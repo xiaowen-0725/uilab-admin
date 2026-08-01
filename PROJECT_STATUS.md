@@ -2,14 +2,13 @@
 
 > 更新时间：2026-08-01  
 > 分支：`main`  
-> 最新提交：`d459d3c`  
+> 架构基线提交：`81731f8`
 > 远程：https://github.com/xiaowen-0725/uilab-admin.git  
 > 用途：后续优化/追溯用状态真源；细节合同仍以 `AGENTS.md` / `docs/ai/*` 为准。
 
 ## 1. 一句话定位
 
-**AI-first 通用中后台模板**：Vite + React 19 + TS + Tailwind 4 + 官方 shadcn **Base UI** + TanStack。  
-中文优先，与 UI Lab 弱连接；通过 scenario + CLI + skill 支持 0→1 开应用、1→100 扩展。
+当前可运行产品仍是 **AI-first 通用中后台模板**；已确定的目标形态是中立 **Template Platform**，在同一仓库维护平级的 Admin Console 与 Agent Workbench Archetype。技术栈继续采用 Vite + React 19 + TS + Tailwind 4 + 官方 shadcn **Base UI** + TanStack。
 
 ## 2. 当前阶段判断
 
@@ -23,12 +22,15 @@
 | CLI-2 bootstrap | **Done** | `init` / `apply-scenario` |
 | scenario packs | **Done（薄）** | ops / saas / agent-desktop |
 | agent-desktop 工作区 | **MVP Done** | Workspace 首页 + threads 列表 + L2 desktop 边界 |
+| Agent Workbench 架构 | **Phase 0 Done** | 领域语言、ADR、目录蓝图、路线图与 Admin baseline 已落盘 |
+| Template Platform Monorepo | **Next** | Phase 1：先等价迁移 Admin，再建立平级 Archetype |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| 模板“产品打磨/去 demo 化” | **Next** | 下一阶段优化重点 |
+| Browser test suite | **Baseline red** | 17 files / 103 tests：11 files、55 tests 失败；详见 Phase 0 evidence |
+| 模板“产品打磨/去 demo 化” | **Planned** | 在 Monorepo 迁移稳定后继续 |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**  
-基础设施与 AI 装配闭环已可用；下一阶段应转向**模板体验优化、demo 收敛、scenario 质量、agent-desktop 深化**，而不是继续大改架构。
+Admin 基础设施与 AI 装配闭环仍可用；下一阶段按路线图执行 **Phase 1 Monorepo 等价迁移**。当前 `agent-desktop` 只作为兼容基线保留，不再作为长期 Agent Workbench 架构继续深化。
 
 ## 3. 已锁定决策（勿回退）
 
@@ -36,11 +38,14 @@
 2. 学 shadcn-admin 的壳/页面模式，不整包搬 Radix  
 3. 官方 shadcn Base UI（`render`，禁止 `asChild` / Radix 回潮）  
 4. 中文 UI + 英文标识  
-5. 布局差异走 preferences / scenario，不 fork layout  
+5. Admin 内部布局差异走 preferences / scenario；跨 Archetype 使用平级、独立的 Shell
 6. Skill 负责判断编排，CLI 负责确定性落盘  
 7. 创建方式：`uilab-admin init` 为主，兼容 `apply-scenario`  
-8. 桌面端：L1 + L2，预留 Electron/Tauri，不假装已产品化  
+8. 当前 agent-desktop：L1 + L2 兼容基线；长期 Agent Workbench 保持 Web Renderer + 可选 Desktop Host Adapter
 9. CLI 命令名：`uilab-admin`
+10. Agent Workbench 是独立 Archetype，不是 Admin scenario；Derived Application 使用 copy-and-own
+
+架构真源：`CONTEXT.md`、`docs/adr/*`、`docs/architecture/agent-workbench-module-layout.md` 与 `docs/plans/agent-workbench-template-roadmap.md`。
 
 ## 4. 仓库结构（当前）
 

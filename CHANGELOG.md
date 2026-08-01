@@ -7,12 +7,15 @@
 - Scenario packs: `ops-console`, `saas-admin`, `agent-desktop`
 - Agent desktop workspace canvas (`src/features/workspace`)
 - Project status snapshot: `PROJECT_STATUS.md`
+- Agent Workbench domain glossary, ADRs, architecture layout and implementation roadmap
+- Phase 0 Admin baseline evidence for Playwright UI flows, CLI generation and quality gates
 
 ### Changed
 
 - Migrated component base to official shadcn Base UI (`base-nova`)
 - Localized primary admin surfaces to Chinese-first
 - Provider defaults now consume `src/config/admin-preferences.ts`
+- Documented `agent-desktop` as the legacy Admin composition to preserve during migration toward a standalone Agent Workbench Archetype
 
 ### Fixed
 

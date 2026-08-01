@@ -4,6 +4,8 @@ AI-first 通用中后台项目模板。
 
 基于 [shadcn-admin](https://github.com/satnaing/shadcn-admin) 二创：保留成熟 admin shell / 页面模式 / data-table 交互，改用官方 shadcn **Base UI**，并补齐中文优先与 AI 装配约定。
 
+> 当前可运行产品仍是 Admin 模板。仓库已完成独立 Agent Workbench Archetype 的架构设计与 Phase 0 基线，代码迁移尚未开始；详见 [实施路线](docs/plans/agent-workbench-template-roadmap.md) 与 [项目状态](PROJECT_STATUS.md)。
+
 ## 快速开始
 
 ```bash
