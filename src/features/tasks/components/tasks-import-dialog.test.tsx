@@ -18,20 +18,20 @@ describe('TasksImportDialog', () => {
 
     const title = getByRole('heading', {
       level: 2,
-      name: /Import Tasks/i,
+      name: /导入任务/,
     })
-    const desc = getByText('Import tasks quickly from a CSV file')
+    // Product description is still English
+    const desc = getByText(/Import tasks quickly from a CSV file/)
     const fileInput = getByLabelText('File')
-    const closeButtons = getByRole('dialog')
-      .getByRole('button', { name: 'Close' })
-      .all()
-
+    const closeButton = getByRole('dialog').getByRole('button', {
+      name: /^关闭$/,
+    })
     const importButton = getByRole('button', { name: /^Import$/i })
 
     await expect.element(title).toBeInTheDocument()
     await expect.element(desc).toBeInTheDocument()
     await expect.element(fileInput).toBeInTheDocument()
-    expect(closeButtons).toHaveLength(2)
+    await expect.element(closeButton).toBeInTheDocument()
     await expect.element(importButton).toBeInTheDocument()
   })
 
@@ -44,7 +44,7 @@ describe('TasksImportDialog', () => {
     const importButton = getByRole('button', { name: /^Import$/i })
     await userEvent.click(importButton)
 
-    await expect.element(getByText('Please upload a file.')).toBeInTheDocument()
+    await expect.element(getByText('请上传文件。')).toBeInTheDocument()
     expect(onOpenChange).not.toHaveBeenCalled()
     expect(showSubmittedData).not.toHaveBeenCalled()
   })
@@ -97,24 +97,20 @@ describe('TasksImportDialog', () => {
 
     const { getByRole } = await render(<Harness />)
 
-    const closeButtonX = getByRole('dialog')
-      .getByRole('button', {
-        name: /Close/i,
-      })
-      .nth(0)
-    await userEvent.click(closeButtonX)
+    // Icon close (sr-only still English in product)
+    await userEvent.click(
+      getByRole('dialog').getByRole('button', { name: /^Close$/i })
+    )
 
     expect(onOpenChange).toHaveBeenCalledOnce()
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(showSubmittedData).not.toHaveBeenCalled()
 
     await userEvent.click(getByRole('button', { name: /Reopen/i }))
-    const closeButton = getByRole('dialog')
-      .getByRole('button', {
-        name: /Close/i,
-      })
-      .nth(1)
-    await userEvent.click(closeButton)
+    // Explicit footer close button (Chinese)
+    await userEvent.click(
+      getByRole('dialog').getByRole('button', { name: /^关闭$/ })
+    )
 
     expect(onOpenChange).toHaveBeenCalledTimes(2)
     expect(onOpenChange).toHaveBeenCalledWith(false)

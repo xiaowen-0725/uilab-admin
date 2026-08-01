@@ -4,10 +4,10 @@ import { type Locator, userEvent } from 'vitest/browser'
 import { SignUpForm } from './sign-up-form'
 
 const FORM_MESSAGES = {
-  emailEmpty: 'Please enter your email.',
-  passwordEmpty: 'Please enter your password.',
-  confirmPasswordEmpty: 'Please confirm your password.',
-  passwordMismatch: "Passwords don't match.",
+  emailEmpty: '请输入邮箱。',
+  passwordEmpty: '请输入密码。',
+  confirmPasswordEmpty: '请确认密码。',
+  passwordMismatch: '两次输入的密码不一致。',
 } as const
 
 const toastPromise = vi.hoisted(() =>
@@ -29,10 +29,10 @@ describe('SignUpForm', () => {
     vi.clearAllMocks()
 
     screen = await render(<SignUpForm />)
-    emailInput = screen.getByRole('textbox', { name: /^Email$/i })
-    passwordInput = screen.getByLabelText(/^Password$/i)
-    confirmPasswordInput = screen.getByLabelText(/^Confirm Password$/i)
-    submitButton = screen.getByRole('button', { name: /^Create Account$/i })
+    emailInput = screen.getByRole('textbox', { name: /^邮箱$/ })
+    passwordInput = screen.getByLabelText(/^密码$/)
+    confirmPasswordInput = screen.getByLabelText(/^确认密码$/)
+    submitButton = screen.getByRole('button', { name: /^创建账号$/ })
   })
 
   afterEach(() => {

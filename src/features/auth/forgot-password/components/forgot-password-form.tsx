@@ -70,7 +70,7 @@ export function ForgotPasswordForm({
             </FormItem>
           )}
         />
-        <Button className='mt-2' disabled={isLoading}>
+        <Button className='mt-2' type='submit' disabled={isLoading}>
           继续
           {isLoading ? <Loader2 className='animate-spin' /> : <ArrowRight />}
         </Button>

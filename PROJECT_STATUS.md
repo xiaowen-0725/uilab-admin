@@ -25,7 +25,7 @@
 | Agent Workbench 架构 | **Phase 0 Done** | 领域语言、ADR、目录蓝图、路线图与 Admin baseline 已落盘 |
 | Template Platform Monorepo | **Next** | Phase 1：先等价迁移 Admin，再建立平级 Archetype |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Baseline red** | 17 files / 103 tests：11 files、55 tests 失败；详见 Phase 0 evidence |
+| Browser test suite | **Green** | 17 files / 103 tests 全通过；Base UI console warning 已清零；详见 Phase 0 evidence |
 | 模板“产品打磨/去 demo 化” | **Planned** | 在 Monorepo 迁移稳定后继续 |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
@@ -139,6 +139,13 @@ uilab-admin/
 - 多个派生 app **不要共享同一个 node_modules symlink**，否则 Vite optimize 缓存会互相污染导致空白页
 - `add/init` 后必须 regen `src/routeTree.gen.ts`（CLI 已处理）
 
+### Phase 0 Admin baseline
+
+- `pnpm test`：17 files / 103 tests，全部通过
+- `pnpm typecheck` / `pnpm build` / `pnpm check:ai`：PASS
+- Playwright CLI（本机 headed Chrome）：登录按钮为 `type=submit`，空表单点击校验正常，console 0 error / 0 warning
+- 证据：`docs/evidence/phase-0-quality-gates.md`、`docs/evidence/phase-0-playwright-baseline.md`
+
 ## 7. 已知缺口 / 技术债
 
 ### P1（下一阶段优化优先）
@@ -166,7 +173,7 @@ uilab-admin/
 
 ### P3
 
-1. 测试覆盖（当前有部分 vitest，但 AI/CLI 路径测试不足）  
+1. 测试覆盖仍需扩展（现有 Browser Mode 基线已全绿，但 AI/CLI 自动化路径覆盖仍不足）
 2. 版本号仍 `0.0.1`，CHANGELOG 仍偏上游 shadcn-admin 历史  
 
 ## 8. 建议的后续优化 backlog

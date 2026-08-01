@@ -105,6 +105,7 @@ export function TasksMutateDrawer({
                   <FormLabel>状态</FormLabel>
                   <SelectDropdown
                     defaultValue={field.value}
+                    isControlled
                     onValueChange={field.onChange}
                     placeholder='请选择'
                     items={[
@@ -128,7 +129,7 @@ export function TasksMutateDrawer({
                   <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                       className='flex flex-col space-y-1'
                     >
                       <FormItem className='flex items-center'>
@@ -166,7 +167,7 @@ export function TasksMutateDrawer({
                   <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                       className='flex flex-col space-y-1'
                     >
                       <FormItem className='flex items-center'>

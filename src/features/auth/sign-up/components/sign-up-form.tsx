@@ -109,7 +109,7 @@ export function SignUpForm({
             </FormItem>
           )}
         />
-        <Button className='mt-2' disabled={isLoading}>
+        <Button className='mt-2' type='submit' disabled={isLoading}>
           {isLoading ? <Loader2 className='animate-spin' /> : <UserPlus />}
           创建账号
         </Button>

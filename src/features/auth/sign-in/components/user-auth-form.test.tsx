@@ -4,9 +4,9 @@ import { type Locator, userEvent } from 'vitest/browser'
 import { UserAuthForm } from './user-auth-form'
 
 const FORM_MESSAGES = {
-  emailEmpty: 'Please enter your email.',
-  passwordEmpty: 'Please enter your password.',
-  passwordShort: 'Password must be at least 7 characters long.',
+  emailEmpty: '请输入邮箱。',
+  passwordEmpty: '请输入密码。',
+  passwordShort: '密码至少 7 位。',
 } as const
 
 const navigate = vi.fn()
@@ -60,10 +60,10 @@ describe('UserAuthForm', () => {
     beforeEach(async () => {
       vi.clearAllMocks()
       screen = await render(<UserAuthForm />)
-      emailInput = screen.getByRole('textbox', { name: /^Email$/i })
-      passwordInput = screen.getByLabelText(/^Password$/i)
-      signInButton = screen.getByRole('button', { name: /^Sign in$/i })
-      forgotPasswordLink = screen.getByText(/^Forgot password\?$/i)
+      emailInput = screen.getByRole('textbox', { name: /^邮箱$/ })
+      passwordInput = screen.getByLabelText(/^密码$/)
+      signInButton = screen.getByRole('button', { name: /^登录$/ })
+      forgotPasswordLink = screen.getByText(/^忘记密码？$/)
     })
 
     it('renders fields, submit button, and forgot password link', async () => {
@@ -115,10 +115,10 @@ describe('UserAuthForm', () => {
       <UserAuthForm redirectTo='/settings' />
     )
 
-    await userEvent.fill(getByRole('textbox', { name: /Email/i }), 'a@b.com')
-    await userEvent.fill(getByLabelText('Password'), '1234567')
+    await userEvent.fill(getByRole('textbox', { name: /^邮箱$/ }), 'a@b.com')
+    await userEvent.fill(getByLabelText('密码'), '1234567')
 
-    await userEvent.click(getByRole('button', { name: /Sign in/i }))
+    await userEvent.click(getByRole('button', { name: /^登录$/ }))
 
     await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
     expect(setAccessTokenMock).toHaveBeenCalledOnce()

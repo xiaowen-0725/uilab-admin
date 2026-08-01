@@ -33,7 +33,7 @@ describe('SignOutDialog', () => {
       <SignOutDialog open onOpenChange={vi.fn()} />
     )
 
-    await userEvent.click(getByRole('button', { name: /^Sign out$/i }))
+    await userEvent.click(getByRole('button', { name: /^退出登录$/ }))
 
     expect(reset).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith({
@@ -48,6 +48,7 @@ describe('SignOutDialog', () => {
       <SignOutDialog open onOpenChange={vi.fn()} />
     )
 
+    // ConfirmDialog default cancelBtnText is still English in product
     await userEvent.click(getByRole('button', { name: /^Cancel$/i }))
 
     expect(reset).not.toHaveBeenCalled()

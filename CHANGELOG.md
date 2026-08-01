@@ -21,6 +21,9 @@
 
 - Base UI menu/group, command palette, profile menu, theme settings previews
 - routeTree regeneration after CLI scaffold/init
+- Restored Browser Mode tests to a green 17-file / 103-test baseline by loading application styles and aligning assertions with current Chinese accessible UI contracts
+- Restored real click submission for sign-in, sign-up, forgot-password and OTP forms after the Base UI Button migration
+- Removed Base UI controlled-state warnings from the task mutation form reset flow
 
 ## v2.2.1 (2025-11-06)
 

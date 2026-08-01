@@ -22,8 +22,9 @@ describe('OtpForm', () => {
     vi.clearAllMocks()
 
     screen = await render(<OtpForm />)
+    // Product still uses English sr-only label
     otpInput = screen.getByLabelText(/^One-Time Password$/i)
-    verifyButton = screen.getByRole('button', { name: /^Verify$/i })
+    verifyButton = screen.getByRole('button', { name: /^验证$/ })
   })
 
   afterEach(() => {

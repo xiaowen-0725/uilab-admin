@@ -22,16 +22,16 @@ describe('TasksMultiDeleteDialog', () => {
 
     const title = getByRole('heading', {
       level: 2,
-      name: /Delete 2 tasks/i,
+      name: /删除 2 个任务/,
     })
-    const desc = getByText(
-      'Are you sure you want to delete the selected tasks?'
-    )
+    // Product still has partially English description text
+    const desc = getByText(/Are you sure you want to delete the selected/)
     const confirmDeleteInput = getByRole('textbox', {
       name: /Confirm by typing "DELETE"/i,
     })
-    const cancelButton = getByRole('button', { name: /Cancel/i })
-    const deleteButton = getByRole('button', { name: /Delete/i })
+    // ConfirmDialog default cancel text is still English
+    const cancelButton = getByRole('button', { name: /^Cancel$/i })
+    const deleteButton = getByRole('button', { name: /^删除$/ })
 
     await expect.element(title).toBeInTheDocument()
     await expect.element(desc).toBeInTheDocument()
@@ -50,7 +50,7 @@ describe('TasksMultiDeleteDialog', () => {
     const confirmDeleteInput = getByRole('textbox', {
       name: /Confirm by typing "DELETE"/i,
     })
-    const deleteButton = getByRole('button', { name: /Delete/i })
+    const deleteButton = getByRole('button', { name: /^删除$/ })
 
     await expect.element(deleteButton).toBeDisabled()
 
@@ -68,11 +68,12 @@ describe('TasksMultiDeleteDialog', () => {
       <TasksMultiDeleteDialog open onOpenChange={onOpenChange} table={table} />
     )
 
-    const cancelButton = getByRole('button', { name: /Cancel/i })
+    const cancelButton = getByRole('button', { name: /^Cancel$/i })
     await userEvent.click(cancelButton)
 
     expect(onOpenChange).toHaveBeenCalledOnce()
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    // Base UI Close may pass an event-details second argument.
+    expect(onOpenChange.mock.calls[0][0]).toBe(false)
   })
 
   it('resets the confirm delete input when the dialog is closed and reopened', async () => {
@@ -104,7 +105,7 @@ describe('TasksMultiDeleteDialog', () => {
     await userEvent.fill(confirmDeleteInput, 'DELETE')
     await expect.element(confirmDeleteInput).toHaveValue('DELETE')
 
-    const cancelButton = getByRole('button', { name: /Cancel/i })
+    const cancelButton = getByRole('button', { name: /^Cancel$/i })
     await userEvent.click(cancelButton)
 
     const reopenButton = getByRole('button', { name: /Reopen/i })
@@ -122,7 +123,7 @@ describe('TasksMultiDeleteDialog', () => {
     const confirmDeleteInput = getByRole('textbox', {
       name: /Confirm by typing "DELETE"/i,
     })
-    const deleteButton = getByRole('button', { name: /Delete/i })
+    const deleteButton = getByRole('button', { name: /^删除$/ })
 
     await expect.element(deleteButton).toBeDisabled()
 
@@ -147,7 +148,7 @@ describe('TasksMultiDeleteDialog', () => {
     const confirmDeleteInput = getByRole('textbox', {
       name: /Confirm by typing "DELETE"/i,
     })
-    const deleteButton = getByRole('button', { name: /Delete/i })
+    const deleteButton = getByRole('button', { name: /^删除$/ })
 
     await expect.element(deleteButton).toBeDisabled()
 

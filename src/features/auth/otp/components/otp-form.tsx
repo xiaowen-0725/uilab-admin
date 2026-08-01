@@ -91,7 +91,11 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
             </FormItem>
           )}
         />
-        <Button className='mt-2' disabled={otp.length < 6 || isLoading}>
+        <Button
+          className='mt-2'
+          type='submit'
+          disabled={otp.length < 6 || isLoading}
+        >
           验证
         </Button>
       </form>

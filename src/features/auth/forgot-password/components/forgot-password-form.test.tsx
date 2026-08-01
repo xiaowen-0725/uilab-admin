@@ -24,8 +24,8 @@ describe('ForgotPasswordForm', () => {
     vi.clearAllMocks()
 
     screen = await render(<ForgotPasswordForm />)
-    emailInput = screen.getByRole('textbox', { name: /^Email$/i })
-    continueButton = screen.getByRole('button', { name: /^Continue$/i })
+    emailInput = screen.getByRole('textbox', { name: /^邮箱$/ })
+    continueButton = screen.getByRole('button', { name: /^继续$/ })
   })
 
   it('renders email field and continue button', async () => {
@@ -35,6 +35,7 @@ describe('ForgotPasswordForm', () => {
 
   it('shows validation when submitting empty form', async () => {
     await userEvent.click(continueButton)
+    // Product validation message is still English
     await expect
       .element(screen.getByText(/^Please enter your email\.$/i))
       .toBeInTheDocument()
