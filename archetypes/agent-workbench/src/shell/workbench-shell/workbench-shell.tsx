@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { PanelLeftIcon, PanelRightIcon, AppWindowIcon } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { AppWindowIcon, PanelLeftIcon, PanelRightIcon } from 'lucide-react'
 import type { TaskSurfaceView } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
 import type {
@@ -19,6 +20,26 @@ import { useWorkbenchShortcuts } from './use-workbench-shortcuts'
 
 /** Shell-owned motion modality — never stored in Session. */
 export type NavMotionSource = 'animated' | 'instant'
+
+function getTaskPaneStyle(
+  sideBySide: boolean,
+  stageWidth: number
+): CSSProperties | undefined {
+  if (!sideBySide) return undefined
+
+  const style: CSSProperties = {
+    minWidth: TASK_SURFACE_MIN_WIDTH,
+  }
+
+  if (stageWidth > 0) {
+    style.maxWidth = Math.max(
+      TASK_SURFACE_MIN_WIDTH,
+      stageWidth - WORK_SURFACE_MIN_WIDTH
+    )
+  }
+
+  return style
+}
 
 export interface WorkbenchShellProps {
   view: WorkbenchSessionView
@@ -75,13 +96,9 @@ export function WorkbenchShell({
     view.layout.workSurfaceMaximized ||
     (viewport === 'narrow' && view.layout.workSurfaceVisible)
 
-  const showTaskBesideWork = !(
-    view.layout.workSurfaceMaximized ||
-    (viewport === 'narrow' && view.layout.workSurfaceVisible)
-  )
+  const showTaskBesideWork = !workFullStage
 
-  const sideBySide =
-    view.layout.workSurfaceVisible && !workFullStage && showTaskBesideWork
+  const sideBySide = view.layout.workSurfaceVisible && showTaskBesideWork
 
   const sessionMax = view.workSurfaceMaxWidth
   const effectiveWorkMax = sideBySide
@@ -196,21 +213,7 @@ export function WorkbenchShell({
           {showTaskBesideWork ? (
             <div
               className='flex min-h-0 min-w-0 flex-1'
-              style={
-                sideBySide
-                  ? {
-                      minWidth: TASK_SURFACE_MIN_WIDTH,
-                      ...(stageWidth > 0
-                        ? {
-                            maxWidth: Math.max(
-                              TASK_SURFACE_MIN_WIDTH,
-                              stageWidth - WORK_SURFACE_MIN_WIDTH
-                            ),
-                          }
-                        : {}),
-                    }
-                  : undefined
-              }
+              style={getTaskPaneStyle(sideBySide, stageWidth)}
             >
               <TaskSurface
                 view={taskView}

@@ -28,12 +28,12 @@ export function Navigator({
   const [filter, setFilter] = useState('')
 
   const visibleTasks = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    if (!q) return tasks
+    const normalizedFilter = filter.trim().toLowerCase()
+    if (!normalizedFilter) return tasks
     return tasks.filter(
-      (t) =>
-        t.title.toLowerCase().includes(q) ||
-        (t.subtitle?.toLowerCase().includes(q) ?? false)
+      (task) =>
+        task.title.toLowerCase().includes(normalizedFilter) ||
+        (task.subtitle?.toLowerCase().includes(normalizedFilter) ?? false)
     )
   }, [filter, tasks])
 
@@ -50,8 +50,7 @@ export function Navigator({
       data-open={open ? 'true' : 'false'}
       aria-label='工作台导航'
       aria-hidden={!open}
-      // React 19 supports inert; keep focus out while collapsed/closed.
-      {...({ inert: open ? undefined : true } as { inert?: boolean })}
+      inert={!open}
     >
       <div className='flex items-start justify-between gap-2 px-2 pt-2 pb-1'>
         <div className='min-w-0 rounded-lg px-2 py-1.5'>

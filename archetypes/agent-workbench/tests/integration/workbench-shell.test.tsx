@@ -310,12 +310,10 @@ describe('Workbench Shell integration (visible behavior)', () => {
       expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(
         GEOMETRY_TOLERANCE
       )
-      // Overlay host may stay mounted but closed must not consume reserved width.
-      const overlay = document.querySelector('[data-testid="navigator-overlay"]')
-      if (overlay) {
-        expect(overlay.getAttribute('data-open')).toBe('false')
-        expect(getComputedStyle(overlay).pointerEvents).toBe('none')
-      }
+      // Overlay host stays mounted but closed must not consume reserved width.
+      const overlay = page.getByTestId('navigator-overlay').element()
+      expect(overlay.getAttribute('data-open')).toBe('false')
+      expect(getComputedStyle(overlay).pointerEvents).toBe('none')
       const closedOverlayNav = page.getByTestId('navigator').element()
       expect(closedOverlayNav.hasAttribute('inert')).toBe(true)
       expect(page.getByTestId('navigator-filter').element().tabIndex).toBe(-1)
