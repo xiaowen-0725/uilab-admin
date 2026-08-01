@@ -1,19 +1,26 @@
 # Ignore everything
 /*
 
-# Except these files & folders
-!/src
-!index.html
+# Except monorepo packages and root config surfaces
+!/archetypes
+!/archetypes/**
+!/packages
+!/packages/**
+!/tooling
+!/tooling/**
 !package.json
-!tailwind.config.js
+!pnpm-workspace.yaml
 !tsconfig.json
-!tsconfig.node.json
-!vite.config.ts
 !.prettierrc
 !README.md
 !eslint.config.js
-!postcss.config.js
+!knip.config.ts
+!netlify.toml
 !.vscode/
 
-# Ignore auto generated routeTree.gen.ts
-/src/routeTree.gen.ts
+# Keep ignoring build/deps/coverage and generated route trees
+**/node_modules/**
+**/dist/**
+**/coverage/**
+**/.vitest-attachments/**
+**/routeTree.gen.ts

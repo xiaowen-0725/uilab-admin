@@ -2,17 +2,24 @@
 /**
  * Minimal AI-contract gate for uilab-admin.
  * Validates skill frontmatter, required docs/patterns/scaffolds, and relative links.
+ *
+ * Batch 1A hybrid layout:
+ * - platformRoot: repository root (this script's parent)
+ * - adminRoot: archetypes/admin (application package)
  */
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const platformRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const adminRoot = path.join(platformRoot, 'archetypes', 'admin')
+/** @deprecated alias kept for rel() default base during reporting */
+const projectRoot = platformRoot
 const errors = []
 const warnings = []
 
-function rel(filePath) {
-  return path.relative(projectRoot, filePath) || '.'
+function rel(filePath, base = platformRoot) {
+  return path.relative(base, filePath) || '.'
 }
 
 async function exists(filePath) {
@@ -26,7 +33,7 @@ async function exists(filePath) {
 
 async function mustExist(filePath, label = filePath) {
   if (!(await exists(filePath))) {
-    errors.push(`missing ${rel(label)}`)
+    errors.push(`missing ${typeof label === 'string' && !path.isAbsolute(label) ? label : rel(filePath)}`)
     return false
   }
   return true
@@ -89,10 +96,18 @@ function extractMarkdownLinks(source) {
   return links
 }
 
+/** Resolve a catalog path: src/* against admin; docs/ai/* and scaffolds/* against platform. */
+function resolveCatalogPath(ref) {
+  const normalized = ref.replace(/\\/g, '/')
+  if (normalized.startsWith('src/') || normalized === 'src') {
+    return path.join(adminRoot, ref)
+  }
+  return path.join(platformRoot, ref)
+}
+
 async function main() {
-  const requiredFiles = [
+  const platformRequiredFiles = [
     'AGENTS.md',
-    'AGENT_BRIEF.md',
     'README.md',
     'docs/ai/map.md',
     'docs/ai/do-not.md',
@@ -107,7 +122,6 @@ async function main() {
     'docs/ai/scenarios/ops-console.md',
     'docs/ai/scenarios/saas-admin.md',
     'docs/ai/scenarios/agent-desktop.md',
-    'desktop/README.md',
     'cli/uilab-admin.mjs',
     'skill/uilab-admin/SKILL.md',
     'skill/uilab-admin/references/bootstrap.md',
@@ -128,17 +142,27 @@ async function main() {
     'scaffolds/settings-section/index.tsx',
     'scaffolds/settings-section/__section__-form.tsx',
     'scaffolds/settings-section/route.tsx',
+  ]
+
+  const adminRequiredFiles = [
+    'AGENT_BRIEF.md',
+    'desktop/README.md',
+    'components.json',
+    'package.json',
     'src/config/admin-preferences.ts',
     'src/components/layout/data/sidebar-data.ts',
     'src/features/tasks/index.tsx',
     'src/features/settings/index.tsx',
   ]
 
-  for (const file of requiredFiles) {
-    await mustExist(path.join(projectRoot, file), file)
+  for (const file of platformRequiredFiles) {
+    await mustExist(path.join(platformRoot, file), file)
+  }
+  for (const file of adminRequiredFiles) {
+    await mustExist(path.join(adminRoot, file), file)
   }
 
-  const skillFile = path.join(projectRoot, 'skill/uilab-admin/SKILL.md')
+  const skillFile = path.join(platformRoot, 'skill/uilab-admin/SKILL.md')
   if (await exists(skillFile)) {
     const markdown = await readFile(skillFile, 'utf8')
     const fm = parseFrontmatter(markdown)
@@ -166,7 +190,7 @@ async function main() {
     }
   }
 
-  const catalogPath = path.join(projectRoot, 'docs/ai/patterns.catalog.json')
+  const catalogPath = path.join(platformRoot, 'docs/ai/patterns.catalog.json')
   if (await exists(catalogPath)) {
     let catalog
     try {
@@ -186,16 +210,16 @@ async function main() {
         }
         for (const pattern of catalog.patterns) {
           if (pattern.doc) {
-            await mustExist(path.join(projectRoot, pattern.doc), pattern.doc)
+            await mustExist(path.join(platformRoot, pattern.doc), pattern.doc)
           }
           if (pattern.scaffoldTemplate) {
             await mustExist(
-              path.join(projectRoot, pattern.scaffoldTemplate),
+              path.join(platformRoot, pattern.scaffoldTemplate),
               pattern.scaffoldTemplate
             )
           }
           for (const ref of pattern.references ?? []) {
-            const refPath = path.join(projectRoot, ref)
+            const refPath = resolveCatalogPath(ref)
             if (!(await exists(refPath))) {
               errors.push(`pattern ${pattern.id}: missing reference ${ref}`)
             }
@@ -205,14 +229,14 @@ async function main() {
       if (!catalog.skill?.path) {
         errors.push('patterns.catalog.json: skill.path is required')
       } else {
-        await mustExist(path.join(projectRoot, catalog.skill.path), catalog.skill.path)
+        await mustExist(path.join(platformRoot, catalog.skill.path), catalog.skill.path)
       }
     }
   }
 
 
   // Scenario catalog
-  const scenariosPath = path.join(projectRoot, 'docs/ai/scenarios.catalog.json')
+  const scenariosPath = path.join(platformRoot, 'docs/ai/scenarios.catalog.json')
   if (await exists(scenariosPath)) {
     let scenarios
     try {
@@ -235,7 +259,7 @@ async function main() {
         }
         for (const scenario of scenarios.scenarios) {
           if (scenario.doc) {
-            await mustExist(path.join(projectRoot, scenario.doc), scenario.doc)
+            await mustExist(path.join(platformRoot, scenario.doc), scenario.doc)
           }
           if (!scenario.shell) {
             errors.push(`scenario ${scenario.id}: shell defaults required`)
@@ -248,9 +272,9 @@ async function main() {
     }
   }
 
-  // Relative markdown links under docs/ai and skill/uilab-admin
+  // Relative markdown links under docs/ai and skill/uilab-admin (platform root)
   for (const root of ['docs/ai', 'skill/uilab-admin']) {
-    const abs = path.join(projectRoot, root)
+    const abs = path.join(platformRoot, root)
     if (!(await exists(abs))) continue
     const files = await collectMarkdownFiles(abs)
     for (const file of files) {
@@ -265,9 +289,9 @@ async function main() {
     }
   }
 
-  // Soft checks: radix / asChild regressions in src (warn only for now except package.json deps)
+  // Soft checks: radix / asChild regressions — deps live in Admin package (root is orchestrator only)
   const packageJson = JSON.parse(
-    await readFile(path.join(projectRoot, 'package.json'), 'utf8')
+    await readFile(path.join(adminRoot, 'package.json'), 'utf8')
   )
   const allDeps = {
     ...packageJson.dependencies,
@@ -283,10 +307,10 @@ async function main() {
     warnings.push('package.json scripts.check:ai missing (should be wired)')
   }
 
-  // Ensure components.json points to base-nova-ish base ui
-  if (await exists(path.join(projectRoot, 'components.json'))) {
+  // Ensure components.json points to base-nova-ish base ui (Admin-owned)
+  if (await exists(path.join(adminRoot, 'components.json'))) {
     const components = JSON.parse(
-      await readFile(path.join(projectRoot, 'components.json'), 'utf8')
+      await readFile(path.join(adminRoot, 'components.json'), 'utf8')
     )
     const style = String(components.style ?? '')
     if (!style.toLowerCase().includes('base')) {
