@@ -1,27 +1,28 @@
-"use client"
+import * as CollapsiblePrimitive from '@radix-ui/react-collapsible'
 
-import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible"
-
-function Collapsible({ ...props }: CollapsiblePrimitive.Root.Props) {
-  return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />
+function Collapsible({
+  ...props
+}: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {
+  return <CollapsiblePrimitive.Root data-slot='collapsible' {...props} />
 }
 
-function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
+function CollapsibleTrigger({
+  ...props
+}: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleTrigger>) {
   return (
-    <CollapsiblePrimitive.Trigger data-slot="collapsible-trigger" {...props} />
+    <CollapsiblePrimitive.CollapsibleTrigger
+      data-slot='collapsible-trigger'
+      {...props}
+    />
   )
 }
 
 function CollapsibleContent({
-  className,
   ...props
-}: CollapsiblePrimitive.Panel.Props) {
+}: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleContent>) {
   return (
-    <CollapsiblePrimitive.Panel
-      data-slot="collapsible-content"
-      className={className}
-      // Keep mounted long enough for close animation (Base UI exit styles).
-      keepMounted
+    <CollapsiblePrimitive.CollapsibleContent
+      data-slot='collapsible-content'
       {...props}
     />
   )

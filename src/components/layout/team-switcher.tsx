@@ -32,25 +32,25 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton
-                size='lg'
-                className='data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground'
-              />
-            }
-          >
-            <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
-              <activeTeam.logo className='size-4' />
-            </div>
-            <div className='grid flex-1 text-start text-sm leading-tight'>
-              <span className='truncate font-semibold'>{activeTeam.name}</span>
-              <span className='truncate text-xs'>{activeTeam.plan}</span>
-            </div>
-            <ChevronsUpDown className='ms-auto' />
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size='lg'
+              className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
+            >
+              <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
+                <activeTeam.logo className='size-4' />
+              </div>
+              <div className='grid flex-1 text-start text-sm leading-tight'>
+                <span className='truncate font-semibold'>
+                  {activeTeam.name}
+                </span>
+                <span className='truncate text-xs'>{activeTeam.plan}</span>
+              </div>
+              <ChevronsUpDown className='ms-auto' />
+            </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className='min-w-56 rounded-lg'
+            className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
             align='start'
             side={isMobile ? 'bottom' : 'right'}
             sideOffset={4}

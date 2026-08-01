@@ -12,9 +12,12 @@ dist
 dist-ssr
 *.local
 
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -23,6 +26,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Prefer pnpm
-package-lock.json
-yarn.lock
+# Test coverage
+/coverage
+
+# Vitest artifacts (browser screenshots/attachments)
+**/__screenshots__/
+.vitest-attachments/

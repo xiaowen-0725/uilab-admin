@@ -1,4 +1,5 @@
 import { type SVGProps } from 'react'
+import { Root as Radio, Item } from '@radix-ui/react-radio-group'
 import { CircleCheck, Copy, RotateCcw, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { IconDir } from '@/assets/custom/icon-dir'
@@ -14,9 +15,8 @@ import { IconThemeSystem } from '@/assets/custom/icon-theme-system'
 import { cn } from '@/lib/utils'
 import { useDirection } from '@/context/direction-provider'
 import { type Collapsible, useLayout } from '@/context/layout-provider'
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from '@/context/theme-provider'
 import { Button } from '@/components/ui/button'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Sheet,
   SheetContent,
@@ -26,7 +26,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { useSidebar } from '@/components/ui/sidebar'
+import { useSidebar } from './ui/sidebar'
 import {
   preferencesToAgentPrompt,
   preferencesToConfigSnippet,
@@ -49,17 +49,15 @@ export function ConfigDrawer() {
 
   return (
     <Sheet>
-      <SheetTrigger
-        render={
-          <Button
-            size='icon'
-            variant='ghost'
-            aria-label='Open theme settings'
-            className='rounded-full'
-          />
-        }
-      >
-        <Settings aria-hidden='true' />
+      <SheetTrigger asChild>
+        <Button
+          size='icon'
+          variant='ghost'
+          aria-label='Open theme settings'
+          className='rounded-full'
+        >
+          <Settings aria-hidden='true' />
+        </Button>
       </SheetTrigger>
       <SheetContent className='flex flex-col'>
         <SheetHeader className='pb-0 text-start'>
@@ -127,7 +125,7 @@ function SectionTitle({
   )
 }
 
-function ConfigRadioItem({
+function RadioGroupItem({
   item,
   isTheme = false,
 }: {
@@ -139,21 +137,16 @@ function ConfigRadioItem({
   isTheme?: boolean
 }) {
   return (
-    <RadioGroupItem
+    <Item
       value={item.value}
-      className={cn(
-        'group flex !size-auto h-auto w-full flex-col items-center rounded-none border-0 bg-transparent p-0 text-current shadow-none ring-0 outline-none after:hidden',
-        'data-checked:border-transparent data-checked:bg-transparent data-checked:text-current dark:data-checked:bg-transparent',
-        '[&_[data-slot=radio-group-indicator]]:hidden',
-        'transition duration-200 ease-in'
-      )}
+      className={cn('group outline-none', 'transition duration-200 ease-in')}
       aria-label={`Select ${item.label.toLowerCase()}`}
       aria-describedby={`${item.value}-description`}
     >
       <div
         className={cn(
           'relative rounded-[6px] ring-[1px] ring-border',
-          'group-data-checked:shadow-2xl group-data-checked:ring-primary',
+          'group-data-[state=checked]:shadow-2xl group-data-[state=checked]:ring-primary',
           'group-focus-visible:ring-2'
         )}
         role='img'
@@ -163,29 +156,27 @@ function ConfigRadioItem({
         <CircleCheck
           className={cn(
             'size-6 fill-primary stroke-white',
-            'group-data-unchecked:hidden',
+            'group-data-[state=unchecked]:hidden',
             'absolute top-0 right-0 translate-x-1/2 -translate-y-1/2'
           )}
           aria-hidden='true'
         />
-        {/* Hide default radio indicator dot from ui/radio-group */}
-        <span className='sr-only' />
         <item.icon
           className={cn(
             !isTheme &&
-              'fill-primary stroke-primary group-data-unchecked:fill-muted-foreground group-data-unchecked:stroke-muted-foreground'
+              'fill-primary stroke-primary group-data-[state=unchecked]:fill-muted-foreground group-data-[state=unchecked]:stroke-muted-foreground'
           )}
           aria-hidden='true'
         />
       </div>
       <div
-        className='mt-1 w-full text-center text-xs'
+        className='mt-1 text-xs'
         id={`${item.value}-description`}
         aria-live='polite'
       >
         {item.label}
       </div>
-    </RadioGroupItem>
+    </Item>
   )
 }
 
@@ -199,7 +190,7 @@ function ThemeConfig() {
         onReset={() => setTheme(defaultTheme)}
         resetAriaLabel='Reset theme preference to default'
       />
-      <RadioGroup
+      <Radio
         value={theme}
         onValueChange={setTheme}
         className='grid w-full max-w-md grid-cols-3 gap-4'
@@ -223,9 +214,9 @@ function ThemeConfig() {
             icon: IconThemeDark,
           },
         ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} isTheme />
+          <RadioGroupItem key={item.value} item={item} isTheme />
         ))}
-      </RadioGroup>
+      </Radio>
       <div id='theme-description' className='sr-only'>
         Choose between system preference, light mode, or dark mode
       </div>
@@ -243,7 +234,7 @@ function SidebarConfig() {
         onReset={() => setVariant(defaultVariant)}
         resetAriaLabel='Reset sidebar style to default'
       />
-      <RadioGroup
+      <Radio
         value={variant}
         onValueChange={setVariant}
         className='grid w-full max-w-md grid-cols-3 gap-4'
@@ -267,9 +258,9 @@ function SidebarConfig() {
             icon: IconSidebarSidebar,
           },
         ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} />
+          <RadioGroupItem key={item.value} item={item} />
         ))}
-      </RadioGroup>
+      </Radio>
       <div id='sidebar-description' className='sr-only'>
         Choose between inset, floating, or standard sidebar layout
       </div>
@@ -294,7 +285,7 @@ function LayoutConfig() {
         }}
         resetAriaLabel='Reset layout options to default'
       />
-      <RadioGroup
+      <Radio
         value={radioState}
         onValueChange={(v) => {
           if (v === 'default') {
@@ -325,9 +316,9 @@ function LayoutConfig() {
             icon: IconLayoutFull,
           },
         ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} />
+          <RadioGroupItem key={item.value} item={item} />
         ))}
-      </RadioGroup>
+      </Radio>
       <div id='layout-description' className='sr-only'>
         Choose between default expanded, compact icon-only, or full layout mode
       </div>
@@ -345,7 +336,7 @@ function DirConfig() {
         onReset={() => setDir(defaultDir)}
         resetAriaLabel='Reset text direction to default'
       />
-      <RadioGroup
+      <Radio
         value={dir}
         onValueChange={setDir}
         className='grid w-full max-w-md grid-cols-3 gap-4'
@@ -368,15 +359,16 @@ function DirConfig() {
             ),
           },
         ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} />
+          <RadioGroupItem key={item.value} item={item} />
         ))}
-      </RadioGroup>
+      </Radio>
       <div id='direction-description' className='sr-only'>
         Choose between left-to-right or right-to-left site direction
       </div>
     </div>
   )
 }
+
 
 async function copyText(text: string, successMessage: string) {
   try {
@@ -389,9 +381,8 @@ async function copyText(text: string, successMessage: string) {
 
 function ExportConfig() {
   const { theme } = useTheme()
-  const { variant } = useLayout()
+  const { variant, collapsible } = useLayout()
   const { open } = useSidebar()
-  const { collapsible } = useLayout()
   const { dir } = useDirection()
 
   const layout: AdminPreferences['layout'] = open
