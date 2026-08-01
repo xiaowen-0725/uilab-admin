@@ -1,230 +1,109 @@
-/* eslint-disable react-refresh/only-export-components */
-import * as React from "react"
+import { createContext, useContext, useEffect, useState, useMemo } from 'react'
+import { getCookie, setCookie, removeCookie } from '@/lib/cookies'
 
-type Theme = "dark" | "light" | "system"
-type ResolvedTheme = "dark" | "light"
+type Theme = 'dark' | 'light' | 'system'
+type ResolvedTheme = Exclude<Theme, 'system'>
+
+const DEFAULT_THEME = 'system'
+const THEME_COOKIE_NAME = 'vite-ui-theme'
+const THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 // 1 year
 
 type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme
   storageKey?: string
-  disableTransitionOnChange?: boolean
 }
 
 type ThemeProviderState = {
+  defaultTheme: Theme
+  resolvedTheme: ResolvedTheme
   theme: Theme
   setTheme: (theme: Theme) => void
+  resetTheme: () => void
 }
 
-const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)"
-const THEME_VALUES: Theme[] = ["dark", "light", "system"]
-
-const ThemeProviderContext = React.createContext<
-  ThemeProviderState | undefined
->(undefined)
-
-function isTheme(value: string | null): value is Theme {
-  if (value === null) {
-    return false
-  }
-
-  return THEME_VALUES.includes(value as Theme)
+const initialState: ThemeProviderState = {
+  defaultTheme: DEFAULT_THEME,
+  resolvedTheme: 'light',
+  theme: DEFAULT_THEME,
+  setTheme: () => null,
+  resetTheme: () => null,
 }
 
-function getSystemTheme(): ResolvedTheme {
-  if (window.matchMedia(COLOR_SCHEME_QUERY).matches) {
-    return "dark"
-  }
-
-  return "light"
-}
-
-function disableTransitionsTemporarily() {
-  const style = document.createElement("style")
-  style.appendChild(
-    document.createTextNode(
-      "*,*::before,*::after{-webkit-transition:none!important;transition:none!important}"
-    )
-  )
-  document.head.appendChild(style)
-
-  return () => {
-    window.getComputedStyle(document.body)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        style.remove()
-      })
-    })
-  }
-}
-
-function isEditableTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  if (target.isContentEditable) {
-    return true
-  }
-
-  const editableParent = target.closest(
-    "input, textarea, select, [contenteditable='true']"
-  )
-  if (editableParent) {
-    return true
-  }
-
-  return false
-}
+const ThemeContext = createContext<ThemeProviderState>(initialState)
 
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
-  storageKey = "theme",
-  disableTransitionOnChange = true,
+  defaultTheme = DEFAULT_THEME,
+  storageKey = THEME_COOKIE_NAME,
   ...props
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(() => {
-    const storedTheme = localStorage.getItem(storageKey)
-    if (isTheme(storedTheme)) {
-      return storedTheme
-    }
-
-    return defaultTheme
-  })
-
-  const setTheme = React.useCallback(
-    (nextTheme: Theme) => {
-      localStorage.setItem(storageKey, nextTheme)
-      setThemeState(nextTheme)
-    },
-    [storageKey]
+  const [theme, _setTheme] = useState<Theme>(
+    () => (getCookie(storageKey) as Theme) || defaultTheme
   )
 
-  const applyTheme = React.useCallback(
-    (nextTheme: Theme) => {
-      const root = document.documentElement
-      const resolvedTheme =
-        nextTheme === "system" ? getSystemTheme() : nextTheme
-      const restoreTransitions = disableTransitionOnChange
-        ? disableTransitionsTemporarily()
-        : null
+  const resolvedTheme = useMemo((): ResolvedTheme => {
+    if (theme === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light'
+    }
+    return theme as ResolvedTheme
+  }, [theme])
 
-      root.classList.remove("light", "dark")
-      root.classList.add(resolvedTheme)
+  useEffect(() => {
+    const root = window.document.documentElement
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 
-      if (restoreTransitions) {
-        restoreTransitions()
-      }
-    },
-    [disableTransitionOnChange]
-  )
-
-  React.useEffect(() => {
-    applyTheme(theme)
-
-    if (theme !== "system") {
-      return undefined
+    const applyTheme = (currentResolvedTheme: ResolvedTheme) => {
+      root.classList.remove('light', 'dark')
+      root.classList.add(currentResolvedTheme)
     }
 
-    const mediaQuery = window.matchMedia(COLOR_SCHEME_QUERY)
     const handleChange = () => {
-      applyTheme("system")
+      if (theme === 'system') {
+        const systemTheme = mediaQuery.matches ? 'dark' : 'light'
+        applyTheme(systemTheme)
+      }
     }
 
-    mediaQuery.addEventListener("change", handleChange)
+    applyTheme(resolvedTheme)
 
-    return () => {
-      mediaQuery.removeEventListener("change", handleChange)
-    }
-  }, [theme, applyTheme])
+    mediaQuery.addEventListener('change', handleChange)
 
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) {
-        return
-      }
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [theme, resolvedTheme])
 
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return
-      }
+  const setTheme = (theme: Theme) => {
+    setCookie(storageKey, theme, THEME_COOKIE_MAX_AGE)
+    _setTheme(theme)
+  }
 
-      if (isEditableTarget(event.target)) {
-        return
-      }
+  const resetTheme = () => {
+    removeCookie(storageKey)
+    _setTheme(DEFAULT_THEME)
+  }
 
-      if (event.key.toLowerCase() !== "d") {
-        return
-      }
-
-      setThemeState((currentTheme) => {
-        const nextTheme =
-          currentTheme === "dark"
-            ? "light"
-            : currentTheme === "light"
-              ? "dark"
-              : getSystemTheme() === "dark"
-                ? "light"
-                : "dark"
-
-        localStorage.setItem(storageKey, nextTheme)
-        return nextTheme
-      })
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [storageKey])
-
-  React.useEffect(() => {
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.storageArea !== localStorage) {
-        return
-      }
-
-      if (event.key !== storageKey) {
-        return
-      }
-
-      if (isTheme(event.newValue)) {
-        setThemeState(event.newValue)
-        return
-      }
-
-      setThemeState(defaultTheme)
-    }
-
-    window.addEventListener("storage", handleStorageChange)
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange)
-    }
-  }, [defaultTheme, storageKey])
-
-  const value = React.useMemo(
-    () => ({
-      theme,
-      setTheme,
-    }),
-    [theme, setTheme]
-  )
+  const contextValue = {
+    defaultTheme,
+    resolvedTheme,
+    resetTheme,
+    theme,
+    setTheme,
+  }
 
   return (
-    <ThemeProviderContext.Provider {...props} value={value}>
+    <ThemeContext value={contextValue} {...props}>
       {children}
-    </ThemeProviderContext.Provider>
+    </ThemeContext>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = () => {
-  const context = React.useContext(ThemeProviderContext)
+  const context = useContext(ThemeContext)
 
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider")
-  }
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider')
 
   return context
 }

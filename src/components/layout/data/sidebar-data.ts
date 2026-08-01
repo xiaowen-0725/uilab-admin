@@ -1,68 +1,90 @@
 import {
+  AudioWaveform,
+  Command,
+  GalleryVerticalEnd,
   LayoutDashboard,
   ListTodo,
   Settings,
   ShieldCheck,
   UserCog,
   Wrench,
-} from "lucide-react"
-import type { SidebarData } from "../types"
+} from 'lucide-react'
+import { type SidebarData } from '../types'
 
 export const sidebarData: SidebarData = {
   user: {
-    name: "演示用户",
-    email: "demo@uilab.dev",
+    name: '演示用户',
+    email: 'demo@uilab.dev',
+    avatar: '',
   },
-  app: {
-    name: "UI Lab Admin",
-    plan: "通用中后台模板",
-  },
+  teams: [
+    {
+      name: 'UI Lab Admin',
+      logo: Command,
+      plan: 'Vite + Base UI',
+    },
+    {
+      name: 'Acme Inc',
+      logo: GalleryVerticalEnd,
+      plan: 'Enterprise',
+    },
+    {
+      name: 'Acme Corp.',
+      logo: AudioWaveform,
+      plan: 'Startup',
+    },
+  ],
   navGroups: [
     {
-      title: "概览",
+      title: 'General',
       items: [
         {
-          title: "仪表盘",
-          url: "/",
+          title: 'Dashboard',
+          url: '/',
           icon: LayoutDashboard,
         },
         {
-          title: "数据列表",
-          url: "/tasks",
+          title: 'Tasks',
+          url: '/tasks',
           icon: ListTodo,
         },
       ],
     },
     {
-      title: "系统",
+      title: 'Pages',
       items: [
         {
-          title: "设置",
-          icon: Settings,
-          items: [
-            {
-              title: "个人资料",
-              url: "/settings",
-              icon: UserCog,
-            },
-            {
-              title: "账户",
-              url: "/settings/account",
-              icon: Wrench,
-            },
-          ],
-        },
-        {
-          title: "认证页",
+          title: 'Auth',
           icon: ShieldCheck,
           items: [
             {
-              title: "登录",
-              url: "/sign-in",
+              title: 'Sign In',
+              url: '/sign-in',
             },
             {
-              title: "注册",
-              url: "/sign-up",
+              title: 'Sign Up',
+              url: '/sign-up',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Other',
+      items: [
+        {
+          title: 'Settings',
+          icon: Settings,
+          items: [
+            {
+              title: 'Profile',
+              url: '/settings',
+              icon: UserCog,
+            },
+            {
+              title: 'Account',
+              url: '/settings/account',
+              icon: Wrench,
             },
           ],
         },

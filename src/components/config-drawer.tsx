@@ -1,31 +1,22 @@
-import * as React from "react"
-import {
-  Check,
-  Columns2,
-  Copy,
-  LayoutDashboard,
-  LayoutTemplate,
-  Monitor,
-  Moon,
-  PanelLeft,
-  RotateCcw,
-  Settings2,
-  Square,
-  Sun,
-} from "lucide-react"
-import { toast } from "sonner"
-import {
-  preferencesToAgentPrompt,
-  preferencesToConfigSnippet,
-  preferencesToJson,
-  type AdminPreferences,
-  type LayoutMode,
-  type SidebarVariant,
-  type AdminTheme,
-  type TextDirection,
-} from "@/config/admin-preferences"
-import { usePreferences } from "@/context/preferences-provider"
-import { Button } from "@/components/ui/button"
+import { type SVGProps } from 'react'
+import { CircleCheck, Copy, RotateCcw, Settings } from 'lucide-react'
+import { toast } from 'sonner'
+import { IconDir } from '@/assets/custom/icon-dir'
+import { IconLayoutCompact } from '@/assets/custom/icon-layout-compact'
+import { IconLayoutDefault } from '@/assets/custom/icon-layout-default'
+import { IconLayoutFull } from '@/assets/custom/icon-layout-full'
+import { IconSidebarFloating } from '@/assets/custom/icon-sidebar-floating'
+import { IconSidebarInset } from '@/assets/custom/icon-sidebar-inset'
+import { IconSidebarSidebar } from '@/assets/custom/icon-sidebar-sidebar'
+import { IconThemeDark } from '@/assets/custom/icon-theme-dark'
+import { IconThemeLight } from '@/assets/custom/icon-theme-light'
+import { IconThemeSystem } from '@/assets/custom/icon-theme-system'
+import { cn } from '@/lib/utils'
+import { useDirection } from '@/context/direction-provider'
+import { type Collapsible, useLayout } from '@/context/layout-provider'
+import { useTheme } from '@/components/theme-provider'
+import { Button } from '@/components/ui/button'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Sheet,
   SheetContent,
@@ -34,82 +25,355 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet"
-import { cn } from "@/lib/utils"
+} from '@/components/ui/sheet'
+import { useSidebar } from '@/components/ui/sidebar'
+import {
+  preferencesToAgentPrompt,
+  preferencesToConfigSnippet,
+  preferencesToJson,
+  type AdminPreferences,
+} from '@/config/admin-preferences'
 
-type OptionCardProps<T extends string> = {
-  value: T
-  current: T
-  label: string
-  description?: string
-  icon: React.ReactNode
-  onSelect: (value: T) => void
-}
+export function ConfigDrawer() {
+  const { setOpen } = useSidebar()
+  const { resetDir } = useDirection()
+  const { resetTheme } = useTheme()
+  const { resetLayout } = useLayout()
 
-function OptionCard<T extends string>({
-  value,
-  current,
-  label,
-  description,
-  icon,
-  onSelect,
-}: OptionCardProps<T>) {
-  const selected = value === current
+  const handleReset = () => {
+    setOpen(true)
+    resetDir()
+    resetTheme()
+    resetLayout()
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      className={cn(
-        "relative flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors",
-        "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected
-          ? "border-primary bg-primary/5 shadow-sm"
-          : "border-border bg-background"
-      )}
-      aria-pressed={selected}
-    >
-      {selected ? (
-        <span className="absolute top-2 right-2 rounded-full bg-primary p-0.5 text-primary-foreground">
-          <Check className="size-3" />
-        </span>
-      ) : null}
-      <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-foreground">
-        {icon}
-      </div>
-      <div className="space-y-0.5">
-        <div className="text-sm font-medium">{label}</div>
-        {description ? (
-          <div className="text-xs text-muted-foreground">{description}</div>
-        ) : null}
-      </div>
-    </button>
+    <Sheet>
+      <SheetTrigger
+        render={
+          <Button
+            size='icon'
+            variant='ghost'
+            aria-label='Open theme settings'
+            className='rounded-full'
+          />
+        }
+      >
+        <Settings aria-hidden='true' />
+      </SheetTrigger>
+      <SheetContent className='flex flex-col'>
+        <SheetHeader className='pb-0 text-start'>
+          <SheetTitle>Theme Settings</SheetTitle>
+          <SheetDescription>
+            Adjust the appearance and layout to suit your preferences.
+          </SheetDescription>
+        </SheetHeader>
+        <div className='space-y-6 overflow-y-auto px-4'>
+          <ThemeConfig />
+          <SidebarConfig />
+          <LayoutConfig />
+          <DirConfig />
+          <ExportConfig />
+        </div>
+        <SheetFooter className='gap-2'>
+          <Button
+            variant='destructive'
+            onClick={handleReset}
+            aria-label='Reset all settings to default values'
+          >
+            Reset
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
 
 function SectionTitle({
   title,
-  showReset,
+  showReset = false,
   onReset,
+  resetAriaLabel,
+  className,
 }: {
   title: string
   showReset?: boolean
   onReset?: () => void
+  /** Shown on the small per-section reset (RotateCcw) for accessibility and tests. */
+  resetAriaLabel?: string
+  className?: string
 }) {
   return (
-    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-      <span>{title}</span>
-      {showReset && onReset ? (
+    <div
+      className={cn(
+        'mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground',
+        className
+      )}
+    >
+      {title}
+      {showReset && onReset && (
         <Button
-          type="button"
-          size="icon-xs"
-          variant="secondary"
-          className="rounded-full"
+          type='button'
+          size='icon'
+          variant='secondary'
+          className='size-4 rounded-full'
           onClick={onReset}
-          aria-label={`重置${title}`}
+          aria-label={resetAriaLabel}
         >
-          <RotateCcw className="size-3" />
+          <RotateCcw className='size-3' />
         </Button>
-      ) : null}
+      )}
+    </div>
+  )
+}
+
+function ConfigRadioItem({
+  item,
+  isTheme = false,
+}: {
+  item: {
+    value: string
+    label: string
+    icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement
+  }
+  isTheme?: boolean
+}) {
+  return (
+    <RadioGroupItem
+      value={item.value}
+      className={cn(
+        'group flex !size-auto h-auto w-full flex-col items-center rounded-none border-0 bg-transparent p-0 text-current shadow-none ring-0 outline-none after:hidden',
+        'data-checked:border-transparent data-checked:bg-transparent data-checked:text-current dark:data-checked:bg-transparent',
+        '[&_[data-slot=radio-group-indicator]]:hidden',
+        'transition duration-200 ease-in'
+      )}
+      aria-label={`Select ${item.label.toLowerCase()}`}
+      aria-describedby={`${item.value}-description`}
+    >
+      <div
+        className={cn(
+          'relative rounded-[6px] ring-[1px] ring-border',
+          'group-data-checked:shadow-2xl group-data-checked:ring-primary',
+          'group-focus-visible:ring-2'
+        )}
+        role='img'
+        aria-hidden='false'
+        aria-label={`${item.label} option preview`}
+      >
+        <CircleCheck
+          className={cn(
+            'size-6 fill-primary stroke-white',
+            'group-data-unchecked:hidden',
+            'absolute top-0 right-0 translate-x-1/2 -translate-y-1/2'
+          )}
+          aria-hidden='true'
+        />
+        {/* Hide default radio indicator dot from ui/radio-group */}
+        <span className='sr-only' />
+        <item.icon
+          className={cn(
+            !isTheme &&
+              'fill-primary stroke-primary group-data-unchecked:fill-muted-foreground group-data-unchecked:stroke-muted-foreground'
+          )}
+          aria-hidden='true'
+        />
+      </div>
+      <div
+        className='mt-1 w-full text-center text-xs'
+        id={`${item.value}-description`}
+        aria-live='polite'
+      >
+        {item.label}
+      </div>
+    </RadioGroupItem>
+  )
+}
+
+function ThemeConfig() {
+  const { defaultTheme, theme, setTheme } = useTheme()
+  return (
+    <div>
+      <SectionTitle
+        title='Theme'
+        showReset={theme !== defaultTheme}
+        onReset={() => setTheme(defaultTheme)}
+        resetAriaLabel='Reset theme preference to default'
+      />
+      <RadioGroup
+        value={theme}
+        onValueChange={setTheme}
+        className='grid w-full max-w-md grid-cols-3 gap-4'
+        aria-label='Select theme preference'
+        aria-describedby='theme-description'
+      >
+        {[
+          {
+            value: 'system',
+            label: 'System',
+            icon: IconThemeSystem,
+          },
+          {
+            value: 'light',
+            label: 'Light',
+            icon: IconThemeLight,
+          },
+          {
+            value: 'dark',
+            label: 'Dark',
+            icon: IconThemeDark,
+          },
+        ].map((item) => (
+          <ConfigRadioItem key={item.value} item={item} isTheme />
+        ))}
+      </RadioGroup>
+      <div id='theme-description' className='sr-only'>
+        Choose between system preference, light mode, or dark mode
+      </div>
+    </div>
+  )
+}
+
+function SidebarConfig() {
+  const { defaultVariant, variant, setVariant } = useLayout()
+  return (
+    <div className='max-md:hidden'>
+      <SectionTitle
+        title='Sidebar'
+        showReset={defaultVariant !== variant}
+        onReset={() => setVariant(defaultVariant)}
+        resetAriaLabel='Reset sidebar style to default'
+      />
+      <RadioGroup
+        value={variant}
+        onValueChange={setVariant}
+        className='grid w-full max-w-md grid-cols-3 gap-4'
+        aria-label='Select sidebar style'
+        aria-describedby='sidebar-description'
+      >
+        {[
+          {
+            value: 'inset',
+            label: 'Inset',
+            icon: IconSidebarInset,
+          },
+          {
+            value: 'floating',
+            label: 'Floating',
+            icon: IconSidebarFloating,
+          },
+          {
+            value: 'sidebar',
+            label: 'Sidebar',
+            icon: IconSidebarSidebar,
+          },
+        ].map((item) => (
+          <ConfigRadioItem key={item.value} item={item} />
+        ))}
+      </RadioGroup>
+      <div id='sidebar-description' className='sr-only'>
+        Choose between inset, floating, or standard sidebar layout
+      </div>
+    </div>
+  )
+}
+
+function LayoutConfig() {
+  const { open, setOpen } = useSidebar()
+  const { defaultCollapsible, collapsible, setCollapsible } = useLayout()
+
+  const radioState = open ? 'default' : collapsible
+
+  return (
+    <div className='max-md:hidden'>
+      <SectionTitle
+        title='Layout'
+        showReset={radioState !== 'default'}
+        onReset={() => {
+          setOpen(true)
+          setCollapsible(defaultCollapsible)
+        }}
+        resetAriaLabel='Reset layout options to default'
+      />
+      <RadioGroup
+        value={radioState}
+        onValueChange={(v) => {
+          if (v === 'default') {
+            setOpen(true)
+            return
+          }
+          setOpen(false)
+          setCollapsible(v as Collapsible)
+        }}
+        className='grid w-full max-w-md grid-cols-3 gap-4'
+        aria-label='Select layout style'
+        aria-describedby='layout-description'
+      >
+        {[
+          {
+            value: 'default',
+            label: 'Default',
+            icon: IconLayoutDefault,
+          },
+          {
+            value: 'icon',
+            label: 'Compact',
+            icon: IconLayoutCompact,
+          },
+          {
+            value: 'offcanvas',
+            label: 'Full layout',
+            icon: IconLayoutFull,
+          },
+        ].map((item) => (
+          <ConfigRadioItem key={item.value} item={item} />
+        ))}
+      </RadioGroup>
+      <div id='layout-description' className='sr-only'>
+        Choose between default expanded, compact icon-only, or full layout mode
+      </div>
+    </div>
+  )
+}
+
+function DirConfig() {
+  const { defaultDir, dir, setDir } = useDirection()
+  return (
+    <div>
+      <SectionTitle
+        title='Direction'
+        showReset={defaultDir !== dir}
+        onReset={() => setDir(defaultDir)}
+        resetAriaLabel='Reset text direction to default'
+      />
+      <RadioGroup
+        value={dir}
+        onValueChange={setDir}
+        className='grid w-full max-w-md grid-cols-3 gap-4'
+        aria-label='Select site direction'
+        aria-describedby='direction-description'
+      >
+        {[
+          {
+            value: 'ltr',
+            label: 'Left to Right',
+            icon: (props: SVGProps<SVGSVGElement>) => (
+              <IconDir dir='ltr' {...props} />
+            ),
+          },
+          {
+            value: 'rtl',
+            label: 'Right to Left',
+            icon: (props: SVGProps<SVGSVGElement>) => (
+              <IconDir dir='rtl' {...props} />
+            ),
+          },
+        ].map((item) => (
+          <ConfigRadioItem key={item.value} item={item} />
+        ))}
+      </RadioGroup>
+      <div id='direction-description' className='sr-only'>
+        Choose between left-to-right or right-to-left site direction
+      </div>
     </div>
   )
 }
@@ -119,299 +383,80 @@ async function copyText(text: string, successMessage: string) {
     await navigator.clipboard.writeText(text)
     toast.success(successMessage)
   } catch {
-    toast.error("复制失败，请手动选择文本")
+    toast.error('复制失败，请手动选择文本')
   }
 }
 
-export function ConfigDrawer() {
-  const {
-    defaults,
-    preferences,
-    setThemePreference,
-    setSidebarVariant,
-    setLayoutMode,
-    setDirection,
-    resetPreferences,
-    setSidebarOpen,
-  } = usePreferences()
+function ExportConfig() {
+  const { theme } = useTheme()
+  const { variant } = useLayout()
+  const { open } = useSidebar()
+  const { collapsible } = useLayout()
+  const { dir } = useDirection()
 
-  const handleLayoutSelect = (layout: LayoutMode) => {
-    setLayoutMode(layout)
-    setSidebarOpen(layout === "default")
+  const layout: AdminPreferences['layout'] = open
+    ? 'default'
+    : collapsible === 'offcanvas'
+      ? 'full'
+      : 'compact'
+
+  const preferences: AdminPreferences = {
+    theme,
+    sidebar: variant,
+    layout,
+    direction: dir,
   }
 
   return (
-    <Sheet>
-      <SheetTrigger
-        render={
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label="打开外观与布局设置"
-            className="rounded-full"
-          />
-        }
-      >
-        <Settings2 className="size-4" />
-      </SheetTrigger>
-      <SheetContent className="flex w-full flex-col sm:max-w-md">
-        <SheetHeader className="pb-0 text-start">
-          <SheetTitle>外观与布局</SheetTitle>
-          <SheetDescription>
-            调整当前浏览器的主题与壳层布局。可导出为项目默认配置，供新应用复用。
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="flex-1 space-y-6 overflow-y-auto px-4 py-2">
-          <section>
-            <SectionTitle
-              title="主题"
-              showReset={preferences.theme !== defaults.theme}
-              onReset={() => setThemePreference(defaults.theme)}
-            />
-            <div className="grid grid-cols-3 gap-3">
-              {(
-                [
-                  {
-                    value: "system",
-                    label: "跟随系统",
-                    icon: <Monitor className="size-4" />,
-                  },
-                  {
-                    value: "light",
-                    label: "浅色",
-                    icon: <Sun className="size-4" />,
-                  },
-                  {
-                    value: "dark",
-                    label: "深色",
-                    icon: <Moon className="size-4" />,
-                  },
-                ] satisfies Array<{
-                  value: AdminTheme
-                  label: string
-                  icon: React.ReactNode
-                }>
-              ).map((item) => (
-                <OptionCard
-                  key={item.value}
-                  value={item.value}
-                  current={preferences.theme}
-                  label={item.label}
-                  icon={item.icon}
-                  onSelect={setThemePreference}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="max-md:hidden">
-            <SectionTitle
-              title="侧栏样式"
-              showReset={preferences.sidebar !== defaults.sidebar}
-              onReset={() => setSidebarVariant(defaults.sidebar)}
-            />
-            <div className="grid grid-cols-3 gap-3">
-              {(
-                [
-                  {
-                    value: "inset",
-                    label: "内嵌",
-                    description: "Inset",
-                    icon: <Square className="size-4" />,
-                  },
-                  {
-                    value: "floating",
-                    label: "浮动",
-                    description: "Floating",
-                    icon: <Columns2 className="size-4" />,
-                  },
-                  {
-                    value: "sidebar",
-                    label: "贴边",
-                    description: "Sidebar",
-                    icon: <PanelLeft className="size-4" />,
-                  },
-                ] satisfies Array<{
-                  value: SidebarVariant
-                  label: string
-                  description: string
-                  icon: React.ReactNode
-                }>
-              ).map((item) => (
-                <OptionCard
-                  key={item.value}
-                  value={item.value}
-                  current={preferences.sidebar}
-                  label={item.label}
-                  description={item.description}
-                  icon={item.icon}
-                  onSelect={setSidebarVariant}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="max-md:hidden">
-            <SectionTitle
-              title="布局密度"
-              showReset={preferences.layout !== defaults.layout}
-              onReset={() => handleLayoutSelect(defaults.layout)}
-            />
-            <div className="grid grid-cols-3 gap-3">
-              {(
-                [
-                  {
-                    value: "default",
-                    label: "默认",
-                    description: "展开侧栏",
-                    icon: <LayoutDashboard className="size-4" />,
-                  },
-                  {
-                    value: "compact",
-                    label: "紧凑",
-                    description: "图标侧栏",
-                    icon: <LayoutTemplate className="size-4" />,
-                  },
-                  {
-                    value: "full",
-                    label: "全宽",
-                    description: "隐藏侧栏",
-                    icon: <Columns2 className="size-4" />,
-                  },
-                ] satisfies Array<{
-                  value: LayoutMode
-                  label: string
-                  description: string
-                  icon: React.ReactNode
-                }>
-              ).map((item) => (
-                <OptionCard
-                  key={item.value}
-                  value={item.value}
-                  current={preferences.layout}
-                  label={item.label}
-                  description={item.description}
-                  icon={item.icon}
-                  onSelect={handleLayoutSelect}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <SectionTitle
-              title="阅读方向"
-              showReset={preferences.direction !== defaults.direction}
-              onReset={() => setDirection(defaults.direction)}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              {(
-                [
-                  {
-                    value: "ltr",
-                    label: "从左到右",
-                    description: "LTR",
-                    icon: <PanelLeft className="size-4" />,
-                  },
-                  {
-                    value: "rtl",
-                    label: "从右到左",
-                    description: "RTL",
-                    icon: <Columns2 className="size-4" />,
-                  },
-                ] satisfies Array<{
-                  value: TextDirection
-                  label: string
-                  description: string
-                  icon: React.ReactNode
-                }>
-              ).map((item) => (
-                <OptionCard
-                  key={item.value}
-                  value={item.value}
-                  current={preferences.direction}
-                  label={item.label}
-                  description={item.description}
-                  icon={item.icon}
-                  onSelect={setDirection}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="space-y-3 rounded-xl border bg-muted/30 p-3">
-            <div className="space-y-1">
-              <div className="text-sm font-semibold">导出为项目默认</div>
-              <p className="text-xs text-muted-foreground">
-                当前选择只影响本浏览器。复制后可固化到
-                `src/config/admin-preferences.ts`，供新应用默认使用。
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() =>
-                  copyText(
-                    preferencesToJson(preferences),
-                    "已复制 JSON 配置"
-                  )
-                }
-              >
-                <Copy className="size-4" />
-                复制 JSON
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() =>
-                  copyText(
-                    preferencesToConfigSnippet(preferences),
-                    "已复制配置代码片段"
-                  )
-                }
-              >
-                <Copy className="size-4" />
-                复制 defaults 代码
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() =>
-                  copyText(
-                    preferencesToAgentPrompt(preferences),
-                    "已复制 Agent 提示词"
-                  )
-                }
-              >
-                <Copy className="size-4" />
-                复制 Agent 提示词
-              </Button>
-            </div>
-            <pre className="overflow-x-auto rounded-lg border bg-background p-3 text-[11px] leading-relaxed text-muted-foreground">
-              {preferencesToJson(preferences)}
-            </pre>
-          </section>
-        </div>
-
-        <SheetFooter className="gap-2 sm:flex-col">
-          <Button
-            variant="destructive"
-            onClick={() => {
-              resetPreferences()
-              setSidebarOpen(true)
-              toast.message("已恢复项目默认布局")
-            }}
-          >
-            <RotateCcw className="size-4" />
-            重置为项目默认
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    <div className='space-y-3 rounded-xl border bg-muted/30 p-3'>
+      <div className='space-y-1'>
+        <div className='text-sm font-semibold'>Export as project defaults</div>
+        <p className='text-xs text-muted-foreground'>
+          Runtime tweaks stay in cookies. Copy these values into
+          `src/config/admin-preferences.ts` for a new app default.
+        </p>
+      </div>
+      <div className='grid gap-2'>
+        <Button
+          variant='outline'
+          className='justify-start'
+          onClick={() =>
+            copyText(preferencesToJson(preferences), '已复制 JSON 配置')
+          }
+        >
+          <Copy className='size-4' />
+          Copy JSON
+        </Button>
+        <Button
+          variant='outline'
+          className='justify-start'
+          onClick={() =>
+            copyText(
+              preferencesToConfigSnippet(preferences),
+              '已复制 defaults 代码'
+            )
+          }
+        >
+          <Copy className='size-4' />
+          Copy defaults code
+        </Button>
+        <Button
+          variant='outline'
+          className='justify-start'
+          onClick={() =>
+            copyText(
+              preferencesToAgentPrompt(preferences),
+              '已复制 Agent 提示词'
+            )
+          }
+        >
+          <Copy className='size-4' />
+          Copy agent prompt
+        </Button>
+      </div>
+      <pre className='overflow-x-auto rounded-lg border bg-background p-3 text-[11px] leading-relaxed text-muted-foreground'>
+        {preferencesToJson(preferences)}
+      </pre>
+    </div>
   )
 }
-
-// keep type export surface stable for future CLI/skill adapters
-export type { AdminPreferences }

@@ -1,54 +1,69 @@
-import { Link, useLocation } from "@tanstack/react-router"
+import { type ReactNode } from 'react'
+import { Link, useLocation } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
-} from "@/components/ui/sidebar"
-import type { NavGroup as NavGroupProps, NavItem, NavLink } from "./types"
+} from '@/components/ui/sidebar'
+import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  type NavCollapsible,
+  type NavItem,
+  type NavLink,
+  type NavGroup as NavGroupProps,
+} from './types'
 
 export function NavGroup({ title, items }: NavGroupProps) {
-  const href = useLocation({ select: (location) => location.pathname })
-
+  const { state, isMobile } = useSidebar()
+  const href = useLocation({ select: (location) => location.href })
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{title}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
-          if (item.items) {
-            return item.items.map((subItem) => (
-              <SidebarMenuLink
-                key={`${item.title}-${subItem.title}`}
-                item={subItem}
-                href={href}
-              />
-            ))
-          }
+          const key = `${item.title}-${item.url}`
 
-          return (
-            <SidebarMenuLink
-              key={`${item.title}-${item.url}`}
-              item={item}
-              href={href}
-            />
-          )
+          if (!item.items)
+            return <SidebarMenuLink key={key} item={item} href={href} />
+
+          if (state === 'collapsed' && !isMobile)
+            return (
+              <SidebarMenuCollapsedDropdown key={key} item={item} href={href} />
+            )
+
+          return <SidebarMenuCollapsible key={key} item={item} href={href} />
         })}
       </SidebarMenu>
     </SidebarGroup>
   )
 }
 
-function SidebarMenuLink({
-  item,
-  href,
-}: {
-  item: NavLink
-  href: string
-}) {
-  const { setOpenMobile } = useSidebar()
+function NavBadge({ children }: { children: ReactNode }) {
+  return <Badge className='rounded-full px-1 py-0 text-xs'>{children}</Badge>
+}
 
+function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
+  const { setOpenMobile } = useSidebar()
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -56,8 +71,9 @@ function SidebarMenuLink({
         tooltip={item.title}
         render={
           <Link to={item.url} onClick={() => setOpenMobile(false)}>
-            {item.icon ? <item.icon /> : null}
+            {item.icon && <item.icon />}
             <span>{item.title}</span>
+            {item.badge && <NavBadge>{item.badge}</NavBadge>}
           </Link>
         }
       />
@@ -65,10 +81,110 @@ function SidebarMenuLink({
   )
 }
 
-function checkIsActive(href: string, item: NavItem) {
-  if ("url" in item && item.url) {
-    return href === item.url || href.startsWith(`${item.url}/`)
-  }
+function SidebarMenuCollapsible({
+  item,
+  href,
+}: {
+  item: NavCollapsible
+  href: string
+}) {
+  const { setOpenMobile } = useSidebar()
+  return (
+    <Collapsible
+      defaultOpen={checkIsActive(href, item, true)}
+      className='group/collapsible'
+      render={<SidebarMenuItem />}
+    >
+      <CollapsibleTrigger
+        render={
+          <SidebarMenuButton tooltip={item.title}>
+            {item.icon && <item.icon />}
+            <span>{item.title}</span>
+            {item.badge && <NavBadge>{item.badge}</NavBadge>}
+            <ChevronRight className='ms-auto transition-transform duration-200 group-data-open/collapsible:rotate-90 rtl:rotate-180' />
+          </SidebarMenuButton>
+        }
+      />
+      <CollapsibleContent className='CollapsibleContent'>
+        <SidebarMenuSub>
+          {item.items.map((subItem) => (
+            <SidebarMenuSubItem key={subItem.title}>
+              <SidebarMenuSubButton
+                isActive={checkIsActive(href, subItem)}
+                render={
+                  <Link to={subItem.url} onClick={() => setOpenMobile(false)}>
+                    {subItem.icon && <subItem.icon />}
+                    <span>{subItem.title}</span>
+                    {subItem.badge && <NavBadge>{subItem.badge}</NavBadge>}
+                  </Link>
+                }
+              />
+            </SidebarMenuSubItem>
+          ))}
+        </SidebarMenuSub>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
 
-  return Boolean(item.items?.some((child) => child.url === href))
+function SidebarMenuCollapsedDropdown({
+  item,
+  href,
+}: {
+  item: NavCollapsible
+  href: string
+}) {
+  return (
+    <SidebarMenuItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <SidebarMenuButton
+              tooltip={item.title}
+              isActive={checkIsActive(href, item)}
+            >
+              {item.icon && <item.icon />}
+              <span>{item.title}</span>
+              {item.badge && <NavBadge>{item.badge}</NavBadge>}
+              <ChevronRight className='ms-auto transition-transform duration-200 group-data-open:rotate-90' />
+            </SidebarMenuButton>
+          }
+        />
+        <DropdownMenuContent side='right' align='start' sideOffset={4}>
+          <DropdownMenuLabel>
+            {item.title} {item.badge ? `(${item.badge})` : ''}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {item.items.map((sub) => (
+            <DropdownMenuItem
+              key={`${sub.title}-${sub.url}`}
+              render={
+                <Link
+                  to={sub.url}
+                  className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
+                >
+                  {sub.icon && <sub.icon />}
+                  <span className='max-w-52 text-wrap'>{sub.title}</span>
+                  {sub.badge && (
+                    <span className='ms-auto text-xs'>{sub.badge}</span>
+                  )}
+                </Link>
+              }
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
+  )
+}
+
+function checkIsActive(href: string, item: NavItem, mainNav = false) {
+  return (
+    href === item.url || // /endpint?search=param
+    href.split('?')[0] === item.url || // endpoint
+    !!item?.items?.filter((i) => i.url === href).length || // if child nav is active
+    (mainNav &&
+      href.split('/')[1] !== '' &&
+      href.split('/')[1] === item?.url?.split('/')[1])
+  )
 }
