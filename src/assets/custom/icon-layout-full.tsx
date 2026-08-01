@@ -1,4 +1,5 @@
 import { type SVGProps } from 'react'
+import { cn } from '@/lib/utils'
 
 export function IconLayoutFull(props: SVGProps<SVGSVGElement>) {
   return (
@@ -6,7 +7,7 @@ export function IconLayoutFull(props: SVGProps<SVGSVGElement>) {
       data-name='icon-layout-full'
       xmlns='http://www.w3.org/2000/svg'
       viewBox='0 0 79.86 51.14'
-      {...props}
+      className={cn('fill-current stroke-current', props.className)} {...props}
     >
       <path
         fill='none'

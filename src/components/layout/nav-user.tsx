@@ -37,28 +37,35 @@ type NavUserProps = {
 export function NavUser({ user }: NavUserProps) {
   const { isMobile } = useSidebar()
   const [open, setOpen] = useDialogState()
+  const initials = user.name.slice(0, 1).toUpperCase() || 'U'
 
   return (
     <>
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<SidebarMenuButton
-                size='lg'
-                className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
-              >
-                <Avatar className='h-8 w-8 rounded-lg'>
+            <DropdownMenuTrigger
+              render={
+                <SidebarMenuButton
+                  size='lg'
+                  className='data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground'
+                />
+              }
+            >
+              <Avatar className='h-8 w-8 rounded-lg'>
+                {user.avatar ? (
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className='rounded-lg'>SN</AvatarFallback>
-                </Avatar>
-                <div className='grid flex-1 text-start text-sm leading-tight'>
-                  <span className='truncate font-semibold'>{user.name}</span>
-                  <span className='truncate text-xs'>{user.email}</span>
-                </div>
-                <ChevronsUpDown className='ms-auto size-4' />
-              </SidebarMenuButton>} />
+                ) : null}
+                <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
+              </Avatar>
+              <div className='grid flex-1 text-start text-sm leading-tight'>
+                <span className='truncate font-semibold'>{user.name}</span>
+                <span className='truncate text-xs'>{user.email}</span>
+              </div>
+              <ChevronsUpDown className='ms-auto size-4' />
+            </DropdownMenuTrigger>
             <DropdownMenuContent
-              className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
+              className='min-w-56 rounded-lg'
               side={isMobile ? 'bottom' : 'right'}
               align='end'
               sideOffset={4}
@@ -66,8 +73,12 @@ export function NavUser({ user }: NavUserProps) {
               <DropdownMenuLabel className='p-0 font-normal'>
                 <div className='flex items-center gap-2 px-1 py-1.5 text-start text-sm'>
                   <Avatar className='h-8 w-8 rounded-lg'>
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className='rounded-lg'>SN</AvatarFallback>
+                    {user.avatar ? (
+                      <AvatarImage src={user.avatar} alt={user.name} />
+                    ) : null}
+                    <AvatarFallback className='rounded-lg'>
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
                   <div className='grid flex-1 text-start text-sm leading-tight'>
                     <span className='truncate font-semibold'>{user.name}</span>
@@ -84,18 +95,18 @@ export function NavUser({ user }: NavUserProps) {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem render={<Link to='/settings/account'>
-                    <BadgeCheck />
-                    账户
-                  </Link>} />
-                <DropdownMenuItem render={<Link to='/settings'>
-                    <CreditCard />
-                    账单
-                  </Link>} />
-                <DropdownMenuItem render={<Link to='/settings/notifications'>
-                    <Bell />
-                    通知
-                  </Link>} />
+                <DropdownMenuItem render={<Link to='/settings/account' />}>
+                  <BadgeCheck />
+                  账户
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link to='/settings' />}>
+                  <CreditCard />
+                  账单
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link to='/settings/notifications' />}>
+                  <Bell />
+                  通知
+                </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem

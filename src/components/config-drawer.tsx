@@ -1,5 +1,5 @@
 import { type SVGProps } from 'react'
-import { CircleCheck, Copy, RotateCcw, Settings } from 'lucide-react'
+import { Check, Copy, RotateCcw, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { IconDir } from '@/assets/custom/icon-dir'
 import { IconLayoutCompact } from '@/assets/custom/icon-layout-compact'
@@ -21,7 +21,6 @@ import { useDirection } from '@/context/direction-provider'
 import { type Collapsible, useLayout } from '@/context/layout-provider'
 import { useTheme } from '@/context/theme-provider'
 import { Button } from '@/components/ui/button'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Sheet,
   SheetContent,
@@ -61,20 +60,20 @@ export function ConfigDrawer() {
       >
         <Settings aria-hidden='true' />
       </SheetTrigger>
-      <SheetContent className='flex flex-col'>
+      <SheetContent className='flex w-full flex-col sm:max-w-md'>
         <SheetHeader className='pb-0 text-start'>
           <SheetTitle>外观与布局</SheetTitle>
-          <SheetDescription>
-            按偏好调整主题与壳层布局。
-          </SheetDescription>
+          <SheetDescription>按偏好调整主题与壳层布局。</SheetDescription>
         </SheetHeader>
-        <div className='space-y-6 overflow-y-auto px-4'>
+
+        <div className='flex-1 space-y-6 overflow-y-auto px-4 py-2'>
           <ThemeConfig />
           <SidebarConfig />
           <LayoutConfig />
           <DirConfig />
           <ExportConfig />
         </div>
+
         <SheetFooter className='gap-2'>
           <Button
             variant='destructive'
@@ -94,230 +93,229 @@ function SectionTitle({
   showReset = false,
   onReset,
   resetAriaLabel,
-  className,
 }: {
   title: string
   showReset?: boolean
   onReset?: () => void
   resetAriaLabel?: string
-  className?: string
 }) {
   return (
-    <div
-      className={cn(
-        'mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground',
-        className
-      )}
-    >
-      {title}
-      {showReset && onReset && (
+    <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground'>
+      <span>{title}</span>
+      {showReset && onReset ? (
         <Button
           type='button'
-          size='icon'
+          size='icon-xs'
           variant='secondary'
-          className='size-4 rounded-full'
+          className='rounded-full'
           onClick={onReset}
           aria-label={resetAriaLabel}
         >
           <RotateCcw className='size-3' />
         </Button>
-      )}
+      ) : null}
     </div>
   )
 }
 
-function ConfigRadioItem({
+type OptionItem<T extends string> = {
+  value: T
+  label: string
+  icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement
+}
+
+function OptionCard<T extends string>({
   item,
+  current,
+  onSelect,
   isTheme = false,
 }: {
-  item: {
-    value: string
-    label: string
-    icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement
-  }
+  item: OptionItem<T>
+  current: T
+  onSelect: (value: T) => void
   isTheme?: boolean
 }) {
+  const selected = item.value === current
+
   return (
-    <RadioGroupItem
-      value={item.value}
-      className={cn(
-        'group flex !size-auto h-auto w-full flex-col items-center rounded-none border-0 bg-transparent p-0 text-current shadow-none ring-0 outline-none after:hidden',
-        'data-checked:border-transparent data-checked:bg-transparent data-checked:text-current dark:data-checked:bg-transparent',
-        '[&_[data-slot=radio-group-indicator]]:hidden',
-        'transition duration-200 ease-in'
-      )}
+    <button
+      type='button'
+      onClick={() => onSelect(item.value)}
+      aria-pressed={selected}
       aria-label={`选择${item.label}`}
-      aria-describedby={`${item.value}-description`}
+      className={cn(
+        'group flex w-full flex-col items-center gap-1 rounded-lg p-0.5 text-center transition-colors',
+        'outline-none focus-visible:ring-2 focus-visible:ring-ring'
+      )}
     >
       <div
         className={cn(
-          'relative rounded-[6px] ring-[1px] ring-border',
-          'group-data-checked:shadow-2xl group-data-checked:ring-primary',
-          'group-focus-visible:ring-2'
+          'relative w-full overflow-hidden rounded-[6px] ring-1 ring-border',
+          selected && 'shadow-md ring-2 ring-primary'
         )}
-        role='img'
-        aria-label={`${item.label} 预览`}
       >
-        <CircleCheck
-          className={cn(
-            'size-6 fill-primary stroke-white',
-            'group-data-unchecked:hidden',
-            'absolute top-0 right-0 translate-x-1/2 -translate-y-1/2'
-          )}
-          aria-hidden='true'
-        />
+        {selected ? (
+          <span className='absolute top-0 right-0 z-10 translate-x-1/3 -translate-y-1/3 rounded-full bg-primary p-0.5 text-primary-foreground shadow-sm'>
+            <Check className='size-3.5' strokeWidth={3} />
+          </span>
+        ) : null}
         <item.icon
           className={cn(
-            !isTheme &&
-              'fill-primary stroke-primary group-data-unchecked:fill-muted-foreground group-data-unchecked:stroke-muted-foreground'
+            'block h-auto w-full',
+            isTheme
+              ? 'overflow-hidden rounded-[6px]'
+              : cn(
+                  'fill-primary stroke-primary',
+                  !selected &&
+                    'fill-muted-foreground stroke-muted-foreground'
+                )
           )}
           aria-hidden='true'
         />
       </div>
-      <div
-        className='mt-1 w-full text-center text-xs'
-        id={`${item.value}-description`}
-        aria-live='polite'
-      >
-        {item.label}
-      </div>
-    </RadioGroupItem>
+      <span className='text-xs text-foreground'>{item.label}</span>
+    </button>
   )
 }
 
 function ThemeConfig() {
   const { defaultTheme, theme, setTheme } = useTheme()
+  const items: OptionItem<'system' | 'light' | 'dark'>[] = [
+    { value: 'system', label: '跟随系统', icon: IconThemeSystem },
+    { value: 'light', label: '浅色', icon: IconThemeLight },
+    { value: 'dark', label: '深色', icon: IconThemeDark },
+  ]
+
   return (
-    <div>
+    <section>
       <SectionTitle
         title='主题'
         showReset={theme !== defaultTheme}
         onReset={() => setTheme(defaultTheme)}
         resetAriaLabel='重置主题为默认'
       />
-      <RadioGroup
-        value={theme}
-        onValueChange={setTheme}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='选择主题'
-      >
-        {[
-          { value: 'system', label: '跟随系统', icon: IconThemeSystem },
-          { value: 'light', label: '浅色', icon: IconThemeLight },
-          { value: 'dark', label: '深色', icon: IconThemeDark },
-        ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} isTheme />
+      <div className='grid grid-cols-3 gap-3'>
+        {items.map((item) => (
+          <OptionCard
+            key={item.value}
+            item={item}
+            current={theme}
+            onSelect={setTheme}
+            isTheme
+          />
         ))}
-      </RadioGroup>
-    </div>
+      </div>
+    </section>
   )
 }
 
 function SidebarConfig() {
   const { defaultVariant, variant, setVariant } = useLayout()
+  const items: OptionItem<'inset' | 'floating' | 'sidebar'>[] = [
+    { value: 'inset', label: '内嵌', icon: IconSidebarInset },
+    { value: 'floating', label: '浮动', icon: IconSidebarFloating },
+    { value: 'sidebar', label: '贴边', icon: IconSidebarSidebar },
+  ]
+
   return (
-    <div className='max-md:hidden'>
+    <section className='max-md:hidden'>
       <SectionTitle
         title='侧栏样式'
         showReset={defaultVariant !== variant}
         onReset={() => setVariant(defaultVariant)}
         resetAriaLabel='重置侧栏样式为默认'
       />
-      <RadioGroup
-        value={variant}
-        onValueChange={setVariant}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='选择侧栏样式'
-      >
-        {[
-          { value: 'inset', label: '内嵌', icon: IconSidebarInset },
-          { value: 'floating', label: '浮动', icon: IconSidebarFloating },
-          { value: 'sidebar', label: '贴边', icon: IconSidebarSidebar },
-        ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} />
+      <div className='grid grid-cols-3 gap-3'>
+        {items.map((item) => (
+          <OptionCard
+            key={item.value}
+            item={item}
+            current={variant}
+            onSelect={setVariant}
+          />
         ))}
-      </RadioGroup>
-    </div>
+      </div>
+    </section>
   )
 }
 
 function LayoutConfig() {
   const { open, setOpen } = useSidebar()
   const { defaultCollapsible, collapsible, setCollapsible } = useLayout()
-  const radioState = open ? 'default' : collapsible
+  const current = open ? 'default' : collapsible
+
+  const items: OptionItem<'default' | 'icon' | 'offcanvas'>[] = [
+    { value: 'default', label: '默认', icon: IconLayoutDefault },
+    { value: 'icon', label: '紧凑', icon: IconLayoutCompact },
+    { value: 'offcanvas', label: '全宽', icon: IconLayoutFull },
+  ]
 
   return (
-    <div className='max-md:hidden'>
+    <section className='max-md:hidden'>
       <SectionTitle
         title='布局密度'
-        showReset={radioState !== 'default'}
+        showReset={current !== 'default'}
         onReset={() => {
           setOpen(true)
           setCollapsible(defaultCollapsible)
         }}
         resetAriaLabel='重置布局为默认'
       />
-      <RadioGroup
-        value={radioState}
-        onValueChange={(v) => {
-          if (v === 'default') {
-            setOpen(true)
-            return
-          }
-          setOpen(false)
-          setCollapsible(v as Collapsible)
-        }}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='选择布局密度'
-      >
-        {[
-          { value: 'default', label: '默认', icon: IconLayoutDefault },
-          { value: 'icon', label: '紧凑', icon: IconLayoutCompact },
-          { value: 'offcanvas', label: '全宽', icon: IconLayoutFull },
-        ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} />
+      <div className='grid grid-cols-3 gap-3'>
+        {items.map((item) => (
+          <OptionCard
+            key={item.value}
+            item={item}
+            current={current}
+            onSelect={(value) => {
+              if (value === 'default') {
+                setOpen(true)
+                return
+              }
+              setOpen(false)
+              setCollapsible(value as Collapsible)
+            }}
+          />
         ))}
-      </RadioGroup>
-    </div>
+      </div>
+    </section>
   )
 }
 
 function DirConfig() {
   const { defaultDir, dir, setDir } = useDirection()
+  const items: OptionItem<'ltr' | 'rtl'>[] = [
+    {
+      value: 'ltr',
+      label: '从左到右',
+      icon: (props) => <IconDir dir='ltr' {...props} />,
+    },
+    {
+      value: 'rtl',
+      label: '从右到左',
+      icon: (props) => <IconDir dir='rtl' {...props} />,
+    },
+  ]
+
   return (
-    <div>
+    <section>
       <SectionTitle
         title='阅读方向'
         showReset={defaultDir !== dir}
         onReset={() => setDir(defaultDir)}
         resetAriaLabel='重置阅读方向为默认'
       />
-      <RadioGroup
-        value={dir}
-        onValueChange={setDir}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='选择阅读方向'
-      >
-        {[
-          {
-            value: 'ltr',
-            label: '从左到右',
-            icon: (props: SVGProps<SVGSVGElement>) => (
-              <IconDir dir='ltr' {...props} />
-            ),
-          },
-          {
-            value: 'rtl',
-            label: '从右到左',
-            icon: (props: SVGProps<SVGSVGElement>) => (
-              <IconDir dir='rtl' {...props} />
-            ),
-          },
-        ].map((item) => (
-          <ConfigRadioItem key={item.value} item={item} />
+      <div className='grid grid-cols-2 gap-3'>
+        {items.map((item) => (
+          <OptionCard
+            key={item.value}
+            item={item}
+            current={dir}
+            onSelect={setDir}
+          />
         ))}
-      </RadioGroup>
-    </div>
+      </div>
+    </section>
   )
 }
 
@@ -350,7 +348,7 @@ function ExportConfig() {
   }
 
   return (
-    <div className='space-y-3 rounded-xl border bg-muted/30 p-3'>
+    <section className='space-y-3 rounded-xl border bg-muted/30 p-3'>
       <div className='space-y-1'>
         <div className='text-sm font-semibold'>导出为项目默认</div>
         <p className='text-xs text-muted-foreground'>
@@ -399,6 +397,6 @@ function ExportConfig() {
       <pre className='overflow-x-auto rounded-lg border bg-background p-3 text-[11px] leading-relaxed text-muted-foreground'>
         {preferencesToJson(preferences)}
       </pre>
-    </div>
+    </section>
   )
 }

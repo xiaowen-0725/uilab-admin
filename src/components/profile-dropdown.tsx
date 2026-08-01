@@ -19,7 +19,7 @@ export function ProfileDropdown() {
 
   return (
     <>
-      <DropdownMenu modal={false}>
+      <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <Button variant='ghost' className='relative h-8 w-8 rounded-full' />
@@ -30,7 +30,7 @@ export function ProfileDropdown() {
             <AvatarFallback>演</AvatarFallback>
           </Avatar>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className='w-56' align='end'>
+        <DropdownMenuContent className='w-56' align='end' sideOffset={8}>
           <DropdownMenuLabel className='font-normal'>
             <div className='flex flex-col gap-1.5'>
               <p className='text-sm leading-none font-medium'>演示用户</p>
@@ -41,30 +41,18 @@ export function ProfileDropdown() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem
-              render={
-                <Link to='/settings'>
-                  个人资料
-                  <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
-                </Link>
-              }
-            />
-            <DropdownMenuItem
-              render={
-                <Link to='/settings'>
-                  账单
-                  <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
-                </Link>
-              }
-            />
-            <DropdownMenuItem
-              render={
-                <Link to='/settings'>
-                  设置
-                  <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-                </Link>
-              }
-            />
+            <DropdownMenuItem render={<Link to='/settings' />}>
+              个人资料
+              <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link to='/settings' />}>
+              账单
+              <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link to='/settings' />}>
+              设置
+              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+            </DropdownMenuItem>
             <DropdownMenuItem>新建团队</DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
