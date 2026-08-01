@@ -25,7 +25,7 @@
 - **Phase 2A minimal Foundation seam**：`packages/foundation`（`@uilab/foundation`）公开 Interface 仅 `ui/button`、`ui/input`、`styles/tokens.css`；Admin 经 `@/components/ui/*` 兼容 re-export 消费；Workbench 直接消费公开子路径；`check:foundation` 边界门禁；`init` copy-and-own 到派生应用 `packages/foundation` + mini-workspace。
 - **Phase 3 Workbench Shell skeleton（shipped）**：Composition Root、Navigator、Task Surface、Composer、Adaptive Context Panel、placeholder Work Surface Host、task-scoped layout session、静态 fixture、`check:workbench`。
 - **Phase 3A inset layout polish（shipped）**：Admin inset / Codex 空间关系 — sidebar 背景、272px Navigator、8px inset Workspace、合并顶栏、TaskSurface content-only、浮动 Composer、pointer/keyboard 分源动效；独立 Playwright/动效证据已落盘。**非** Phase 4。
-- **Phase 3B Codex pane chrome + motion（shipped）**：Task/Work peer 44px toolbars；pointer View Transition vs keyboard instant；Context pointer entry；Playwright/动效证据已落盘；**无** Runtime / Surface。
+- **Phase 3B Codex pane chrome + motion（shipped）**：Task/Work peer 44px toolbars；右锚定 reserved-space Work drawer vs keyboard instant；Codex 语义图标；Context pointer entry；Playwright/动效证据已落盘；**无** Runtime / Surface。
 - Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈（Admin 源在 `archetypes/admin`；Workbench 使用小型 code-defined Router）。
 - Admin Shell、主题、动画、数据表格、认证、设置与错误页参考实现。
 - Admin-owned AI 合同：`archetypes/admin/docs/ai/*` 与 `archetypes/admin/scaffolds/*`。
@@ -206,7 +206,7 @@ Replicate Codex Desktop Task/Work peer pane chrome and pointer continuity motion
 
 - Task pane owns 44px toolbar (compat `workspace-top-bar`); Work Host owns peer 44px tab toolbar.
 - Icon-only Context/Work/maximize/close controls; no Task subtitle in toolbar.
-- Pointer Work open/close/maximize/restore via View Transition (`task-pane` / `work-surface`, 180ms); keyboard instant.
+- Pointer Work open/close/maximize/restore via an interruptible right-anchored reserved-space drawer (200/160/180ms); keyboard instant; Work content never snapshot-scales.
 - Context pointer open 140ms opacity + translateY(-4px); close immediate; keyboard instant.
 - Shell-owned `data-pane-motion` / `data-context-motion`; integration tests for geometry and motion source.
 

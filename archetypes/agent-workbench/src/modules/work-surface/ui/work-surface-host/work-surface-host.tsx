@@ -5,8 +5,8 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react'
-import { Maximize2, Minimize2, X } from 'lucide-react'
 import type { WorkSurfaceTab } from '@/modules/workbench-session'
+import { Maximize2, Minimize2, X } from 'lucide-react'
 
 /** Work Surface Module Implementation copy — Phase 6 surfaces not present. */
 const WORK_SURFACE_PLACEHOLDER_NOTICE =
@@ -56,6 +56,10 @@ function tabPlaceholderBody(tabId: string, label: string): string {
   ].join('\n')
 }
 
+/**
+ * Work Surface Host — always mounted so the Shell drawer can collapse with live pixels.
+ * Drawer slot owns width; Host fills the slot. Hidden: inert + aria-hidden, no compat test id.
+ */
 export function WorkSurfaceHost({
   view,
   callbacks,
@@ -120,34 +124,28 @@ export function WorkSurfaceHost({
     [callbacks, view.maxWidth, view.minWidth, view.width]
   )
 
-  if (!view.visible) {
-    return null
-  }
-
   const activeTab =
     view.tabs.find((t) => t.id === view.activeTabId) ?? view.tabs[0]
 
-  const styleWidth =
-    view.maximized || fullStage
-      ? undefined
-      : { width: view.width, minWidth: view.minWidth }
-
-  // Split only: left divider between Task and Work. Full-stage has no internal left edge.
+  // Drawer slot owns width; Host fills 100% at scale(1). Split shows left divider.
   const hostClassName =
-    view.maximized || fullStage
+    view.maximized || fullStage || !view.visible
       ? 'relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col bg-background'
-      : 'relative flex h-full min-h-0 shrink-0 flex-col border-l border-border bg-background'
+      : 'relative flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col border-l border-border bg-background'
 
   return (
     <section
       className={hostClassName}
-      style={styleWidth}
+      style={{ width: '100%', minWidth: 0 }}
       data-slot='work-surface-host'
-      data-testid='work-surface-host'
+      data-testid={view.visible ? 'work-surface-host' : undefined}
       data-maximized={view.maximized ? 'true' : 'false'}
+      data-visible={view.visible ? 'true' : 'false'}
       aria-label='工作面宿主'
+      aria-hidden={!view.visible}
+      inert={!view.visible}
     >
-      {!view.maximized && !fullStage ? (
+      {view.visible && !view.maximized && !fullStage ? (
         <div
           role='separator'
           aria-orientation='vertical'
@@ -171,7 +169,10 @@ export function WorkSurfaceHost({
         data-slot='work-surface-toolbar'
       >
         {toolbarLeading != null ? (
-          <div className='flex shrink-0 items-center' data-slot='work-toolbar-leading'>
+          <div
+            className='flex shrink-0 items-center'
+            data-slot='work-toolbar-leading'
+          >
             {toolbarLeading}
           </div>
         ) : null}
@@ -190,7 +191,7 @@ export function WorkSurfaceHost({
                 id={`work-tab-${tab.id}`}
                 aria-selected={selected}
                 aria-controls='work-surface-panel'
-                data-testid={`work-tab-${tab.id}`}
+                data-testid={view.visible ? `work-tab-${tab.id}` : undefined}
                 className={
                   selected
                     ? 'rounded-md bg-muted px-2.5 py-1.5 text-xs font-medium focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -205,7 +206,7 @@ export function WorkSurfaceHost({
         </div>
         <button
           type='button'
-          data-testid='work-surface-maximize'
+          data-testid={view.visible ? 'work-surface-maximize' : undefined}
           className={TOOLBAR_CONTROL_CLASS}
           aria-pressed={view.maximized}
           aria-label={view.maximized ? '退出最大化' : '最大化工作面'}
@@ -220,7 +221,7 @@ export function WorkSurfaceHost({
         </button>
         <button
           type='button'
-          data-testid='work-surface-close'
+          data-testid={view.visible ? 'work-surface-close' : undefined}
           className={TOOLBAR_CONTROL_CLASS}
           aria-label='关闭工作面'
           title='关闭工作面'
@@ -233,13 +234,11 @@ export function WorkSurfaceHost({
       <div
         id='work-surface-panel'
         role='tabpanel'
-        aria-labelledby={
-          activeTab ? `work-tab-${activeTab.id}` : undefined
-        }
+        aria-labelledby={activeTab ? `work-tab-${activeTab.id}` : undefined}
         className='min-h-0 flex-1 overflow-auto p-4'
-        data-testid='work-surface-panel'
+        data-testid={view.visible ? 'work-surface-panel' : undefined}
       >
-        <pre className='whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground'>
+        <pre className='font-sans text-sm leading-relaxed whitespace-pre-wrap text-foreground'>
           {activeTab
             ? tabPlaceholderBody(activeTab.id, activeTab.label)
             : WORK_SURFACE_PLACEHOLDER_NOTICE}

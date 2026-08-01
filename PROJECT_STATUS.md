@@ -32,10 +32,10 @@
 | Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin 兼容 re-export；Workbench 直接子路径消费；`check:foundation`；init copy-and-own |
 | Agent Workbench Shell | **Phase 3 Done** | 静态 Shell / task-scoped layout / placeholder Host；`check:workbench`；Playwright 证据；**无** Runtime / 具体 Surface |
 | Workbench inset layout polish | **Phase 3A Done** | sidebar 平面 + 272px Navigator + 8px inset Workspace + 合并顶栏 + pointer/keyboard 分源动效；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
-| Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；pointer View Transition vs keyboard instant；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
+| Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Codex 语义图标；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
 | Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | Foundation 2/8；Admin 18/108；Workbench 2/20；共 136 tests |
+| Browser test suite | **Green** | Foundation 2/8；Admin 18/108；Workbench 2/21；共 137 tests |
 | 模板“产品打磨/去 demo 化” | **Planned** | 在 Monorepo 稳定后继续 |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 

@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
-import {
-  AppWindowIcon,
-  FolderIcon,
-  PanelLeftIcon,
-  PanelRightIcon,
-} from 'lucide-react'
+import type { CSSProperties, TransitionEvent } from 'react'
 import type { TaskSurfaceView } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
+import { WorkSurfaceHost } from '@/modules/work-surface'
 import type {
   WorkbenchSessionCommands,
   WorkbenchSessionView,
 } from '@/modules/workbench-session'
-import { WorkSurfaceHost } from '@/modules/work-surface'
+import {
+  FolderIcon,
+  PanelBottom,
+  PanelLeftIcon,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { Navigator } from '../navigator/navigator'
 import {
   TASK_SURFACE_MIN_WIDTH,
@@ -21,37 +21,58 @@ import {
 } from '../responsive-layout/geometry'
 import { useStageWidth } from '../responsive-layout/use-stage-width'
 import { useViewportMode } from '../responsive-layout/use-viewport-mode'
-import {
-  usePointerViewTransition,
-  type PaneMotionSource,
-} from './use-pointer-view-transition'
 import { useWorkbenchShortcuts } from './use-workbench-shortcuts'
 
 /** Shell-owned motion modality — never stored in Session. */
 export type NavMotionSource = 'animated' | 'instant'
 export type ContextMotionSource = 'animated' | 'instant'
 
+/**
+ * Phase 3B contract: animated vs instant source only (data-pane-motion).
+ * Never stored in Session.
+ */
+export type PaneMotionSource = 'animated' | 'instant'
+
+/**
+ * Shell-owned Work drawer action — drives CSS duration/easing only
+ * (data-pane-transition). Never stored in Session.
+ */
+export type PaneTransition =
+  | 'open'
+  | 'close'
+  | 'maximize'
+  | 'restore'
+  | 'instant'
+
 const TOOLBAR_CONTROL_CLASS =
   'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-muted'
 
+/**
+ * Task flex constraints for split layout.
+ * - No maxWidth: Work right edge is fixed; Task must fill left remainder during drawer growth.
+ * - During width animation, minWidth is 0 so restore/maximize cannot push Stage.
+ * - After width transition ends (instant), restore TASK_SURFACE_MIN_WIDTH; final geometry unchanged.
+ * - full-stage / hidden: sideBySide false → no inline minWidth.
+ */
 function getTaskPaneStyle(
   sideBySide: boolean,
-  stageWidth: number
+  widthAnimating: boolean
 ): CSSProperties | undefined {
   if (!sideBySide) return undefined
-
-  const style: CSSProperties = {
-    minWidth: TASK_SURFACE_MIN_WIDTH,
+  return {
+    minWidth: widthAnimating ? 0 : TASK_SURFACE_MIN_WIDTH,
   }
+}
 
-  if (stageWidth > 0) {
-    style.maxWidth = Math.max(
-      TASK_SURFACE_MIN_WIDTH,
-      stageWidth - WORK_SURFACE_MIN_WIDTH
-    )
-  }
-
-  return style
+function workDrawerWidth(
+  visible: boolean,
+  fullStage: boolean,
+  effectiveWorkWidth: number,
+  stageWidth: number
+): number | string {
+  if (!visible) return 0
+  if (fullStage) return stageWidth > 0 ? stageWidth : '100%'
+  return effectiveWorkWidth
 }
 
 export interface WorkbenchShellProps {
@@ -75,8 +96,23 @@ export function WorkbenchShell({
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
   const [contextMotion, setContextMotion] =
     useState<ContextMotionSource>('instant')
-  const [paneMotion, setPaneMotion] = useState<PaneMotionSource>('instant')
-  const { runPointerTransition } = usePointerViewTransition()
+  const [paneMotionSource, setPaneMotionSource] =
+    useState<PaneMotionSource>('instant')
+  const [paneTransition, setPaneTransition] =
+    useState<PaneTransition>('instant')
+
+  const setPaneInstant = useCallback(() => {
+    setPaneMotionSource('instant')
+    setPaneTransition('instant')
+  }, [])
+
+  const setPanePointerAction = useCallback(
+    (action: Exclude<PaneTransition, 'instant'>) => {
+      setPaneMotionSource('animated')
+      setPaneTransition(action)
+    },
+    []
+  )
 
   const toggleNavigatorFromPointer = useCallback(() => {
     setNavMotion('animated')
@@ -100,44 +136,59 @@ export function WorkbenchShell({
   }, [commands])
 
   const toggleWorkFromPointer = useCallback(() => {
-    const source = runPointerTransition(() => {
-      commands.toggleWorkSurface()
-    })
-    setPaneMotion(source)
-  }, [commands, runPointerTransition])
+    setPanePointerAction(view.layout.workSurfaceVisible ? 'close' : 'open')
+    commands.toggleWorkSurface()
+  }, [commands, setPanePointerAction, view.layout.workSurfaceVisible])
 
   const toggleWorkFromKeyboard = useCallback(() => {
-    setPaneMotion('instant')
+    setPaneInstant()
     commands.toggleWorkSurface()
-  }, [commands])
+  }, [commands, setPaneInstant])
 
   const closeWorkFromPointer = useCallback(() => {
-    const source = runPointerTransition(() => {
-      commands.closeWorkSurface()
-    })
-    setPaneMotion(source)
-  }, [commands, runPointerTransition])
+    setPanePointerAction('close')
+    commands.closeWorkSurface()
+  }, [commands, setPanePointerAction])
 
   const toggleMaximizeFromPointer = useCallback(() => {
-    const source = runPointerTransition(() => {
-      commands.toggleMaximize()
-    })
-    setPaneMotion(source)
-  }, [commands, runPointerTransition])
+    setPanePointerAction(
+      view.layout.workSurfaceMaximized ? 'restore' : 'maximize'
+    )
+    commands.toggleMaximize()
+  }, [commands, setPanePointerAction, view.layout.workSurfaceMaximized])
 
   const exitMaximizeFromKeyboard = useCallback(() => {
-    setPaneMotion('instant')
+    setPaneInstant()
     commands.exitMaximize()
-  }, [commands])
+  }, [commands, setPaneInstant])
+
+  const resizeWorkFromPointer = useCallback(
+    (width: number) => {
+      // Drag/keyboard resize must not inherit open/maximize transition duration.
+      setPaneInstant()
+      commands.resizeWorkSurface(width)
+    },
+    [commands, setPaneInstant]
+  )
 
   /** Task select: mark context/pane instant so restored layout never plays entry. */
   const selectTaskFromShell = useCallback(
     (taskId: string) => {
       setContextMotion('instant')
-      setPaneMotion('instant')
+      setPaneInstant()
       commands.selectTask(taskId)
     },
-    [commands]
+    [commands, setPaneInstant]
+  )
+
+  /** Slot width only — ignore bubbled child transitions. */
+  const handleWorkDrawerTransitionEnd = useCallback(
+    (event: TransitionEvent<HTMLDivElement>) => {
+      if (event.currentTarget !== event.target) return
+      if (event.propertyName !== 'width') return
+      setPaneInstant()
+    },
+    [setPaneInstant]
   )
 
   useWorkbenchShortcuts(view, {
@@ -170,9 +221,7 @@ export function WorkbenchShell({
     view.layout.workSurfaceMaximized ||
     (viewport === 'narrow' && view.layout.workSurfaceVisible)
 
-  const showTaskBesideWork = !workFullStage
-
-  const sideBySide = view.layout.workSurfaceVisible && showTaskBesideWork
+  const sideBySide = view.layout.workSurfaceVisible && !workFullStage
 
   const sessionMax = view.workSurfaceMaxWidth
   const effectiveWorkMax = sideBySide
@@ -189,6 +238,15 @@ export function WorkbenchShell({
     effectiveWorkMax
   )
 
+  const drawerWidth = workDrawerWidth(
+    view.layout.workSurfaceVisible,
+    workFullStage,
+    effectiveWorkWidth,
+    stageWidth
+  )
+
+  const widthAnimating = paneMotionSource === 'animated'
+
   return (
     <div
       className='relative flex h-svh min-h-0 w-full overflow-hidden bg-sidebar'
@@ -198,7 +256,8 @@ export function WorkbenchShell({
       data-nav-open={view.navigatorOpen ? 'true' : 'false'}
       data-nav-motion={navMotion}
       data-context-motion={contextMotion}
-      data-pane-motion={paneMotion}
+      data-pane-motion={paneMotionSource}
+      data-pane-transition={paneTransition}
     >
       <a
         href='#workbench-main'
@@ -235,117 +294,127 @@ export function WorkbenchShell({
           className='relative flex min-h-0 min-w-0 flex-1 overflow-hidden'
           data-testid='workbench-stage'
         >
-          {showTaskBesideWork ? (
-            <div
-              className='flex min-h-0 min-w-0 flex-1 flex-col'
-              style={getTaskPaneStyle(sideBySide, stageWidth)}
-              data-slot='task-pane'
+          {/* Task stays mounted; full-stage Work shrinks it via the drawer width. */}
+          <div
+            className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+            style={getTaskPaneStyle(sideBySide, widthAnimating)}
+            data-slot='task-pane'
+            aria-hidden={workFullStage || undefined}
+            inert={workFullStage || undefined}
+          >
+            {/* Task pane toolbar (44px) — was Workspace-wide header. */}
+            <header
+              className='flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
+              data-testid='workspace-top-bar'
+              data-slot='task-pane-toolbar'
             >
-              {/* Task pane toolbar (44px) — was Workspace-wide header. */}
-              <header
-                className='flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
-                data-testid='workspace-top-bar'
-                data-slot='task-pane-toolbar'
+              <button
+                type='button'
+                data-testid={workFullStage ? undefined : 'toggle-navigator'}
+                className={TOOLBAR_CONTROL_CLASS}
+                aria-pressed={view.navigatorOpen}
+                aria-label='切换导航'
+                title='切换导航'
+                onClick={toggleNavigatorFromPointer}
               >
-                <button
-                  type='button'
-                  data-testid='toggle-navigator'
-                  className={TOOLBAR_CONTROL_CLASS}
-                  aria-pressed={view.navigatorOpen}
-                  aria-label='切换导航'
-                  title='切换导航'
-                  onClick={toggleNavigatorFromPointer}
-                >
-                  <PanelLeftIcon className='size-4' aria-hidden />
-                </button>
+                <PanelLeftIcon className='size-4' aria-hidden />
+              </button>
 
-                <FolderIcon
-                  className='size-4 shrink-0 text-muted-foreground'
-                  aria-hidden
-                />
+              <FolderIcon
+                className='size-4 shrink-0 text-muted-foreground'
+                aria-hidden
+              />
 
-                <div className='min-w-0 flex-1'>
-                  <h1 className='truncate text-sm font-semibold leading-none'>
-                    {taskView.title}
-                  </h1>
-                </div>
-
-                <div className='flex shrink-0 items-center gap-0.5'>
-                  <button
-                    type='button'
-                    data-testid='toggle-context'
-                    className={TOOLBAR_CONTROL_CLASS}
-                    aria-pressed={view.layout.contextPanelOpen}
-                    aria-label='切换任务上下文面板'
-                    title='切换任务上下文面板'
-                    onClick={toggleContextFromPointer}
-                  >
-                    <PanelRightIcon className='size-4' aria-hidden />
-                  </button>
-                  <button
-                    type='button'
-                    data-testid='toggle-work-surface-chrome'
-                    className={TOOLBAR_CONTROL_CLASS}
-                    aria-pressed={view.layout.workSurfaceVisible}
-                    aria-label='切换工作面'
-                    title='切换工作面'
-                    onClick={toggleWorkFromPointer}
-                  >
-                    <AppWindowIcon className='size-4' aria-hidden />
-                  </button>
-                </div>
-              </header>
-
-              <div className='flex min-h-0 min-w-0 flex-1'>
-                <TaskSurface
-                  view={taskView}
-                  onCloseContextPanel={
-                    taskView.contextPanelOpen
-                      ? () => {
-                          setContextMotion('instant')
-                          commands.toggleContextPanel()
-                        }
-                      : undefined
-                  }
-                />
+              <div className='min-w-0 flex-1'>
+                <h1 className='truncate text-sm leading-none font-semibold'>
+                  {taskView.title}
+                </h1>
               </div>
-            </div>
-          ) : null}
 
-          <WorkSurfaceHost
-            view={{
-              visible: view.layout.workSurfaceVisible,
-              maximized: view.layout.workSurfaceMaximized,
-              width: effectiveWorkWidth,
-              minWidth: view.workSurfaceMinWidth,
-              maxWidth: effectiveWorkMax,
-              tabs: view.workSurfaceTabs,
-              activeTabId: view.layout.activeTabId,
-            }}
-            callbacks={{
-              onClose: closeWorkFromPointer,
-              onActivateTab: commands.activateTab,
-              onResize: commands.resizeWorkSurface,
-              onToggleMaximize: toggleMaximizeFromPointer,
-              onExitMaximize: exitMaximizeFromKeyboard,
-            }}
-            fullStage={workFullStage}
-            toolbarLeading={
-              workFullStage ? (
+              <div className='flex shrink-0 items-center gap-0.5'>
                 <button
                   type='button'
-                  data-testid='toggle-navigator'
+                  data-testid='toggle-context'
                   className={TOOLBAR_CONTROL_CLASS}
-                  aria-pressed={view.navigatorOpen}
-                  aria-label='切换导航'
-                  title='切换导航'
-                  onClick={toggleNavigatorFromPointer}
+                  aria-pressed={view.layout.contextPanelOpen}
+                  aria-label='切换任务上下文面板'
+                  title='切换任务上下文面板'
+                  onClick={toggleContextFromPointer}
                 >
-                  <PanelLeftIcon className='size-4' aria-hidden />
+                  <SlidersHorizontal className='size-4' aria-hidden />
                 </button>
-              ) : undefined
-            }
-          />
+                <button
+                  type='button'
+                  data-testid='toggle-work-surface-chrome'
+                  className={TOOLBAR_CONTROL_CLASS}
+                  aria-pressed={view.layout.workSurfaceVisible}
+                  aria-label='切换工作面'
+                  title='切换工作面'
+                  onClick={toggleWorkFromPointer}
+                >
+                  <PanelBottom className='size-4' aria-hidden />
+                </button>
+              </div>
+            </header>
+
+            <div className='flex min-h-0 min-w-0 flex-1'>
+              <TaskSurface
+                view={taskView}
+                onCloseContextPanel={
+                  taskView.contextPanelOpen
+                    ? () => {
+                        setContextMotion('instant')
+                        commands.toggleContextPanel()
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          </div>
+
+          {/* Always-mounted right-anchored Work drawer — width is the only moving boundary. */}
+          <div
+            className='work-drawer-slot'
+            data-slot='work-drawer-slot'
+            style={{ width: drawerWidth }}
+            aria-hidden={!view.layout.workSurfaceVisible || undefined}
+            onTransitionEnd={handleWorkDrawerTransitionEnd}
+          >
+            <WorkSurfaceHost
+              view={{
+                visible: view.layout.workSurfaceVisible,
+                maximized: view.layout.workSurfaceMaximized,
+                width: effectiveWorkWidth,
+                minWidth: view.workSurfaceMinWidth,
+                maxWidth: effectiveWorkMax,
+                tabs: view.workSurfaceTabs,
+                activeTabId: view.layout.activeTabId,
+              }}
+              callbacks={{
+                onClose: closeWorkFromPointer,
+                onActivateTab: commands.activateTab,
+                onResize: resizeWorkFromPointer,
+                onToggleMaximize: toggleMaximizeFromPointer,
+                onExitMaximize: exitMaximizeFromKeyboard,
+              }}
+              fullStage={workFullStage}
+              toolbarLeading={
+                workFullStage && view.layout.workSurfaceVisible ? (
+                  <button
+                    type='button'
+                    data-testid='toggle-navigator'
+                    className={TOOLBAR_CONTROL_CLASS}
+                    aria-pressed={view.navigatorOpen}
+                    aria-label='切换导航'
+                    title='切换导航'
+                    onClick={toggleNavigatorFromPointer}
+                  >
+                    <PanelLeftIcon className='size-4' aria-hidden />
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
         </main>
       </div>
 

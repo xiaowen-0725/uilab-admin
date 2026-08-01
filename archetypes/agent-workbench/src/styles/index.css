@@ -2,18 +2,22 @@
 @import './tokens.css';
 
 /* Tailwind 4: scan Foundation source (workspace via node_modules). */
-@source "../../node_modules/@uilab/foundation/src/ui";
+@source '../../node_modules/@uilab/foundation/src/ui';
 
 @custom-variant dark (&:is(.dark *));
 
-/* Phase 3A Shell geometry + motion tokens (Shell-owned, not Session). */
+/* Phase 3A/3B Shell geometry + motion tokens (Shell-owned, not Session). */
 :root {
   --navigator-width: 272px;
   --workspace-inset: 8px;
   --workspace-radius: 12px;
   --content-max-width: 880px;
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-drawer-close: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-pane-expand: cubic-bezier(0.77, 0, 0.175, 1);
   --nav-motion-duration: 0ms;
+  --pane-motion-duration: 0ms;
+  --pane-motion-easing: var(--ease-drawer);
 }
 
 @layer base {
@@ -29,8 +33,17 @@
 
   body {
     @apply m-0 h-full min-h-svh w-full overflow-x-hidden bg-sidebar font-sans text-foreground antialiased;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      Arial,
+      'Noto Sans',
+      sans-serif;
   }
 
   #root {
@@ -43,7 +56,7 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-3 ring-ring/50;
+    @apply ring-3 ring-ring/50 outline-none;
   }
 }
 
@@ -56,14 +69,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-
-  /* Explicit View Transition bypass (pointer Work path also skips in JS). */
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
-    animation-duration: 0s !important;
   }
 }
 
@@ -214,44 +219,45 @@
   container-name: task;
 }
 
-/* --- Phase 3B: Task / Work pane chrome + pointer View Transitions --- */
+/* --- Phase 3B: right-anchored Work drawer (no View Transition morph) --- */
+/* data-pane-motion = animated|instant (source); data-pane-transition = action. */
 
-[data-slot='task-pane'] {
-  view-transition-name: task-pane;
+[data-slot='workbench-shell'][data-pane-motion='animated'][data-pane-transition='open'] {
+  --pane-motion-duration: 200ms;
+  --pane-motion-easing: var(--ease-drawer);
 }
 
-[data-slot='work-surface-host'] {
-  view-transition-name: work-surface;
+[data-slot='workbench-shell'][data-pane-motion='animated'][data-pane-transition='close'] {
+  --pane-motion-duration: 160ms;
+  --pane-motion-easing: var(--ease-drawer-close);
+}
+
+[data-slot='workbench-shell'][data-pane-motion='animated'][data-pane-transition='maximize'],
+[data-slot='workbench-shell'][data-pane-motion='animated'][data-pane-transition='restore'] {
+  --pane-motion-duration: 180ms;
+  --pane-motion-easing: var(--ease-pane-expand);
+}
+
+[data-slot='workbench-shell'][data-pane-motion='instant'],
+[data-slot='workbench-shell'][data-pane-transition='instant'] {
+  --pane-motion-duration: 0ms;
 }
 
 /*
- * Allow pointer events to reach live controls during active transitions so
- * rapid toggle/close/maximize can skipTransition and retarget (work order).
+ * Always-mounted Work clipping slot. Width is the only moving boundary;
+ * right edge stays at Stage right (flex end). Interruptible: CSS retargets
+ * mid-transition from the current computed width.
  */
-::view-transition {
-  pointer-events: none;
-}
-
-/* Suppress root crossfade + UA default 0.25s root group (keeps lifecycle at 180ms). */
-::view-transition-group(root),
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
-::view-transition-group(task-pane),
-::view-transition-group(work-surface) {
-  animation-duration: 180ms;
-  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
-}
-
-::view-transition-old(task-pane),
-::view-transition-new(task-pane),
-::view-transition-old(work-surface),
-::view-transition-new(work-surface) {
-  animation-duration: 180ms;
-  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+.work-drawer-slot {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 0;
+  height: 100%;
+  width: 0;
+  overflow: hidden;
+  transition-property: width;
+  transition-duration: var(--pane-motion-duration);
+  transition-timing-function: var(--pane-motion-easing);
 }
 
 /*

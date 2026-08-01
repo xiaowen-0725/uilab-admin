@@ -1,6 +1,9 @@
 # Phase 3B Codex Pane Chrome + Motion — Work Order
 
 > Status: completed and independently verified
+> 2026-08-02 amendment: default View Transition pane morph was replaced by
+> [`animation-plans/001`](../../animation-plans/001-replace-work-morph-with-drawer.md)
+> after frame-by-frame review found content scaling inconsistent with Codex.
 > Scope: Task/Work pane chrome and pointer motion polish only; no Runtime or concrete Surface
 
 ## Objective
@@ -57,8 +60,8 @@ have one toolbar spanning both Task and Work.
 - Controls use no always-visible border. Hover/pressed state is a soft rounded background.
 - No fake menu/action. Do not add a decorative ellipsis that looks interactive.
 
-The Task pane wrapper owns `view-transition-name: task-pane` and contains its toolbar
-plus `TaskSurface`.
+The Task pane remains mounted while Work expands so the moving divider has one continuous
+reserved-space model. Full-stage Work makes Task inert and shrinks it to zero width.
 
 ## Work pane chrome
 
@@ -72,13 +75,14 @@ Keep Work Surface Host as the owner of Work chrome, but align it with Codex:
 - Use `Maximize2`, `Minimize2`, and `X` from Workbench-owned `lucide-react`.
 - Host background is the Workspace background rather than a separate card plane.
 - Keep resize separator, keyboard resize, tabs, placeholder truthfulness, and all callbacks.
-- The Host owns `view-transition-name: work-surface`.
+- The Host stays mounted while hidden, but is inert/aria-hidden; the Shell drawer slot owns
+  its visible width.
 
 ## Pointer vs keyboard motion contract
 
 ### Pointer Work transitions
 
-The following pointer actions use the browser View Transition API when available:
+The following pointer actions use one interruptible right-anchored drawer slot:
 
 - open Work from Task toolbar
 - close Work from Task toolbar or Work toolbar
@@ -87,22 +91,20 @@ The following pointer actions use the browser View Transition API when available
 
 Contract:
 
-- duration: **180ms**
-- easing: `cubic-bezier(0.77, 0, 0.175, 1)` (strong on-screen movement curve)
-- transition names: `task-pane`, `work-surface`
-- suppress the root crossfade so the whole application never flashes
-- repeated pointer actions skip/retarget the active transition before starting the next
-- unsupported browsers fall back to the exact same state update with no animation
-- `prefers-reduced-motion: reduce` bypasses movement and performs the update immediately
-- expose `data-pane-motion="animated|instant"` on Workbench Shell for verification
-
-Use `flushSync` only inside the View Transition update callback so React commits the
-state change in the captured transition boundary. Keep this helper private to Shell.
+- Work right edge stays fixed to Stage right; only the left boundary advances/retracts
+- Work content remains live at normal scale; no snapshot morph or `transform: scale(...)`
+- open: **200ms** `cubic-bezier(0.32, 0.72, 0, 1)`
+- close: **160ms** `cubic-bezier(0.23, 1, 0.32, 1)`
+- maximize/restore: **180ms** `cubic-bezier(0.77, 0, 0.175, 1)`
+- CSS width transition retargets from its current value on rapid pointer input
+- `prefers-reduced-motion: reduce` performs the update immediately
+- expose `data-pane-motion="animated|instant"` and
+  `data-pane-transition="open|close|maximize|restore|instant"` on Shell
 
 ### Keyboard Work transitions
 
 - `Ctrl/Cmd+Shift+W` and `Escape` remain **instant**.
-- They must not call `document.startViewTransition`.
+- They must not animate the drawer width.
 - Shell marks `data-pane-motion="instant"`.
 
 ### Context card
@@ -184,7 +186,8 @@ Use Playwright CLI + local Chrome at 1440×900, 1024×768, and 760×800:
 
 - screenshot Task-only + Context, Task/Work split, Work maximized, and restored states
 - verify 44px Task and Work toolbar heights and pane-aligned bounds
-- sample View Transition animations and confirm duration/easing
+- sample drawer width during open/maximize/restore; confirm right-edge delta remains 0,
+  content transform remains `none`, and duration/easing match the action
 - verify rapid pointer toggles settle to correct state
 - emulate reduced motion and confirm pointer Work transition is bypassed
 - verify keyboard Context/Work actions are instant

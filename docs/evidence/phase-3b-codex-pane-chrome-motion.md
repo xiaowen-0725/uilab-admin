@@ -1,6 +1,6 @@
 # Phase 3B Codex Pane Chrome + Motion — Evidence
 
-> Date: 2026-08-01
+> Date: 2026-08-02 (drawer correction; original pane chrome delivered 2026-08-01)
 > Branch: `main`
 > Verdict: **Pass**
 > Scope: Task/Work pane chrome and continuity motion only; no Runtime or concrete Surface
@@ -21,30 +21,33 @@ URL: `http://127.0.0.1:5174/`.
 
 | Viewport/state | Verified geometry and behavior | Screenshot |
 |---|---|---|
-| 1440×900 Task-only | One pane-local 44px Task toolbar; no subtitle; icon-only Context/Work controls | [`task-only-1440.png`](../../output/playwright/phase3b-audit/task-only-1440.png) |
+| 1440×900 Task-only | One 44px Task toolbar; Context=`SlidersHorizontal`, Work=`PanelBottom`; 32×32 controls | [`task-icons-1440.png`](../../output/playwright/work-drawer-audit/task-icons-1440.png) |
 | 1440×900 Context | Context remains a content-height reserved card at the Task upper-right | [`task-context-1440.png`](../../output/playwright/phase3b-audit/task-context-1440.png) |
-| 1440×900 split | Task and Work have separate, non-overlapping 44px toolbars | [`split-context-1440.png`](../../output/playwright/phase3b-audit/split-context-1440.png) |
-| 1024×768 split | Task `x=9, w=526`; Work `x=536, w=479`; Context overlays constrained Task; no overflow | [`split-context-1024.png`](../../output/playwright/phase3b-audit/split-context-1024.png) |
-| 760×800 serial | Work fills Stage `x=0, w=760`; one operable Navigator control; no left divider or overflow | [`work-serial-760.png`](../../output/playwright/phase3b-audit/work-serial-760.png) |
-| 1440×900 maximized | Work fills inset Stage; toolbar remains 44px and owns restore/close controls | [`work-maximized-1440.png`](../../output/playwright/phase3b-audit/work-maximized-1440.png) |
+| 1440×900 split | Task and Work have separate toolbars; Work right edge fixed to Stage | [`work-open-1440.png`](../../output/playwright/work-drawer-audit/work-open-1440.png) |
+| 1024×768 split | Stage `w=1006`; Task `w=526`; Work `w=480`; no horizontal overflow | [`work-split-1024.png`](../../output/playwright/work-drawer-audit/work-split-1024.png) |
+| 760×800 serial | Work fills Stage `x=0, w=760`; Task remains inert at 0px; one operable Navigator control | [`work-serial-760.png`](../../output/playwright/work-drawer-audit/work-serial-760.png) |
+| 1440×900 maximized | Work boundary expands to full Stage without scaling content | [`work-maximized-1440.png`](../../output/playwright/work-drawer-audit/work-maximized-1440.png) |
 | 1440×900 restored | Pointer restore recovers Task, Context, and Work split state | [`work-restored-1440.png`](../../output/playwright/phase3b-audit/work-restored-1440.png) |
 
 Console: **0 errors / 0 warnings**.
 
 ## Motion verification
 
-- Pointer Work open/close/maximize/restore uses named View Transitions
-  `task-pane` and `work-surface` at `180ms cubic-bezier(0.77, 0, 0.175, 1)`.
-- Root transition group/crossfade is disabled (`animation-name: none`, duration `0s`);
-  sampled active named animations were 180ms only.
-- Three pointer toggles spaced 30ms apart interrupted safely and settled to the expected
-  final closed state with no active animations or console warnings.
+- Frame-by-frame review revoked the original default View Transition morph because it
+  compressed Task snapshots and scaled Work during maximize.
+- Current Work drawer samples at 1440px: width `47.85 → 373.98 → 467.01 → 480px`;
+  every sampled `slot.right - stage.right` was `0px`, and Work transform stayed `none`.
+- Pointer open: 200ms drawer curve; close: 160ms strong ease-out;
+  maximize/restore: 180ms strong ease-in-out.
+- Maximize and restore intermediate samples also kept right-edge delta at `0px`, while
+  Task width moved inversely and Work content remained unscaled.
+- Three pointer toggles spaced 30ms apart retargeted safely and settled open at 480px.
 - Pointer Context open computed to `140ms cubic-bezier(0.23, 1, 0.32, 1)` with
   opacity and `translateY(-4px)` entry; closing is immediate.
-- `Ctrl/Cmd+Shift+W`, `Ctrl/Cmd+I`, and `Escape` do not invoke
-  `document.startViewTransition`; Shell reports the `instant` motion source.
-- With `prefers-reduced-motion: reduce`, pointer Work actions bypass View Transition and
-  settle instantly with zero active animations.
+- `Ctrl/Cmd+Shift+W`, `Ctrl/Cmd+I`, and `Escape` report the `instant` motion source;
+  keyboard Work computed duration was `0s`.
+- With `prefers-reduced-motion: reduce`, Work computed duration was `0.01ms`, the slot
+  had zero active animations after settling, and movement was imperceptible.
 - No `transition-all`, generic `ease-in`, scale-from-zero, bounce, or decorative keyframes
   were introduced.
 
@@ -53,8 +56,8 @@ Console: **0 errors / 0 warnings**.
 ```text
 Foundation:  2 files /   8 tests passed
 Admin:      18 files / 108 tests passed
-Workbench:   2 files /  20 tests passed
-Total:                  136 tests passed
+Workbench:   2 files /  21 tests passed
+Total:                  137 tests passed
 ```
 
 Commands passed:
@@ -75,13 +78,12 @@ git diff --check
 
 | Area | Finding | Severity | Disposition |
 |---|---|---|---|
-| Work continuity | Named pane snapshots preserve spatial identity through open, close, maximize, and restore | — | Pass |
-| Root document | Root crossfade/group animation is suppressed, preventing whole-window flash | — | Pass |
-| Interruption | Active transitions are skipped before retargeting; rapid input settles deterministically | — | Pass |
+| Work continuity | Right edge remains fixed while the left boundary advances/retracts; content stays at normal scale | — | Pass |
+| Interruption | CSS width transition retargets from the current computed width | — | Pass |
 | Context entry | 140ms opacity + 4px translation is subtle, directional, and contains no scale/bounce | — | Pass |
 | Keyboard motion | High-frequency shortcuts and Escape are instant | — | Pass |
-| Reduced motion | View Transition is bypassed and CSS motion is disabled | — | Pass |
-| Snapshot cost | View Transition captures two bounded pane surfaces for 180ms | Low, accepted | Recheck when real Browser/Document surfaces arrive |
+| Reduced motion | Drawer movement collapses to 0.01ms; keyboard remains 0ms | — | Pass |
+| Layout cost | One bounded Stage width transition intentionally reflows Task/Work for 160–200ms | Low, accepted | Recheck with real Browser/Document surfaces |
 
 **Animation verdict: Approve.**
 

@@ -5,18 +5,18 @@
 
 ## 当前状态（shipped vs planned）
 
-| 能力 | 状态 |
-|---|---|
-| Workbench Shell + Navigator | **shipped**（Phase 3） |
-| Inset Workspace 空间模型 + Navigator 动效 | **shipped**（Phase 3A layout polish） |
-| Task/Work pane chrome + pointer View Transition | **shipped**（Phase 3B；Playwright/动效证据已落盘） |
-| Task Surface + Composer + Adaptive Context Panel | **shipped**（静态 fixture） |
-| Work Surface Host（Single-pane + Tabs，显隐/调宽/最大化） | **shipped**（占位内容） |
-| Agent Runtime / 流式投影 | **planned**（Phase 4，当前暂停） |
-| Surface Registry | **planned**（Phase 5） |
-| Document / Browser / Review Surfaces | **planned**（Phase 6） |
-| `uilab-admin init` 生成 Workbench | **planned**（Phase 8） |
-| Electron / Tauri desktop host | **not started** |
+| 能力                                                      | 状态                                               |
+| --------------------------------------------------------- | -------------------------------------------------- |
+| Workbench Shell + Navigator                               | **shipped**（Phase 3）                             |
+| Inset Workspace 空间模型 + Navigator 动效                 | **shipped**（Phase 3A layout polish）              |
+| Task/Work pane chrome + right-anchored drawer             | **shipped**（Phase 3B；Playwright/动效证据已落盘） |
+| Task Surface + Composer + Adaptive Context Panel          | **shipped**（静态 fixture）                        |
+| Work Surface Host（Single-pane + Tabs，显隐/调宽/最大化） | **shipped**（占位内容）                            |
+| Agent Runtime / 流式投影                                  | **planned**（Phase 4，当前暂停）                   |
+| Surface Registry                                          | **planned**（Phase 5）                             |
+| Document / Browser / Review Surfaces                      | **planned**（Phase 6）                             |
+| `uilab-admin init` 生成 Workbench                         | **planned**（Phase 8）                             |
+| Electron / Tauri desktop host                             | **not started**                                    |
 
 ## 快速开始
 
@@ -59,16 +59,16 @@ Sidebar background plane
 - Context / Work Surface 显隐、宽度、活动 tab、最大化 **按 Task 保存**。
 - Context Panel：宽 Task 用 reserved-space，窄 Task 用 overlay（CSS container query）；卡片按内容高度/最大高度，不默认满高。
 - Navigator pointer 切换：180ms `cubic-bezier(0.32, 0.72, 0, 1)`；键盘 `Ctrl/Cmd+B` 瞬时；动效源在 Shell，不进 Session。
-- **Phase 3B**：pointer Work open/close/maximize/restore 走 View Transition（`task-pane` / `work-surface`，180ms strong ease-in-out）；keyboard Work / Escape / Context 为 instant；Context pointer 打开 140ms opacity+translateY entry。
+- **Phase 3B**：pointer Work 使用右锚定 reserved-space drawer，右边界固定、内容不缩放；open 200ms drawer curve、close 160ms strong ease-out、maximize/restore 180ms strong ease-in-out；keyboard Work / Escape / Context 为 instant；Context pointer 打开 140ms opacity+translateY entry。Task toolbar 使用 `SlidersHorizontal`（Context）与 `PanelBottom`（Work）语义图标。
 
 ## 快捷键
 
-| 快捷键 | 行为 |
-|---|---|
-| `Ctrl/Cmd+B` | 切换 Navigator（瞬时，无动画） |
-| `Ctrl/Cmd+I` | 切换 Context Panel（瞬时） |
-| `Ctrl/Cmd+Shift+W` | 切换 Work Surface Host（瞬时） |
-| `Escape` | 退出 Work Surface 最大化（优先，瞬时） |
+| 快捷键             | 行为                                   |
+| ------------------ | -------------------------------------- |
+| `Ctrl/Cmd+B`       | 切换 Navigator（瞬时，无动画）         |
+| `Ctrl/Cmd+I`       | 切换 Context Panel（瞬时）             |
+| `Ctrl/Cmd+Shift+W` | 切换 Work Surface Host（瞬时）         |
+| `Escape`           | 退出 Work Surface 最大化（优先，瞬时） |
 
 ## Foundation
 

@@ -10,8 +10,9 @@
 - 图标：包内 `lucide-react`（不扩 Foundation）
 - **已交付**：静态 Workbench Shell 骨架（Navigator、Task Surface、Composer、Adaptive Context Panel、Single-pane + Tabs Work Surface Host）
 - **已交付（Phase 3A）**：Admin inset / Codex 空间关系 — sidebar 背景平面、272px Navigator、8px inset Workspace、TaskSurface content-only、浮动 Composer、内容高度 Context 卡、pointer/keyboard 分源 Navigator 动效
-- **已交付（Phase 3B）**：Task/Work 并列 44px pane chrome、icon-only Context/Work 控件、pointer View Transition（180ms）与 keyboard instant 分源；Playwright/动效证据已落盘；**无** Runtime / 具体 Surface
+- **已交付（Phase 3B）**：Task/Work 并列 44px pane chrome、Codex 语义图标、右锚定 reserved-space Work drawer（open 200ms / close 160ms / maximize-restore 180ms）与 keyboard instant 分源；Playwright/动效证据已落盘；**无** Runtime / 具体 Surface
 - **未交付（勿伪装）**：Agent Runtime、event projection、Surface Registry、Document/Browser/Review Surface、Resource Explorer、持久化、Git、文件系统、Electron/Tauri、Phase 4
+
 ## 目录约定
 
 ```text
