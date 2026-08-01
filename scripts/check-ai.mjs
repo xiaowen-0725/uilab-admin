@@ -101,7 +101,16 @@ async function main() {
     'docs/ai/patterns/data-table-list.md',
     'docs/ai/patterns/settings-section.md',
     'docs/ai/patterns/auth-page.md',
+    'docs/ai/bootstrap.md',
+    'docs/ai/cli.md',
+    'docs/ai/scenarios.catalog.json',
+    'docs/ai/scenarios/ops-console.md',
+    'docs/ai/scenarios/saas-admin.md',
+    'docs/ai/scenarios/agent-desktop.md',
+    'desktop/README.md',
     'skill/uilab-admin/SKILL.md',
+    'skill/uilab-admin/references/bootstrap.md',
+    'skill/uilab-admin/references/extend.md',
     'skill/uilab-admin/agents/openai.yaml',
     'skill/uilab-admin/references/discover.md',
     'skill/uilab-admin/references/scaffold.md',
@@ -145,7 +154,7 @@ async function main() {
       } else if (String(fm.description).length > 1024) {
         errors.push('skill/uilab-admin/SKILL.md: description exceeds 1024 characters')
       }
-      for (const route of ['discover', 'scaffold', 'shell', 'review']) {
+      for (const route of ['bootstrap', 'discover', 'scaffold', 'shell', 'review']) {
         if (!markdown.includes(`\`${route}\``) && !markdown.includes(`| \`${route}\``)) {
           // softer: ensure route token exists
           if (!markdown.includes(route)) {
@@ -196,6 +205,44 @@ async function main() {
         errors.push('patterns.catalog.json: skill.path is required')
       } else {
         await mustExist(path.join(projectRoot, catalog.skill.path), catalog.skill.path)
+      }
+    }
+  }
+
+
+  // Scenario catalog
+  const scenariosPath = path.join(projectRoot, 'docs/ai/scenarios.catalog.json')
+  if (await exists(scenariosPath)) {
+    let scenarios
+    try {
+      scenarios = JSON.parse(await readFile(scenariosPath, 'utf8'))
+    } catch (error) {
+      errors.push(`docs/ai/scenarios.catalog.json: invalid JSON (${error.message})`)
+      scenarios = null
+    }
+    if (scenarios) {
+      if (scenarios.cli !== 'uilab-admin') {
+        errors.push('scenarios.catalog.json: cli must be "uilab-admin"')
+      }
+      if (!Array.isArray(scenarios.scenarios) || scenarios.scenarios.length === 0) {
+        errors.push('scenarios.catalog.json: scenarios must be a non-empty array')
+      } else {
+        const requiredScenarioIds = ['ops-console', 'saas-admin', 'agent-desktop']
+        const ids = new Set(scenarios.scenarios.map((s) => s.id))
+        for (const id of requiredScenarioIds) {
+          if (!ids.has(id)) errors.push(`scenarios.catalog.json: missing scenario id "${id}"`)
+        }
+        for (const scenario of scenarios.scenarios) {
+          if (scenario.doc) {
+            await mustExist(path.join(projectRoot, scenario.doc), scenario.doc)
+          }
+          if (!scenario.shell) {
+            errors.push(`scenario ${scenario.id}: shell defaults required`)
+          }
+          if (!scenario.modules?.required) {
+            errors.push(`scenario ${scenario.id}: modules.required required`)
+          }
+        }
       }
     }
   }

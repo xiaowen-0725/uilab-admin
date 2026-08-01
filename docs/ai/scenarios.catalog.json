@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "cli": "uilab-admin",
+  "modes": ["bootstrap", "extend"],
+  "desktopMaturity": {
+    "current": ["L1", "L2"],
+    "plannedHosts": ["electron", "tauri"],
+    "notes": "L1 = runnable Vite web composition; L2 = desktop host-ready boundaries without full host implementation"
+  },
+  "scenarios": [
+    {
+      "id": "ops-console",
+      "title": "运营中后台",
+      "titleEn": "Ops Console",
+      "doc": "docs/ai/scenarios/ops-console.md",
+      "summary": "内部运营/客服/运维类中后台，强调列表处理效率与密集信息。",
+      "runtime": {
+        "default": "web",
+        "desktopHostReady": false
+      },
+      "shell": {
+        "theme": "system",
+        "sidebar": "sidebar",
+        "layout": "compact",
+        "direction": "ltr",
+        "profileHint": "ops-dense"
+      },
+      "modules": {
+        "required": ["dashboard", "data-table-list", "settings", "auth", "errors"],
+        "recommended": ["tasks-like-queue"],
+        "optional": ["notifications-settings"]
+      },
+      "patterns": ["data-table-list", "settings-section", "auth-page"],
+      "excludeDemos": ["extra-auth-variants", "multi-team-switcher-heavy"],
+      "navHints": {
+        "groups": ["概览", "业务", "系统"]
+      }
+    },
+    {
+      "id": "saas-admin",
+      "title": "SaaS 管理端",
+      "titleEn": "SaaS Admin",
+      "doc": "docs/ai/scenarios/saas-admin.md",
+      "summary": "通用 SaaS 后台，仪表盘 + 资源列表 + 账户设置，默认更产品化。",
+      "runtime": {
+        "default": "web",
+        "desktopHostReady": false
+      },
+      "shell": {
+        "theme": "system",
+        "sidebar": "inset",
+        "layout": "default",
+        "direction": "ltr",
+        "profileHint": "console-default"
+      },
+      "modules": {
+        "required": ["dashboard", "data-table-list", "settings", "auth", "errors"],
+        "recommended": ["profile-settings", "appearance-settings"],
+        "optional": ["billing-settings"]
+      },
+      "patterns": ["data-table-list", "settings-section", "auth-page"],
+      "excludeDemos": ["ops-only-dense-copy"],
+      "navHints": {
+        "groups": ["概览", "资源", "设置"]
+      }
+    },
+    {
+      "id": "agent-desktop",
+      "title": "Agent 工作台",
+      "titleEn": "Agent Desktop",
+      "doc": "docs/ai/scenarios/agent-desktop.md",
+      "summary": "类似 Codex 的 Agent 工作台：会话/线程、主画布、设置。L1 可 web 跑；L2 预留桌面 host。",
+      "runtime": {
+        "default": "web",
+        "desktopHostReady": true,
+        "plannedHosts": ["electron", "tauri"]
+      },
+      "shell": {
+        "theme": "system",
+        "sidebar": "sidebar",
+        "layout": "full",
+        "direction": "ltr",
+        "profileHint": "canvas-first"
+      },
+      "modules": {
+        "required": ["workspace", "thread-list", "settings", "errors"],
+        "recommended": ["command-palette", "appearance-settings"],
+        "optional": ["auth-optional", "dashboard-light"]
+      },
+      "patterns": ["data-table-list", "settings-section"],
+      "excludeDemos": ["heavy-saas-dashboard", "extra-auth-variants", "clerk-style-binding"],
+      "navHints": {
+        "groups": ["工作区", "会话", "设置"]
+      },
+      "desktop": {
+        "maturity": "L1+L2",
+        "hostDir": "desktop/",
+        "rendererBoundary": "src/",
+        "notes": "Do not implement full Electron/Tauri in phase 1; keep IPC/host seams open."
+      }
+    }
+  ]
+}

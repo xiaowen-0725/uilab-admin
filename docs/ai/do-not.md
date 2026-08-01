@@ -12,3 +12,5 @@ Agent 在本仓库中默认禁止：
 8. 把用户可见文案留英文主路径（除非用户明确要求英文）
 9. 把 sample mock 当成不可替换的业务真源
 10. 声称完成但未跑 `pnpm typecheck` / `pnpm build`
+11. 把 planned 的 `uilab-admin init` / Electron/Tauri host 说成已实现
+12. 在 CLI 未落盘时声称 bootstrap 已成功创建应用

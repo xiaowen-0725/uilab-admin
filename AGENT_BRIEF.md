@@ -23,13 +23,14 @@
 
 ## 常见任务怎么走
 
-| 任务 | 路线 |
+| 任务 | 模式/路线 |
 |---|---|
-| 了解仓库 | `$uilab-admin` → `discover` |
-| 新加列表页 | `scaffold` + pattern `data-table-list` |
-| 新加设置段 | `scaffold` + pattern `settings-section` |
-| 改默认布局/导航 | `shell` |
-| 检查是否合规 | `review` |
+| 新开一个应用 | `bootstrap` + scenario（ops-console / saas-admin / agent-desktop） |
+| 了解仓库 | extend → `discover` |
+| 新加列表页 | extend → `scaffold` + `data-table-list` |
+| 新加设置段 | extend → `scaffold` + `settings-section` |
+| 改默认布局/导航 | extend → `shell` |
+| 检查是否合规 | extend → `review` |
 
 ## 可删示例
 
@@ -46,6 +47,13 @@
 - 不要把表格退回简单 Select 过滤
 - 不要回潮 Radix / `asChild`
 - 不要只改 feature 不改 route/sidebar
+
+## 场景与 CLI
+
+- 场景目录：`docs/ai/scenarios.catalog.json`
+- Bootstrap 合同：`docs/ai/bootstrap.md`
+- CLI 合同：`docs/ai/cli.md`（命令名 `uilab-admin`；init/add 分期实现）
+- 桌面端：L1 可运行 web 构成 + L2 host-ready 边界；完整 Electron/Tauri 后置
 
 ## 门禁
 

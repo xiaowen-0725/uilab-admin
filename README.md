@@ -59,21 +59,34 @@ skill/uilab-admin/ # Agent skill 入口
 
 ## AI-first
 
-本地 skill 入口：`$uilab-admin`。
+本仓库面向 Agent 装配，分两种模式：
+
+- **bootstrap（0→1）**：按 scenario 开新应用（目标 CLI：`uilab-admin init`）
+- **extend（1→100）**：在已有派生应用上 scaffold / shell / review
+
+内置场景：
+
+- `ops-console` 运营中后台
+- `saas-admin` SaaS 管理端
+- `agent-desktop` Agent 工作台（L1 web + L2 desktop-host-ready，后续可接 Electron/Tauri）
+
+合同文档：
+
+- [docs/ai/bootstrap.md](docs/ai/bootstrap.md)
+- [docs/ai/cli.md](docs/ai/cli.md)
+- [docs/ai/scenarios.catalog.json](docs/ai/scenarios.catalog.json)
+
+本地 skill 入口：`$uilab-admin`。  
 仓库门禁：`pnpm check:ai`。
-
-本仓库面向 Agent 装配：
-
-- 硬规则：[AGENTS.md](AGENTS.md)
-- 地图与模式：[docs/ai/](docs/ai/)
-- Skill：`skill/uilab-admin`
 
 典型能力：
 
+- 场景推荐与初始化编排
 - 发现 pattern / 落点
 - 按 `data-table-list` / `settings-section` / `auth-page` scaffold
 - 改 shell 默认与导航
 - review 门禁
+
 
 ## 与 UI Lab 关系
 

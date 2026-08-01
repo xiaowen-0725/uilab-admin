@@ -65,10 +65,22 @@ pnpm check:ai   # AI 合同 / skill / pattern 门禁
 
 使用 skill：`skill/uilab-admin`（`$uilab-admin`）
 
+### 模式
+
+- **bootstrap（0→1）**：新应用初始化 / 场景推荐 / 套 scenario pack
+- **extend（1→100）**：已有派生应用上增量装配
+
+### 路线
+
+- `bootstrap`：0→1 场景确认与初始化编排（CLI `uilab-admin init` 为目标；未实现时 manual fallback）
 - `discover`：只读地图与 pattern
 - `scaffold`：按 pattern 加页面
 - `shell`：改布局默认/导航 IA
 - `review`：只读门禁检查
+
+场景包：`docs/ai/scenarios.catalog.json`  
+CLI 合同：`docs/ai/cli.md`  
+Bootstrap 合同：`docs/ai/bootstrap.md`
 
 详细见 `docs/ai/` 与 skill references。
 

@@ -31,3 +31,11 @@
 - `Pass`：门禁通过
 - `Block`：存在硬违规
 - `Insufficient evidence`：信息不足，不能判 Pass
+
+## Bootstrap（0→1）
+
+- [ ] 已确认 scenario（或记录用户选择）
+- [ ] 未把 L1/L2 夸大成完整桌面 host
+- [ ] CLI 可用时用 `uilab-admin init`；不可用时给出 manual fallback 且文件真实存在
+- [ ] 有 APP_BRIEF 或等价场景记录
+- [ ] `desktopHostReady` 场景包含 desktop 边界说明

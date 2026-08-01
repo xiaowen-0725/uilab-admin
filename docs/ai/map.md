@@ -48,6 +48,10 @@
 | `docs/ai/do-not.md` | 禁止事项 |
 | `docs/ai/acceptance.md` | 验收 |
 | `skill/uilab-admin` | Agent 路由 skill |
+| `docs/ai/bootstrap.md` | 0→1 / 1→100 合同 |
+| `docs/ai/cli.md` | `uilab-admin` CLI 合同 |
+| `docs/ai/scenarios.catalog.json` | 场景包目录 |
+| `docs/ai/scenarios/*` | 场景说明 |
 
 ## 新页面最小落点
 

@@ -91,11 +91,22 @@
   },
   "skill": {
     "path": "skill/uilab-admin",
+    "modes": [
+      "bootstrap",
+      "extend"
+    ],
     "routes": [
+      "bootstrap",
       "discover",
       "scaffold",
       "shell",
       "review"
     ]
+  },
+  "scenarios": "docs/ai/scenarios.catalog.json",
+  "cli": {
+    "name": "uilab-admin",
+    "doc": "docs/ai/cli.md",
+    "status": "planned-min-set"
   }
 }
