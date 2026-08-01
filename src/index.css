@@ -128,3 +128,17 @@
     @apply font-sans;
     }
 }
+
+/* Sidebar nav collapsible open/close.
+   Reference: shadcn-admin uses Radix --radix-collapsible-content-height + data-state.
+   Base UI equivalent: --collapsible-panel-height + data-open/closed + starting/ending styles. */
+.CollapsibleContent {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height 300ms ease-out;
+}
+
+.CollapsibleContent[data-starting-style],
+.CollapsibleContent[data-ending-style] {
+  height: 0;
+}

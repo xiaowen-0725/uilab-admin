@@ -12,9 +12,18 @@ function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
   )
 }
 
-function CollapsibleContent({ ...props }: CollapsiblePrimitive.Panel.Props) {
+function CollapsibleContent({
+  className,
+  ...props
+}: CollapsiblePrimitive.Panel.Props) {
   return (
-    <CollapsiblePrimitive.Panel data-slot="collapsible-content" {...props} />
+    <CollapsiblePrimitive.Panel
+      data-slot="collapsible-content"
+      className={className}
+      // Keep mounted long enough for close animation (Base UI exit styles).
+      keepMounted
+      {...props}
+    />
   )
 }
 
