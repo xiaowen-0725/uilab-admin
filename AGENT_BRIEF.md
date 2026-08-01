@@ -20,6 +20,23 @@
 - 中文优先文案，代码标识英文
 - 独立仓库：`xiaowen-0725/uilab-admin`
 
+## 布局偏好模型
+
+- 页面入口：`src/components/config-drawer.tsx`
+- 项目 defaults：`src/config/admin-preferences.ts`
+- 运行时状态：`src/context/preferences-provider.tsx`
+- 用户覆盖：`localStorage["uilab-admin.preferences"]`
+
+新应用若只要不同默认布局，改 defaults 即可，不必改组件。
+
+导出方式（优先）：
+
+1. 页面试布局
+2. 复制 JSON / defaults 代码 / Agent 提示词
+3. 写入目标仓库 `admin-preferences.ts`
+
+CLI/Skill 是后置加速器，不是第一入口。
+
 ## 目录落点
 
 | 你要做的事 | 放哪里 |
@@ -29,6 +46,8 @@
 | 新错误页 | `src/features/errors/` + `src/routes/(errors)/` |
 | 导航菜单 | `src/components/layout/data/sidebar-data.ts` |
 | 壳层布局 | `src/components/layout/*` |
+| 默认布局偏好 | `src/config/admin-preferences.ts` |
+| 运行时布局设置面板 | `src/components/config-drawer.tsx` |
 | shadcn 原子组件 | `src/components/ui/*`（优先 CLI 生成） |
 
 ## 可删示例

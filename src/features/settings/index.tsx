@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation } from "@tanstack/react-router"
 import { Header } from "@/components/layout/header"
 import { Main } from "@/components/layout/main"
-import { ThemeSwitch } from "@/components/theme-switch"
+import { PageHeaderActions } from "@/components/layout/page-header-actions"
 import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -18,7 +18,7 @@ export function Settings() {
     <>
       <Header fixed>
         <div className="me-auto font-medium">设置</div>
-        <ThemeSwitch />
+        <PageHeaderActions />
       </Header>
       <Main fixed>
         <div className="space-y-0.5">

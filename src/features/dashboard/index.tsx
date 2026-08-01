@@ -6,7 +6,7 @@ import {
 } from "lucide-react"
 import { Header } from "@/components/layout/header"
 import { Main } from "@/components/layout/main"
-import { ThemeSwitch } from "@/components/theme-switch"
+import { PageHeaderActions } from "@/components/layout/page-header-actions"
 import {
   Card,
   CardContent,
@@ -56,7 +56,7 @@ export function Dashboard() {
     <>
       <Header>
         <div className="me-auto font-medium">仪表盘</div>
-        <ThemeSwitch />
+        <PageHeaderActions />
       </Header>
       <Main>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">

@@ -1,6 +1,6 @@
 import { Header } from "@/components/layout/header"
 import { Main } from "@/components/layout/main"
-import { ThemeSwitch } from "@/components/theme-switch"
+import { PageHeaderActions } from "@/components/layout/page-header-actions"
 import { Button } from "@/components/ui/button"
 import { TasksTable } from "./components/tasks-table"
 import { tasks } from "./data/tasks"
@@ -10,7 +10,7 @@ export function Tasks() {
     <>
       <Header fixed>
         <div className="me-auto font-medium">数据列表</div>
-        <ThemeSwitch />
+        <PageHeaderActions />
       </Header>
       <Main className="flex flex-1 flex-col gap-4 sm:gap-6">
         <div className="flex flex-wrap items-end justify-between gap-2">

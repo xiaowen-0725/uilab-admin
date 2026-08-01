@@ -37,6 +37,41 @@ pnpm preview
 - `/sign-in`、`/sign-up` 认证页
 - `/404` 错误页
 
+## 外观与布局设置
+
+模板内置 Config Drawer（header 齿轮按钮），可实时切换：
+
+- 主题：跟随系统 / 浅色 / 深色
+- 侧栏样式：inset / floating / sidebar
+- 布局密度：默认展开 / 紧凑图标 / 全宽隐藏
+- 阅读方向：LTR / RTL
+
+这是**用户运行时偏好**，保存在 `localStorage`。
+
+### 项目默认布局
+
+新应用的默认壳层写在：
+
+```ts
+// src/config/admin-preferences.ts
+export const adminPreferenceDefaults = {
+  theme: "system",
+  sidebar: "inset",
+  layout: "default",
+  direction: "ltr",
+}
+```
+
+解析顺序：`项目 defaults → 用户 localStorage 覆盖 → 实际渲染`。
+
+在设置抽屉底部可以：
+
+1. 复制 JSON
+2. 复制 defaults 代码片段
+3. 复制 Agent 提示词
+
+先在页面里试好布局，再固化到目标应用的 defaults。
+
 ## 目录约定
 
 ```text
