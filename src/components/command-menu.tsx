@@ -29,7 +29,7 @@ export function CommandMenu() {
   )
 
   return (
-    <CommandDialog modal open={open} onOpenChange={setOpen}>
+    <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput placeholder='输入命令或搜索...' />
       <CommandList>
         <ScrollArea className='h-72 pe-1'>
@@ -71,17 +71,17 @@ export function CommandMenu() {
             </CommandGroup>
           ))}
           <CommandSeparator />
-          <CommandGroup heading='Theme'>
+          <CommandGroup heading='主题'>
             <CommandItem onSelect={() => runCommand(() => setTheme('light'))}>
-              <Sun /> <span>Light</span>
+              <Sun /> <span>浅色</span>
             </CommandItem>
             <CommandItem onSelect={() => runCommand(() => setTheme('dark'))}>
               <Moon className='scale-90' />
-              <span>Dark</span>
+              <span>深色</span>
             </CommandItem>
             <CommandItem onSelect={() => runCommand(() => setTheme('system'))}>
               <Laptop />
-              <span>System</span>
+              <span>跟随系统</span>
             </CommandItem>
           </CommandGroup>
         </ScrollArea>

@@ -11,6 +11,7 @@ export function Search({
   const { setOpen } = useSearch()
   return (
     <Button
+      type='button'
       {...props}
       variant='outline'
       className={cn(
