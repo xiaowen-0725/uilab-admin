@@ -27,11 +27,14 @@ pnpm check:ai
 
 ## 当前页面
 
-- `/` 仪表盘
+- `/` 仪表盘（`agent-desktop` init 后为工作区）
+- `/workspace` Agent 主画布
 - `/tasks` 数据列表（完整 faceted filter / toolbar）
 - `/settings/*` 设置
 - `/sign-in` `/sign-up` 等认证页
 - 错误页
+
+完整状态与 backlog 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 目录约定
 

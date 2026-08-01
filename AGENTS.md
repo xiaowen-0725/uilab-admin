@@ -2,6 +2,8 @@
 
 本仓库是 **AI-first 通用中后台模板**。Agent 默认按本文件执行；与 `AGENT_BRIEF.md` / `docs/ai/*` 冲突时，以本文件硬规则为准。
 
+阶段状态与 backlog 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
+
 ## 定位
 
 - 技术栈：Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（**Base UI / base-nova**）+ TanStack Router / Query / Table

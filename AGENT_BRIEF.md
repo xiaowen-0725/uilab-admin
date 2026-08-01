@@ -8,6 +8,8 @@
 
 ## 当前真源
 
+- 状态快照：[PROJECT_STATUS.md](PROJECT_STATUS.md)
+
 - 技术栈：Vite + React 19 + TS + Tailwind 4 + **shadcn Base UI (base-nova)** + TanStack
 - 中文主路径已落地
 - 布局 defaults：`src/config/admin-preferences.ts`

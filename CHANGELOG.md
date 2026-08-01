@@ -1,3 +1,24 @@
+## [Unreleased]
+
+### Added
+
+- AI-first contracts: `AGENTS.md`, `docs/ai/*`, `$uilab-admin` skill, scaffolds
+- CLI `uilab-admin`: `check`, `add`, `set-shell`, `init`, `apply-scenario`
+- Scenario packs: `ops-console`, `saas-admin`, `agent-desktop`
+- Agent desktop workspace canvas (`src/features/workspace`)
+- Project status snapshot: `PROJECT_STATUS.md`
+
+### Changed
+
+- Migrated component base to official shadcn Base UI (`base-nova`)
+- Localized primary admin surfaces to Chinese-first
+- Provider defaults now consume `src/config/admin-preferences.ts`
+
+### Fixed
+
+- Base UI menu/group, command palette, profile menu, theme settings previews
+- routeTree regeneration after CLI scaffold/init
+
 ## v2.2.1 (2025-11-06)
 
 ### Fix
