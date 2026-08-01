@@ -17,7 +17,7 @@
     "test:browser": "vitest",
     "test:coverage": "vitest run --coverage --browser.headless",
     "test:browser:install": "playwright install chromium --with-deps",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b",
     "check:ai": "node scripts/check-ai.mjs",
     "check": "pnpm typecheck && pnpm run check:ai",
     "uilab-admin": "node cli/uilab-admin.mjs",

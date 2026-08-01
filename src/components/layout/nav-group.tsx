@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import {
@@ -88,9 +88,18 @@ function SidebarMenuCollapsible({
   href: string
 }) {
   const { setOpenMobile } = useSidebar()
+  const routeKey = href.split('?')[0]
+  const isRouteActive = checkIsActive(href, item, true)
+  const [openState, setOpenState] = useState(() => ({
+    routeKey,
+    open: isRouteActive,
+  }))
+  const open = openState.routeKey === routeKey ? openState.open : isRouteActive
+
   return (
     <Collapsible
-      defaultOpen={checkIsActive(href, item, true)}
+      open={open}
+      onOpenChange={(nextOpen) => setOpenState({ routeKey, open: nextOpen })}
       className='group/collapsible'
       render={<SidebarMenuItem />}
     >

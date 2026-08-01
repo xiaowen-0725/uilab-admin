@@ -1,18 +1,4 @@
-import { Link } from '@tanstack/react-router'
-import {
-  Bot,
-  MessageSquareText,
-  PanelRight,
-  Play,
-  Plus,
-  Sparkles,
-} from 'lucide-react'
-import { ConfigDrawer } from '@/components/config-drawer'
-import { Header } from '@/components/layout/header'
-import { Main } from '@/components/layout/main'
-import { ProfileDropdown } from '@/components/profile-dropdown'
-import { Search } from '@/components/search'
-import { ThemeSwitch } from '@/components/theme-switch'
+import { Bot, PanelRight, Play, Plus, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,6 +9,12 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { ConfigDrawer } from '@/components/config-drawer'
+import { Header } from '@/components/layout/header'
+import { Main } from '@/components/layout/main'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
 
 const recentThreads = [
   {
@@ -61,15 +53,12 @@ export function Workspace() {
             </div>
             <h1 className='text-2xl font-bold tracking-tight'>工作区</h1>
             <p className='text-muted-foreground'>
-              Agent 主画布占位：会话上下文、提示输入与结果面板。后续可接真实模型与桌面
+              Agent
+              主画布占位：会话上下文、提示输入与结果面板。后续可接真实模型与桌面
               host。
             </p>
           </div>
           <div className='flex gap-2'>
-            <Button variant='outline' render={<Link to='/threads' />}>
-              <MessageSquareText className='size-4' />
-              会话列表
-            </Button>
             <Button>
               <Plus className='size-4' />
               新建会话
@@ -99,13 +88,6 @@ export function Workspace() {
                   </p>
                 </button>
               ))}
-              <Button
-                variant='ghost'
-                className='w-full justify-start'
-                render={<Link to='/threads' />}
-              >
-                查看全部会话
-              </Button>
             </CardContent>
           </Card>
 
@@ -124,7 +106,8 @@ export function Workspace() {
                 <div className='rounded-lg border bg-background p-3 text-sm'>
                   <div className='mb-1 font-medium'>系统</div>
                   <p className='text-muted-foreground'>
-                    已进入 agent-desktop 工作区。可从右侧检查桌面 host 边界，或打开会话列表管理线程。
+                    已进入 agent-desktop 工作区。可从右侧检查桌面 host
+                    边界，或打开会话列表管理线程。
                   </p>
                 </div>
                 <div className='rounded-lg border bg-background p-3 text-sm'>
