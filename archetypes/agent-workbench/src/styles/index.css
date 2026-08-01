@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Tailwind 4: scan Foundation source (workspace via node_modules). */
+@source "../../node_modules/@uilab/foundation/src/ui";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  html {
+    @apply h-full overflow-x-hidden;
+  }
+
+  body {
+    @apply m-0 h-full min-h-svh w-full overflow-x-hidden bg-background font-sans text-foreground antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  }
+
+  #root {
+    @apply h-full min-h-svh;
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-3 ring-ring/50;
+  }
+}
+
+/* Reduced motion: disable nonessential transitions/animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Task Surface is a size container for Context reserved / overlay modes. */
+@utility task-container {
+  container-type: inline-size;
+  container-name: task;
+}
+
+/*
+ * Context panel host modes (CSS container queries on Task width):
+ * - reserved when Task ≥820px (1440 Task-only, 1024 Task-only stay reserved)
+ * - overlay when Task ≤819px (1024 split ~544, 760 Task-only must overlay)
+ * Seamless pair: min-width 820 / max-width 819 — not viewport media queries.
+ */
+.context-panel-slot {
+  pointer-events: none;
+}
+
+.context-panel-slot[data-open='true'] {
+  pointer-events: auto;
+}
+
+.context-panel-card {
+  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--card) 96%, transparent);
+  box-shadow:
+    0 10px 30px color-mix(in oklch, var(--foreground) 8%, transparent),
+    0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+/* Reserved-space when Task container is wide enough. */
+@container task (min-width: 820px) {
+  .context-panel-slot[data-open='true'] {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    width: min(300px, 36%);
+    flex-shrink: 0;
+    align-self: stretch;
+    padding: 0.75rem 0.75rem 0.75rem 0;
+  }
+
+  .context-panel-slot[data-open='true'] .context-panel-card {
+    height: 100%;
+    width: 100%;
+    border-radius: 0.75rem;
+  }
+
+  .context-panel-slot[data-open='false'] {
+    display: none;
+  }
+}
+
+/* Overlay when Task Surface is constrained (≤819px). */
+@container task (max-width: 819px) {
+  .context-panel-slot[data-open='true'] {
+    position: absolute;
+    inset-block: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 30;
+    width: min(320px, calc(100% - 1.5rem));
+  }
+
+  .context-panel-slot[data-open='true'] .context-panel-card {
+    height: 100%;
+    width: 100%;
+    border-radius: 0.75rem;
+  }
+
+  .context-panel-slot[data-open='false'] {
+    display: none;
+  }
+}

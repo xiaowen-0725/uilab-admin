@@ -1,42 +1,54 @@
 # UI Lab Admin
 
-AI-first **Template Platform**，当前可运行产品为通用中后台 **Admin Archetype**。
+AI-first **Template Platform**，当前可运行产品为：
+
+- 通用中后台 **Admin Archetype**（`archetypes/admin`）
+- **Agent Workbench Archetype** Phase 3 静态 Shell（`archetypes/agent-workbench`）
 
 基于 [shadcn-admin](https://github.com/satnaing/shadcn-admin) 二创：保留成熟 admin shell / 页面模式 / data-table 交互，改用官方 shadcn **Base UI**，并补齐中文优先与 AI 装配约定。
 
-> 仓库已完成 Phase 1 目录迁移，并落地 **Phase 2A 最小 Foundation seam**：`packages/foundation` 提供 Button / Input / tokens；Admin 经兼容模块消费。完整 Phase 2（Workbench 第二消费者）尚未开始。
-> Admin 源与 Admin-owned 资产位于 `archetypes/admin`，规范 CLI / 质量门禁位于 `tooling/*`，根目录保留兼容命令与 `$uilab-admin` skill 前门。
-> **应用侧合同**见 [`archetypes/admin/AGENTS.md`](archetypes/admin/AGENTS.md) 与 [`archetypes/admin/README.md`](archetypes/admin/README.md)。
+> 仓库已完成 Phase 1 目录迁移、**Phase 2A 最小 Foundation seam**，以及 **Phase 3 Workbench Shell 骨架**。
+> Foundation 提供 Button / Input / tokens；Admin 与 Workbench 均为消费者。完整 Phase 2（共享 providers / 更广 primitives）**尚未**完成。
+> **未交付**：Agent Runtime、具体 Work Surface（Document/Browser/Review）、Workbench CLI 生成、desktop host。
+> Admin 源与 Admin-owned 资产位于 `archetypes/admin`，Workbench 源位于 `archetypes/agent-workbench`，规范 CLI / 质量门禁位于 `tooling/*`，根目录保留兼容命令与 `$uilab-admin` skill 前门。
+> **应用侧合同**见 [`archetypes/admin/AGENTS.md`](archetypes/admin/AGENTS.md)、[`archetypes/agent-workbench/AGENTS.md`](archetypes/agent-workbench/AGENTS.md)。
 > 路线与状态见 [实施路线](docs/plans/agent-workbench-template-roadmap.md) 与 [项目状态](PROJECT_STATUS.md)。
 
 ## 快速开始
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev                 # Admin（默认兼容入口）
+pnpm dev:admin
+pnpm dev:workbench       # Workbench Shell → :5174
 ```
 
 ```bash
 pnpm typecheck
 pnpm build
+pnpm test
 pnpm check:foundation
+pnpm check:workbench
 pnpm check:ai
+pnpm check
 ```
 
-根命令委托到 `@uilab/foundation` / `@uilab/admin` 与平台门禁；也可：
+根命令委托到 `@uilab/foundation` / `@uilab/admin` / `@uilab/agent-workbench` 与平台门禁；也可：
 
 ```bash
 pnpm --filter @uilab/admin dev
+pnpm --filter @uilab/agent-workbench dev
 pnpm --filter @uilab/foundation typecheck
 pnpm --filter @uilab/admin typecheck
+pnpm --filter @uilab/agent-workbench typecheck
 ```
 
 ## 技术栈
 
 - Vite + React 19 + TypeScript
 - Tailwind CSS 4
-- 官方 shadcn/ui（Base UI / `base-nova`）
-- TanStack Router / Query / Table
+- 官方 shadcn/ui（Base UI / `base-nova`）— 主要用于 Admin；Foundation Button/Input 同栈
+- TanStack Router / Query / Table（Admin）；Workbench 使用小型 code-defined Router
 - 中文优先文案，代码标识英文
 
 ## 平台形状（当前）
@@ -44,23 +56,28 @@ pnpm --filter @uilab/admin typecheck
 ```text
 uilab-templates/
   archetypes/
-    admin/                 # 当前可运行 Admin 源应用
-      AGENTS.md            # Admin / 派生应用硬合同（init 原样带入）
-      README.md            # 单应用 README（init 原样带入）
+    admin/                   # 可运行 Admin 源应用
+      AGENTS.md              # Admin / 派生应用硬合同（init 原样带入）
+      README.md
       src/
-      docs/ai/             # Admin AI 合同 / patterns / scenarios
-      scaffolds/           # Admin 页面薄模板
+      docs/ai/
+      scaffolds/
+    agent-workbench/         # Phase 3 可运行 Workbench Shell
+      AGENTS.md
+      README.md
+      APP_BRIEF.md
+      src/
   packages/
-    foundation/            # Phase 2A：Button / Input / tokens（source-consumed）
+    foundation/              # Phase 2A：Button / Input / tokens（source-consumed）
   tooling/
-    template-cli/          # 规范 uilab-admin CLI
-    quality-gates/         # 规范 check:ai + check:foundation
-  skill/uilab-admin/       # 外部可发现 skill 前门
-  cli/ / scripts/          # 根兼容 wrapper
-  docs/                    # 平台 ADR / plans / evidence
+    template-cli/            # 规范 uilab-admin CLI
+    quality-gates/           # check:ai + check:foundation + check:workbench
+  skill/uilab-admin/         # 外部可发现 skill 前门
+  cli/ / scripts/            # 根兼容 wrapper
+  docs/                      # 平台 ADR / plans / evidence
 ```
 
-`uilab-admin init` 会把 Foundation 复制进派生应用 `packages/foundation`，并写入迷你 `pnpm-workspace.yaml`。完整 Phase 2 仍待 Agent Workbench 成为第二消费者。
+`uilab-admin init` 会把 Foundation 复制进派生应用 `packages/foundation`，并写入迷你 `pnpm-workspace.yaml`（**仅 Admin 生成**；Workbench 生成属 Phase 8，未 shipped）。
 
 ## 当前页面（Admin）
 
@@ -70,6 +87,13 @@ uilab-templates/
 - `/settings/*` 设置
 - `/sign-in` `/sign-up` 等认证页
 - 错误页
+
+## Agent Workbench（Phase 3）
+
+- 独立包 `@uilab/agent-workbench`，`pnpm dev:workbench`
+- Navigator + Task Surface + Composer + Adaptive Context Panel + placeholder Work Surface Host
+- 静态 fixture；**无** Runtime / 真实 Surface
+- 详见 [Workbench README](archetypes/agent-workbench/README.md)
 
 完整状态与 backlog 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。  
 单应用视角说明见 [Admin README](archetypes/admin/README.md)。
@@ -108,23 +132,24 @@ Admin / 派生应用硬规则：[archetypes/admin/AGENTS.md](archetypes/admin/AG
 
 本仓库面向 Agent 装配，分两种模式：
 
-- **bootstrap（0→1）**：按 scenario 开新应用（`uilab-admin init`）
+- **bootstrap（0→1）**：按 scenario 开新应用（`uilab-admin init`，**当前仅 Admin**）
 - **extend（1→100）**：在已有派生应用上 scaffold / shell / review
 
 内置场景：
 
 - `ops-console` 运营中后台
 - `saas-admin` SaaS 管理端
-- `agent-desktop` Agent 工作台兼容基线（L1 web + L2 desktop-host-ready；长期独立 Workbench 见路线图）
+- `agent-desktop` Agent 工作台兼容基线（L1 web + L2 desktop-host-ready；长期独立 Workbench 见 `archetypes/agent-workbench`，**勿**与 Phase 3 Shell 混淆）
 
 合同文档：
 
 - **平台**：本 README、根 [AGENTS.md](AGENTS.md)
 - **Admin / 派生应用**：[archetypes/admin/AGENTS.md](archetypes/admin/AGENTS.md)、[archetypes/admin/README.md](archetypes/admin/README.md)
+- **Workbench**：[archetypes/agent-workbench/AGENTS.md](archetypes/agent-workbench/AGENTS.md)、[archetypes/agent-workbench/README.md](archetypes/agent-workbench/README.md)
 - **Admin AI**：[bootstrap.md](archetypes/admin/docs/ai/bootstrap.md)、[cli.md](archetypes/admin/docs/ai/cli.md)、[scenarios.catalog.json](archetypes/admin/docs/ai/scenarios.catalog.json)
 
 本地 skill 入口：`$uilab-admin`。  
-仓库门禁：`pnpm check:ai`。
+仓库门禁：`pnpm check:ai`、`pnpm check:foundation`、`pnpm check:workbench`。
 
 CLI-1（可执行）：
 
@@ -135,7 +160,7 @@ pnpm uilab-admin add settings-section --section billing --title 账单
 pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --direction ltr
 ```
 
-`init` / `apply-scenario` 已可用（CLI-2）。生成应用携带 Admin-local AGENTS/README，而非平台根合同。
+`init` / `apply-scenario` 已可用（CLI-2）。生成应用携带 Admin-local AGENTS/README，而非平台根合同。Workbench 生成 **未** 接入 CLI。
 
 典型能力：
 

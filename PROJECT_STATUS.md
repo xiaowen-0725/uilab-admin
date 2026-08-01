@@ -1,16 +1,17 @@
 # uilab-admin 项目状态快照
 
-> 更新时间：2026-08-01  
-> 分支：`main`  
-> 架构基线提交：`81731f8`  
-> Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C
-> Phase 2A：minimal Foundation seam（`packages/foundation` Button/Input/tokens + materialization + boundary gate）
-> 远程：https://github.com/xiaowen-0725/uilab-admin.git  
+> 更新时间：2026-08-01
+> 分支：`main`
+> 架构基线提交：`81731f8`
+> Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C `c84be8d`
+> Phase 2A：`9d55b3c` minimal Foundation seam（`packages/foundation` Button/Input/tokens + materialization + boundary gate）
+> Phase 3：Agent Workbench Shell skeleton（本批；证据已落盘）
+> 远程：https://github.com/xiaowen-0725/uilab-admin.git
 > 用途：后续优化/追溯用状态真源；平台合同见根 `AGENTS.md`，Admin / 派生应用硬规则见 `archetypes/admin/AGENTS.md` 与 `archetypes/admin/docs/ai/*`。
 
 ## 1. 一句话定位
 
-仓库已演进为中立 **Template Platform**：Admin Console 作为当前可运行 Archetype 位于 `archetypes/admin`。目标形态继续在同一仓库维护平级的 Admin Console 与 Agent Workbench Archetype。技术栈：Vite + React 19 + TS + Tailwind 4 + 官方 shadcn **Base UI** + TanStack。
+仓库已演进为中立 **Template Platform**：可运行 Archetype 为 Admin Console（`archetypes/admin`）与 Agent Workbench Phase 3 静态 Shell（`archetypes/agent-workbench`）。技术栈：Vite + React 19 + TS + Tailwind 4 + 官方 shadcn **Base UI** + TanStack。
 
 ## 2. 当前阶段判断
 
@@ -26,25 +27,26 @@
 | agent-desktop 工作区 | **MVP Done** | Workspace 首页 + threads 列表 + L2 desktop 边界 |
 | Agent Workbench 架构 | **Phase 0 Done** | 领域语言、ADR、目录蓝图、路线图与 Admin baseline 已落盘 |
 | Template Platform Monorepo | **Phase 1 Done（through 1C）** | Admin 源、tooling、Admin assets 与合同已对齐 |
-| Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin 兼容 re-export；`check:foundation`；init copy-and-own |
-| Full Phase 2 Foundation | **Not complete** | 待 Agent Workbench 作为第二真实消费者后再扩 primitives/providers |
+| Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin 兼容 re-export；Workbench 直接子路径消费；`check:foundation`；init copy-and-own |
+| Agent Workbench Shell | **Phase 3 Done** | 静态 Shell / task-scoped layout / placeholder Host；`check:workbench`；Playwright 证据；**无** Runtime / 具体 Surface |
+| Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | Admin 18 files / 108 tests；Foundation 另有 focused Browser 测试 |
+| Browser test suite | **Green** | Foundation 2/8；Admin 18/108；Workbench 2/14 |
 | 模板“产品打磨/去 demo 化” | **Planned** | 在 Monorepo 稳定后继续 |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
-**结论：**  
-Phase 1 与 **Phase 2A Foundation seam** 已完成。完整 Phase 2 验收（双 Archetype 同语义 primitives + providers）仍阻塞于 Workbench。`agent-desktop` 仅作兼容基线。
+**结论：**
+Phase 1、**Phase 2A Foundation seam**、**Phase 3 Workbench Shell 骨架** 已完成并有独立验收证据。完整 Phase 2 仍未完成（primitives/providers 范围）。Runtime / Surface / CLI Workbench 生成均未开始。`agent-desktop` 仅作 Admin 兼容基线。
 
 ## 3. 已锁定决策（勿回退）
 
-1. 独立仓库，不进 UI Lab monorepo  
-2. 学 shadcn-admin 的壳/页面模式，不整包搬 Radix  
-3. 官方 shadcn Base UI（`render`，禁止 `asChild` / Radix 回潮）  
-4. 中文 UI + 英文标识  
+1. 独立仓库，不进 UI Lab monorepo
+2. 学 shadcn-admin 的壳/页面模式，不整包搬 Radix
+3. 官方 shadcn Base UI（`render`，禁止 `asChild` / Radix 回潮）
+4. 中文 UI + 英文标识
 5. Admin 内部布局差异走 preferences / scenario；跨 Archetype 使用平级、独立的 Shell
-6. Skill 负责判断编排，CLI 负责确定性落盘  
-7. 创建方式：`uilab-admin init` 为主，兼容 `apply-scenario`  
+6. Skill 负责判断编排，CLI 负责确定性落盘
+7. 创建方式：`uilab-admin init` 为主，兼容 `apply-scenario`
 8. 当前 agent-desktop：L1 + L2 兼容基线；长期 Agent Workbench 保持 Web Renderer + 可选 Desktop Host Adapter
 9. CLI 命令名：`uilab-admin`
 10. Agent Workbench 是独立 Archetype，不是 Admin scenario；Derived Application 使用 copy-and-own
@@ -57,13 +59,17 @@ Phase 1 与 **Phase 2A Foundation seam** 已完成。完整 Phase 2 验收（双
 uilab-templates/
   AGENTS.md / README.md / PROJECT_STATUS.md / CHANGELOG.md   # 平台合同
   pnpm-workspace.yaml
-  package.json                 # 根编排（委托 @uilab/admin）
+  package.json                 # 根编排（Admin + Workbench + Foundation）
   cli/uilab-admin.mjs          # 兼容 wrapper → tooling/template-cli
   scripts/check-ai.mjs         # 兼容 wrapper → tooling/quality-gates
+  scripts/check-foundation.mjs
+  scripts/check-workbench.mjs
   skill/uilab-admin/           # 外部可发现 skill 前门
   tooling/
     template-cli/uilab-admin.mjs
     quality-gates/check-ai.mjs
+    quality-gates/check-foundation-boundaries.mjs
+    quality-gates/check-workbench-boundaries.mjs
   archetypes/admin/            # Admin 源应用 + Admin-owned 资产与应用合同
     AGENTS.md / README.md      # Admin / 派生应用硬合同（init 原样带入）
     src/
@@ -71,6 +77,9 @@ uilab-templates/
     scaffolds/                 # data-table-list / settings-section
     desktop/README.md
     AGENT_BRIEF.md
+  archetypes/agent-workbench/  # Phase 3 Workbench Shell 源应用
+    AGENTS.md / README.md / APP_BRIEF.md
+    src/ modules + shell + composition
   packages/foundation/         # Phase 2A：Button / Input / tokens（source-consumed）
   docs/                        # ADR / plans / evidence / research（平台级）
 ```
@@ -90,7 +99,7 @@ uilab-templates/
 
 ### 5.2 Skill（`$uilab-admin`）
 
-本地已桥接：Claude / Codex / Agents / Grok。  
+本地已桥接：Claude / Codex / Agents / Grok。
 平台 skill 位于根 `skill/uilab-admin/`，Markdown 链到 `archetypes/admin/docs/ai/*`；`init` 生成应用时改写为本地 `docs/ai`。
 
 | 模式 | 路线 | 作用 |
@@ -127,25 +136,25 @@ uilab-templates/
 
 ### Phase 1 monorepo migration
 
-- Batch 1A `9a7b582`：Admin 应用迁入 workspace  
-- Batch 1B `e22a8f4`：规范 tooling + 根兼容 wrapper  
-- Batch 1C：Admin assets（`docs/ai` / `scaffolds`）迁入 `archetypes/admin`，CLI/门禁三根模型与合同对齐；**应用侧 AGENTS/README 归 Archetype 所有**，`init` 不再把平台根合同拷进派生应用  
+- Batch 1A `9a7b582`：Admin 应用迁入 workspace
+- Batch 1B `e22a8f4`：规范 tooling + 根兼容 wrapper
+- Batch 1C `c84be8d`：Admin assets（`docs/ai` / `scaffolds`）迁入 `archetypes/admin`，CLI/门禁三根模型与合同对齐；**应用侧 AGENTS/README 归 Archetype 所有**，`init` 不再把平台根合同拷进派生应用
 - 证据：`docs/evidence/phase-1-template-platform-migration.md`
 
 ### CLI-2 多场景
 
-目录：`/Users/zhoujw/develop/tmp/uilab-admin-cli2-verify-20260801-121430`  
+目录：`/Users/zhoujw/develop/tmp/uilab-admin-cli2-verify-20260801-121430`
 证据：`EVIDENCE.md`
 
-- init ops/saas/agent：PASS  
-- apply-scenario：PASS  
-- extend（members + set-shell）：PASS  
-- 冲突/未知 scenario 退出码：PASS  
-- typecheck/build（init apps）：PASS  
+- init ops/saas/agent：PASS
+- apply-scenario：PASS
+- extend（members + set-shell）：PASS
+- 冲突/未知 scenario 退出码：PASS
+- typecheck/build（init apps）：PASS
 
 ### UI smoke（真实 dev）
 
-目录：`/Users/zhoujw/develop/tmp/uilab-admin-ui-verify-20260801-122005`  
+目录：`/Users/zhoujw/develop/tmp/uilab-admin-ui-verify-20260801-122005`
 证据：`UI_EVIDENCE.md` + `screenshots/`
 
 | 场景 | 端口 | 结果 |
@@ -172,32 +181,46 @@ uilab-templates/
 - `routeTree.gen.ts` SHA 保持 `ae8902e654f8393e3499dbd3f912d4ddcb0f133cedd328c6bf112e681c9652b4`
 - 证据：`docs/evidence/phase-1-template-platform-migration.md`
 
+### Phase 2A minimal Foundation
+
+- 提交：`9d55b3c`
+- `@uilab/foundation` Button/Input/tokens；Admin re-export；`check:foundation`；init materialization
+- 证据：`docs/evidence/phase-2a-minimal-foundation.md`
+
+### Phase 3 Workbench Shell skeleton
+
+- 代码：`archetypes/agent-workbench`（本批提交；具体 hash 以 `git log` 为准）
+- 静态 Shell + task-scoped layout + placeholder Work Surface Host + `check:workbench`
+- **未包含**：Runtime、Surface Registry、Document/Browser/Review、CLI Workbench 生成、desktop host
+- 证据：`docs/evidence/phase-3-workbench-shell-skeleton.md`
+
 ## 7. 已知缺口 / 技术债
 
 ### 与 Phase 1 迁移无关（已知债务，不计入 Phase 1 验收）
 
-- **lint**：Admin 包内既有 eslint 问题（若存在）不作为本阶段迁移失败条件  
-- **knip**：既有 unused export / dependency 扫描债务不作为本阶段迁移失败条件  
+- **lint**：Admin 包内既有 eslint 问题（若存在）不作为本阶段迁移失败条件
+- **knip**：既有 unused export / dependency 扫描债务不作为本阶段迁移失败条件
 
 ### P1（下一阶段优化优先）
 
-1. **Phase 2 remainder / Phase 3 Workbench**（第二消费者后再扩 Foundation）
-2. **模板去 demo 化**  
-3. **scenario 质量**（agent-desktop 噪音入口等）  
-4. **CLI 体验**（npm 发布、`auth-page` add 等）
+1. **Phase 2 remainder**（共享 theme Provider / 更广 primitives；Workbench 第二消费者已有）
+2. **Phase 4 Fake Runtime** 与 Task lifecycle
+3. **模板去 demo 化**
+4. **scenario 质量**（agent-desktop 噪音入口等）
+5. **CLI 体验**（npm 发布、`auth-page` add、Workbench init 属 Phase 8）
 
 ### P2
 
-1. agent-desktop 主画布仍是 mock，未接真实 Agent runtime  
-2. desktop host（Electron/Tauri）未实现  
-3. OpenAPI → list scaffold 未做  
-4. UI Lab 视觉弱接入未做  
+1. agent-desktop 主画布仍是 mock，未接真实 Agent runtime
+2. desktop host（Electron/Tauri）未实现
+3. OpenAPI → list scaffold 未做
+4. UI Lab 视觉弱接入未做
 5. 更强 `check:ai`（页面三件套静态扫描、禁止 Select 主筛选等）
 
 ### P3
 
-1. AI/CLI 自动化路径覆盖仍不足  
-2. 版本号仍 `0.0.1`，CHANGELOG 仍偏上游 shadcn-admin 历史  
+1. AI/CLI 自动化路径覆盖仍不足
+2. 版本号仍 `0.0.1`，CHANGELOG 仍偏上游 shadcn-admin 历史
 
 ## 8. 建议的后续优化 backlog
 
@@ -207,44 +230,51 @@ uilab-templates/
 2. ~~Admin 兼容 re-export 消费~~
 3. ~~依赖门禁 `check:foundation` + init materialization~~
 
-### Wave 0b — Phase 2 remainder（阻塞：Workbench）
+### Wave 0b — Phase 2 remainder
 
-1. 第二 Archetype 证明同语义 primitives 后再扩 Dialog/Popover/…
+1. 在双 Archetype 同语义基础上再扩 Dialog/Popover/…（按需）
 2. Theme / direction providers 跨 Archetype 对齐
 
 ### Wave A — 模板打磨
 
-1. 收敛默认侧栏 IA  
-2. 统一中文文案死角  
-3. scenario apply 时更积极地裁剪无关 demo  
-4. README / PROJECT_STATUS / AGENT_BRIEF 保持同步  
+1. 收敛默认侧栏 IA
+2. 统一中文文案死角
+3. scenario apply 时更积极地裁剪无关 demo
+4. README / PROJECT_STATUS / AGENT_BRIEF 保持同步
 
-### Wave B — Agent Desktop → Workbench（Phase 3+）
+### Wave B — Workbench（Phase 3 done → 4+）
 
-1. 独立 `archetypes/agent-workbench`  
-2. Workspace 接 mock stream / tool call 轨迹  
-3. 与 Admin 平级 Shell  
+1. ~~独立 `archetypes/agent-workbench` Shell 骨架~~（Phase 3）
+2. Phase 4 Fake Runtime + projection
+3. Phase 5–6 Surface Registry + Document/Browser/Review
 
 ### Wave C — 装配系统增强
 
-1. `uilab-admin add auth-page`  
-2. CLI 发布策略  
-3. `check` 增强结构审计  
+1. `uilab-admin add auth-page`
+2. CLI 发布策略
+3. `check` 增强结构审计
 
 ## 9. 常用命令
 
 ```bash
-# 模板本体（根编排 → @uilab/admin）
+# 模板本体（根编排 → Foundation / Admin / Workbench）
 pnpm install
-pnpm dev
+pnpm dev                 # Admin
+pnpm dev:workbench
 pnpm typecheck
 pnpm build
+pnpm test
+pnpm check:foundation
+pnpm check:workbench
 pnpm check:ai
+pnpm check
 
 # 包级
 pnpm --filter @uilab/admin typecheck
 pnpm --filter @uilab/admin build
 pnpm --filter @uilab/admin test
+pnpm --filter @uilab/agent-workbench typecheck
+pnpm --filter @uilab/agent-workbench test
 
 # CLI
 pnpm uilab-admin --help
@@ -271,14 +301,16 @@ pnpm uilab-admin check
 | `f747719` | Browser 测试基线恢复（17/103 绿） |
 | `9a7b582` | Phase 1 Batch 1A：Admin 迁入 workspace |
 | `e22a8f4` | Phase 1 Batch 1B：tooling 规范路径 + 兼容 wrapper |
-| （Batch 1C） | Admin assets + 三根路径模型 + 合同对齐（本批未提交） |
+| `c84be8d` | Phase 1 Batch 1C：Admin assets + 三根路径模型 + 合同对齐 |
+| `9d55b3c` | Phase 2A：minimal Foundation seam |
+| （本批） | Phase 3 Workbench Shell skeleton；具体 hash 以 `git log` 为准 |
 
 ## 11. 状态更新约定
 
 后续每次完成一个可交付阶段，至少更新：
 
-1. 本文件 `PROJECT_STATUS.md`（阶段判断 / 缺口 / backlog）  
-2. `CHANGELOG.md` 的 Unreleased（若有用户可见变化）  
-3. 必要的 `README.md` / Admin `AGENT_BRIEF.md` 一句同步  
+1. 本文件 `PROJECT_STATUS.md`（阶段判断 / 缺口 / backlog）
+2. `CHANGELOG.md` 的 Unreleased（若有用户可见变化）
+3. 必要的 `README.md` / Admin `AGENT_BRIEF.md` 一句同步
 
 不要把 planned 写成 shipped。

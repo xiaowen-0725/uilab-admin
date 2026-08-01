@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
  *   platformRoot: string,
  *   foundationRoot: string,
  *   adminRoot: string,
+ *   workbenchRoot: string | null,
  * }} GateLayout
  */
 
@@ -60,6 +61,7 @@ function detectGateLayout() {
       platformRoot,
       foundationRoot: path.join(platformRoot, 'packages', 'foundation'),
       adminRoot: path.join(platformRoot, 'archetypes', 'admin'),
+      workbenchRoot: path.join(platformRoot, 'archetypes', 'agent-workbench'),
     }
   }
 
@@ -70,11 +72,13 @@ function detectGateLayout() {
     platformRoot: projectRoot,
     foundationRoot: path.join(projectRoot, 'packages', 'foundation'),
     adminRoot: projectRoot,
+    // Derived Admin apps do not include Workbench Archetype
+    workbenchRoot: null,
   }
 }
 
 const LAYOUT = detectGateLayout()
-const { platformRoot, foundationRoot, adminRoot } = LAYOUT
+const { platformRoot, foundationRoot, adminRoot, workbenchRoot } = LAYOUT
 const errors = []
 
 function rel(filePath, base = platformRoot) {
@@ -496,11 +500,129 @@ async function checkAdminConsumption() {
   }
 }
 
+/**
+ * Workbench is the second consumer of Phase 2A Button/Input/tokens.
+ * Imports public Foundation subpaths directly (no Admin-style re-export required).
+ * Does not expand Foundation exports.
+ */
+async function checkWorkbenchConsumption() {
+  if (!workbenchRoot) {
+    return
+  }
+
+  if (!(await exists(workbenchRoot))) {
+    errors.push(
+      `Workbench package root missing (${rel(workbenchRoot)}); platform expects archetypes/agent-workbench as second Foundation consumer`
+    )
+    return
+  }
+
+  const wbPkgPath = path.join(workbenchRoot, 'package.json')
+  if (!(await mustExist(wbPkgPath, `Workbench package.json (${rel(wbPkgPath)})`))) {
+    return
+  }
+
+  let wbPkg
+  try {
+    wbPkg = JSON.parse(await readFile(wbPkgPath, 'utf8'))
+  } catch (error) {
+    errors.push(`Workbench package.json is not valid JSON: ${error.message}`)
+    return
+  }
+
+  if (wbPkg.name !== '@uilab/agent-workbench') {
+    errors.push(
+      `Workbench package name must be @uilab/agent-workbench (got ${JSON.stringify(wbPkg.name)})`
+    )
+  }
+
+  const dep =
+    wbPkg.dependencies?.['@uilab/foundation'] ??
+    wbPkg.devDependencies?.['@uilab/foundation']
+  if (dep !== 'workspace:*') {
+    errors.push(
+      `Workbench must depend on @uilab/foundation as "workspace:*" (got ${JSON.stringify(dep)})`
+    )
+  }
+
+  // Scan Workbench sources for approved public Interface consumption
+  const srcRoot = path.join(workbenchRoot, 'src')
+  const files = await walkSources(srcRoot)
+  let hasButton = false
+  let hasInput = false
+  let hasTokens = false
+
+  for (const file of files) {
+    const text = await readFile(file, 'utf8')
+    if (
+      text.includes("@uilab/foundation/ui/button") ||
+      text.includes("'@uilab/foundation/ui/button'")
+    ) {
+      hasButton = true
+    }
+    if (
+      text.includes("@uilab/foundation/ui/input") ||
+      text.includes("'@uilab/foundation/ui/input'")
+    ) {
+      hasInput = true
+    }
+    if (text.includes('@uilab/foundation/styles/tokens.css')) {
+      hasTokens = true
+    }
+  }
+
+  // tokens may only appear in CSS
+  if (!hasTokens) {
+    const cssCandidates = [
+      path.join(workbenchRoot, 'src/styles/tokens.css'),
+      path.join(workbenchRoot, 'src/styles/index.css'),
+    ]
+    for (const cssPath of cssCandidates) {
+      if (await exists(cssPath)) {
+        const css = await readFile(cssPath, 'utf8')
+        if (css.includes('@uilab/foundation/styles/tokens.css')) {
+          hasTokens = true
+          break
+        }
+      }
+    }
+  }
+
+  if (!hasButton) {
+    errors.push(
+      'Workbench must consume @uilab/foundation/ui/button (second Foundation consumer)'
+    )
+  }
+  if (!hasInput) {
+    errors.push(
+      'Workbench must consume @uilab/foundation/ui/input (second Foundation consumer)'
+    )
+  }
+  if (!hasTokens) {
+    errors.push(
+      'Workbench must import @uilab/foundation/styles/tokens.css (second Foundation consumer)'
+    )
+  }
+
+  const indexCssPath = path.join(workbenchRoot, 'src/styles/index.css')
+  if (await mustExist(indexCssPath, `Workbench index.css (${rel(indexCssPath, workbenchRoot)})`)) {
+    const indexCss = await readFile(indexCssPath, 'utf8')
+    if (!indexCss.includes('@uilab/foundation/src/ui')) {
+      errors.push(
+        'Workbench src/styles/index.css must register Foundation UI with Tailwind @source (node_modules/@uilab/foundation/src/ui)'
+      )
+    }
+  }
+}
+
 async function main() {
   console.log(`check-foundation (${LAYOUT.kind})`)
   console.log(`  platformRoot:   ${platformRoot}`)
   console.log(`  foundationRoot: ${foundationRoot}`)
   console.log(`  adminRoot:      ${adminRoot}`)
+  if (workbenchRoot) {
+    console.log(`  workbenchRoot:  ${workbenchRoot}`)
+  }
 
   if (!(await mustExist(foundationRoot, `Foundation package root (${rel(foundationRoot)})`))) {
     // still try admin checks for better diagnostics? fail closed early messages only
@@ -515,6 +637,7 @@ async function main() {
   }
 
   await checkAdminConsumption()
+  await checkWorkbenchConsumption()
 
   if (errors.length > 0) {
     console.error(`\ncheck-foundation FAILED (${errors.length} issue(s)):`)
@@ -524,7 +647,11 @@ async function main() {
 
   console.log('\ncheck-foundation OK')
   console.log(`  exports: ${APPROVED_EXPORT_KEYS.join(', ')}`)
-  console.log('  dependency direction: Admin → Foundation only')
+  console.log(
+    workbenchRoot
+      ? '  dependency direction: Admin + Workbench → Foundation only'
+      : '  dependency direction: Admin → Foundation only'
+  )
   process.exit(0)
 }
 

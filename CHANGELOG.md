@@ -13,6 +13,8 @@
 - **Phase 2A minimal Foundation**: private source-consumed `@uilab/foundation` with public exports `./ui/button`, `./ui/input`, `./styles/tokens.css` only
 - Foundation Browser tests for Button/Input public Interface; Admin compatibility re-exports
 - Foundation boundary gate (`check:foundation`) and CLI copy-and-own materialization into derived `packages/foundation` + mini `pnpm-workspace.yaml`
+- **Phase 3 Agent Workbench Shell skeleton**: runnable `@uilab/agent-workbench` peer Archetype with Composition Root, `workbench-session` / `task` / `work-surface` Modules, Navigator, Adaptive Context Panel, placeholder Single-pane + Tabs Work Surface Host, static fixtures, reducer + browser integration tests
+- Workbench boundary gate (`check:workbench`) and root scripts `dev:workbench` / `preview:workbench` / `dev:admin` (default `pnpm dev` remains Admin)
 
 ### Changed
 
@@ -28,7 +30,9 @@
 - Explicit platform `--template` requires canonical `tooling/template-cli` and `tooling/quality-gates` (no fallback to import-only root wrappers)
 - Root commands (`pnpm dev`, `typecheck`, `build`, `test`, `check:ai`, `uilab-admin`) remain valid via workspace delegation and wrappers
 - **Phase 2A**: root `typecheck` / `build` / `test` verify Foundation before Admin; `pnpm check` includes `check:foundation`; Admin tokens/Button/Input implementation moved into Foundation with thin compatibility modules
-- Full Phase 2 (Workbench second consumer, broader primitives/providers) is **not** claimed complete
+- **Phase 3**: root `typecheck` / `build` / `test` also cover Workbench; `check:foundation` verifies Workbench as second consumer of existing Button/Input/tokens (exports unchanged); `pnpm check` includes `check:workbench`
+- Full Phase 2 (broader primitives/providers, shared theme Provider) is **still not** claimed complete
+- Phase 3 does **not** deliver Agent Runtime, Surface Registry, Document/Browser/Review Surfaces, persistence, desktop host, or `uilab-admin init` Workbench generation
 
 ### Fixed
 

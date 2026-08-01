@@ -21,18 +21,19 @@
 
 当前仓库已经具备：
 
-- Template Platform monorepo：`archetypes/admin`（可运行 Admin）、`tooling/template-cli`、`tooling/quality-gates`、根兼容 wrapper 与 `skill/uilab-admin` 前门。
-- **Phase 2A minimal Foundation seam**：`packages/foundation`（`@uilab/foundation`）公开 Interface 仅 `ui/button`、`ui/input`、`styles/tokens.css`；Admin 经 `@/components/ui/*` 兼容 re-export 消费；`check:foundation` 边界门禁；`init` copy-and-own 到派生应用 `packages/foundation` + mini-workspace。
-- Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈（Admin 源在 `archetypes/admin`）。
+- Template Platform monorepo：`archetypes/admin`（可运行 Admin）、`archetypes/agent-workbench`（Phase 3 可运行静态 Shell）、`tooling/template-cli`、`tooling/quality-gates`、根兼容 wrapper 与 `skill/uilab-admin` 前门。
+- **Phase 2A minimal Foundation seam**：`packages/foundation`（`@uilab/foundation`）公开 Interface 仅 `ui/button`、`ui/input`、`styles/tokens.css`；Admin 经 `@/components/ui/*` 兼容 re-export 消费；Workbench 直接消费公开子路径；`check:foundation` 边界门禁；`init` copy-and-own 到派生应用 `packages/foundation` + mini-workspace。
+- **Phase 3 Workbench Shell skeleton（shipped）**：Composition Root、Navigator、Task Surface、Composer、Adaptive Context Panel、placeholder Work Surface Host、task-scoped layout session、静态 fixture、`check:workbench`。
+- Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈（Admin 源在 `archetypes/admin`；Workbench 使用小型 code-defined Router）。
 - Admin Shell、主题、动画、数据表格、认证、设置与错误页参考实现。
 - Admin-owned AI 合同：`archetypes/admin/docs/ai/*` 与 `archetypes/admin/scaffolds/*`。
-- `uilab-admin` CLI 的 `check`、`add`、`set-shell`、`init`、`apply-scenario`（规范实现在 `tooling/template-cli`）。
+- `uilab-admin` CLI 的 `check`、`add`、`set-shell`、`init`、`apply-scenario`（规范实现在 `tooling/template-cli`；**仍仅生成 Admin**）。
 - `agent-desktop` scenario 与 `/workspace` mock 页面（Admin 兼容基线）。
-- `pnpm typecheck`、`pnpm build`、`pnpm check:foundation`、`pnpm check:ai` 门禁；Admin Browser Mode 18 files / 108 tests；Foundation 另有 focused Browser 测试。
+- `pnpm typecheck`、`pnpm build`、`pnpm test`、`pnpm check:foundation`、`pnpm check:workbench`、`pnpm check:ai` 门禁；Admin Browser Mode 18 files / 108 tests；Foundation 与 Workbench 另有 focused Browser 测试。
 
-**说明：** Phase 2A 只证明 Foundation 包边界与 materialization，**不**宣称完整 Phase 2 验收完成（仍缺 Workbench 第二消费者与更广 primitives/providers）。
+**说明：** Phase 2A + Workbench 第二消费者已落地，**仍不**宣称完整 Phase 2 验收完成（缺更广 primitives/providers 与共享 theme Provider）。Phase 3 **不**包含 Runtime、Surface Registry、具体 Surface 或 CLI Workbench 生成。
 
-当前 `/workspace` 是 Admin Shell 内的三卡片示例，不是后续 Agent Workbench 的 Kernel。它可作为文案和视觉参考，但不能成为新 Shell 的结构基础。`agent-desktop` 仍作为迁移期兼容 scenario 保留。
+当前 `/workspace` 是 Admin Shell 内的三卡片示例，不是 Agent Workbench 的 Kernel。长期 Workbench 以 `archetypes/agent-workbench` 为准。`agent-desktop` 仍作为迁移期兼容 scenario 保留。
 
 ## Target repository shape
 
@@ -138,6 +139,10 @@ Playwright 验证：导航可达、搜索可打开、设置抽屉可操作、用
 
 ## Phase 3 — Build the Workbench Shell skeleton
 
+### Status
+
+**Shipped and independently verified** as `@uilab/agent-workbench` (static Shell only). Evidence: [`phase-3-workbench-shell-skeleton.md`](../evidence/phase-3-workbench-shell-skeleton.md).
+
 ### Purpose
 
 先验证生产级空间模型与响应式行为，不接真实 Agent Runtime。
@@ -145,12 +150,13 @@ Playwright 验证：导航可达、搜索可打开、设置抽屉可操作、用
 ### Deliverables
 
 - 创建 `archetypes/agent-workbench` 的 Composition Root、Provider、Router 与配置入口。
-- 实现 Navigator、Workspace、Task Surface 和 Composer。
-- 实现 Adaptive Task Context Panel：宽屏 Reserved-space，窄屏 Overlay。
+- 实现 Navigator、Task Surface 和 Composer。
+- 实现 Adaptive Task Context Panel：宽 Task Reserved-space，窄 Task Overlay（container query）。
 - 实现空的 Work Surface Host：Single-pane + Tabs、显隐、调宽、最大化。
 - 新 Task 默认 Task-only；打开工作内容时展开 Work Surface，并按 Task 恢复状态。
 - 实现键盘焦点顺序、面板开关快捷键和 reduced-motion 降级。
 - 使用静态 fixture，不在 UI 中伪装真实 Agent 执行。
+- 根编排：`dev:workbench` / `check:workbench`；Foundation 第二消费者校验（不扩 exports）。
 
 ### Acceptance
 

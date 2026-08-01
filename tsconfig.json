@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/foundation" },
-    { "path": "./archetypes/admin" }
+    { "path": "./archetypes/admin" },
+    { "path": "./archetypes/agent-workbench" }
   ]
 }
