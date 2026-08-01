@@ -25,7 +25,7 @@ Agent 工作台（类似 Codex 桌面端的信息架构方向）。
 
 | 模块 | 含义 | 第一期落点建议 |
 |---|---|---|
-| workspace | 主画布/会话工作区 | `src/features/workspace` 或先用 dashboard 位替换 |
+| workspace | 主画布/会话工作区 | `src/features/workspace`（init 后首页 `/`） |
 | thread-list | 会话/任务线程列表 | `data-table-list` 或侧栏列表 pattern |
 | settings | 模型/快捷键/外观 | `settings-section` |
 | errors | 失败边界 | 现有 errors feature |
@@ -49,6 +49,13 @@ desktop/README.md    # 接入合同
 - 去掉过重 SaaS dashboard demo
 - 去掉多余 auth 变体与 Clerk 痕迹
 - 导航文案偏“工作区/会话”，不是“客户/订单”
+
+## Bootstrap 时 CLI 会做的事
+
+- seed `threads` 列表
+- 把首页 `/` 切到 `Workspace`
+- 侧栏偏“工作区 / 会话列表”
+- 保留 `desktop/README.md` L2 边界
 
 ## Extend 常见下一步
 

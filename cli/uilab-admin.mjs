@@ -784,6 +784,72 @@ See template docs: docs/ai/bootstrap.md and docs/ai/scenarios/agent-desktop.md.
   return { path: 'desktop/README.md', created: true }
 }
 
+
+async function configureAgentDesktopShell(appRoot, { dryRun }) {
+  const actions = []
+
+  // Home route -> Workspace
+  const homeRoute = path.join(appRoot, 'src/routes/_authenticated/index.tsx')
+  const homeContent = `import { createFileRoute } from '@tanstack/react-router'
+import { Workspace } from '@/features/workspace'
+
+export const Route = createFileRoute('/_authenticated/')({
+  component: Workspace,
+})
+`
+  if (dryRun) print('[dry-run] set home route to Workspace')
+  else await writeFile(homeRoute, homeContent, 'utf8')
+  actions.push({ type: 'home-route', path: 'src/routes/_authenticated/index.tsx' })
+
+  // Sidebar IA: 工作区 / 会话 / 设置
+  const sidebarPath = path.join(
+    appRoot,
+    'src/components/layout/data/sidebar-data.ts'
+  )
+  let sidebar = await readFile(sidebarPath, 'utf8')
+
+  // Ensure MessageSquare / Bot icons import if missing - use LayoutDashboard and ListTodo already present
+  // Replace first nav group titles/urls lightly by rewriting navGroups section carefully is hard;
+  // instead patch known dashboard/tasks entries and add workspace/threads if needed.
+  if (!sidebar.includes("url: '/workspace'") && !sidebar.includes('url: "/"')) {
+    // no-op
+  }
+
+  // Change dashboard title to 工作区 and keep url /
+  sidebar = sidebar.replace(
+    /title:\s*'仪表盘',\n\s*url:\s*'\/',\n\s*icon:\s*LayoutDashboard,/,
+    `title: '工作区',\n          url: '/',\n          icon: LayoutDashboard,`
+  )
+  // If threads exists entry already from seed, rename group later.
+  // Ensure a top-level 会话 list entry exists at /threads
+  if (!sidebar.includes("url: '/threads'")) {
+    const item = `        {
+          title: '会话列表',\n          url: '/threads',\n          icon: ListTodo,\n        },`
+    sidebar = sidebar.replace(
+      /url:\s*'\/',\n\s*icon:\s*LayoutDashboard,\n\s*},/,
+      (m) => `${m}\n${item}`
+    )
+  } else {
+    sidebar = sidebar.replace(
+      /title:\s*'会话列表',\n\s*url:\s*'\/threads'/,
+      `title: '会话列表',\n          url: '/threads'`
+    )
+  }
+
+  // Rename first group to 工作区 if still 概览
+  sidebar = sidebar.replace(/title:\s*'概览'/, "title: '工作区'")
+
+  // Soften demo-heavy auth group title remains ok.
+  if (dryRun) print('[dry-run] patch sidebar for agent-desktop IA')
+  else await writeFile(sidebarPath, sidebar, 'utf8')
+  actions.push({
+    type: 'sidebar-ia',
+    path: 'src/components/layout/data/sidebar-data.ts',
+  })
+
+  return actions
+}
+
 async function seedScenarioModules(appRoot, scenario, flags) {
   const seeded = []
   if (flags['skip-seed']) return seeded
@@ -825,6 +891,21 @@ async function seedScenarioModules(appRoot, scenario, flags) {
         'dry-run': !!flags['dry-run'],
       })
       seeded.push(result)
+    }
+
+    // Workspace feature is part of template; configure home + IA.
+    if (await exists(path.join(appRoot, 'src/features/workspace/index.tsx'))) {
+      const shellActions = await configureAgentDesktopShell(appRoot, {
+        dryRun: !!flags['dry-run'],
+      })
+      seeded.push({
+        pattern: 'agent-desktop-shell',
+        created: shellActions.map((a) => a.path),
+      })
+    } else {
+      printErr(
+        'warning: src/features/workspace missing; agent-desktop home not switched'
+      )
     }
   }
 
