@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
-import { CaretSortIcon, CheckIcon } from '@radix-ui/react-icons'
+import { ChevronsUpDown as CaretSortIcon, Check as CheckIcon } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { showSubmittedData } from '@/lib/show-submitted-data'
 import { cn } from '@/lib/utils'
@@ -110,8 +110,7 @@ export function AccountForm() {
             <FormItem className='flex flex-col'>
               <FormLabel>Language</FormLabel>
               <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
+                <PopoverTrigger render={<FormControl>
                     <Button
                       variant='outline'
                       role='combobox'
@@ -127,8 +126,7 @@ export function AccountForm() {
                         : 'Select language'}
                       <CaretSortIcon className='ms-2 h-4 w-4 shrink-0 opacity-50' />
                     </Button>
-                  </FormControl>
-                </PopoverTrigger>
+                  </FormControl>} />
                 <PopoverContent className='w-50 p-0'>
                   <Command>
                     <CommandInput placeholder='Search language...' />

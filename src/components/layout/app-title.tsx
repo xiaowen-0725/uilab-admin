@@ -17,9 +17,8 @@ export function AppTitle() {
         <SidebarMenuButton
           size='lg'
           className='gap-0 py-0 hover:bg-transparent active:bg-transparent'
-          asChild
-        >
-          <div>
+         
+         render={<div>
             <Link
               to='/'
               onClick={() => setOpenMobile(false)}
@@ -29,8 +28,7 @@ export function AppTitle() {
               <span className='truncate text-xs'>Vite + ShadcnUI</span>
             </Link>
             <ToggleSidebar />
-          </div>
-        </SidebarMenuButton>
+          </div>} />
       </SidebarMenuItem>
     </SidebarMenu>
   )

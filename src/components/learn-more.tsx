@@ -1,4 +1,4 @@
-import { type Root, type Content, type Trigger } from '@radix-ui/react-popover'
+import type { ReactNode } from 'react'
 import { CircleQuestionMark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -8,9 +8,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 
-type LearnMoreProps = React.ComponentProps<typeof Root> & {
-  contentProps?: React.ComponentProps<typeof Content>
-  triggerProps?: React.ComponentProps<typeof Trigger>
+type LearnMoreProps = Omit<React.ComponentProps<typeof Popover>, 'children'> & {
+  children?: ReactNode
+  contentProps?: React.ComponentProps<typeof PopoverContent>
+  triggerProps?: React.ComponentProps<typeof PopoverTrigger>
 }
 
 export function LearnMore({
@@ -22,15 +23,15 @@ export function LearnMore({
   return (
     <Popover {...props}>
       <PopoverTrigger
-        asChild
         {...triggerProps}
         className={cn('size-5 rounded-full', triggerProps?.className)}
-      >
-        <Button variant='outline' size='icon'>
-          <span className='sr-only'>Learn more</span>
-          <CircleQuestionMark className='size-4 [&>circle]:hidden' />
-        </Button>
-      </PopoverTrigger>
+        render={
+          <Button variant='outline' size='icon'>
+            <span className='sr-only'>Learn more</span>
+            <CircleQuestionMark className='size-4 [&>circle]:hidden' />
+          </Button>
+        }
+      />
       <PopoverContent
         side='top'
         align='start'

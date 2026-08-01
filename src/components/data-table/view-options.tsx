@@ -1,14 +1,15 @@
-import { DropdownMenuTrigger } from '@radix-ui/react-dropdown-menu'
-import { MixerHorizontalIcon } from '@radix-ui/react-icons'
+import { Check, Settings2 as MixerHorizontalIcon } from 'lucide-react'
 import { type Table } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
 
 type DataTableViewOptionsProps<TData> = {
   table: Table<TData>
@@ -18,16 +19,18 @@ export function DataTableViewOptions<TData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant='outline'
-          size='sm'
-          className='ms-auto hidden h-8 lg:flex'
-        >
-          <MixerHorizontalIcon className='size-4' />
-          View
-        </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant='outline'
+            size='sm'
+            className='ms-auto hidden h-8 lg:flex'
+          />
+        }
+      >
+        <MixerHorizontalIcon className='size-4' />
+        View
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-37.5'>
         <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
@@ -39,15 +42,18 @@ export function DataTableViewOptions<TData>({
               typeof column.accessorFn !== 'undefined' && column.getCanHide()
           )
           .map((column) => {
+            const visible = column.getIsVisible()
             return (
-              <DropdownMenuCheckboxItem
+              <DropdownMenuItem
                 key={column.id}
                 className='capitalize'
-                checked={column.getIsVisible()}
-                onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                onClick={() => column.toggleVisibility(!visible)}
               >
+                <Check
+                  className={cn('size-4', visible ? 'opacity-100' : 'opacity-0')}
+                />
                 {column.id}
-              </DropdownMenuCheckboxItem>
+              </DropdownMenuItem>
             )
           })}
       </DropdownMenuContent>

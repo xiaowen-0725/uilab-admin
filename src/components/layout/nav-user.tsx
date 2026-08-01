@@ -43,8 +43,7 @@ export function NavUser({ user }: NavUserProps) {
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
+            <DropdownMenuTrigger render={<SidebarMenuButton
                 size='lg'
                 className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
               >
@@ -57,8 +56,7 @@ export function NavUser({ user }: NavUserProps) {
                   <span className='truncate text-xs'>{user.email}</span>
                 </div>
                 <ChevronsUpDown className='ms-auto size-4' />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
+              </SidebarMenuButton>} />
             <DropdownMenuContent
               className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
               side={isMobile ? 'bottom' : 'right'}
@@ -86,24 +84,18 @@ export function NavUser({ user }: NavUserProps) {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                  <Link to='/settings/account'>
+                <DropdownMenuItem render={<Link to='/settings/account'>
                     <BadgeCheck />
                     Account
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to='/settings'>
+                  </Link>} />
+                <DropdownMenuItem render={<Link to='/settings'>
                     <CreditCard />
                     Billing
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to='/settings/notifications'>
+                  </Link>} />
+                <DropdownMenuItem render={<Link to='/settings/notifications'>
                     <Bell />
                     Notifications
-                  </Link>
-                </DropdownMenuItem>
+                  </Link>} />
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem

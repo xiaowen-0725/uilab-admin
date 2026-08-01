@@ -22,27 +22,23 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
   return (
     <>
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
+        <DropdownMenuTrigger render={<Button
             size='icon'
             variant='outline'
             className={cn('md:size-7 lg:hidden', className)}
           >
             <Menu />
             <span className='sr-only'>Toggle navigation menu</span>
-          </Button>
-        </DropdownMenuTrigger>
+          </Button>} />
         <DropdownMenuContent side='bottom' align='start'>
           {links.map(({ title, href, isActive, disabled }) => (
-            <DropdownMenuItem key={`${title}-${href}`} asChild>
-              <Link
+            <DropdownMenuItem key={`${title}-${href}`} render={<Link
                 to={href}
                 className={!isActive ? 'text-muted-foreground' : ''}
                 disabled={disabled}
               >
                 {title}
-              </Link>
-            </DropdownMenuItem>
+              </Link>} />
           ))}
         </DropdownMenuContent>
       </DropdownMenu>

@@ -21,8 +21,7 @@ export function DatePicker({
 }: DatePickerProps) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button
+      <PopoverTrigger render={<Button
           variant='outline'
           data-empty={!selected}
           className='w-60 justify-start text-start font-normal data-[empty=true]:text-muted-foreground'
@@ -33,8 +32,7 @@ export function DatePicker({
             <span>{placeholder}</span>
           )}
           <CalendarIcon className='ms-auto h-4 w-4 opacity-50' />
-        </Button>
-      </PopoverTrigger>
+        </Button>} />
       <PopoverContent className='w-auto p-0'>
         <Calendar
           mode='single'
