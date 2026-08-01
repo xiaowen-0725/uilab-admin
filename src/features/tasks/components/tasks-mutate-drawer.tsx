@@ -32,7 +32,7 @@ type TaskMutateDrawerProps = {
 }
 
 const formSchema = z.object({
-  title: z.string().min(1, 'Title is required.'),
+  title: z.string().min(1, '请输入标题。'),
   status: z.string().min(1, 'Please select a status.'),
   label: z.string().min(1, 'Please select a label.'),
   priority: z.string().min(1, 'Please choose a priority.'),
@@ -73,12 +73,9 @@ export function TasksMutateDrawer({
     >
       <SheetContent className='flex flex-col'>
         <SheetHeader className='text-start'>
-          <SheetTitle>{isUpdate ? 'Update' : 'Create'} Task</SheetTitle>
+          <SheetTitle>{isUpdate ? '更新任务' : '创建任务'}</SheetTitle>
           <SheetDescription>
-            {isUpdate
-              ? 'Update the task by providing necessary info.'
-              : 'Add a new task by providing necessary info.'}
-            Click save when you&apos;re done.
+            {isUpdate ? '修改任务信息后保存。' : '填写信息以创建新任务。'}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -94,7 +91,7 @@ export function TasksMutateDrawer({
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder='Enter a title' />
+                    <Input {...field} placeholder='请输入标题' />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -109,7 +106,7 @@ export function TasksMutateDrawer({
                   <SelectDropdown
                     defaultValue={field.value}
                     onValueChange={field.onChange}
-                    placeholder='Select dropdown'
+                    placeholder='请选择'
                     items={[
                       { label: 'In Progress', value: 'in progress' },
                       { label: 'Backlog', value: 'backlog' },
@@ -199,7 +196,7 @@ export function TasksMutateDrawer({
           </form>
         </Form>
         <SheetFooter className='gap-2'>
-          <SheetClose render={<Button variant='outline'>Close</Button>} />
+          <SheetClose render={<Button variant='outline'>关闭</Button>} />
           <Button form='tasks-form' type='submit'>
             Save changes
           </Button>

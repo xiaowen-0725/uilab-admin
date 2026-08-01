@@ -155,7 +155,7 @@ export function AppearanceForm() {
           )}
         />
 
-        <Button type='submit'>Update preferences</Button>
+        <Button type='submit'>更新偏好</Button>
       </form>
     </Form>
   )

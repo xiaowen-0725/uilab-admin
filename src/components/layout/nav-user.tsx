@@ -79,22 +79,22 @@ export function NavUser({ user }: NavUserProps) {
               <DropdownMenuGroup>
                 <DropdownMenuItem>
                   <Sparkles />
-                  Upgrade to Pro
+                  升级到 Pro
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem render={<Link to='/settings/account'>
                     <BadgeCheck />
-                    Account
+                    账户
                   </Link>} />
                 <DropdownMenuItem render={<Link to='/settings'>
                     <CreditCard />
-                    Billing
+                    账单
                   </Link>} />
                 <DropdownMenuItem render={<Link to='/settings/notifications'>
                     <Bell />
-                    Notifications
+                    通知
                   </Link>} />
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
@@ -103,7 +103,7 @@ export function NavUser({ user }: NavUserProps) {
                 onClick={() => setOpen(true)}
               >
                 <LogOut />
-                Sign out
+                退出登录
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

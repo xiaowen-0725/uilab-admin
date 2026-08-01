@@ -94,7 +94,7 @@ export function NotificationsForm() {
           )}
         />
         <div className='relative'>
-          <h3 className='mb-4 text-lg font-medium'>Email Notifications</h3>
+          <h3 className='mb-4 text-lg font-medium'>邮件通知</h3>
           <div className='space-y-4'>
             <FormField
               control={form.control}
@@ -213,7 +213,7 @@ export function NotificationsForm() {
             </FormItem>
           )}
         />
-        <Button type='submit'>Update notifications</Button>
+        <Button type='submit'>更新通知设置</Button>
       </form>
     </Form>
   )

@@ -54,7 +54,7 @@ export function ConfigDrawer() {
           <Button
             size='icon'
             variant='ghost'
-            aria-label='Open theme settings'
+            aria-label='打开外观与布局设置'
             className='rounded-full'
           />
         }
@@ -63,9 +63,9 @@ export function ConfigDrawer() {
       </SheetTrigger>
       <SheetContent className='flex flex-col'>
         <SheetHeader className='pb-0 text-start'>
-          <SheetTitle>Theme Settings</SheetTitle>
+          <SheetTitle>外观与布局</SheetTitle>
           <SheetDescription>
-            Adjust the appearance and layout to suit your preferences.
+            按偏好调整主题与壳层布局。
           </SheetDescription>
         </SheetHeader>
         <div className='space-y-6 overflow-y-auto px-4'>
@@ -79,9 +79,9 @@ export function ConfigDrawer() {
           <Button
             variant='destructive'
             onClick={handleReset}
-            aria-label='Reset all settings to default values'
+            aria-label='重置所有设置为默认值'
           >
-            Reset
+            重置
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -146,7 +146,7 @@ function ConfigRadioItem({
         '[&_[data-slot=radio-group-indicator]]:hidden',
         'transition duration-200 ease-in'
       )}
-      aria-label={`Select ${item.label.toLowerCase()}`}
+      aria-label={`选择${item.label}`}
       aria-describedby={`${item.value}-description`}
     >
       <div
@@ -156,7 +156,7 @@ function ConfigRadioItem({
           'group-focus-visible:ring-2'
         )}
         role='img'
-        aria-label={`${item.label} option preview`}
+        aria-label={`${item.label} 预览`}
       >
         <CircleCheck
           className={cn(
@@ -190,21 +190,21 @@ function ThemeConfig() {
   return (
     <div>
       <SectionTitle
-        title='Theme'
+        title='主题'
         showReset={theme !== defaultTheme}
         onReset={() => setTheme(defaultTheme)}
-        resetAriaLabel='Reset theme preference to default'
+        resetAriaLabel='重置主题为默认'
       />
       <RadioGroup
         value={theme}
         onValueChange={setTheme}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select theme preference'
+        aria-label='选择主题'
       >
         {[
-          { value: 'system', label: 'System', icon: IconThemeSystem },
-          { value: 'light', label: 'Light', icon: IconThemeLight },
-          { value: 'dark', label: 'Dark', icon: IconThemeDark },
+          { value: 'system', label: '跟随系统', icon: IconThemeSystem },
+          { value: 'light', label: '浅色', icon: IconThemeLight },
+          { value: 'dark', label: '深色', icon: IconThemeDark },
         ].map((item) => (
           <ConfigRadioItem key={item.value} item={item} isTheme />
         ))}
@@ -218,21 +218,21 @@ function SidebarConfig() {
   return (
     <div className='max-md:hidden'>
       <SectionTitle
-        title='Sidebar'
+        title='侧栏样式'
         showReset={defaultVariant !== variant}
         onReset={() => setVariant(defaultVariant)}
-        resetAriaLabel='Reset sidebar style to default'
+        resetAriaLabel='重置侧栏样式为默认'
       />
       <RadioGroup
         value={variant}
         onValueChange={setVariant}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select sidebar style'
+        aria-label='选择侧栏样式'
       >
         {[
-          { value: 'inset', label: 'Inset', icon: IconSidebarInset },
-          { value: 'floating', label: 'Floating', icon: IconSidebarFloating },
-          { value: 'sidebar', label: 'Sidebar', icon: IconSidebarSidebar },
+          { value: 'inset', label: '内嵌', icon: IconSidebarInset },
+          { value: 'floating', label: '浮动', icon: IconSidebarFloating },
+          { value: 'sidebar', label: '贴边', icon: IconSidebarSidebar },
         ].map((item) => (
           <ConfigRadioItem key={item.value} item={item} />
         ))}
@@ -249,13 +249,13 @@ function LayoutConfig() {
   return (
     <div className='max-md:hidden'>
       <SectionTitle
-        title='Layout'
+        title='布局密度'
         showReset={radioState !== 'default'}
         onReset={() => {
           setOpen(true)
           setCollapsible(defaultCollapsible)
         }}
-        resetAriaLabel='Reset layout options to default'
+        resetAriaLabel='重置布局为默认'
       />
       <RadioGroup
         value={radioState}
@@ -268,12 +268,12 @@ function LayoutConfig() {
           setCollapsible(v as Collapsible)
         }}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select layout style'
+        aria-label='选择布局密度'
       >
         {[
-          { value: 'default', label: 'Default', icon: IconLayoutDefault },
-          { value: 'icon', label: 'Compact', icon: IconLayoutCompact },
-          { value: 'offcanvas', label: 'Full layout', icon: IconLayoutFull },
+          { value: 'default', label: '默认', icon: IconLayoutDefault },
+          { value: 'icon', label: '紧凑', icon: IconLayoutCompact },
+          { value: 'offcanvas', label: '全宽', icon: IconLayoutFull },
         ].map((item) => (
           <ConfigRadioItem key={item.value} item={item} />
         ))}
@@ -287,28 +287,28 @@ function DirConfig() {
   return (
     <div>
       <SectionTitle
-        title='Direction'
+        title='阅读方向'
         showReset={defaultDir !== dir}
         onReset={() => setDir(defaultDir)}
-        resetAriaLabel='Reset text direction to default'
+        resetAriaLabel='重置阅读方向为默认'
       />
       <RadioGroup
         value={dir}
         onValueChange={setDir}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select site direction'
+        aria-label='选择阅读方向'
       >
         {[
           {
             value: 'ltr',
-            label: 'Left to Right',
+            label: '从左到右',
             icon: (props: SVGProps<SVGSVGElement>) => (
               <IconDir dir='ltr' {...props} />
             ),
           },
           {
             value: 'rtl',
-            label: 'Right to Left',
+            label: '从右到左',
             icon: (props: SVGProps<SVGSVGElement>) => (
               <IconDir dir='rtl' {...props} />
             ),
@@ -352,10 +352,10 @@ function ExportConfig() {
   return (
     <div className='space-y-3 rounded-xl border bg-muted/30 p-3'>
       <div className='space-y-1'>
-        <div className='text-sm font-semibold'>Export as project defaults</div>
+        <div className='text-sm font-semibold'>导出为项目默认</div>
         <p className='text-xs text-muted-foreground'>
-          Runtime tweaks stay in cookies. Copy these values into
-          `src/config/admin-preferences.ts` for a new app default.
+          运行时偏好保存在 cookie。复制后可写入
+          `src/config/admin-preferences.ts`，作为新应用默认。
         </p>
       </div>
       <div className='grid gap-2'>
@@ -367,7 +367,7 @@ function ExportConfig() {
           }
         >
           <Copy className='size-4' />
-          Copy JSON
+          复制 JSON
         </Button>
         <Button
           variant='outline'
@@ -380,7 +380,7 @@ function ExportConfig() {
           }
         >
           <Copy className='size-4' />
-          Copy defaults code
+          复制 defaults 代码
         </Button>
         <Button
           variant='outline'
@@ -393,7 +393,7 @@ function ExportConfig() {
           }
         >
           <Copy className='size-4' />
-          Copy agent prompt
+          复制 Agent 提示词
         </Button>
       </div>
       <pre className='overflow-x-auto rounded-lg border bg-background p-3 text-[11px] leading-relaxed text-muted-foreground'>

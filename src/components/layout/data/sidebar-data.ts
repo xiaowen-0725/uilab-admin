@@ -35,85 +35,85 @@ export const sidebarData: SidebarData = {
     {
       name: 'Acme Inc',
       logo: GalleryVerticalEnd,
-      plan: 'Enterprise',
+      plan: '企业版',
     },
     {
       name: 'Acme Corp.',
       logo: AudioWaveform,
-      plan: 'Startup',
+      plan: '创业版',
     },
   ],
   navGroups: [
     {
-      title: 'General',
+      title: '概览',
       items: [
         {
-          title: 'Dashboard',
+          title: '仪表盘',
           url: '/',
           icon: LayoutDashboard,
         },
         {
-          title: 'Tasks',
+          title: '任务列表',
           url: '/tasks',
           icon: ListTodo,
         },
       ],
     },
     {
-      title: 'Pages',
+      title: '页面',
       items: [
         {
-          title: 'Auth',
+          title: '认证',
           icon: ShieldCheck,
           items: [
             {
-              title: 'Sign In',
+              title: '登录',
               url: '/sign-in',
             },
             {
-              title: 'Sign In (2 Col)',
+              title: '登录（双栏）',
               url: '/sign-in-2',
             },
             {
-              title: 'Sign Up',
+              title: '注册',
               url: '/sign-up',
             },
             {
-              title: 'Forgot Password',
+              title: '忘记密码',
               url: '/forgot-password',
             },
             {
-              title: 'OTP',
+              title: '验证码',
               url: '/otp',
             },
           ],
         },
         {
-          title: 'Errors',
+          title: '错误页',
           icon: Bug,
           items: [
             {
-              title: 'Unauthorized',
+              title: '未授权',
               url: '/errors/unauthorized',
               icon: Lock,
             },
             {
-              title: 'Forbidden',
+              title: '禁止访问',
               url: '/errors/forbidden',
               icon: UserX,
             },
             {
-              title: 'Not Found',
+              title: '页面不存在',
               url: '/errors/not-found',
               icon: FileX,
             },
             {
-              title: 'Internal Server Error',
+              title: '服务器错误',
               url: '/errors/internal-server-error',
               icon: ServerOff,
             },
             {
-              title: 'Maintenance Error',
+              title: '维护中',
               url: '/errors/maintenance-error',
               icon: Construction,
             },
@@ -122,34 +122,34 @@ export const sidebarData: SidebarData = {
       ],
     },
     {
-      title: 'Other',
+      title: '其他',
       items: [
         {
-          title: 'Settings',
+          title: '设置',
           icon: Settings,
           items: [
             {
-              title: 'Profile',
+              title: '个人资料',
               url: '/settings',
               icon: UserCog,
             },
             {
-              title: 'Account',
+              title: '账户',
               url: '/settings/account',
               icon: Wrench,
             },
             {
-              title: 'Appearance',
+              title: '外观',
               url: '/settings/appearance',
               icon: Palette,
             },
             {
-              title: 'Notifications',
+              title: '通知',
               url: '/settings/notifications',
               icon: Bell,
             },
             {
-              title: 'Display',
+              title: '显示',
               url: '/settings/display',
               icon: Monitor,
             },

@@ -36,7 +36,7 @@ export function DataTableBulkActions<TData>({
       loading: 'Updating status...',
       success: () => {
         table.resetRowSelection()
-        return `Status updated to "${status}" for ${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''}.`
+        return `状态已更新为 "${status}" for ${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''}.`
       },
       error: 'Error',
     })
@@ -49,7 +49,7 @@ export function DataTableBulkActions<TData>({
       loading: 'Updating priority...',
       success: () => {
         table.resetRowSelection()
-        return `Priority updated to "${priority}" for ${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''}.`
+        return `优先级已更新为 "${priority}" for ${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''}.`
       },
       error: 'Error',
     })
@@ -62,7 +62,7 @@ export function DataTableBulkActions<TData>({
       loading: 'Exporting tasks...',
       success: () => {
         table.resetRowSelection()
-        return `Exported ${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''} to CSV.`
+        return `已导出 ${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''} 到 CSV。`
       },
       error: 'Error',
     })
@@ -78,7 +78,7 @@ export function DataTableBulkActions<TData>({
                   variant='outline'
                   size='icon'
                   className='size-8'
-                  aria-label='Update status'
+                  aria-label='更新状态'
                   title='Update status'
                 >
                   <CircleArrowUp />
@@ -110,7 +110,7 @@ export function DataTableBulkActions<TData>({
                   variant='outline'
                   size='icon'
                   className='size-8'
-                  aria-label='Update priority'
+                  aria-label='更新优先级'
                   title='Update priority'
                 >
                   <ArrowUpDown />
@@ -142,7 +142,7 @@ export function DataTableBulkActions<TData>({
               size='icon'
               onClick={() => handleBulkExport()}
               className='size-8'
-              aria-label='Export tasks'
+              aria-label='导出任务'
               title='Export tasks'
             >
               <Download />
@@ -159,7 +159,7 @@ export function DataTableBulkActions<TData>({
               size='icon'
               onClick={() => setShowDeleteConfirm(true)}
               className='size-8'
-              aria-label='Delete selected tasks'
+              aria-label='删除所选任务'
               title='Delete selected tasks'
             >
               <Trash2 />

@@ -6,6 +6,9 @@
 
 ## 当前状态
 
+- 界面主路径已中文优先（侧栏/Dashboard/Tasks/Settings/Auth/错误页/Theme Settings）
+- 代码标识保持英文
+
 - 底稿：完整迁入 shadcn-admin 的 shell、theme settings、dashboard、tasks、settings、auth、errors
 - 已删除：Clerk 整支、apps / chats / users 等过重 demo
 - 组件底座：当前仍为参考仓库的 Radix shadcn（下一步切官方 Base UI）

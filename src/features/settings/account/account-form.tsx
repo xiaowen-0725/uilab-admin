@@ -79,7 +79,7 @@ export function AccountForm() {
             <FormItem>
               <FormLabel>Name</FormLabel>
               <FormControl>
-                <Input placeholder='Your name' {...field} />
+                <Input placeholder='你的名称' {...field} />
               </FormControl>
               <FormDescription>
                 This is the name that will be displayed on your profile and in
@@ -129,7 +129,7 @@ export function AccountForm() {
                   </FormControl>} />
                 <PopoverContent className='w-50 p-0'>
                   <Command>
-                    <CommandInput placeholder='Search language...' />
+                    <CommandInput placeholder='搜索语言...' />
                     <CommandEmpty>No language found.</CommandEmpty>
                     <CommandGroup>
                       <CommandList>
@@ -164,7 +164,7 @@ export function AccountForm() {
             </FormItem>
           )}
         />
-        <Button type='submit'>Update account</Button>
+        <Button type='submit'>更新账户</Button>
       </form>
     </Form>
   )

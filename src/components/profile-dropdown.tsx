@@ -20,40 +20,56 @@ export function ProfileDropdown() {
   return (
     <>
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger render={<Button variant='ghost' className='relative h-8 w-8 rounded-full'>
-            <Avatar className='h-8 w-8'>
-              <AvatarImage src='/avatars/01.png' alt='@shadcn' />
-              <AvatarFallback>SN</AvatarFallback>
-            </Avatar>
-          </Button>} />
+        <DropdownMenuTrigger
+          render={
+            <Button variant='ghost' className='relative h-8 w-8 rounded-full' />
+          }
+        >
+          <Avatar className='h-8 w-8'>
+            <AvatarImage src='/avatars/01.png' alt='演示用户' />
+            <AvatarFallback>演</AvatarFallback>
+          </Avatar>
+        </DropdownMenuTrigger>
         <DropdownMenuContent className='w-56' align='end'>
           <DropdownMenuLabel className='font-normal'>
             <div className='flex flex-col gap-1.5'>
-              <p className='text-sm leading-none font-medium'>satnaing</p>
+              <p className='text-sm leading-none font-medium'>演示用户</p>
               <p className='text-xs leading-none text-muted-foreground'>
-                satnaingdev@gmail.com
+                demo@uilab.dev
               </p>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem render={<Link to='/settings'>
-                Profile
-                <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
-              </Link>} />
-            <DropdownMenuItem render={<Link to='/settings'>
-                Billing
-                <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
-              </Link>} />
-            <DropdownMenuItem render={<Link to='/settings'>
-                Settings
-                <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-              </Link>} />
-            <DropdownMenuItem>New Team</DropdownMenuItem>
+            <DropdownMenuItem
+              render={
+                <Link to='/settings'>
+                  个人资料
+                  <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+                </Link>
+              }
+            />
+            <DropdownMenuItem
+              render={
+                <Link to='/settings'>
+                  账单
+                  <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
+                </Link>
+              }
+            />
+            <DropdownMenuItem
+              render={
+                <Link to='/settings'>
+                  设置
+                  <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+                </Link>
+              }
+            />
+            <DropdownMenuItem>新建团队</DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant='destructive' onClick={() => setOpen(true)}>
-            Sign out
+            退出登录
             <DropdownMenuShortcut className='text-current'>
               ⇧⌘Q
             </DropdownMenuShortcut>

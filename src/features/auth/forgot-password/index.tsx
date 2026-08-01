@@ -16,10 +16,10 @@ export function ForgotPassword() {
       <Card className='max-w-sm gap-4 sm:min-w-sm'>
         <CardHeader>
           <CardTitle className='text-lg tracking-tight'>
-            Forgot Password
+            忘记密码
           </CardTitle>
           <CardDescription>
-            Enter your registered email and <br /> we will send you a link to
+            输入注册邮箱， <br /> we will send you a link to
             reset your password.
           </CardDescription>
         </CardHeader>

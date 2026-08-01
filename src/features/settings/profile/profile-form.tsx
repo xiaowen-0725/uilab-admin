@@ -51,8 +51,8 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>
 const defaultValues: Partial<ProfileFormValues> = {
   bio: 'I own a computer.',
   urls: [
-    { value: 'https://shadcn.com' },
-    { value: 'http://twitter.com/shadcn' },
+    { value: 'https://演示用户.com' },
+    { value: 'http://twitter.com/演示用户' },
   ],
 }
 
@@ -81,7 +81,7 @@ export function ProfileForm() {
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input placeholder='shadcn' {...field} />
+                <Input placeholder='演示用户' {...field} />
               </FormControl>
               <FormDescription>
                 This is your public display name. It can be your real name or a
@@ -100,7 +100,7 @@ export function ProfileForm() {
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder='Select a verified email to display' />
+                    <SelectValue placeholder='选择要展示的邮箱' />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -125,7 +125,7 @@ export function ProfileForm() {
               <FormLabel>Bio</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder='Tell us a little bit about yourself'
+                  placeholder='介绍一下你自己'
                   className='resize-none'
                   {...field}
                 />
@@ -170,7 +170,7 @@ export function ProfileForm() {
             Add URL
           </Button>
         </div>
-        <Button type='submit'>Update profile</Button>
+        <Button type='submit'>更新资料</Button>
       </form>
     </Form>
   )

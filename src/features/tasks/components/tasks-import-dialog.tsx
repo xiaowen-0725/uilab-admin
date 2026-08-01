@@ -74,7 +74,7 @@ export function TasksImportDialog({
     >
       <DialogContent className='gap-2 sm:max-w-sm'>
         <DialogHeader className='text-start'>
-          <DialogTitle>Import Tasks</DialogTitle>
+          <DialogTitle>导入任务</DialogTitle>
           <DialogDescription>
             Import tasks quickly from a CSV file.
           </DialogDescription>
@@ -102,7 +102,7 @@ export function TasksImportDialog({
           </form>
         </Form>
         <DialogFooter className='gap-2'>
-          <DialogClose render={<Button variant='outline'>Close</Button>} />
+          <DialogClose render={<Button variant='outline'>关闭</Button>} />
           <Button type='submit' form='task-import-form'>
             Import
           </Button>

@@ -13,41 +13,41 @@ import {
 export const labels = [
   {
     value: 'bug',
-    label: 'Bug',
+    label: '缺陷',
   },
   {
     value: 'feature',
-    label: 'Feature',
+    label: '功能',
   },
   {
     value: 'documentation',
-    label: 'Documentation',
+    label: '文档',
   },
 ]
 
 export const statuses = [
   {
-    label: 'Backlog',
+    label: '待办池',
     value: 'backlog' as const,
     icon: HelpCircle,
   },
   {
-    label: 'Todo',
+    label: '待办',
     value: 'todo' as const,
     icon: Circle,
   },
   {
-    label: 'In Progress',
+    label: '进行中',
     value: 'in progress' as const,
     icon: Timer,
   },
   {
-    label: 'Done',
+    label: '已完成',
     value: 'done' as const,
     icon: CheckCircle,
   },
   {
-    label: 'Canceled',
+    label: '已取消',
     value: 'canceled' as const,
     icon: CircleOff,
   },
@@ -55,22 +55,22 @@ export const statuses = [
 
 export const priorities = [
   {
-    label: 'Low',
+    label: '低',
     value: 'low' as const,
     icon: ArrowDown,
   },
   {
-    label: 'Medium',
+    label: '中',
     value: 'medium' as const,
     icon: ArrowRight,
   },
   {
-    label: 'High',
+    label: '高',
     value: 'high' as const,
     icon: ArrowUp,
   },
   {
-    label: 'Critical',
+    label: '紧急',
     value: 'critical' as const,
     icon: AlertCircle,
   },

@@ -33,16 +33,16 @@ export function Dashboard() {
       {/* ===== Main ===== */}
       <Main>
         <div className='mb-2 flex items-center justify-between space-y-2'>
-          <h1 className='text-2xl font-bold tracking-tight'>Dashboard</h1>
+          <h1 className='text-2xl font-bold tracking-tight'>仪表盘</h1>
           <div className='flex items-center space-x-2'>
-            <Button>Download</Button>
+            <Button>下载</Button>
           </div>
         </div>
         <Tabs defaultValue='overview' className='space-y-4'>
           <div className='w-full overflow-x-auto pb-2'>
             <TabsList>
-              <TabsTrigger value='overview'>Overview</TabsTrigger>
-              <TabsTrigger value='analytics'>Analytics</TabsTrigger>
+              <TabsTrigger value='overview'>概览</TabsTrigger>
+              <TabsTrigger value='analytics'>分析</TabsTrigger>
               <TabsTrigger value='reports' disabled>
                 Reports
               </TabsTrigger>
@@ -107,7 +107,7 @@ export function Dashboard() {
               </Card>
               <Card>
                 <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                  <CardTitle className='text-sm font-medium'>Sales</CardTitle>
+                  <CardTitle className='text-sm font-medium'>成交量</CardTitle>
                   <svg
                     xmlns='http://www.w3.org/2000/svg'
                     viewBox='0 0 24 24'
@@ -158,7 +158,7 @@ export function Dashboard() {
             <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>
               <Card className='col-span-1 lg:col-span-4'>
                 <CardHeader>
-                  <CardTitle>Overview</CardTitle>
+                  <CardTitle>概览</CardTitle>
                 </CardHeader>
                 <CardContent className='ps-2'>
                   <Overview />
@@ -166,9 +166,9 @@ export function Dashboard() {
               </Card>
               <Card className='col-span-1 lg:col-span-3'>
                 <CardHeader>
-                  <CardTitle>Recent Sales</CardTitle>
+                  <CardTitle>最近成交</CardTitle>
                   <CardDescription>
-                    You made 265 sales this month.
+                    本月完成 265 笔交易。
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -188,25 +188,25 @@ export function Dashboard() {
 
 const topNav = [
   {
-    title: 'Overview',
+    title: '概览',
     href: 'dashboard/overview',
     isActive: true,
     disabled: false,
   },
   {
-    title: 'Customers',
+    title: '客户',
     href: 'dashboard/customers',
     isActive: false,
     disabled: true,
   },
   {
-    title: 'Products',
+    title: '产品',
     href: 'dashboard/products',
     isActive: false,
     disabled: true,
   },
   {
-    title: 'Settings',
+    title: '设置',
     href: 'dashboard/settings',
     isActive: false,
     disabled: true,
