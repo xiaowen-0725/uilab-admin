@@ -15,6 +15,10 @@ import {
 } from 'lucide-react'
 import { Navigator } from '../navigator/navigator'
 import {
+  SettingsDialog,
+  type SettingsSectionId,
+} from '../settings/settings-dialog'
+import {
   TASK_SURFACE_MIN_WIDTH,
   WORK_SURFACE_MIN_WIDTH,
   computeEffectiveWorkMax,
@@ -100,6 +104,18 @@ export function WorkbenchShell({
     useState<PaneMotionSource>('instant')
   const [paneTransition, setPaneTransition] =
     useState<PaneTransition>('instant')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSectionId>('profile')
+
+  const openSettings = useCallback(() => {
+    setSettingsSection('profile')
+    setSettingsOpen(true)
+  }, [])
+
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false)
+  }, [])
 
   const setPaneInstant = useCallback(() => {
     setPaneMotionSource('instant')
@@ -277,6 +293,7 @@ export function WorkbenchShell({
               open={view.navigatorOpen}
               mode='reserved'
               onSelectTask={selectTaskFromShell}
+              onOpenSettings={openSettings}
             />
           </div>
         </div>
@@ -435,8 +452,16 @@ export function WorkbenchShell({
             setNavMotion('animated')
             commands.setNavigatorOpen(false)
           }}
+          onOpenSettings={openSettings}
         />
       ) : null}
+
+      <SettingsDialog
+        open={settingsOpen}
+        section={settingsSection}
+        onSectionChange={setSettingsSection}
+        onClose={closeSettings}
+      />
     </div>
   )
 }

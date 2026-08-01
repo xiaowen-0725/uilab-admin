@@ -1,2 +1,80 @@
-/* Compatibility import — design tokens owned by @uilab/foundation (Phase 2A). */
+/* Foundation tokens first; Workbench overrides below stay Archetype-local. */
 @import '@uilab/foundation/styles/tokens.css';
+
+/*
+ * Workbench appearance palette (light / dark).
+ * Source of truth for this Archetype only — does not expand Foundation API.
+ *
+ * Light: background #FFFFFF · foreground #0D0D0D · primary #0169CC
+ * Dark:  background #111111 · foreground #FCFCFC · primary #0169CC
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #0d0d0d;
+  --card: #ffffff;
+  --card-foreground: #0d0d0d;
+  --popover: #ffffff;
+  --popover-foreground: #0d0d0d;
+  --primary: #0169cc;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #0d0d0d;
+  --muted: #f4f4f5;
+  --muted-foreground: #737373;
+  --accent: #f4f4f5;
+  --accent-foreground: #0d0d0d;
+  --destructive: #dc2626;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #0169cc;
+
+  /* Slightly cooler plane behind the inset Workspace */
+  --sidebar: #f7f7f7;
+  --sidebar-foreground: #0d0d0d;
+  --sidebar-primary: #0169cc;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ececec;
+  --sidebar-accent-foreground: #0d0d0d;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #0169cc;
+}
+
+.dark {
+  /*
+   * Plane hierarchy (matches desktop workbench reference):
+   *   Navigator / chrome  — elevated gray (#1a1a1a)
+   *   Workspace main      — deeper black (#0d0d0d)
+   *   cards / composer    — mid lift on the black stage (#161616)
+   *
+   * Earlier we inverted this (black chrome + #111 stage); that read opposite
+   * of the reference (gray rail + black main).
+   */
+  --background: #0d0d0d;
+  --foreground: #fcfcfc;
+  --card: #161616;
+  --card-foreground: #fcfcfc;
+  --popover: #1a1a1a;
+  --popover-foreground: #fcfcfc;
+  --primary: #0169cc;
+  --primary-foreground: #ffffff;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #fcfcfc;
+  --muted: #1a1a1a;
+  --muted-foreground: #a3a3a3;
+  --accent: #1f1f1f;
+  --accent-foreground: #fcfcfc;
+  --destructive: #f87171;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 12%);
+  --ring: #0169cc;
+
+  /* Left rail — grayer / elevated over the black stage */
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #fcfcfc;
+  --sidebar-primary: #0169cc;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #fcfcfc;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: #0169cc;
+}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Input } from '@uilab/foundation/ui/input'
 import type { ProjectSummary, TaskSummary } from '@/modules/workbench-session'
+import { NavigatorUserMenu } from './navigator-user-menu'
 
 export interface NavigatorProps {
   project: ProjectSummary
@@ -10,6 +11,7 @@ export interface NavigatorProps {
   mode: 'reserved' | 'overlay'
   onSelectTask: (taskId: string) => void
   onClose?: () => void
+  onOpenSettings?: () => void
 }
 
 /**
@@ -24,6 +26,7 @@ export function Navigator({
   mode,
   onSelectTask,
   onClose,
+  onOpenSettings,
 }: NavigatorProps) {
   const [filter, setFilter] = useState('')
 
@@ -126,9 +129,10 @@ export function Navigator({
         </ul>
       </div>
 
-      <footer className='px-4 py-2 text-[10px] text-muted-foreground'>
-        Phase 3 · 静态 Shell
-      </footer>
+      <NavigatorUserMenu
+        interactive={open}
+        onOpenSettings={onOpenSettings}
+      />
     </nav>
   )
 

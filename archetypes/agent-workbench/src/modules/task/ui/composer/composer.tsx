@@ -7,7 +7,7 @@ export interface ComposerProps {
 }
 
 /**
- * Floating Codex-style Composer card.
+ * Floating Composer card at the Task surface foot.
  * Accepts local text only; submit does not call Agent Runtime (Phase 3 honesty).
  */
 export function Composer({

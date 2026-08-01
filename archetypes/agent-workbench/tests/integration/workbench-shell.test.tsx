@@ -207,6 +207,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(nav.hasAttribute('inert')).toBe(true)
     expect(page.getByTestId('navigator-filter').element().tabIndex).toBe(-1)
     expect(page.getByTestId('task-task-a').element().tabIndex).toBe(-1)
+    expect(page.getByTestId('navigator-user-trigger').element().tabIndex).toBe(
+      -1
+    )
 
     // Wait for pointer motion / layout settle (180ms drawer curve).
     await expect
@@ -226,6 +229,83 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // Collapsed: ~8px left inset; workspace expands into remaining viewport.
     expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
     expect(wsBox.width).toBeGreaterThan(1400 - INSET * 2 - GEOMETRY_TOLERANCE)
+  })
+
+  it('Navigator account menu opens upward with settings and sign-out fixtures', async () => {
+    await page.viewport(1440, 900)
+    await render(<WorkbenchApp />)
+
+    const trigger = page.getByTestId('navigator-user-trigger')
+    await expect.element(trigger).toBeInTheDocument()
+    await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
+    await expect
+      .element(page.getByTestId('navigator-user-menu'))
+      .toHaveTextContent('演示用户')
+    await expect
+      .element(page.getByTestId('navigator-user-menu'))
+      .toHaveTextContent('demo@uilab.dev')
+
+    // Closed: no menu panel in the document.
+    expect(
+      document.querySelector('[data-testid="navigator-user-menu-panel"]')
+    ).toBeNull()
+
+    await userEvent.click(trigger)
+    await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
+    const panel = page.getByTestId('navigator-user-menu-panel')
+    await expect.element(panel).toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('navigator-user-settings'))
+      .toHaveTextContent('设置')
+    await expect
+      .element(page.getByTestId('navigator-user-sign-out'))
+      .toHaveTextContent('退出登录')
+
+    // Menu sits above the account chip.
+    const triggerBox = trigger.element().getBoundingClientRect()
+    const panelBox = panel.element().getBoundingClientRect()
+    expect(panelBox.bottom).toBeLessThanOrEqual(
+      triggerBox.top + GEOMETRY_TOLERANCE
+    )
+
+    // Settings opens the modal dialog (profile section by default).
+    await userEvent.click(page.getByTestId('navigator-user-settings'))
+    await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      document.querySelector('[data-testid="navigator-user-menu-panel"]')
+    ).toBeNull()
+    await expect
+      .element(page.getByTestId('settings-dialog'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('settings-profile-name'))
+      .toHaveTextContent('演示用户')
+
+    // Appearance: dark preference applies document .dark class.
+    await userEvent.click(page.getByTestId('settings-nav-appearance'))
+    await expect
+      .element(page.getByTestId('settings-theme-group'))
+      .toBeInTheDocument()
+    await userEvent.click(page.getByTestId('settings-theme-dark'))
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    await expect
+      .element(page.getByTestId('settings-theme-dark'))
+      .toHaveAttribute('data-selected', 'true')
+
+    // Light preference clears dark class.
+    await userEvent.click(page.getByTestId('settings-theme-light'))
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+
+    // Escape closes the settings dialog.
+    await userEvent.keyboard('{Escape}')
+    expect(document.querySelector('[data-testid="settings-dialog"]')).toBeNull()
+
+    // Sign-out is fixture-only honesty.
+    await userEvent.click(trigger)
+    await userEvent.click(page.getByTestId('navigator-user-sign-out'))
+    await expect
+      .element(page.getByTestId('navigator-user-notice'))
+      .toHaveTextContent('退出登录（静态 fixture）')
   })
 
   it('keyboard Ctrl+B toggles navigator with instant motion', async () => {

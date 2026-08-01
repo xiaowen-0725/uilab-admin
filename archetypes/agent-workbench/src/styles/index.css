@@ -136,9 +136,22 @@
   margin-inline-end: var(--workspace-inset);
   border: 1px solid var(--border);
   border-radius: var(--workspace-radius);
+  /* Light: soft ink shadow. Dark overridden below (white-glow on black looks wrong). */
   box-shadow:
     0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
     0 8px 24px color-mix(in oklch, var(--foreground) 6%, transparent);
+}
+
+/*
+ * Dark: black main stage sits in front of the grayer Navigator.
+ * Hairline + soft black depth (not a light halo).
+ */
+.dark [data-slot='workbench-shell'][data-viewport='wide'] .workbench-workspace,
+.dark [data-slot='workbench-shell'][data-viewport='medium'] .workbench-workspace {
+  border-color: rgb(255 255 255 / 7%);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 40%),
+    0 8px 28px rgb(0 0 0 / 35%);
 }
 
 /* Wide expanded: left margin 0 (sits against Navigator). */
