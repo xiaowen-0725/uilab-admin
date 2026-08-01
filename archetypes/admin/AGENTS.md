@@ -18,12 +18,20 @@ docs/ai/             # AI 合同、patterns、scenarios
 scaffolds/           # 页面薄模板
 skill/uilab-admin/   # 本地 skill 入口
 cli/                 # 本地 uilab-admin CLI
-scripts/             # 本地 check:ai 门禁
+scripts/             # 本地 check:ai / check:foundation 门禁
+packages/foundation/ # 派生应用：copy-and-own Foundation（平台 monorepo 内为 workspace 包）
 ```
+
+## Foundation 兼容层（Phase 2A）
+
+- **Button / Input / design tokens** 的实现位于 `@uilab/foundation`（公开子路径：`ui/button`、`ui/input`、`styles/tokens.css`）。
+- 应用代码**继续**从 `@/components/ui/button`、`@/components/ui/input` 导入；这两个文件是兼容 re-export，不含平行实现。
+- `src/styles/theme.css` 兼容导入 Foundation tokens；`src/styles/index.css` 用 Tailwind 4 `@source` 注册 Foundation 包源。
+- 不要在 Admin 内再实现一套 Button/Input/tokens；不要把 providers、Shell、data-table、Router/Query 抽进 Foundation（未在 Phase 2A 范围）。
 
 ## 四层模型
 
-1. **Kernel（少动）**：`src/components/ui/*`、`layout/*`、`data-table/*`、`context/*`、路由/Query 基建
+1. **Kernel（少动）**：`src/components/ui/*`（含 Foundation 兼容 re-export）、`layout/*`、`data-table/*`、`context/*`、路由/Query 基建
 2. **Patterns（优先复用）**：见 `docs/ai/patterns/*` 与 `docs/ai/patterns.catalog.json`
 3. **App Config（表达差异）**：`src/config/admin-preferences.ts`、`src/components/layout/data/sidebar-data.ts`
 4. **Features（业务可变）**：`src/features/<domain>/*`
@@ -66,7 +74,8 @@ scripts/             # 本地 check:ai 门禁
 pnpm typecheck
 pnpm build
 pnpm test
-pnpm check:ai   # AI 合同 / skill / pattern 门禁
+pnpm check:foundation   # Foundation 边界与 Admin 消费合同（派生应用为本地脚本）
+pnpm check:ai           # AI 合同 / skill / pattern 门禁
 ```
 
 若改了路由/页面，还需目视或说明：

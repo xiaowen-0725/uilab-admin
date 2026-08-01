@@ -10,6 +10,9 @@
 - Agent Workbench domain glossary, ADRs, architecture layout and implementation roadmap
 - Phase 0 Admin baseline evidence for Playwright UI flows, CLI generation and quality gates
 - Phase 1 Template Platform workspace: `archetypes/admin`, `tooling/*`, monorepo root orchestration
+- **Phase 2A minimal Foundation**: private source-consumed `@uilab/foundation` with public exports `./ui/button`, `./ui/input`, `./styles/tokens.css` only
+- Foundation Browser tests for Button/Input public Interface; Admin compatibility re-exports
+- Foundation boundary gate (`check:foundation`) and CLI copy-and-own materialization into derived `packages/foundation` + mini `pnpm-workspace.yaml`
 
 ### Changed
 
@@ -24,6 +27,8 @@
 - **Contract ownership**: platform `AGENTS.md` / `README.md` stay at repo root; Admin/derived-app contracts are Archetype-owned at `archetypes/admin/AGENTS.md` and `archetypes/admin/README.md`. `init` materializes those Admin-local files (via filtered Admin body copy) and does **not** copy platform-root AGENTS/README into generated apps
 - Explicit platform `--template` requires canonical `tooling/template-cli` and `tooling/quality-gates` (no fallback to import-only root wrappers)
 - Root commands (`pnpm dev`, `typecheck`, `build`, `test`, `check:ai`, `uilab-admin`) remain valid via workspace delegation and wrappers
+- **Phase 2A**: root `typecheck` / `build` / `test` verify Foundation before Admin; `pnpm check` includes `check:foundation`; Admin tokens/Button/Input implementation moved into Foundation with thin compatibility modules
+- Full Phase 2 (Workbench second consumer, broader primitives/providers) is **not** claimed complete
 
 ### Fixed
 

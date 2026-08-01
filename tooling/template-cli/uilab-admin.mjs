@@ -27,10 +27,11 @@ const __dirname = path.dirname(__filename)
 const CLI_VERSION = '0.2.0'
 
 /**
- * Three conceptual roots (collapse to one in self-contained derived apps):
+ * Conceptual roots (collapse in self-contained derived apps):
  * - adminTemplateRoot / appRoot: Admin source application (includes AGENTS.md / README.md)
  * - adminAssetsRoot: Admin-owned docs/ai + scaffolds
  * - supportRoot: platform support (skill front door + shared configs; not app AGENTS/README)
+ * - foundationSourceRoot (init only): packages/foundation source for copy-and-own
  *
  * @typedef {'platform' | 'derived'} CliLayoutKind
  * @typedef {{
@@ -96,6 +97,9 @@ const COPY_IGNORE = new Set([
   'coverage',
   '.DS_Store',
   'pnpm-debug.log',
+  '.vitest-attachments',
+  '__screenshots__',
+  '.playwright-cli',
 ])
 
 function print(msg = '') {
@@ -115,7 +119,7 @@ Usage:
 Commands:
   init <app-name>               Create a new app from this template
   apply-scenario <scenario-id>  Apply a scenario pack to an existing app
-  check                         Run AI-contract / template gates
+  check                         Run Foundation + AI template gates
   add <pattern>                 Scaffold a page pattern into the app
   set-shell                     Write project shell defaults
   help                          Show help
@@ -408,51 +412,92 @@ function getScenario(catalog, id) {
 async function cmdCheck(appRoot, flags, layout = LAYOUT) {
   await assertAppRoot(appRoot)
 
-  // Platform Admin → canonical platform quality gate
-  // Derived app → local scripts/check-ai.mjs
-  let script
+  // Platform Admin → canonical platform quality gates
+  // Derived app → local scripts/check-foundation.mjs + scripts/check-ai.mjs
+  // Order: Foundation first, then AI. Fail-fast on Foundation failure (AI not run).
   const isPlatformAdmin =
     layout.kind === 'platform' &&
     layout.platformRoot &&
     pathsEqual(appRoot, layout.adminTemplateRoot)
 
-  if (isPlatformAdmin) {
-    script = path.join(layout.platformRoot, 'tooling/quality-gates/check-ai.mjs')
-  } else {
-    script = path.join(appRoot, 'scripts/check-ai.mjs')
-  }
+  const foundationScript = isPlatformAdmin
+    ? path.join(
+        layout.platformRoot,
+        'tooling/quality-gates/check-foundation-boundaries.mjs'
+      )
+    : path.join(appRoot, 'scripts/check-foundation.mjs')
+  const aiScript = isPlatformAdmin
+    ? path.join(layout.platformRoot, 'tooling/quality-gates/check-ai.mjs')
+    : path.join(appRoot, 'scripts/check-ai.mjs')
 
-  if (!(await exists(script))) {
-    printErr(
-      isPlatformAdmin
-        ? 'tooling/quality-gates/check-ai.mjs not found'
-        : 'scripts/check-ai.mjs not found'
-    )
+  const foundationLabel = isPlatformAdmin
+    ? 'tooling/quality-gates/check-foundation-boundaries.mjs'
+    : 'scripts/check-foundation.mjs'
+  const aiLabel = isPlatformAdmin
+    ? 'tooling/quality-gates/check-ai.mjs'
+    : 'scripts/check-ai.mjs'
+
+  // Validate both scripts exist before running either.
+  const missing = []
+  if (!(await exists(foundationScript))) missing.push(foundationLabel)
+  if (!(await exists(aiScript))) missing.push(aiLabel)
+  if (missing.length) {
+    printErr(`missing gate script(s): ${missing.join(', ')}`)
     process.exit(EXIT.NOT_FOUND)
   }
 
-  const result = spawnSync(process.execPath, [script], {
-    cwd: appRoot,
-    encoding: 'utf8',
-  })
+  const gates = [
+    { name: 'foundation', script: foundationScript, label: foundationLabel },
+    { name: 'ai', script: aiScript, label: aiLabel },
+  ]
 
+  /** @type {string[]} */
+  const stdoutParts = []
+  /** @type {string[]} */
+  const stderrParts = []
+  let overallOk = true
+  let lastStatus = 0
+
+  for (const gate of gates) {
+    const result = spawnSync(process.execPath, [gate.script], {
+      cwd: appRoot,
+      encoding: 'utf8',
+    })
+    const status = result.status ?? 1
+    const header = `[uilab-admin check] ${gate.name} (${gate.label})\n`
+    const out = (result.stdout || '').toString()
+    const err = (result.stderr || '').toString()
+    stdoutParts.push(header + out)
+    if (err) stderrParts.push(err)
+
+    if (status !== 0) {
+      overallOk = false
+      lastStatus = status
+      // Deterministic fail-fast: stop before subsequent gates when Foundation fails.
+      // If more gates were run, aggregation would still set ok=false and status=last non-zero.
+      break
+    }
+  }
+
+  const combinedStdout = stdoutParts.join('')
+  const combinedStderr = stderrParts.join('')
   const payload = {
     command: 'check',
-    ok: result.status === 0,
-    status: result.status ?? 1,
-    stdout: result.stdout,
-    stderr: result.stderr,
+    ok: overallOk,
+    status: overallOk ? 0 : lastStatus || 1,
+    stdout: combinedStdout,
+    stderr: combinedStderr,
   }
 
   if (flags.json) {
     print(JSON.stringify(payload, null, 2))
   } else {
-    if (result.stdout) process.stdout.write(result.stdout)
-    if (result.stderr) process.stderr.write(result.stderr)
-    if (result.status === 0) print('uilab-admin check passed')
+    if (combinedStdout) process.stdout.write(combinedStdout)
+    if (combinedStderr) process.stderr.write(combinedStderr)
+    if (overallOk) print('uilab-admin check passed')
     else printErr('uilab-admin check failed')
   }
-  process.exit(result.status === 0 ? EXIT.OK : EXIT.FAIL)
+  process.exit(overallOk ? EXIT.OK : EXIT.FAIL)
 }
 
 async function registerSidebarItem(appRoot, { title, url, dryRun }) {
@@ -1210,9 +1255,11 @@ async function pathIsEmptyish(dir) {
 function copyFilter(src, base) {
   const rel = path.relative(base, src)
   if (!rel || rel === '') return true
-  const first = rel.split(path.sep)[0]
-  if (COPY_IGNORE.has(first)) return false
-  if (first.startsWith('node_modules')) return false
+  const segments = rel.split(path.sep).filter(Boolean)
+  for (const segment of segments) {
+    if (COPY_IGNORE.has(segment)) return false
+    if (segment.startsWith('node_modules')) return false
+  }
   return true
 }
 
@@ -1333,13 +1380,71 @@ async function validateInitSources(sources) {
     err.code = 'NOT_FOUND'
     throw err
   }
+
+  // Foundation package (Phase 2A) — required before any target write
+  if (!sources.foundationSourceRoot) {
+    const err = new Error('template foundation source root not resolved')
+    err.code = 'NOT_FOUND'
+    throw err
+  }
+  const foundationPkg = path.join(sources.foundationSourceRoot, 'package.json')
+  if (!(await exists(foundationPkg))) {
+    const err = new Error(
+      `template foundation missing package.json: ${sources.foundationSourceRoot}`
+    )
+    err.code = 'NOT_FOUND'
+    throw err
+  }
+  let foundationMeta
+  try {
+    foundationMeta = JSON.parse(await readFile(foundationPkg, 'utf8'))
+  } catch {
+    const err = new Error(
+      `template foundation package.json invalid: ${foundationPkg}`
+    )
+    err.code = 'NOT_FOUND'
+    throw err
+  }
+  if (foundationMeta.name !== '@uilab/foundation') {
+    const err = new Error(
+      `template foundation package name must be @uilab/foundation (got ${JSON.stringify(foundationMeta.name)}): ${sources.foundationSourceRoot}`
+    )
+    err.code = 'NOT_FOUND'
+    throw err
+  }
+  const foundationRequired = [
+    'src/ui/button.tsx',
+    'src/ui/input.tsx',
+    'src/styles/tokens.css',
+    'src/internal/cn.ts',
+  ]
+  for (const rel of foundationRequired) {
+    const from = path.join(sources.foundationSourceRoot, rel)
+    if (!(await exists(from))) {
+      const err = new Error(
+        `template foundation missing ${rel} under ${sources.foundationSourceRoot}`
+      )
+      err.code = 'NOT_FOUND'
+      throw err
+    }
+  }
+  if (!(await exists(sources.canonicalFoundationGatePath))) {
+    const err = new Error(
+      `canonical Foundation gate not found: ${sources.canonicalFoundationGatePath}`
+    )
+    err.code = 'NOT_FOUND'
+    throw err
+  }
 }
 
 /**
- * Resolve init template sources (three roots).
- * - Platform default: app/Admin assets = archetypes/admin; support = platform root
- * - Explicit --template <platform-root>: same split under that platform root
- * - Explicit self-contained derived template: all three roots equal template dir
+ * Resolve init template sources (Admin + assets + support + Foundation).
+ * - Platform default: Admin = archetypes/admin; support = platform root;
+ *   foundationSourceRoot = <repo>/packages/foundation
+ * - Explicit --template <platform-root>: same split under that platform root;
+ *   foundationSourceRoot = <template>/packages/foundation
+ * - Explicit self-contained derived template: Admin/assets/support = template dir;
+ *   foundationSourceRoot = <app>/packages/foundation
  */
 async function resolveInitSources(flags, layout = LAYOUT) {
   let templateArg = flags.template
@@ -1355,6 +1460,11 @@ async function resolveInitSources(flags, layout = LAYOUT) {
         adminSourceRoot: layout.adminTemplateRoot,
         adminAssetsRoot: layout.adminAssetsRoot,
         supportRoot: layout.supportRoot,
+        foundationSourceRoot: path.join(
+          layout.platformRoot,
+          'packages',
+          'foundation'
+        ),
         canonicalCliPath: path.join(
           layout.platformRoot,
           'tooling/template-cli/uilab-admin.mjs'
@@ -1362,6 +1472,10 @@ async function resolveInitSources(flags, layout = LAYOUT) {
         canonicalGatePath: path.join(
           layout.platformRoot,
           'tooling/quality-gates/check-ai.mjs'
+        ),
+        canonicalFoundationGatePath: path.join(
+          layout.platformRoot,
+          'tooling/quality-gates/check-foundation-boundaries.mjs'
         ),
       }
     }
@@ -1371,12 +1485,23 @@ async function resolveInitSources(flags, layout = LAYOUT) {
       adminSourceRoot: layout.adminTemplateRoot,
       adminAssetsRoot: layout.adminAssetsRoot,
       supportRoot: layout.supportRoot,
+      foundationSourceRoot: path.join(
+        layout.adminTemplateRoot,
+        'packages',
+        'foundation'
+      ),
       canonicalCliPath: layout.cliPath,
       canonicalGatePath: path.join(
         path.dirname(layout.cliPath),
         '..',
         'scripts',
         'check-ai.mjs'
+      ),
+      canonicalFoundationGatePath: path.join(
+        path.dirname(layout.cliPath),
+        '..',
+        'scripts',
+        'check-foundation.mjs'
       ),
     }
   }
@@ -1395,14 +1520,20 @@ async function resolveInitSources(flags, layout = LAYOUT) {
       platformRoot,
       'tooling/quality-gates/check-ai.mjs'
     )
+    const canonicalFoundationGate = path.join(
+      platformRoot,
+      'tooling/quality-gates/check-foundation-boundaries.mjs'
+    )
     return {
       form: 'platform',
       templateRoot: platformRoot,
       adminSourceRoot: adminRoot,
       adminAssetsRoot: adminRoot,
       supportRoot: platformRoot,
+      foundationSourceRoot: path.join(platformRoot, 'packages', 'foundation'),
       canonicalCliPath: canonicalCli,
       canonicalGatePath: canonicalGate,
+      canonicalFoundationGatePath: canonicalFoundationGate,
     }
   }
 
@@ -1414,6 +1545,8 @@ async function resolveInitSources(flags, layout = LAYOUT) {
     'scaffolds',
     'cli/uilab-admin.mjs',
     'scripts/check-ai.mjs',
+    'scripts/check-foundation.mjs',
+    'packages/foundation/package.json',
   ]
   for (const rel of derivedNeeded) {
     if (!(await exists(path.join(templateArg, rel)))) {
@@ -1430,8 +1563,14 @@ async function resolveInitSources(flags, layout = LAYOUT) {
     adminSourceRoot: templateArg,
     adminAssetsRoot: templateArg,
     supportRoot: templateArg,
+    foundationSourceRoot: path.join(templateArg, 'packages', 'foundation'),
     canonicalCliPath: path.join(templateArg, 'cli/uilab-admin.mjs'),
     canonicalGatePath: path.join(templateArg, 'scripts/check-ai.mjs'),
+    canonicalFoundationGatePath: path.join(
+      templateArg,
+      'scripts',
+      'check-foundation.mjs'
+    ),
   }
 }
 
@@ -1440,13 +1579,29 @@ async function derivePackageJson(targetDir) {
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   pkg.scripts = pkg.scripts || {}
   pkg.scripts['check:ai'] = 'node scripts/check-ai.mjs'
+  pkg.scripts['check:foundation'] = 'node scripts/check-foundation.mjs'
+  pkg.scripts['check'] =
+    'pnpm typecheck && pnpm run check:foundation && pnpm run check:ai'
   pkg.scripts['uilab-admin'] = 'node cli/uilab-admin.mjs'
   pkg.scripts['cli:check'] = 'node cli/uilab-admin.mjs check'
   if (pkg.scripts.knip) {
     pkg.scripts.knip = 'knip'
   }
+  // Preserve workspace Foundation dependency for mini-workspace installs.
+  pkg.dependencies = pkg.dependencies || {}
+  if (!pkg.dependencies['@uilab/foundation']) {
+    pkg.dependencies['@uilab/foundation'] = 'workspace:*'
+  }
   pkg.bin = { 'uilab-admin': 'cli/uilab-admin.mjs' }
   await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8')
+}
+
+async function writeDerivedPnpmWorkspace(targetDir) {
+  const content = `packages:
+  - '.'
+  - 'packages/*'
+`
+  await writeFile(path.join(targetDir, 'pnpm-workspace.yaml'), content, 'utf8')
 }
 
 async function writeDerivedPrettierrc(targetDir, supportRoot) {
@@ -1544,8 +1699,9 @@ async function writeDerivedNetlify(targetDir) {
  * 1) copy Admin app source (includes Admin-local AGENTS.md / README.md)
  * 2) controlled copy of already-validated support + Admin assets
  *    (AGENTS/README are NOT re-copied from supportRoot)
- * 3) derive package scripts + single-app config files
- * 4) rewrite generated skill links to local docs/ai
+ * 3) copy Foundation into target packages/foundation + mini-workspace metadata
+ * 4) derive package scripts + single-app config files
+ * 5) rewrite generated skill links to local docs/ai
  *
  * Caller must run validateInitSources first — no silent skip of missing sources.
  */
@@ -1577,6 +1733,11 @@ async function materializeDerivedApp(targetDir, sources) {
     })
   }
 
+  // 3. Foundation package (copy-and-own mini-workspace)
+  const foundationDest = path.join(targetDir, 'packages', 'foundation')
+  await copyDirFiltered(sources.foundationSourceRoot, foundationDest)
+  await writeDerivedPnpmWorkspace(targetDir)
+
   // Canonical CLI + quality gate implementations (not platform wrappers)
   await mkdir(path.join(targetDir, 'cli'), { recursive: true })
   await mkdir(path.join(targetDir, 'scripts'), { recursive: true })
@@ -1588,20 +1749,25 @@ async function materializeDerivedApp(targetDir, sources) {
     sources.canonicalGatePath,
     path.join(targetDir, 'scripts/check-ai.mjs')
   )
+  // Canonical Foundation gate (full implementation), not the platform root wrapper
+  await cp(
+    sources.canonicalFoundationGatePath,
+    path.join(targetDir, 'scripts/check-foundation.mjs')
+  )
   try {
     await chmod(path.join(targetDir, 'cli/uilab-admin.mjs'), 0o755)
   } catch {
     // best-effort
   }
 
-  // 3. Derived single-app transforms
+  // 4. Derived single-app transforms
   await derivePackageJson(targetDir)
   await writeDerivedPrettierrc(targetDir, sources.supportRoot)
   await writeDerivedPrettierignore(targetDir)
   await writeDerivedKnip(targetDir)
   await writeDerivedNetlify(targetDir)
 
-  // 4. Skill links must be local docs/ai in generated apps
+  // 5. Skill links must be local docs/ai in generated apps
   await rewriteGeneratedSkillDocsLinks(targetDir)
 }
 
@@ -1670,6 +1836,7 @@ async function cmdInit(positional, flags, layout = LAYOUT) {
     print(`[dry-run] admin source ${sources.adminSourceRoot}`)
     print(`[dry-run] admin assets ${sources.adminAssetsRoot}`)
     print(`[dry-run] support ${sources.supportRoot}`)
+    print(`[dry-run] foundation source ${sources.foundationSourceRoot}`)
     if (flags.json) {
       print(
         JSON.stringify(
@@ -1683,6 +1850,7 @@ async function cmdInit(positional, flags, layout = LAYOUT) {
             adminSourceRoot: sources.adminSourceRoot,
             adminAssetsRoot: sources.adminAssetsRoot,
             supportRoot: sources.supportRoot,
+            foundationSourceRoot: sources.foundationSourceRoot,
           },
           null,
           2
@@ -1713,6 +1881,7 @@ async function cmdInit(positional, flags, layout = LAYOUT) {
     scenario: applyResult.scenario.id,
     shell: applyResult.shell,
     actions: applyResult.actions,
+    foundationSourceRoot: sources.foundationSourceRoot,
     next: [
       `cd ${targetDir}`,
       'pnpm install',

@@ -1,0 +1,47 @@
+{
+  "name": "@uilab/foundation",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Private source-consumed Foundation package (Phase 2A). Not published; consumed via workspace subpath exports.",
+  "exports": {
+    "./ui/button": "./src/ui/button.tsx",
+    "./ui/input": "./src/ui/input.tsx",
+    "./styles/tokens.css": "./src/styles/tokens.css"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --browser.headless",
+    "test:watch": "vitest --browser.headless",
+    "test:browser": "vitest",
+    "test:browser:install": "playwright install chromium --with-deps"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.5.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/browser-playwright": "^4.1.4",
+    "playwright": "1.59.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4",
+    "vitest-browser-react": "^2.2.0"
+  },
+  "packageManager": "pnpm@10.33.3"
+}

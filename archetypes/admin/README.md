@@ -15,6 +15,7 @@ pnpm dev
 pnpm typecheck
 pnpm build
 pnpm test
+pnpm check:foundation
 pnpm check:ai
 ```
 
@@ -24,8 +25,18 @@ pnpm check:ai
 - Tailwind CSS 4
 - 官方 shadcn/ui（Base UI / `base-nova`）
 - TanStack Router / Query / Table
+- `@uilab/foundation`（Button / Input / tokens；应用侧仍用 `@/components/ui/*`）
 - 中文优先文案，代码标识英文
 
+### UI 与 tokens 来源
+
+| 应用导入 | 实际实现 |
+|---|---|
+| `@/components/ui/button` | 兼容 re-export → `@uilab/foundation/ui/button` |
+| `@/components/ui/input` | 兼容 re-export → `@uilab/foundation/ui/input` |
+| `src/styles/theme.css` | 兼容 import → `@uilab/foundation/styles/tokens.css` |
+
+应用代码保持现有 shadcn 别名；不要平行实现第二套 Button/Input/tokens。
 ## 当前页面
 
 - `/` 仪表盘（`agent-desktop` init 后为工作区）
@@ -42,11 +53,12 @@ src/
   components/
     layout/        # App shell
     data-table/    # 表格模式
-    ui/            # shadcn Base UI
+    ui/            # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
   features/        # 业务页面（厚）
   routes/          # 文件路由（薄）
   context/         # theme / layout / direction / search
   config/          # 项目默认布局等
+packages/foundation/  # 派生应用：本地 Foundation 副本（平台内为 workspace 包）
 docs/ai/           # AI 合同与 pattern 文档
 scaffolds/         # 页面薄模板
 skill/uilab-admin/ # Agent skill 入口

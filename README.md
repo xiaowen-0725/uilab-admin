@@ -4,9 +4,10 @@ AI-first **Template Platform**，当前可运行产品为通用中后台 **Admin
 
 基于 [shadcn-admin](https://github.com/satnaing/shadcn-admin) 二创：保留成熟 admin shell / 页面模式 / data-table 交互，改用官方 shadcn **Base UI**，并补齐中文优先与 AI 装配约定。
 
-> 仓库已完成 Phase 1 目录迁移：Admin 源应用与 Admin-owned 资产位于 `archetypes/admin`，规范 CLI / 质量门禁位于 `tooling/*`，根目录保留兼容命令与 `$uilab-admin` skill 前门。  
-> **应用侧合同**（派生应用与 Admin 源应用）见 [`archetypes/admin/AGENTS.md`](archetypes/admin/AGENTS.md) 与 [`archetypes/admin/README.md`](archetypes/admin/README.md)。  
-> Agent Workbench Archetype 与 Foundation 见 [实施路线](docs/plans/agent-workbench-template-roadmap.md) 与 [项目状态](PROJECT_STATUS.md)。
+> 仓库已完成 Phase 1 目录迁移，并落地 **Phase 2A 最小 Foundation seam**：`packages/foundation` 提供 Button / Input / tokens；Admin 经兼容模块消费。完整 Phase 2（Workbench 第二消费者）尚未开始。
+> Admin 源与 Admin-owned 资产位于 `archetypes/admin`，规范 CLI / 质量门禁位于 `tooling/*`，根目录保留兼容命令与 `$uilab-admin` skill 前门。
+> **应用侧合同**见 [`archetypes/admin/AGENTS.md`](archetypes/admin/AGENTS.md) 与 [`archetypes/admin/README.md`](archetypes/admin/README.md)。
+> 路线与状态见 [实施路线](docs/plans/agent-workbench-template-roadmap.md) 与 [项目状态](PROJECT_STATUS.md)。
 
 ## 快速开始
 
@@ -18,13 +19,15 @@ pnpm dev
 ```bash
 pnpm typecheck
 pnpm build
+pnpm check:foundation
 pnpm check:ai
 ```
 
-根命令委托到 `@uilab/admin` 与平台门禁；也可：
+根命令委托到 `@uilab/foundation` / `@uilab/admin` 与平台门禁；也可：
 
 ```bash
 pnpm --filter @uilab/admin dev
+pnpm --filter @uilab/foundation typecheck
 pnpm --filter @uilab/admin typecheck
 ```
 
@@ -47,16 +50,17 @@ uilab-templates/
       src/
       docs/ai/             # Admin AI 合同 / patterns / scenarios
       scaffolds/           # Admin 页面薄模板
+  packages/
+    foundation/            # Phase 2A：Button / Input / tokens（source-consumed）
   tooling/
     template-cli/          # 规范 uilab-admin CLI
-    quality-gates/         # 规范 check:ai
-  packages/                # 预留 Foundation（Phase 2）
+    quality-gates/         # 规范 check:ai + check:foundation
   skill/uilab-admin/       # 外部可发现 skill 前门
   cli/ / scripts/          # 根兼容 wrapper
   docs/                    # 平台 ADR / plans / evidence
 ```
 
-后续计划：`archetypes/agent-workbench` 与共享 `packages/foundation`。
+`uilab-admin init` 会把 Foundation 复制进派生应用 `packages/foundation`，并写入迷你 `pnpm-workspace.yaml`。完整 Phase 2 仍待 Agent Workbench 成为第二消费者。
 
 ## 当前页面（Admin）
 

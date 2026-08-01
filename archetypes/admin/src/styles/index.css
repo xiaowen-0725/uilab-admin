@@ -4,6 +4,9 @@
 @import '@fontsource-variable/geist';
 @import './theme.css';
 
+/* Tailwind 4: scan Foundation source (workspace / mini-workspace via node_modules). */
+@source "../../node_modules/@uilab/foundation/src/ui";
+
 @custom-variant dark (&:is(.dark *));
 
 @layer base {

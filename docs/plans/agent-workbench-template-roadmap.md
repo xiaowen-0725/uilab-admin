@@ -22,14 +22,17 @@
 当前仓库已经具备：
 
 - Template Platform monorepo：`archetypes/admin`（可运行 Admin）、`tooling/template-cli`、`tooling/quality-gates`、根兼容 wrapper 与 `skill/uilab-admin` 前门。
+- **Phase 2A minimal Foundation seam**：`packages/foundation`（`@uilab/foundation`）公开 Interface 仅 `ui/button`、`ui/input`、`styles/tokens.css`；Admin 经 `@/components/ui/*` 兼容 re-export 消费；`check:foundation` 边界门禁；`init` copy-and-own 到派生应用 `packages/foundation` + mini-workspace。
 - Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈（Admin 源在 `archetypes/admin`）。
 - Admin Shell、主题、动画、数据表格、认证、设置与错误页参考实现。
 - Admin-owned AI 合同：`archetypes/admin/docs/ai/*` 与 `archetypes/admin/scaffolds/*`。
 - `uilab-admin` CLI 的 `check`、`add`、`set-shell`、`init`、`apply-scenario`（规范实现在 `tooling/template-cli`）。
 - `agent-desktop` scenario 与 `/workspace` mock 页面（Admin 兼容基线）。
-- `pnpm typecheck`、`pnpm build`、`pnpm check:ai` 门禁；Browser Mode 当前 18 files / 108 tests 全绿（Phase 0 基线 17/103）。
+- `pnpm typecheck`、`pnpm build`、`pnpm check:foundation`、`pnpm check:ai` 门禁；Admin Browser Mode 18 files / 108 tests；Foundation 另有 focused Browser 测试。
 
-当前 `/workspace` 是 Admin Shell 内的三卡片示例，不是后续 Agent Workbench 的 Kernel。它可作为文案和视觉参考，但不能成为新 Shell 的结构基础。Phase 1 完成后，合同已表达多 Archetype 平台；`agent-desktop` 仍作为迁移期兼容 scenario 保留。
+**说明：** Phase 2A 只证明 Foundation 包边界与 materialization，**不**宣称完整 Phase 2 验收完成（仍缺 Workbench 第二消费者与更广 primitives/providers）。
+
+当前 `/workspace` 是 Admin Shell 内的三卡片示例，不是后续 Agent Workbench 的 Kernel。它可作为文案和视觉参考，但不能成为新 Shell 的结构基础。`agent-desktop` 仍作为迁移期兼容 scenario 保留。
 
 ## Target repository shape
 
@@ -110,6 +113,13 @@ Playwright 验证：导航可达、搜索可打开、设置抽屉可操作、用
 
 建立跨 Archetype 的真实复用基线，不把 Admin 专属结构包装成共享能力。
 
+### Phase 2A status（当前已交付）
+
+见 work order [`phase-2a-minimal-foundation-work-order.md`](./phase-2a-minimal-foundation-work-order.md) 与证据 [`../evidence/phase-2a-minimal-foundation.md`](../evidence/phase-2a-minimal-foundation.md)。
+
+已落地：`packages/foundation` 的 Button/Input/tokens、Admin 兼容消费、Tailwind `@source`、边界门禁、init materialization。
+**未完成（完整 Phase 2）**：Workbench 第二消费者、主题 Provider 共享、更多 primitives。
+
 ### Deliverables
 
 - 创建 `packages/foundation`，提供设计 Token、主题 Provider、Base UI primitives、纯样式工具和必要的无业务 hooks。
@@ -124,6 +134,7 @@ Playwright 验证：导航可达、搜索可打开、设置抽屉可操作、用
 - 主题、方向和 reduced-motion 设置在两个 Archetype 中一致。
 - 删除 Foundation 后，通用复杂度会重新出现在两个 Archetype；否则该抽取应撤销。
 - Admin baseline 不回归；两个 Archetype 分别通过 typecheck/build。
+
 
 ## Phase 3 — Build the Workbench Shell skeleton
 

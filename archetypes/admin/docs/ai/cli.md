@@ -95,12 +95,23 @@ uilab-admin check
 uilab-admin check --json
 ```
 
-最小检查应对齐/复用：
+综合模板门禁（与 `pnpm check:foundation` + `pnpm check:ai` 对齐）：
 
-- 模板内 `pnpm check:ai` 合同
-- 必要文件存在
-- 无 `@radix-ui/*` 依赖回潮
-- scenario/pattern 引用可解析
+| 布局 | 顺序执行 |
+|---|---|
+| Platform Admin | `tooling/quality-gates/check-foundation-boundaries.mjs` → `tooling/quality-gates/check-ai.mjs` |
+| Derived app | `scripts/check-foundation.mjs` → `scripts/check-ai.mjs` |
+
+行为：
+
+- 运行前校验两个 gate 脚本均存在；任一缺失则退出码 `4`（`NOT_FOUND`）
+- **先 Foundation，后 AI**；Foundation 失败则 **fail-fast**（不跑 AI）
+- 仅当两个 gate 均通过时成功（退出码 `0`）
+- 公开 JSON 载荷形状保持：`command` / `ok` / `status` / `stdout` / `stderr`（两 gate 输出合并进字符串字段，无嵌套 schema 破坏）
+- 非 JSON 模式下最终行仍为 `uilab-admin check passed` / `uilab-admin check failed`
+
+AI gate 覆盖：必要文件存在、无 `@radix-ui/*` 依赖回潮、scenario/pattern 引用可解析等。
+Foundation gate 覆盖：导出白名单、依赖方向、Admin 消费合同等。
 
 ### 后置（不做进第一期最小集）
 
@@ -141,7 +152,7 @@ Skill 在 bootstrap/extend 中应：
 - skill 路由认识 bootstrap/extend
 
 ### Phase CLI-1（最小可用）— shipped
-- `check`（包装 `scripts/check-ai.mjs`）
+- `check`（Foundation + AI 两门禁：platform 走 `tooling/quality-gates/*`；derived 走本地 `scripts/check-foundation.mjs` + `scripts/check-ai.mjs`）
 - `add data-table-list|settings-section`
 - `set-shell`
 - 入口：`pnpm uilab-admin` / `node cli/uilab-admin.mjs` / package bin `uilab-admin`

@@ -19,11 +19,13 @@
     "test:browser:install": "playwright install chromium --with-deps",
     "typecheck": "tsc -b",
     "check:ai": "node ../../scripts/check-ai.mjs",
-    "check": "pnpm typecheck && pnpm run check:ai",
+    "check:foundation": "node ../../scripts/check-foundation.mjs",
+    "check": "pnpm typecheck && pnpm run check:foundation && pnpm run check:ai",
     "uilab-admin": "node ../../cli/uilab-admin.mjs",
     "cli:check": "node ../../cli/uilab-admin.mjs check"
   },
   "dependencies": {
+    "@uilab/foundation": "workspace:*",
     "@base-ui/react": "^1.6.0",
     "@fontsource-variable/geist": "^5.3.0",
     "@hookform/resolvers": "^5.2.2",

@@ -3,7 +3,8 @@
 > 更新时间：2026-08-01  
 > 分支：`main`  
 > 架构基线提交：`81731f8`  
-> Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C（本提交）  
+> Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C
+> Phase 2A：minimal Foundation seam（`packages/foundation` Button/Input/tokens + materialization + boundary gate）
 > 远程：https://github.com/xiaowen-0725/uilab-admin.git  
 > 用途：后续优化/追溯用状态真源；平台合同见根 `AGENTS.md`，Admin / 派生应用硬规则见 `archetypes/admin/AGENTS.md` 与 `archetypes/admin/docs/ai/*`。
 
@@ -25,13 +26,15 @@
 | agent-desktop 工作区 | **MVP Done** | Workspace 首页 + threads 列表 + L2 desktop 边界 |
 | Agent Workbench 架构 | **Phase 0 Done** | 领域语言、ADR、目录蓝图、路线图与 Admin baseline 已落盘 |
 | Template Platform Monorepo | **Phase 1 Done（through 1C）** | Admin 源、tooling、Admin assets 与合同已对齐 |
+| Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin 兼容 re-export；`check:foundation`；init copy-and-own |
+| Full Phase 2 Foundation | **Not complete** | 待 Agent Workbench 作为第二真实消费者后再扩 primitives/providers |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | 当前 18 files / 108 tests 全通过；Phase 0 基线为 17/103；Base UI console warning 已清零 |
+| Browser test suite | **Green** | Admin 18 files / 108 tests；Foundation 另有 focused Browser 测试 |
 | 模板“产品打磨/去 demo 化” | **Planned** | 在 Monorepo 稳定后继续 |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**  
-Phase 1（Batch 1A–1C）已完成目录与合同迁移。下一里程碑是 **Phase 2 minimal Foundation**（`packages/foundation`）。当前 `agent-desktop` 只作为兼容基线保留，不再作为长期 Agent Workbench 架构继续深化。
+Phase 1 与 **Phase 2A Foundation seam** 已完成。完整 Phase 2 验收（双 Archetype 同语义 primitives + providers）仍阻塞于 Workbench。`agent-desktop` 仅作兼容基线。
 
 ## 3. 已锁定决策（勿回退）
 
@@ -68,7 +71,7 @@ uilab-templates/
     scaffolds/                 # data-table-list / settings-section
     desktop/README.md
     AGENT_BRIEF.md
-  packages/                    # 预留 Foundation（Phase 2）
+  packages/foundation/         # Phase 2A：Button / Input / tokens（source-consumed）
   docs/                        # ADR / plans / evidence / research（平台级）
 ```
 
@@ -178,7 +181,7 @@ uilab-templates/
 
 ### P1（下一阶段优化优先）
 
-1. **Phase 2 minimal Foundation**（下一里程碑）  
+1. **Phase 2 remainder / Phase 3 Workbench**（第二消费者后再扩 Foundation）
 2. **模板去 demo 化**  
 3. **scenario 质量**（agent-desktop 噪音入口等）  
 4. **CLI 体验**（npm 发布、`auth-page` add 等）
@@ -198,11 +201,16 @@ uilab-templates/
 
 ## 8. 建议的后续优化 backlog
 
-### Wave 0 — Phase 2 Foundation（建议下一步）
+### Wave 0 — Phase 2A Foundation seam（已完成）
 
-1. 创建 `packages/foundation` 最小公开 Interface  
-2. Admin 消费同一 Foundation 入口  
-3. 依赖门禁：Foundation 不得反向依赖 Archetype  
+1. ~~创建 `packages/foundation` 最小公开 Interface（Button/Input/tokens）~~
+2. ~~Admin 兼容 re-export 消费~~
+3. ~~依赖门禁 `check:foundation` + init materialization~~
+
+### Wave 0b — Phase 2 remainder（阻塞：Workbench）
+
+1. 第二 Archetype 证明同语义 primitives 后再扩 Dialog/Popover/…
+2. Theme / direction providers 跨 Archetype 对齐
 
 ### Wave A — 模板打磨
 

@@ -29,16 +29,29 @@
 ```text
 uilab-templates/
   archetypes/admin/          # Admin 源应用 + Admin-owned docs/ai + scaffolds + AGENTS/README
+  packages/foundation/       # Phase 2A 最小 Foundation（Button / Input / tokens）
   tooling/template-cli/      # 规范 CLI 实现
-  tooling/quality-gates/     # 规范 check:ai 实现
+  tooling/quality-gates/     # 规范 check:ai / check:foundation 实现
   skill/uilab-admin/         # 外部可发现 skill 前门（兼容入口）
   cli/uilab-admin.mjs        # 根兼容 wrapper → tooling/template-cli
   scripts/check-ai.mjs       # 根兼容 wrapper → tooling/quality-gates
-  packages/                  # 预留给 Foundation（Phase 2）
+  scripts/check-foundation.mjs  # 根兼容 wrapper → Foundation 边界门禁
   docs/                      # 平台 ADR / plans / evidence（不含 Admin docs/ai）
 ```
 
-生成的派生应用在**自身根目录**自包含：Admin-local `AGENTS.md` / `README.md`、`docs/ai`、`scaffolds`、`skill/uilab-admin` 与本地 CLI/门禁（规范实现副本，非根 wrapper）。
+生成的派生应用在**自身根目录**自包含：Admin-local `AGENTS.md` / `README.md`、`docs/ai`、`scaffolds`、`skill/uilab-admin`、本地 `packages/foundation`（copy-and-own mini-workspace）与本地 CLI/门禁（规范实现副本，非根 wrapper）。
+
+### Foundation（Phase 2A）
+
+- 包名：`@uilab/foundation`（private，**source-consumed**，本阶段不发 npm）
+- 公开 Interface 仅：
+  - `@uilab/foundation/ui/button`
+  - `@uilab/foundation/ui/input`
+  - `@uilab/foundation/styles/tokens.css`
+- 禁止根 barrel；`cn` 为包内 private Implementation
+- 依赖方向：`archetypes/*` → `@uilab/foundation`；Foundation 不得反向依赖任何 Archetype
+- 门禁：`pnpm check:foundation`（规范实现 `tooling/quality-gates/check-foundation-boundaries.mjs`）
+- Admin 仍通过 `@/components/ui/*` 兼容 re-export 消费；应用代码勿直接扩散 Foundation 子路径（除非新 Archetype）
 
 ## 四层模型（Admin）
 
@@ -67,17 +80,21 @@ uilab-templates/
 至少：
 
 ```bash
-pnpm typecheck
-pnpm build
-pnpm check:ai   # AI 合同 / skill / pattern 门禁
+pnpm typecheck          # Foundation → Admin
+pnpm build              # Foundation → Admin
+pnpm check:foundation   # Foundation 边界 / 导出 / Admin 消费合同
+pnpm check:ai           # AI 合同 / skill / pattern 门禁
 ```
 
-根命令委托到 `@uilab/admin` 或平台门禁。包级也可：
+`pnpm check` = typecheck + foundation + AI。根命令委托到 `@uilab/foundation` / `@uilab/admin` 或平台门禁。包级也可：
 
 ```bash
+pnpm --filter @uilab/foundation typecheck
+pnpm --filter @uilab/foundation test
 pnpm --filter @uilab/admin typecheck
 pnpm --filter @uilab/admin build
 pnpm --filter @uilab/admin check:ai
+pnpm --filter @uilab/admin check:foundation
 ```
 
 派生应用**不要**使用 `--filter @uilab/admin`；见 Admin-local 完成定义。
