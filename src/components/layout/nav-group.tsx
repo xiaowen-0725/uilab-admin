@@ -22,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -145,9 +146,11 @@ function SidebarMenuCollapsedDropdown({
             <ChevronRight className='ms-auto transition-transform duration-[180ms] group-data-open/collapsible:rotate-90' />
           </SidebarMenuButton>} />
         <DropdownMenuContent side='right' align='start' sideOffset={4}>
+          <DropdownMenuGroup>
           <DropdownMenuLabel>
             {item.title} {item.badge ? `(${item.badge})` : ''}
           </DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           {item.items.map((sub) => (
             <DropdownMenuItem key={`${sub.title}-${sub.url}`} render={<Link

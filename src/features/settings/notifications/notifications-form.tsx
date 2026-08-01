@@ -20,9 +20,7 @@ import { Switch } from '@/components/ui/switch'
 const notificationsFormSchema = z.object({
   type: z.enum(['all', 'mentions', 'none'], {
     error: (iss) =>
-      iss.input === undefined
-        ? 'Please select a notification type.'
-        : undefined,
+      iss.input === undefined ? '请选择通知类型。' : undefined,
   }),
   mobile: z.boolean().default(false).optional(),
   communication_emails: z.boolean().default(false).optional(),
@@ -33,8 +31,8 @@ const notificationsFormSchema = z.object({
 
 type NotificationsFormValues = z.infer<typeof notificationsFormSchema>
 
-// This can come from your database or API.
 const defaultValues: Partial<NotificationsFormValues> = {
+  type: 'all',
   communication_emails: false,
   marketing_emails: false,
   social_emails: true,
@@ -58,41 +56,32 @@ export function NotificationsForm() {
           name='type'
           render={({ field }) => (
             <FormItem className='relative space-y-3'>
-              <FormLabel>Notify me about...</FormLabel>
+              <FormLabel>通知我关于…</FormLabel>
               <FormControl>
                 <RadioGroup
+                  value={field.value}
                   onValueChange={field.onChange}
-                  defaultValue={field.value}
                   className='flex flex-col gap-2'
                 >
-                  <FormItem className='flex items-center'>
-                    <FormControl>
-                      <RadioGroupItem value='all' />
-                    </FormControl>
-                    <FormLabel className='font-normal'>
-                      All new messages
-                    </FormLabel>
-                  </FormItem>
-                  <FormItem className='flex items-center'>
-                    <FormControl>
-                      <RadioGroupItem value='mentions' />
-                    </FormControl>
-                    <FormLabel className='font-normal'>
-                      Direct messages and mentions
-                    </FormLabel>
-                  </FormItem>
-                  <FormItem className='flex items-center'>
-                    <FormControl>
-                      <RadioGroupItem value='none' />
-                    </FormControl>
-                    <FormLabel className='font-normal'>Nothing</FormLabel>
-                  </FormItem>
+                  <label className='flex items-center gap-2'>
+                    <RadioGroupItem value='all' />
+                    <span className='text-sm font-normal'>全部新消息</span>
+                  </label>
+                  <label className='flex items-center gap-2'>
+                    <RadioGroupItem value='mentions' />
+                    <span className='text-sm font-normal'>私信与提及</span>
+                  </label>
+                  <label className='flex items-center gap-2'>
+                    <RadioGroupItem value='none' />
+                    <span className='text-sm font-normal'>不通知</span>
+                  </label>
                 </RadioGroup>
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+
         <div className='relative'>
           <h3 className='mb-4 text-lg font-medium'>邮件通知</h3>
           <div className='space-y-4'>
@@ -102,11 +91,9 @@ export function NotificationsForm() {
               render={({ field }) => (
                 <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
                   <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>
-                      Communication emails
-                    </FormLabel>
+                    <FormLabel className='text-base'>通讯邮件</FormLabel>
                     <FormDescription>
-                      Receive emails about your account activity.
+                      接收与账户活动相关的邮件。
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -124,11 +111,9 @@ export function NotificationsForm() {
               render={({ field }) => (
                 <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
                   <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>
-                      Marketing emails
-                    </FormLabel>
+                    <FormLabel className='text-base'>营销邮件</FormLabel>
                     <FormDescription>
-                      Receive emails about new products, features, and more.
+                      接收新产品、功能更新等相关邮件。
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -146,9 +131,9 @@ export function NotificationsForm() {
               render={({ field }) => (
                 <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
                   <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>Social emails</FormLabel>
+                    <FormLabel className='text-base'>社交邮件</FormLabel>
                     <FormDescription>
-                      Receive emails for friend requests, follows, and more.
+                      接收好友请求、关注等社交相关邮件。
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -166,9 +151,9 @@ export function NotificationsForm() {
               render={({ field }) => (
                 <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
                   <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>Security emails</FormLabel>
+                    <FormLabel className='text-base'>安全邮件</FormLabel>
                     <FormDescription>
-                      Receive emails about your account activity and security.
+                      接收账户活动与安全相关邮件。
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -184,11 +169,12 @@ export function NotificationsForm() {
             />
           </div>
         </div>
+
         <FormField
           control={form.control}
           name='mobile'
           render={({ field }) => (
-            <FormItem className='relative flex flex-row items-start'>
+            <FormItem className='relative flex flex-row items-start gap-2'>
               <FormControl>
                 <Checkbox
                   checked={field.value}
@@ -196,18 +182,16 @@ export function NotificationsForm() {
                 />
               </FormControl>
               <div className='space-y-1 leading-none'>
-                <FormLabel>
-                  Use different settings for my mobile devices
-                </FormLabel>
+                <FormLabel>为移动设备使用不同设置</FormLabel>
                 <FormDescription>
-                  You can manage your mobile notifications in the{' '}
+                  你可以在{' '}
                   <Link
                     to='/settings'
                     className='underline decoration-dashed underline-offset-4 hover:decoration-solid'
                   >
-                    mobile settings
+                    移动端设置
                   </Link>{' '}
-                  page.
+                  页面管理移动通知。
                 </FormDescription>
               </div>
             </FormItem>

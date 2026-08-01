@@ -31,6 +31,7 @@ export function ProfileDropdown() {
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent className='w-56' align='end' sideOffset={8}>
+          <DropdownMenuGroup>
           <DropdownMenuLabel className='font-normal'>
             <div className='flex flex-col gap-1.5'>
               <p className='text-sm leading-none font-medium'>演示用户</p>
@@ -39,6 +40,7 @@ export function ProfileDropdown() {
               </p>
             </div>
           </DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem render={<Link to='/settings' />}>

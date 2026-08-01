@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
@@ -53,9 +54,11 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
             side={isMobile ? 'bottom' : 'right'}
             sideOffset={4}
           >
+            <DropdownMenuGroup>
             <DropdownMenuLabel className='text-xs text-muted-foreground'>
               团队
             </DropdownMenuLabel>
+            </DropdownMenuGroup>
             {teams.map((team, index) => (
               <DropdownMenuItem
                 key={team.name}
