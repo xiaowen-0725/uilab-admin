@@ -53,7 +53,7 @@ description: "uilab-admin 的单入口 model-invoked router：支持 0→1 boots
 8. **Desktop**：当前 L1+L2；可后续接 Electron/Tauri，但第一期不实现完整 host  
 9. **CLI 名**：`uilab-admin`（确定性动作）
    - shipped：`check` / `add` / `set-shell`
-   - planned：`init` / `apply-scenario`
+   - shipped：`init` / `apply-scenario`（CLI-2）
    - 未实现命令不得假装已执行  
 10. **弱连接 UI Lab**，不绑 Create/Package 主链路
 

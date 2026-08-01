@@ -72,7 +72,7 @@ pnpm check:ai   # AI 合同 / skill / pattern 门禁
 
 ### 路线
 
-- `bootstrap`：0→1 场景确认与初始化编排（CLI `uilab-admin init` 为目标；未实现时 manual fallback）
+- `bootstrap`：0→1 场景确认与初始化编排（CLI `uilab-admin init` / `apply-scenario`）
 - `discover`：只读地图与 pattern
 - `scaffold`：按 pattern 加页面
 - `shell`：改布局默认/导航 IA

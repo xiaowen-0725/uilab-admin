@@ -53,8 +53,17 @@
 - 场景目录：`docs/ai/scenarios.catalog.json`
 - Bootstrap 合同：`docs/ai/bootstrap.md`
 - CLI 合同：`docs/ai/cli.md`（命令名 `uilab-admin`）
-- CLI-1 已可用：`check` / `add` / `set-shell`；`init` 仍 planned
+- CLI 已可用：`check` / `add` / `set-shell` / `init` / `apply-scenario`
 - 桌面端：L1 可运行 web 构成 + L2 host-ready 边界；完整 Electron/Tauri 后置
+
+## CLI 快用
+
+```bash
+pnpm uilab-admin init my-ops --scenario ops-console --dir ../
+pnpm uilab-admin apply-scenario agent-desktop --dir .
+pnpm uilab-admin add data-table-list --domain orders --title 订单列表
+pnpm uilab-admin check
+```
 
 ## 门禁
 

@@ -3,7 +3,7 @@
 命令名：**`uilab-admin`**  
 定位：确定性装配引擎。Skill 负责判断与编排，CLI 负责准确落盘。
 
-> 状态：CLI-1 已落地（`check` / `add` / `set-shell`）。`init` / `apply-scenario` 仍为 planned。未实现命令要在 `--help` 标 planned，禁止 skill 假装已执行成功。
+> 状态：CLI-1 + CLI-2 已落地（`check` / `add` / `set-shell` / `init` / `apply-scenario`）。未实现能力（如完整 Electron host）仍需标 planned。
 
 ## 设计原则
 
@@ -146,10 +146,11 @@ Skill 在 bootstrap/extend 中应：
 - `set-shell`
 - 入口：`pnpm uilab-admin` / `node cli/uilab-admin.mjs` / package bin `uilab-admin`
 
-### Phase CLI-2（0→1）
+### Phase CLI-2（0→1）— shipped
 - `init`
 - `apply-scenario`
-- APP_BRIEF / desktop README 生成
+- APP_BRIEF / scenario marker / routeTree regen
+- scenario seeds（ops tickets / saas billing / agent threads）
 
 ### Phase CLI-3
 - auth-page add
@@ -167,6 +168,8 @@ Skill 在 bootstrap/extend 中应：
 
 ```bash
 pnpm uilab-admin --help
+pnpm uilab-admin init my-ops --scenario ops-console --dir ./apps
+pnpm uilab-admin apply-scenario agent-desktop --dir .
 pnpm uilab-admin check
 pnpm uilab-admin add data-table-list --domain orders --title 订单列表
 pnpm uilab-admin add settings-section --section billing --title 账单

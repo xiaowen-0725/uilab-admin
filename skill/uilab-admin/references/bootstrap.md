@@ -10,15 +10,18 @@
 |---|---|
 | 场景识别与确认卡 | 按合同执行 |
 | scenario catalog | shipped（文档/数据） |
-| CLI `uilab-admin init` | planned（未实现时不得假装成功） |
+| CLI `uilab-admin init` / `apply-scenario` | shipped |
 | 完整 Electron/Tauri | planned；仅 L1+L2 边界 |
 
-若 CLI 尚未实现：
+优先执行：
 
-1. 仍可完成场景推荐与确认卡
-2. 给出**手工 bootstrap 步骤**（clone 模板 → 改名 → apply shell/modules）
-3. 明确标注哪些步骤是 manual fallback
-4. 不要写“已 init 成功”除非文件真实落盘
+```bash
+pnpm uilab-admin init <app> --scenario <id> --dir <parent>
+# 或
+pnpm uilab-admin apply-scenario <id> --dir <app>
+```
+
+执行后核对文件真实落盘与 `pnpm uilab-admin check`。
 
 ## 行动前必读
 

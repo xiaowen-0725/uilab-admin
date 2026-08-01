@@ -88,7 +88,7 @@ pnpm uilab-admin add settings-section --section billing --title 账单
 pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --direction ltr
 ```
 
-`init` / `apply-scenario` 仍为 CLI-2 planned。
+`init` / `apply-scenario` 已可用（CLI-2）。
 
 典型能力：
 
