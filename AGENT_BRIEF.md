@@ -1,45 +1,48 @@
 # AGENT_BRIEF — uilab-admin
 
-## 定位
+给 Agent / 协作者的短简报。硬规则以 [AGENTS.md](AGENTS.md) 为准。
 
-通用中后台模板。学 shadcn-admin 的完整壳与页面模式，而不是手搓近似版。
+## 一句话
 
-## 当前阶段（方案 A）
+通用中后台模板：用稳定壳层 + 可点名页面模式，让 AI 后续持续装配业务应用。
 
-1. ✅ 整仓拷贝 shadcn-admin 底稿
-2. ✅ 删除 Clerk / apps / chats / users 等过重 demo
-3. ✅ 保留 dashboard / tasks / settings / auth / errors / theme settings
-4. ⏳ 下一步：组件底座迁官方 shadcn Base UI
-5. ⏳ 中文优先文案系统化
+## 当前真源
 
-## 硬规则
+- 技术栈：Vite + React 19 + TS + Tailwind 4 + **shadcn Base UI (base-nova)** + TanStack
+- 中文主路径已落地
+- 布局 defaults：`src/config/admin-preferences.ts`
+- 主题设置可导出 JSON / defaults 代码 / Agent 提示词
+- AI 合同：`AGENTS.md` + `docs/ai/*` + `skill/uilab-admin`
 
-- 不要再把关键交互简化成 Select / 自造布局设置
-- data-table 以 `src/components/data-table/*` 为准
-- shell 以 `src/components/layout/*` + `src/context/*` 为准
-- 新增页面：feature 厚、route 薄
-- 与 UI Lab 弱连接，不引入 UI Lab runtime
+## 先读
+
+1. [AGENTS.md](AGENTS.md)
+2. [docs/ai/map.md](docs/ai/map.md)
+3. [docs/ai/patterns.catalog.json](docs/ai/patterns.catalog.json)
+4. 对应 pattern 文档（list / settings / auth）
+
+## 常见任务怎么走
+
+| 任务 | 路线 |
+|---|---|
+| 了解仓库 | `$uilab-admin` → `discover` |
+| 新加列表页 | `scaffold` + pattern `data-table-list` |
+| 新加设置段 | `scaffold` + pattern `settings-section` |
+| 改默认布局/导航 | `shell` |
+| 检查是否合规 | `review` |
 
 ## 可删示例
 
-- `src/features/tasks/*` mock 数据
+- `src/features/tasks/data/*` mock
 - `src/features/dashboard/*` 假指标
-- auth 多变体中不需要的页面
-- settings 子页中不需要的项
+- 不需要的 auth 变体页
+- 不需要的 settings 子页
 
-## 新页面落点
+删除后同步 route + sidebar。
 
-| 事项 | 路径 |
-| --- | --- |
-| 新后台页 | `src/features/<name>` + `src/routes/_authenticated/<name>` |
-| 导航 | `src/components/layout/data/sidebar-data.ts` |
-| 表格模式 | 复用 `src/components/data-table/*` |
-| 布局默认 | `src/config/admin-preferences.ts` + providers |
+## 不要做
 
-## 验收
-
-- `pnpm install && pnpm dev`
-- `pnpm build`
-- Theme Settings 动效/布局切换可用
-- Tasks faceted filter 可用
-- 无 Clerk 依赖
+- 不要引入 Clerk / UI Lab runtime
+- 不要把表格退回简单 Select 过滤
+- 不要回潮 Radix / `asChild`
+- 不要只改 feature 不改 route/sidebar

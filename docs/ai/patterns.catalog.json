@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "patterns": [
+    {
+      "id": "data-table-list",
+      "title": "数据列表页",
+      "titleEn": "Data Table List",
+      "doc": "docs/ai/patterns/data-table-list.md",
+      "references": [
+        "src/features/tasks",
+        "src/components/data-table",
+        "src/routes/_authenticated/tasks/index.tsx"
+      ],
+      "scaffold": {
+        "required": [
+          "src/features/<domain>/index.tsx",
+          "src/features/<domain>/components/<domain>-table.tsx",
+          "src/features/<domain>/components/<domain>-columns.tsx",
+          "src/features/<domain>/data/schema.ts",
+          "src/routes/_authenticated/<domain>/index.tsx",
+          "sidebar-data entry"
+        ],
+        "optional": [
+          "provider",
+          "dialogs",
+          "primary-buttons",
+          "row-actions"
+        ]
+      },
+      "forbidden": [
+        "raw select-only filters as primary UX",
+        "duplicate table primitives",
+        "missing route or sidebar registration"
+      ],
+      "scaffoldTemplate": "scaffolds/data-table-list"
+    },
+    {
+      "id": "settings-section",
+      "title": "设置分段",
+      "titleEn": "Settings Section",
+      "doc": "docs/ai/patterns/settings-section.md",
+      "references": [
+        "src/features/settings",
+        "src/routes/_authenticated/settings"
+      ],
+      "scaffold": {
+        "required": [
+          "src/features/settings/<section>/index.tsx",
+          "src/features/settings/<section>/<section>-form.tsx",
+          "src/routes/_authenticated/settings/<section>.tsx",
+          "settings sidebarNavItems entry"
+        ]
+      },
+      "forbidden": [
+        "bypass settings layout",
+        "no form validation messages"
+      ],
+      "scaffoldTemplate": "scaffolds/settings-section"
+    },
+    {
+      "id": "auth-page",
+      "title": "认证页",
+      "titleEn": "Auth Page",
+      "doc": "docs/ai/patterns/auth-page.md",
+      "references": [
+        "src/features/auth",
+        "src/routes/(auth)"
+      ],
+      "scaffold": {
+        "required": [
+          "src/features/auth/<flow>/index.tsx",
+          "src/features/auth/<flow>/components/*-form.tsx",
+          "src/routes/(auth)/<flow>.tsx"
+        ]
+      },
+      "forbidden": [
+        "force Clerk binding",
+        "place auth pages under _authenticated shell"
+      ]
+    }
+  ],
+  "shell": {
+    "preferences": "src/config/admin-preferences.ts",
+    "sidebar": "src/components/layout/data/sidebar-data.ts",
+    "profilesSuggested": [
+      "console-default",
+      "ops-dense",
+      "portal-light",
+      "canvas-first"
+    ]
+  },
+  "skill": {
+    "path": "skill/uilab-admin",
+    "routes": [
+      "discover",
+      "scaffold",
+      "shell",
+      "review"
+    ]
+  }
+}

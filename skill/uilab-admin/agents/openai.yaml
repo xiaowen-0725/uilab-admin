@@ -1,0 +1,4 @@
+interface:
+  display_name: "uilab-admin"
+  short_description: "AI-first admin template router for scaffold, shell, and review"
+  default_prompt: "Use $uilab-admin to discover patterns or scaffold a page in this admin template."
