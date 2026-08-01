@@ -2,13 +2,14 @@
 
 ### Added
 
-- AI-first contracts: `AGENTS.md`, `docs/ai/*`, `$uilab-admin` skill, scaffolds
+- AI-first contracts: `AGENTS.md`, Admin `docs/ai/*`, `$uilab-admin` skill, scaffolds
 - CLI `uilab-admin`: `check`, `add`, `set-shell`, `init`, `apply-scenario`
 - Scenario packs: `ops-console`, `saas-admin`, `agent-desktop`
 - Agent desktop workspace canvas (`src/features/workspace`)
 - Project status snapshot: `PROJECT_STATUS.md`
 - Agent Workbench domain glossary, ADRs, architecture layout and implementation roadmap
 - Phase 0 Admin baseline evidence for Playwright UI flows, CLI generation and quality gates
+- Phase 1 Template Platform workspace: `archetypes/admin`, `tooling/*`, monorepo root orchestration
 
 ### Changed
 
@@ -16,6 +17,13 @@
 - Localized primary admin surfaces to Chinese-first
 - Provider defaults now consume `src/config/admin-preferences.ts`
 - Documented `agent-desktop` as the legacy Admin composition to preserve during migration toward a standalone Agent Workbench Archetype
+- **Phase 1 Batch 1A–1C**: Admin application lives under `archetypes/admin`; Admin-owned assets moved to `archetypes/admin/docs/ai` and `archetypes/admin/scaffolds`
+- Canonical CLI / quality-gate implementations live under `tooling/template-cli` and `tooling/quality-gates`; root `cli/uilab-admin.mjs` and `scripts/check-ai.mjs` remain compatibility wrappers
+- Root `skill/uilab-admin` remains the externally discovered front door and now links to `archetypes/admin/docs/ai/*`; generated apps rewrite those links back to local `docs/ai`
+- CLI / gate path model uses three roots: Admin app source, Admin assets (`docs/ai` + `scaffolds`), and platform support (skill / configs)
+- **Contract ownership**: platform `AGENTS.md` / `README.md` stay at repo root; Admin/derived-app contracts are Archetype-owned at `archetypes/admin/AGENTS.md` and `archetypes/admin/README.md`. `init` materializes those Admin-local files (via filtered Admin body copy) and does **not** copy platform-root AGENTS/README into generated apps
+- Explicit platform `--template` requires canonical `tooling/template-cli` and `tooling/quality-gates` (no fallback to import-only root wrappers)
+- Root commands (`pnpm dev`, `typecheck`, `build`, `test`, `check:ai`, `uilab-admin`) remain valid via workspace delegation and wrappers
 
 ### Fixed
 
@@ -24,6 +32,7 @@
 - Restored Browser Mode tests to a green 17-file / 103-test baseline by loading application styles and aligning assertions with current Chinese accessible UI contracts
 - Restored real click submission for sign-in, sign-up, forgot-password and OTP forms after the Base UI Button migration
 - Removed Base UI controlled-state warnings from the task mutation form reset flow
+- Made sidebar initial/reset state follow `adminPreferenceDefaults.layout`, including generated compact/full scenarios; Browser coverage is now 18 files / 108 tests
 
 ## v2.2.1 (2025-11-06)
 

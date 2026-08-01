@@ -9,7 +9,7 @@ description: "uilab-admin 的单入口 model-invoked router：支持 0→1 boots
 
 每轮先判断模式，再进入 **一条** 互斥路线；完成或遇门禁后重路由。  
 硬规则以 [AGENTS.md](../../AGENTS.md) 为准。  
-0→1 / 1→100 合同见 [bootstrap.md](../../docs/ai/bootstrap.md)。
+0→1 / 1→100 合同见 [bootstrap.md](../../archetypes/admin/docs/ai/bootstrap.md)。
 
 ## 先选模式
 
@@ -25,11 +25,11 @@ description: "uilab-admin 的单入口 model-invoked router：支持 0→1 boots
 
 | 用户意图 | 模式 | 路线 | 改代码 | 行动前完整读取 |
 |---|---|---|---:|---|
-| 从 0 开新应用 / 选场景 / 初始化模板 | bootstrap | `bootstrap` | 是（CLI 或受控手工） | [bootstrap.md](references/bootstrap.md)、[docs/ai/bootstrap.md](../../docs/ai/bootstrap.md)、[scenarios.catalog.json](../../docs/ai/scenarios.catalog.json)、[cli.md](../../docs/ai/cli.md) |
-| 了解仓库结构、pattern、可落点 | extend | `discover` | 否 | [discover.md](references/discover.md)、[map.md](../../docs/ai/map.md)、[extend.md](references/extend.md) |
-| 新增列表/设置/认证页 | extend | `scaffold` | 是 | [scaffold.md](references/scaffold.md)、对应 pattern、[do-not.md](../../docs/ai/do-not.md)、[acceptance.md](../../docs/ai/acceptance.md) |
+| 从 0 开新应用 / 选场景 / 初始化模板 | bootstrap | `bootstrap` | 是（CLI 或受控手工） | [bootstrap.md](references/bootstrap.md)、[docs/ai/bootstrap.md](../../archetypes/admin/docs/ai/bootstrap.md)、[scenarios.catalog.json](../../archetypes/admin/docs/ai/scenarios.catalog.json)、[cli.md](../../archetypes/admin/docs/ai/cli.md) |
+| 了解仓库结构、pattern、可落点 | extend | `discover` | 否 | [discover.md](references/discover.md)、[map.md](../../archetypes/admin/docs/ai/map.md)、[extend.md](references/extend.md) |
+| 新增列表/设置/认证页 | extend | `scaffold` | 是 | [scaffold.md](references/scaffold.md)、对应 pattern、[do-not.md](../../archetypes/admin/docs/ai/do-not.md)、[acceptance.md](../../archetypes/admin/docs/ai/acceptance.md) |
 | 改默认布局/导航 | extend | `shell` | 是 | [shell.md](references/shell.md)、`admin-preferences.ts`、`sidebar-data.ts` |
-| 合规检查 | extend | `review` | 否 | [review.md](references/review.md)、[do-not.md](../../docs/ai/do-not.md)、[acceptance.md](../../docs/ai/acceptance.md) |
+| 合规检查 | extend | `review` | 否 | [review.md](references/review.md)、[do-not.md](../../archetypes/admin/docs/ai/do-not.md)、[acceptance.md](../../archetypes/admin/docs/ai/acceptance.md) |
 
 ## 场景包（bootstrap 用）
 
@@ -62,7 +62,7 @@ description: "uilab-admin 的单入口 model-invoked router：支持 0→1 boots
 - Skill：场景判断、确认卡、编排、解释、review
 - CLI：`init` / `apply-scenario` / `add` / `set-shell` / `check` 等确定性落盘
 
-CLI 合同：[docs/ai/cli.md](../../docs/ai/cli.md)
+CLI 合同：[docs/ai/cli.md](../../archetypes/admin/docs/ai/cli.md)
 
 ## 完成边界
 

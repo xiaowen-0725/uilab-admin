@@ -12,6 +12,7 @@ import { IconThemeDark } from '@/assets/custom/icon-theme-dark'
 import { IconThemeLight } from '@/assets/custom/icon-theme-light'
 import { IconThemeSystem } from '@/assets/custom/icon-theme-system'
 import {
+  defaultSidebarOpen,
   preferencesToAgentPrompt,
   preferencesToConfigSnippet,
   preferencesToJson,
@@ -40,7 +41,7 @@ export function ConfigDrawer() {
   const { resetLayout } = useLayout()
 
   const handleReset = () => {
-    setOpen(true)
+    setOpen(defaultSidebarOpen)
     resetDir()
     resetTheme()
     resetLayout()
@@ -243,6 +244,10 @@ function LayoutConfig() {
   const { open, setOpen } = useSidebar()
   const { defaultCollapsible, collapsible, setCollapsible } = useLayout()
   const current = open ? 'default' : collapsible
+  // Project default selection: open → "default"; closed → collapsible mode (icon/offcanvas).
+  const projectDefaultCurrent = defaultSidebarOpen
+    ? 'default'
+    : defaultCollapsible
 
   const items: OptionItem<'default' | 'icon' | 'offcanvas'>[] = [
     { value: 'default', label: '默认', icon: IconLayoutDefault },
@@ -254,9 +259,9 @@ function LayoutConfig() {
     <section className='max-md:hidden'>
       <SectionTitle
         title='布局密度'
-        showReset={current !== 'default'}
+        showReset={current !== projectDefaultCurrent}
         onReset={() => {
-          setOpen(true)
+          setOpen(defaultSidebarOpen)
           setCollapsible(defaultCollapsible)
         }}
         resetAriaLabel='重置布局为默认'

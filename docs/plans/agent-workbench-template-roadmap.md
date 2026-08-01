@@ -21,13 +21,15 @@
 
 当前仓库已经具备：
 
-- Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈。
+- Template Platform monorepo：`archetypes/admin`（可运行 Admin）、`tooling/template-cli`、`tooling/quality-gates`、根兼容 wrapper 与 `skill/uilab-admin` 前门。
+- Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈（Admin 源在 `archetypes/admin`）。
 - Admin Shell、主题、动画、数据表格、认证、设置与错误页参考实现。
-- `uilab-admin` CLI 的 `check`、`add`、`set-shell`、`init`、`apply-scenario`。
-- `agent-desktop` scenario 与 `/workspace` mock 页面。
-- `pnpm typecheck`、`pnpm build`、`pnpm check:ai` 门禁。
+- Admin-owned AI 合同：`archetypes/admin/docs/ai/*` 与 `archetypes/admin/scaffolds/*`。
+- `uilab-admin` CLI 的 `check`、`add`、`set-shell`、`init`、`apply-scenario`（规范实现在 `tooling/template-cli`）。
+- `agent-desktop` scenario 与 `/workspace` mock 页面（Admin 兼容基线）。
+- `pnpm typecheck`、`pnpm build`、`pnpm check:ai` 门禁；Browser Mode 当前 18 files / 108 tests 全绿（Phase 0 基线 17/103）。
 
-当前 `/workspace` 是 Admin Shell 内的三卡片示例，不是后续 Agent Workbench 的 Kernel。它可作为文案和视觉参考，但不能成为新 Shell 的结构基础。现有 `$uilab-admin` skill、Bootstrap 合同、scenario catalog 与 `PROJECT_STATUS.md` 仍声明“单模板 + agent-desktop scenario”，迁移阶段必须同步修订。
+当前 `/workspace` 是 Admin Shell 内的三卡片示例，不是后续 Agent Workbench 的 Kernel。它可作为文案和视觉参考，但不能成为新 Shell 的结构基础。Phase 1 完成后，合同已表达多 Archetype 平台；`agent-desktop` 仍作为迁移期兼容 scenario 保留。
 
 ## Target repository shape
 

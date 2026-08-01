@@ -5,12 +5,12 @@
 ## 必读
 
 1. [AGENTS.md](../../../AGENTS.md)
-2. [docs/ai/map.md](../../../docs/ai/map.md)
-3. [docs/ai/patterns.catalog.json](../../../docs/ai/patterns.catalog.json)
+2. [docs/ai/map.md](../../../archetypes/admin/docs/ai/map.md)
+3. [docs/ai/patterns.catalog.json](../../../archetypes/admin/docs/ai/patterns.catalog.json)
 4. 相关 pattern 文档：
-   - [data-table-list](../../../docs/ai/patterns/data-table-list.md)
-   - [settings-section](../../../docs/ai/patterns/settings-section.md)
-   - [auth-page](../../../docs/ai/patterns/auth-page.md)
+   - [data-table-list](../../../archetypes/admin/docs/ai/patterns/data-table-list.md)
+   - [settings-section](../../../archetypes/admin/docs/ai/patterns/settings-section.md)
+   - [auth-page](../../../archetypes/admin/docs/ai/patterns/auth-page.md)
 
 ## 做什么
 

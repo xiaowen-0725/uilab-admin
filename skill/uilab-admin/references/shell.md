@@ -7,7 +7,7 @@
 1. 读 `src/config/admin-preferences.ts`
 2. 读 `src/components/layout/data/sidebar-data.ts`
 3. 需要时看 Theme Settings / Config Drawer 的导出能力
-4. 读 [map.md](../../../docs/ai/map.md) 的 App Config 段
+4. 读 [map.md](../../../archetypes/admin/docs/ai/map.md) 的 App Config 段
 
 ## 优先 CLI
 

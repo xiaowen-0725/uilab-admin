@@ -11,7 +11,7 @@ Phase 1 does not create Agent Workbench UI, extract speculative Foundation Modul
 - Architecture decision commit: `81731f8` or a descendant.
 - Phase 0 evidence exists for UI, CLI and quality gates.
 - `pnpm typecheck`, `pnpm build` and `pnpm check:ai` are green.
-- Current Browser test baseline is recorded as 11 failed files / 55 failed tests; migration must not add new failure families.
+- Phase 0 Browser baseline is green: 17 files / 103 tests pass. Current Phase 1 suite is 18 files / 108 tests after adding scenario-aware default coverage; migration must not introduce new failures.
 - Existing `.codex/` and `skills-lock.json` remain outside the migration unless separately authorized.
 
 ## Batch 1A — Workspace root and Admin application move
@@ -91,7 +91,7 @@ pnpm knip
 - Admin renders the same routes and navigation as Phase 0.
 - All seven Phase 0 Playwright screenshots can be reproduced at `1440 × 1000` without material layout drift.
 - Root and package-level typecheck/build/check:ai pass.
-- Browser tests do not exceed the recorded 11 failed files / 55 failed tests and show no new failure family.
+- Browser tests remain green at 17 files / 103 tests (or better) with no new failure family.
 - No path in generated `routeTree.gen.ts` changes solely because of the filesystem move.
 
 ## Batch 1B — Canonical tooling locations
@@ -159,6 +159,14 @@ The current Admin pattern catalog, scenario catalog and Bootstrap/CLI docs are A
 
 The neutral platform skill and Agent Workbench skill are created only after the Agent Workbench Archetype exists. Do not rename `$uilab-admin` during mechanical migration.
 
+### Contract ownership (platform vs Admin / derived app)
+
+- **Platform contracts** stay at repository root: `AGENTS.md`, `README.md` (Template Platform monorepo).
+- **Admin / derived-app contracts** are Archetype-owned: `archetypes/admin/AGENTS.md`, `archetypes/admin/README.md`.
+- `uilab-admin init` materializes Admin-local AGENTS/README via filtered Admin body copy. It must **not** copy platform-root AGENTS/README into generated apps.
+- Preflight validates Admin-local contracts under `adminSourceRoot` before any target write.
+- Explicit platform `--template` requires canonical tooling under `tooling/*` (no fallback to root import-only wrappers).
+
 ### Legacy `agent-desktop` behavior
 
 - Keep the current scenario executable during Phase 1 so the Phase 0 CLI contract remains true.
@@ -187,11 +195,12 @@ Do not combine Browser test repairs, Foundation extraction or Agent Workbench cr
 
 - No Agent Workbench package or UI.
 - No Foundation extraction.
-- No changes to Admin labels, routes, mock data or visuals.
-- No fixes for existing Browser test selectors or Base UI pointer interception.
+- No changes to Admin labels, routes, mock data or visuals beyond equivalence migration.
 - No public CLI rename.
 - No Electron/Tauri implementation.
 - No deletion of legacy scenario support.
+
+Browser Mode is green (Phase 0: 17/103; current: 18/108). Do not treat broken Browser tests as an accepted Phase 1 baseline.
 
 ## Rollback strategy
 

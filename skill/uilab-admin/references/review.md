@@ -5,8 +5,8 @@
 ## 必读
 
 - [AGENTS.md](../../../AGENTS.md)
-- [docs/ai/do-not.md](../../../docs/ai/do-not.md)
-- [docs/ai/acceptance.md](../../../docs/ai/acceptance.md)
+- [docs/ai/do-not.md](../../../archetypes/admin/docs/ai/do-not.md)
+- [docs/ai/acceptance.md](../../../archetypes/admin/docs/ai/acceptance.md)
 - 若审查某 pattern，再读对应 pattern 文档
 
 ## 检查清单

@@ -9,7 +9,7 @@
    - `settings-section`
    - `auth-page`（可选，优先仿现有 auth feature）
 2. 完整阅读对应 `docs/ai/patterns/<id>.md`
-3. 阅读 [do-not.md](../../../docs/ai/do-not.md) 与 [acceptance.md](../../../docs/ai/acceptance.md)
+3. 阅读 [do-not.md](../../../archetypes/admin/docs/ai/do-not.md) 与 [acceptance.md](../../../archetypes/admin/docs/ai/acceptance.md)
 4. 需要模板时，优先复制：
    - `scaffolds/data-table-list/*`
    - `scaffolds/settings-section/*`

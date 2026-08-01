@@ -4,7 +4,7 @@
 
 ## 状态意识（重要）
 
-先读 [bootstrap.md](../../../docs/ai/bootstrap.md) 与 [cli.md](../../../docs/ai/cli.md)。
+先读 [bootstrap.md](../../../archetypes/admin/docs/ai/bootstrap.md) 与 [cli.md](../../../archetypes/admin/docs/ai/cli.md)。
 
 | 能力 | 当前 |
 |---|---|
@@ -25,10 +25,10 @@ pnpm uilab-admin apply-scenario <id> --dir <app>
 
 ## 行动前必读
 
-1. [docs/ai/bootstrap.md](../../../docs/ai/bootstrap.md)
-2. [docs/ai/scenarios.catalog.json](../../../docs/ai/scenarios.catalog.json)
+1. [docs/ai/bootstrap.md](../../../archetypes/admin/docs/ai/bootstrap.md)
+2. [docs/ai/scenarios.catalog.json](../../../archetypes/admin/docs/ai/scenarios.catalog.json)
 3. 对应 `docs/ai/scenarios/<id>.md`
-4. [docs/ai/cli.md](../../../docs/ai/cli.md)
+4. [docs/ai/cli.md](../../../archetypes/admin/docs/ai/cli.md)
 
 ## 流程
 

@@ -3,11 +3,15 @@
  * Minimal AI-contract gate for uilab-admin (canonical implementation).
  * Validates skill frontmatter, required docs/patterns/scaffolds, and relative links.
  *
- * Layout-aware:
- * - platform canonical path (tooling/quality-gates): platformRoot = repo root,
- *   adminRoot = archetypes/admin; docs/scaffolds/skill/CLI still at platform root (Batch 1B).
- * - derived scripts path (scripts/check-ai.mjs copy): project/admin/docs/scaffolds/skill/CLI
- *   all live under the derived application root.
+ * Layout-aware four fields:
+ * - platformRoot: repository / monorepo root
+ * - adminRoot: Admin application package (Admin-local AGENTS/README live here)
+ * - assetsRoot: Admin-owned docs/ai + scaffolds
+ * - supportRoot: platform contracts (root AGENTS/README) + skill front door + CLI wrapper
+ *
+ * Platform: platformRoot + supportRoot = repo root; adminRoot + assetsRoot = archetypes/admin
+ * Derived: all roots collapse to the derived application root (same local AGENTS/README
+ * satisfy both platform-support and Admin-local contract checks).
  */
 import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -20,6 +24,7 @@ import { fileURLToPath } from 'node:url'
  *   platformRoot: string,
  *   adminRoot: string,
  *   assetsRoot: string,
+ *   supportRoot: string,
  * }} GateLayout
  */
 
@@ -33,12 +38,13 @@ function detectGateLayout() {
   // Platform canonical: tooling/quality-gates/check-ai.mjs
   if (parent === 'quality-gates' && grandparent === 'tooling') {
     const platformRoot = path.resolve(scriptDir, '../..')
+    const adminRoot = path.join(platformRoot, 'archetypes', 'admin')
     return {
       kind: 'platform',
       platformRoot,
-      adminRoot: path.join(platformRoot, 'archetypes', 'admin'),
-      // Batch 1B: docs/ai, scaffolds, skill, cli wrappers remain at platform root
-      assetsRoot: platformRoot,
+      adminRoot,
+      assetsRoot: adminRoot,
+      supportRoot: platformRoot,
     }
   }
 
@@ -49,11 +55,12 @@ function detectGateLayout() {
     platformRoot: projectRoot,
     adminRoot: projectRoot,
     assetsRoot: projectRoot,
+    supportRoot: projectRoot,
   }
 }
 
 const LAYOUT = detectGateLayout()
-const { platformRoot, adminRoot, assetsRoot } = LAYOUT
+const { platformRoot, adminRoot, assetsRoot, supportRoot } = LAYOUT
 /** @deprecated alias for reporting default base */
 const projectRoot = platformRoot
 const errors = []
@@ -139,20 +146,41 @@ function extractMarkdownLinks(source) {
   return links
 }
 
-/** Resolve a catalog path: src/* against admin; docs/ai/* and scaffolds/* against assets. */
+/**
+ * Resolve a catalog path:
+ * - src/* against adminRoot
+ * - skill/* against supportRoot
+ * - docs/ai/* and scaffolds/* against assetsRoot
+ */
 function resolveCatalogPath(ref) {
   const normalized = ref.replace(/\\/g, '/')
   if (normalized.startsWith('src/') || normalized === 'src') {
     return path.join(adminRoot, ref)
   }
+  if (normalized.startsWith('skill/') || normalized === 'skill') {
+    return path.join(supportRoot, ref)
+  }
   return path.join(assetsRoot, ref)
 }
 
 async function main() {
-  // AI contract assets (docs/scaffolds/skill/cli) live under assetsRoot
-  const assetsRequiredFiles = [
+  // Platform support: root platform contracts, compatibility CLI wrapper, skill
+  const supportRequiredFiles = [
     'AGENTS.md',
     'README.md',
+    'cli/uilab-admin.mjs',
+    'skill/uilab-admin/SKILL.md',
+    'skill/uilab-admin/references/bootstrap.md',
+    'skill/uilab-admin/references/extend.md',
+    'skill/uilab-admin/agents/openai.yaml',
+    'skill/uilab-admin/references/discover.md',
+    'skill/uilab-admin/references/scaffold.md',
+    'skill/uilab-admin/references/shell.md',
+    'skill/uilab-admin/references/review.md',
+  ]
+
+  // Admin assets: docs/ai + scaffolds
+  const assetsRequiredFiles = [
     'docs/ai/map.md',
     'docs/ai/do-not.md',
     'docs/ai/acceptance.md',
@@ -166,15 +194,6 @@ async function main() {
     'docs/ai/scenarios/ops-console.md',
     'docs/ai/scenarios/saas-admin.md',
     'docs/ai/scenarios/agent-desktop.md',
-    'cli/uilab-admin.mjs',
-    'skill/uilab-admin/SKILL.md',
-    'skill/uilab-admin/references/bootstrap.md',
-    'skill/uilab-admin/references/extend.md',
-    'skill/uilab-admin/agents/openai.yaml',
-    'skill/uilab-admin/references/discover.md',
-    'skill/uilab-admin/references/scaffold.md',
-    'skill/uilab-admin/references/shell.md',
-    'skill/uilab-admin/references/review.md',
     'scaffolds/data-table-list/README.md',
     'scaffolds/data-table-list/index.tsx',
     'scaffolds/data-table-list/route.tsx',
@@ -188,8 +207,12 @@ async function main() {
     'scaffolds/settings-section/route.tsx',
   ]
 
-  // App package body always under adminRoot
+  // App package body + Admin-local contracts always under adminRoot.
+  // Platform mode: adminRoot AGENTS/README are Archetype-owned app contracts.
+  // Derived mode: roots collapse — same files also satisfy supportRoot checks above.
   const adminRequiredFiles = [
+    'AGENTS.md',
+    'README.md',
     'AGENT_BRIEF.md',
     'desktop/README.md',
     'components.json',
@@ -200,14 +223,23 @@ async function main() {
     'src/features/settings/index.tsx',
   ]
 
+  for (const file of supportRequiredFiles) {
+    await mustExist(path.join(supportRoot, file), file)
+  }
   for (const file of assetsRequiredFiles) {
     await mustExist(path.join(assetsRoot, file), file)
   }
   for (const file of adminRequiredFiles) {
-    await mustExist(path.join(adminRoot, file), file)
+    // Label platform Admin-local contracts distinctly when roots differ
+    const label =
+      (file === 'AGENTS.md' || file === 'README.md') &&
+      path.resolve(adminRoot) !== path.resolve(supportRoot)
+        ? `admin:${file}`
+        : file
+    await mustExist(path.join(adminRoot, file), label)
   }
 
-  const skillFile = path.join(assetsRoot, 'skill/uilab-admin/SKILL.md')
+  const skillFile = path.join(supportRoot, 'skill/uilab-admin/SKILL.md')
   if (await exists(skillFile)) {
     const markdown = await readFile(skillFile, 'utf8')
     const fm = parseFrontmatter(markdown)
@@ -273,7 +305,10 @@ async function main() {
       if (!catalog.skill?.path) {
         errors.push('patterns.catalog.json: skill.path is required')
       } else {
-        await mustExist(path.join(assetsRoot, catalog.skill.path), catalog.skill.path)
+        await mustExist(
+          path.join(supportRoot, catalog.skill.path),
+          catalog.skill.path
+        )
       }
     }
   }
@@ -315,9 +350,13 @@ async function main() {
     }
   }
 
-  // Relative markdown links under docs/ai and skill/uilab-admin (assets root)
-  for (const root of ['docs/ai', 'skill/uilab-admin']) {
-    const abs = path.join(assetsRoot, root)
+  // Relative markdown links: Admin docs/ai from assetsRoot; root skill from supportRoot
+  const linkRoots = [
+    { base: assetsRoot, relRoot: 'docs/ai' },
+    { base: supportRoot, relRoot: 'skill/uilab-admin' },
+  ]
+  for (const { base, relRoot } of linkRoots) {
+    const abs = path.join(base, relRoot)
     if (!(await exists(abs))) continue
     const files = await collectMarkdownFiles(abs)
     for (const file of files) {
@@ -326,7 +365,7 @@ async function main() {
         if (target.startsWith('mailto:')) continue
         const resolved = path.resolve(path.dirname(file), target)
         if (!(await exists(resolved))) {
-          errors.push(`${rel(file, assetsRoot)}: broken link -> ${target}`)
+          errors.push(`${rel(file, base)}: broken link -> ${target}`)
         }
       }
     }

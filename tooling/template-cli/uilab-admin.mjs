@@ -27,13 +27,19 @@ const __dirname = path.dirname(__filename)
 const CLI_VERSION = '0.2.0'
 
 /**
+ * Three conceptual roots (collapse to one in self-contained derived apps):
+ * - adminTemplateRoot / appRoot: Admin source application (includes AGENTS.md / README.md)
+ * - adminAssetsRoot: Admin-owned docs/ai + scaffolds
+ * - supportRoot: platform support (skill front door + shared configs; not app AGENTS/README)
+ *
  * @typedef {'platform' | 'derived'} CliLayoutKind
  * @typedef {{
  *   kind: CliLayoutKind,
  *   cliPath: string,
  *   platformRoot: string | null,
  *   adminTemplateRoot: string,
- *   platformAssetsRoot: string,
+ *   adminAssetsRoot: string,
+ *   supportRoot: string,
  * }} CliLayout
  */
 
@@ -45,13 +51,14 @@ function detectCliLayout() {
   // Platform canonical: tooling/template-cli/uilab-admin.mjs
   if (parent === 'template-cli' && grandparent === 'tooling') {
     const platformRoot = path.resolve(__dirname, '../..')
+    const adminRoot = path.join(platformRoot, 'archetypes', 'admin')
     return {
       kind: 'platform',
       cliPath: __filename,
       platformRoot,
-      adminTemplateRoot: path.join(platformRoot, 'archetypes', 'admin'),
-      // Batch 1B: docs/ai, scaffolds, skill remain at platform root
-      platformAssetsRoot: platformRoot,
+      adminTemplateRoot: adminRoot,
+      adminAssetsRoot: adminRoot,
+      supportRoot: platformRoot,
     }
   }
 
@@ -62,7 +69,8 @@ function detectCliLayout() {
     cliPath: __filename,
     platformRoot: null,
     adminTemplateRoot: appRoot,
-    platformAssetsRoot: appRoot,
+    adminAssetsRoot: appRoot,
+    supportRoot: appRoot,
   }
 }
 
@@ -216,9 +224,10 @@ function resolvePathMaybe(dirFlag) {
 }
 
 /**
- * Resolve appRoot + assetsRoot for check/add/apply-scenario/set-shell.
- * Platform mode: platform root or archetypes/admin → Admin package + platform assets.
- * Derived mode: app root = `--dir` if set, otherwise `process.cwd()` (never CLI self-root).
+ * Resolve appRoot + adminAssetsRoot for check/add/apply-scenario/set-shell.
+ * Platform default: both resolve to archetypes/admin.
+ * Explicit derived --dir: both collapse to that directory.
+ * Does not resolve supportRoot (support is init-only / platform packaging).
  */
 function resolveCommandRoots(dirFlag, layout = LAYOUT) {
   if (layout.kind === 'platform') {
@@ -229,15 +238,15 @@ function resolveCommandRoots(dirFlag, layout = LAYOUT) {
     ) {
       return {
         appRoot: layout.adminTemplateRoot,
-        assetsRoot: layout.platformAssetsRoot,
+        adminAssetsRoot: layout.adminAssetsRoot,
       }
     }
-    return { appRoot: candidate, assetsRoot: candidate }
+    return { appRoot: candidate, adminAssetsRoot: candidate }
   }
 
   // Derived CLI: frozen contract — appRoot = --dir or cwd. No CLI-self fallback.
   const appRoot = resolvePathMaybe(dirFlag)
-  return { appRoot, assetsRoot: appRoot }
+  return { appRoot, adminAssetsRoot: appRoot }
 }
 
 /** App body minimum contract only (not scaffolds/catalog). */
@@ -254,16 +263,16 @@ async function assertAppRoot(appRoot) {
   }
 }
 
-/** Scaffold/catalog assets live under assetsRoot (may differ from appRoot on platform). */
-async function assertAssetsRoot(assetsRoot) {
+/** Scaffold/catalog assets live under adminAssetsRoot (Admin-owned). */
+async function assertAdminAssetsRoot(adminAssetsRoot) {
   const needed = [
     'scaffolds/data-table-list',
     'docs/ai/patterns.catalog.json',
   ]
   for (const rel of needed) {
-    if (!(await exists(path.join(assetsRoot, rel)))) {
+    if (!(await exists(path.join(adminAssetsRoot, rel)))) {
       const err = new Error(
-        `not a uilab-admin assets root (missing ${rel}): ${assetsRoot}`
+        `not a uilab-admin admin assets root (missing ${rel}): ${adminAssetsRoot}`
       )
       err.code = 'NOT_FOUND'
       throw err
@@ -371,8 +380,8 @@ function replacePlaceholders(content, map) {
   return out
 }
 
-async function loadScenarios(assetsRoot) {
-  const file = path.join(assetsRoot, 'docs/ai/scenarios.catalog.json')
+async function loadScenarios(adminAssetsRoot) {
+  const file = path.join(adminAssetsRoot, 'docs/ai/scenarios.catalog.json')
   if (!(await exists(file))) {
     const err = new Error(`missing scenarios catalog: ${file}`)
     err.code = 'NOT_FOUND'
@@ -515,7 +524,7 @@ async function registerSettingsNav(appRoot, { section, title, dryRun }) {
   return { skipped: false }
 }
 
-async function addDataTableList(appRoot, assetsRoot, flags) {
+async function addDataTableList(appRoot, adminAssetsRoot, flags) {
   const domain = flags.domain
   if (!domain || !/^[a-z][a-z0-9]*$/.test(domain)) {
     printErr(
@@ -539,7 +548,7 @@ async function addDataTableList(appRoot, assetsRoot, flags) {
     __DOMAIN__: DOMAIN,
   }
 
-  const scaffoldRoot = path.join(assetsRoot, 'scaffolds/data-table-list')
+  const scaffoldRoot = path.join(adminAssetsRoot, 'scaffolds/data-table-list')
   const created = []
   const opts = {
     dryRun: !!flags['dry-run'],
@@ -599,7 +608,7 @@ async function addDataTableList(appRoot, assetsRoot, flags) {
   }
 }
 
-async function addSettingsSection(appRoot, assetsRoot, flags) {
+async function addSettingsSection(appRoot, adminAssetsRoot, flags) {
   const section = flags.section
   if (!section || !/^[a-z][a-z0-9]*$/.test(section)) {
     printErr(
@@ -621,7 +630,7 @@ async function addSettingsSection(appRoot, assetsRoot, flags) {
     __SECTION_DESC__: desc,
   }
 
-  const scaffoldRoot = path.join(assetsRoot, 'scaffolds/settings-section')
+  const scaffoldRoot = path.join(adminAssetsRoot, 'scaffolds/settings-section')
   const opts = {
     dryRun: !!flags['dry-run'],
     force: !!flags.force,
@@ -664,9 +673,9 @@ async function addSettingsSection(appRoot, assetsRoot, flags) {
   }
 }
 
-async function cmdAdd(appRoot, assetsRoot, positional, flags) {
+async function cmdAdd(appRoot, adminAssetsRoot, positional, flags) {
   await assertAppRoot(appRoot)
-  await assertAssetsRoot(assetsRoot)
+  await assertAdminAssetsRoot(adminAssetsRoot)
   const pattern = positional[0]
   if (!pattern) {
     printErr('missing pattern. Use data-table-list or settings-section')
@@ -676,9 +685,9 @@ async function cmdAdd(appRoot, assetsRoot, positional, flags) {
   let result
   try {
     if (pattern === 'data-table-list') {
-      result = await addDataTableList(appRoot, assetsRoot, flags)
+      result = await addDataTableList(appRoot, adminAssetsRoot, flags)
     } else if (pattern === 'settings-section') {
-      result = await addSettingsSection(appRoot, assetsRoot, flags)
+      result = await addSettingsSection(appRoot, adminAssetsRoot, flags)
     } else if (pattern === 'auth-page') {
       printErr('auth-page add is planned; copy from src/features/auth for now')
       process.exit(EXIT.NOT_FOUND)
@@ -958,14 +967,14 @@ export const Route = createFileRoute('/_authenticated/')({
   return actions
 }
 
-async function seedScenarioModules(appRoot, assetsRoot, scenario, flags) {
+async function seedScenarioModules(appRoot, adminAssetsRoot, scenario, flags) {
   const seeded = []
   if (flags['skip-seed']) return seeded
 
   if (scenario.id === 'ops-console') {
     // Keep tasks as queue reference; seed tickets list as business sample.
     if (!(await exists(path.join(appRoot, 'src/features/tickets')))) {
-      const result = await addDataTableList(appRoot, assetsRoot, {
+      const result = await addDataTableList(appRoot, adminAssetsRoot, {
         domain: 'tickets',
         title: '工单列表',
         desc: '运营队列型列表示例，可替换为真实工单数据源。',
@@ -978,7 +987,7 @@ async function seedScenarioModules(appRoot, assetsRoot, scenario, flags) {
 
   if (scenario.id === 'saas-admin') {
     if (!(await exists(path.join(appRoot, 'src/features/settings/billing')))) {
-      const result = await addSettingsSection(appRoot, assetsRoot, {
+      const result = await addSettingsSection(appRoot, adminAssetsRoot, {
         section: 'billing',
         title: '账单',
         desc: '管理账单联系人与发票偏好。',
@@ -991,7 +1000,7 @@ async function seedScenarioModules(appRoot, assetsRoot, scenario, flags) {
 
   if (scenario.id === 'agent-desktop') {
     if (!(await exists(path.join(appRoot, 'src/features/threads')))) {
-      const result = await addDataTableList(appRoot, assetsRoot, {
+      const result = await addDataTableList(appRoot, adminAssetsRoot, {
         domain: 'threads',
         title: '会话列表',
         desc: 'Agent 会话/线程列表示例，可作为工作台侧栏数据源。',
@@ -1068,14 +1077,14 @@ async function renameAppIdentity(appRoot, { appName, packageName, dryRun }) {
 
 async function applyScenario(
   appRoot,
-  assetsRoot,
+  adminAssetsRoot,
   scenarioId,
   flags,
   { appName, packageName } = {}
 ) {
   await assertAppRoot(appRoot)
-  await assertAssetsRoot(assetsRoot)
-  const catalog = await loadScenarios(assetsRoot)
+  await assertAdminAssetsRoot(adminAssetsRoot)
+  const catalog = await loadScenarios(adminAssetsRoot)
   const scenario = getScenario(catalog, scenarioId)
   const dryRun = !!flags['dry-run']
   const actions = []
@@ -1110,7 +1119,12 @@ async function applyScenario(
   }
 
   // seeds
-  const seeded = await seedScenarioModules(appRoot, assetsRoot, scenario, flags)
+  const seeded = await seedScenarioModules(
+    appRoot,
+    adminAssetsRoot,
+    scenario,
+    flags
+  )
   for (const seed of seeded) actions.push({ type: 'seed', ...seed })
 
   // APP_BRIEF
@@ -1154,13 +1168,13 @@ async function applyScenario(
   }
 }
 
-async function cmdApplyScenario(appRoot, assetsRoot, positional, flags) {
+async function cmdApplyScenario(appRoot, adminAssetsRoot, positional, flags) {
   const scenarioId = positional[0] || flags.scenario
   if (!scenarioId) {
     printErr('apply-scenario requires <scenario-id>')
     process.exit(EXIT.USAGE)
   }
-  const result = await applyScenario(appRoot, assetsRoot, scenarioId, flags)
+  const result = await applyScenario(appRoot, adminAssetsRoot, scenarioId, flags)
   const payload = {
     command: 'apply-scenario',
     ok: true,
@@ -1211,13 +1225,12 @@ async function copyDirFiltered(srcRoot, destRoot) {
 }
 
 /**
- * Required support files copied into a derived app from assetsRoot.
+ * Platform support files copied into a derived app from supportRoot.
  * Shared by validateInitSources + materializeDerivedApp (no list drift).
- * Note: .prettierignore is generated content and is not required from source.
+ * Note: AGENTS.md / README.md are Archetype app contracts (adminSourceRoot),
+ * not platform support copies. .prettierignore is generated and not required.
  */
 const INIT_REQUIRED_SUPPORT_FILES = [
-  'AGENTS.md',
-  'README.md',
   'CHANGELOG.md',
   'LICENSE',
   '.gitignore',
@@ -1228,12 +1241,18 @@ const INIT_REQUIRED_SUPPORT_FILES = [
   'netlify.toml',
 ]
 
-/** Required support directories copied into a derived app from assetsRoot. */
-const INIT_REQUIRED_SUPPORT_DIRS = [
-  'docs/ai',
-  'scaffolds',
-  'skill/uilab-admin',
-]
+/**
+ * Required Admin/derived-app contracts under adminSourceRoot.
+ * Filtered Admin body copy already brings them into the target — do not
+ * re-copy from supportRoot (platform contracts must not overwrite app contracts).
+ */
+const INIT_REQUIRED_ADMIN_APP_CONTRACTS = ['AGENTS.md', 'README.md']
+
+/** Platform support directories (skill front door) from supportRoot. */
+const INIT_REQUIRED_SUPPORT_DIRS = ['skill/uilab-admin']
+
+/** Admin-owned asset directories from adminAssetsRoot. */
+const INIT_REQUIRED_ADMIN_ASSET_DIRS = ['docs/ai', 'scaffolds']
 
 /**
  * Fail-fast source validation before any target mkdir/copy/write.
@@ -1257,11 +1276,23 @@ async function validateInitSources(sources) {
     throw err
   }
 
-  for (const rel of INIT_REQUIRED_SUPPORT_FILES) {
-    const from = path.join(sources.assetsRoot, rel)
+  // Admin-local app contracts (AGENTS.md / README.md) — required before any write
+  for (const rel of INIT_REQUIRED_ADMIN_APP_CONTRACTS) {
+    const from = path.join(sources.adminSourceRoot, rel)
     if (!(await exists(from))) {
       const err = new Error(
-        `missing required template support file ${rel} under ${sources.assetsRoot}`
+        `missing required admin app contract ${rel} under ${sources.adminSourceRoot}`
+      )
+      err.code = 'NOT_FOUND'
+      throw err
+    }
+  }
+
+  for (const rel of INIT_REQUIRED_SUPPORT_FILES) {
+    const from = path.join(sources.supportRoot, rel)
+    if (!(await exists(from))) {
+      const err = new Error(
+        `missing required template support file ${rel} under ${sources.supportRoot}`
       )
       err.code = 'NOT_FOUND'
       throw err
@@ -1269,10 +1300,21 @@ async function validateInitSources(sources) {
   }
 
   for (const rel of INIT_REQUIRED_SUPPORT_DIRS) {
-    const from = path.join(sources.assetsRoot, rel)
+    const from = path.join(sources.supportRoot, rel)
     if (!(await exists(from))) {
       const err = new Error(
-        `missing required template asset ${rel} under ${sources.assetsRoot}`
+        `missing required template support dir ${rel} under ${sources.supportRoot}`
+      )
+      err.code = 'NOT_FOUND'
+      throw err
+    }
+  }
+
+  for (const rel of INIT_REQUIRED_ADMIN_ASSET_DIRS) {
+    const from = path.join(sources.adminAssetsRoot, rel)
+    if (!(await exists(from))) {
+      const err = new Error(
+        `missing required admin asset ${rel} under ${sources.adminAssetsRoot}`
       )
       err.code = 'NOT_FOUND'
       throw err
@@ -1294,25 +1336,25 @@ async function validateInitSources(sources) {
 }
 
 /**
- * Resolve init template sources.
- * Supports:
- * - platform root (contains archetypes/admin + docs/ai + scaffolds)
- * - derived-style self-contained Admin template root
- * Default (no --template): Admin app source = archetypes/admin (platform) or local app (derived).
+ * Resolve init template sources (three roots).
+ * - Platform default: app/Admin assets = archetypes/admin; support = platform root
+ * - Explicit --template <platform-root>: same split under that platform root
+ * - Explicit self-contained derived template: all three roots equal template dir
  */
 async function resolveInitSources(flags, layout = LAYOUT) {
   let templateArg = flags.template
     ? path.resolve(process.cwd(), flags.template)
     : null
 
-  // Default: platform Admin package + platform assets; derived CLI uses itself.
+  // Default: platform Admin package + Admin assets + platform support; derived collapses.
   if (!templateArg) {
     if (layout.kind === 'platform') {
       return {
         form: 'platform',
         templateRoot: layout.platformRoot,
         adminSourceRoot: layout.adminTemplateRoot,
-        assetsRoot: layout.platformAssetsRoot,
+        adminAssetsRoot: layout.adminAssetsRoot,
+        supportRoot: layout.supportRoot,
         canonicalCliPath: path.join(
           layout.platformRoot,
           'tooling/template-cli/uilab-admin.mjs'
@@ -1327,7 +1369,8 @@ async function resolveInitSources(flags, layout = LAYOUT) {
       form: 'derived',
       templateRoot: layout.adminTemplateRoot,
       adminSourceRoot: layout.adminTemplateRoot,
-      assetsRoot: layout.platformAssetsRoot,
+      adminAssetsRoot: layout.adminAssetsRoot,
+      supportRoot: layout.supportRoot,
       canonicalCliPath: layout.cliPath,
       canonicalGatePath: path.join(
         path.dirname(layout.cliPath),
@@ -1338,29 +1381,28 @@ async function resolveInitSources(flags, layout = LAYOUT) {
     }
   }
 
-  // Explicit --template: platform root form
+  // Explicit --template: platform root form.
+  // Require canonical tooling only — never fall back to root import-only wrappers
+  // (copying a wrapper into a derived app would be broken).
   if (await exists(path.join(templateArg, 'archetypes/admin/package.json'))) {
     const platformRoot = templateArg
-    const adminSourceRoot = path.join(platformRoot, 'archetypes', 'admin')
+    const adminRoot = path.join(platformRoot, 'archetypes', 'admin')
     const canonicalCli = path.join(
       platformRoot,
       'tooling/template-cli/uilab-admin.mjs'
     )
-    const legacyCli = path.join(platformRoot, 'cli/uilab-admin.mjs')
     const canonicalGate = path.join(
       platformRoot,
       'tooling/quality-gates/check-ai.mjs'
     )
-    const legacyGate = path.join(platformRoot, 'scripts/check-ai.mjs')
     return {
       form: 'platform',
       templateRoot: platformRoot,
-      adminSourceRoot,
-      assetsRoot: platformRoot,
-      canonicalCliPath: (await exists(canonicalCli)) ? canonicalCli : legacyCli,
-      canonicalGatePath: (await exists(canonicalGate))
-        ? canonicalGate
-        : legacyGate,
+      adminSourceRoot: adminRoot,
+      adminAssetsRoot: adminRoot,
+      supportRoot: platformRoot,
+      canonicalCliPath: canonicalCli,
+      canonicalGatePath: canonicalGate,
     }
   }
 
@@ -1386,7 +1428,8 @@ async function resolveInitSources(flags, layout = LAYOUT) {
     form: 'derived',
     templateRoot: templateArg,
     adminSourceRoot: templateArg,
-    assetsRoot: templateArg,
+    adminAssetsRoot: templateArg,
+    supportRoot: templateArg,
     canonicalCliPath: path.join(templateArg, 'cli/uilab-admin.mjs'),
     canonicalGatePath: path.join(templateArg, 'scripts/check-ai.mjs'),
   }
@@ -1406,8 +1449,8 @@ async function derivePackageJson(targetDir) {
   await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8')
 }
 
-async function writeDerivedPrettierrc(targetDir, assetsRoot) {
-  const src = path.join(assetsRoot, '.prettierrc')
+async function writeDerivedPrettierrc(targetDir, supportRoot) {
+  const src = path.join(supportRoot, '.prettierrc')
   let config
   if (await exists(src)) {
     config = JSON.parse(await readFile(src, 'utf8'))
@@ -1420,6 +1463,34 @@ async function writeDerivedPrettierrc(targetDir, assetsRoot) {
     JSON.stringify(config, null, 2) + '\n',
     'utf8'
   )
+}
+
+/**
+ * Platform skill Markdown links point at archetypes/admin/docs/ai.
+ * Derived apps are self-contained: rewrite those links back to local docs/ai.
+ * Generated skill files must contain no archetypes/admin/docs/ai path.
+ */
+async function rewriteGeneratedSkillDocsLinks(targetDir) {
+  const skillRoot = path.join(targetDir, 'skill/uilab-admin')
+  if (!(await exists(skillRoot))) return
+
+  const files = []
+  async function walk(dir) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) await walk(entryPath)
+      else if (entry.isFile() && entry.name.endsWith('.md')) files.push(entryPath)
+    }
+  }
+  await walk(skillRoot)
+
+  const platformMarker = 'archetypes/admin/docs/ai'
+  for (const file of files) {
+    const before = await readFile(file, 'utf8')
+    if (!before.includes(platformMarker)) continue
+    const after = before.split(platformMarker).join('docs/ai')
+    await writeFile(file, after, 'utf8')
+  }
 }
 
 async function writeDerivedPrettierignore(targetDir) {
@@ -1470,25 +1541,36 @@ async function writeDerivedNetlify(targetDir) {
 
 /**
  * Materialize a derived application:
- * 1) copy Admin app source
- * 2) controlled copy of already-validated support/assets (same lists as validateInitSources)
+ * 1) copy Admin app source (includes Admin-local AGENTS.md / README.md)
+ * 2) controlled copy of already-validated support + Admin assets
+ *    (AGENTS/README are NOT re-copied from supportRoot)
  * 3) derive package scripts + single-app config files
+ * 4) rewrite generated skill links to local docs/ai
  *
- * Caller must run validateInitSources first — no silent skip of missing support files.
+ * Caller must run validateInitSources first — no silent skip of missing sources.
  */
 async function materializeDerivedApp(targetDir, sources) {
-  // 1. Admin app body
+  // 1. Admin app body (app contracts AGENTS.md / README.md arrive here unchanged)
   await copyDirFiltered(sources.adminSourceRoot, targetDir)
 
-  // 2. Support files (validated; copy directly — no if-exists)
+  // 2a. Support files from supportRoot (configs / license / changelog — not app contracts)
   for (const rel of INIT_REQUIRED_SUPPORT_FILES) {
-    const from = path.join(sources.assetsRoot, rel)
+    const from = path.join(sources.supportRoot, rel)
     await cp(from, path.join(targetDir, rel), { recursive: true })
   }
 
-  // Support dirs
+  // 2b. Support dirs (skill) from supportRoot
   for (const rel of INIT_REQUIRED_SUPPORT_DIRS) {
-    const from = path.join(sources.assetsRoot, rel)
+    const from = path.join(sources.supportRoot, rel)
+    await cp(from, path.join(targetDir, rel), {
+      recursive: true,
+      filter: (src) => copyFilter(src, from),
+    })
+  }
+
+  // 2c. Admin asset dirs from adminAssetsRoot
+  for (const rel of INIT_REQUIRED_ADMIN_ASSET_DIRS) {
+    const from = path.join(sources.adminAssetsRoot, rel)
     await cp(from, path.join(targetDir, rel), {
       recursive: true,
       filter: (src) => copyFilter(src, from),
@@ -1514,10 +1596,13 @@ async function materializeDerivedApp(targetDir, sources) {
 
   // 3. Derived single-app transforms
   await derivePackageJson(targetDir)
-  await writeDerivedPrettierrc(targetDir, sources.assetsRoot)
+  await writeDerivedPrettierrc(targetDir, sources.supportRoot)
   await writeDerivedPrettierignore(targetDir)
   await writeDerivedKnip(targetDir)
   await writeDerivedNetlify(targetDir)
+
+  // 4. Skill links must be local docs/ai in generated apps
+  await rewriteGeneratedSkillDocsLinks(targetDir)
 }
 
 async function cmdInit(positional, flags, layout = LAYOUT) {
@@ -1557,7 +1642,7 @@ async function cmdInit(positional, flags, layout = LAYOUT) {
   }
 
   {
-    const catalog = await loadScenarios(sources.assetsRoot)
+    const catalog = await loadScenarios(sources.adminAssetsRoot)
     getScenario(catalog, scenarioId)
   }
 
@@ -1583,7 +1668,8 @@ async function cmdInit(positional, flags, layout = LAYOUT) {
     print(`[dry-run] scenario ${scenarioId}`)
     print(`[dry-run] target ${targetDir}`)
     print(`[dry-run] admin source ${sources.adminSourceRoot}`)
-    print(`[dry-run] assets ${sources.assetsRoot}`)
+    print(`[dry-run] admin assets ${sources.adminAssetsRoot}`)
+    print(`[dry-run] support ${sources.supportRoot}`)
     if (flags.json) {
       print(
         JSON.stringify(
@@ -1595,7 +1681,8 @@ async function cmdInit(positional, flags, layout = LAYOUT) {
             scenario: scenarioId,
             packageName,
             adminSourceRoot: sources.adminSourceRoot,
-            assetsRoot: sources.assetsRoot,
+            adminAssetsRoot: sources.adminAssetsRoot,
+            supportRoot: sources.supportRoot,
           },
           null,
           2
@@ -1651,7 +1738,7 @@ async function main() {
     usage(EXIT.OK)
   }
 
-  const { appRoot, assetsRoot } = resolveCommandRoots(args.flags.dir)
+  const { appRoot, adminAssetsRoot } = resolveCommandRoots(args.flags.dir)
 
   try {
     switch (args.command) {
@@ -1659,13 +1746,18 @@ async function main() {
         await cmdCheck(appRoot, args.flags)
         break
       case 'add':
-        await cmdAdd(appRoot, assetsRoot, args.positional, args.flags)
+        await cmdAdd(appRoot, adminAssetsRoot, args.positional, args.flags)
         break
       case 'set-shell':
         await cmdSetShell(appRoot, args.flags)
         break
       case 'apply-scenario':
-        await cmdApplyScenario(appRoot, assetsRoot, args.positional, args.flags)
+        await cmdApplyScenario(
+          appRoot,
+          adminAssetsRoot,
+          args.positional,
+          args.flags
+        )
         break
       case 'init':
         // init uses --dir as parent directory

@@ -21,6 +21,29 @@ export const adminPreferenceDefaults: AdminPreferences = {
   direction: 'ltr',
 }
 
+/**
+ * Whether the project default layout keeps the sidebar open.
+ * Derived from `adminPreferenceDefaults.layout` so CLI `set-shell` remains the single source of truth.
+ * - `default` → open
+ * - `compact` / `full` → closed (collapsible mode comes from layout-provider)
+ */
+export const defaultSidebarOpen =
+  adminPreferenceDefaults.layout === 'default'
+
+/**
+ * Resolve initial sidebar open state from the `sidebar_state` cookie.
+ * - Cookie absent → project default (`defaultSidebarOpen`)
+ * - Cookie present → honor saved `true` / `false` (any non-`false` value is open)
+ */
+export function resolveSidebarDefaultOpen(
+  sidebarStateCookie: string | undefined
+): boolean {
+  if (sidebarStateCookie === undefined) {
+    return defaultSidebarOpen
+  }
+  return sidebarStateCookie !== 'false'
+}
+
 export function preferencesToJson(preferences: AdminPreferences): string {
   return JSON.stringify(preferences, null, 2)
 }

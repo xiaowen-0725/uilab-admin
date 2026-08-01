@@ -1,6 +1,7 @@
 # AGENT_BRIEF — uilab-admin
 
-给 Agent / 协作者的短简报。硬规则以 [AGENTS.md](AGENTS.md) 为准。
+给 Agent / 协作者的短简报。硬规则以同目录 **`AGENTS.md`**（Admin / 派生应用合同）为准。  
+（平台 monorepo 另有根 `AGENTS.md`；`init` 生成应用只携带本 Admin-local 合同。）
 
 ## 一句话
 
@@ -8,8 +9,7 @@
 
 ## 当前真源
 
-- 状态快照：[PROJECT_STATUS.md](PROJECT_STATUS.md)
-
+- 硬规则：同目录 `AGENTS.md`（Admin-local / 派生应用合同）
 - 技术栈：Vite + React 19 + TS + Tailwind 4 + **shadcn Base UI (base-nova)** + TanStack
 - 中文主路径已落地
 - 布局 defaults：`src/config/admin-preferences.ts`
@@ -18,7 +18,7 @@
 
 ## 先读
 
-1. [AGENTS.md](AGENTS.md)
+1. `AGENTS.md`（本应用硬合同）
 2. [docs/ai/map.md](docs/ai/map.md)
 3. [docs/ai/patterns.catalog.json](docs/ai/patterns.catalog.json)
 4. 对应 pattern 文档（list / settings / auth）

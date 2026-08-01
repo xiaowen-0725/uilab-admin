@@ -2,6 +2,10 @@ import { clearCookies } from '@/test-utils/cookies'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, type RenderResult } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
+import {
+  adminPreferenceDefaults,
+  defaultSidebarOpen,
+} from '@/config/admin-preferences'
 import { getCookie, setCookie } from '@/lib/cookies'
 import { DirectionProvider } from '@/context/direction-provider'
 import { LayoutProvider } from '@/context/layout-provider'
@@ -9,8 +13,12 @@ import { ThemeProvider } from '@/context/theme-provider'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { ConfigDrawer } from './config-drawer'
 
+/** Project-default collapsible mode (mirrors layout-provider). */
+const defaultCollapsible =
+  adminPreferenceDefaults.layout === 'full' ? 'offcanvas' : 'icon'
+
 async function renderConfigDrawer({
-  sidebarDefaultOpen = true,
+  sidebarDefaultOpen = defaultSidebarOpen,
 }: {
   sidebarDefaultOpen?: boolean
 } = {}) {
@@ -158,6 +166,7 @@ describe('ConfigDrawer (integration)', () => {
   })
 
   it('selecting full layout sets collapsible to offcanvas and closes sidebar', async () => {
+    // Force open so selecting full is a real user change from an open state.
     const screen = await renderConfigDrawer({ sidebarDefaultOpen: true })
     await openDrawer(screen)
 
@@ -183,7 +192,10 @@ describe('ConfigDrawer (integration)', () => {
           name: /重置主题为默认/,
         })
       )
-      await vi.waitFor(() => expect(getCookie('vite-ui-theme')).toBe('system'))
+      // Section reset uses setTheme(defaultTheme), which writes the project default cookie.
+      await vi.waitFor(() =>
+        expect(getCookie('vite-ui-theme')).toBe(adminPreferenceDefaults.theme)
+      )
     })
 
     it('resets direction via section control after choosing RTL', async () => {
@@ -203,9 +215,12 @@ describe('ConfigDrawer (integration)', () => {
         })
       )
       await vi.waitFor(() =>
-        expect(document.documentElement.getAttribute('dir')).toBe('ltr')
+        expect(document.documentElement.getAttribute('dir')).toBe(
+          adminPreferenceDefaults.direction
+        )
       )
-      expect(getCookie('dir')).toBe('ltr')
+      // Section reset uses setDir(defaultDir), which writes the project default cookie.
+      expect(getCookie('dir')).toBe(adminPreferenceDefaults.direction)
     })
 
     it('resets sidebar style via section control after choosing floating', async () => {
@@ -224,26 +239,54 @@ describe('ConfigDrawer (integration)', () => {
           name: /重置侧栏样式为默认/,
         })
       )
-      await vi.waitFor(() => expect(getCookie('layout_variant')).toBe('inset'))
+      await vi.waitFor(() =>
+        expect(getCookie('layout_variant')).toBe(
+          adminPreferenceDefaults.sidebar
+        )
+      )
     })
 
-    it('resets layout via section control after choosing compact', async () => {
-      const screen = await renderConfigDrawer({ sidebarDefaultOpen: true })
+    it('resets layout via section control after diverging from project default', async () => {
+      const screen = await renderConfigDrawer({
+        sidebarDefaultOpen: defaultSidebarOpen,
+      })
       await openDrawer(screen)
 
-      await userEvent.click(
-        screen.getByRole('button', { name: /^选择紧凑$/ })
-      )
-      await vi.waitFor(() => expect(getCookie('sidebar_state')).toBe('false'))
+      // Diverge from project default density so the section reset control appears.
+      if (defaultSidebarOpen) {
+        await userEvent.click(
+          screen.getByRole('button', { name: /^选择紧凑$/ })
+        )
+        await vi.waitFor(() =>
+          expect(getCookie('sidebar_state')).toBe('false')
+        )
+      } else if (adminPreferenceDefaults.layout === 'compact') {
+        await userEvent.click(
+          screen.getByRole('button', { name: /^选择全宽$/ })
+        )
+        await vi.waitFor(() =>
+          expect(getCookie('layout_collapsible')).toBe('offcanvas')
+        )
+      } else {
+        // project default is full
+        await userEvent.click(
+          screen.getByRole('button', { name: /^选择紧凑$/ })
+        )
+        await vi.waitFor(() =>
+          expect(getCookie('layout_collapsible')).toBe('icon')
+        )
+      }
 
       await userEvent.click(
         screen.getByRole('button', {
           name: /重置布局为默认/,
         })
       )
-      await vi.waitFor(() => expect(getCookie('sidebar_state')).toBe('true'))
       await vi.waitFor(() =>
-        expect(getCookie('layout_collapsible')).toBe('icon')
+        expect(getCookie('sidebar_state')).toBe(String(defaultSidebarOpen))
+      )
+      await vi.waitFor(() =>
+        expect(getCookie('layout_collapsible')).toBe(defaultCollapsible)
       )
     })
   })
@@ -263,6 +306,7 @@ describe('ConfigDrawer (integration)', () => {
   })
 
   it('updates layout: selecting non-default closes sidebar and changes layout cookie', async () => {
+    // Force open so selecting compact is a deliberate user change.
     const screen = await renderConfigDrawer({ sidebarDefaultOpen: true })
 
     await openDrawer(screen)
@@ -280,7 +324,9 @@ describe('ConfigDrawer (integration)', () => {
   })
 
   it('reset restores defaults across sidebar/theme/layout/direction', async () => {
-    const screen = await renderConfigDrawer({ sidebarDefaultOpen: true })
+    const screen = await renderConfigDrawer({
+      sidebarDefaultOpen: defaultSidebarOpen,
+    })
 
     await openDrawer(screen)
 
@@ -308,13 +354,21 @@ describe('ConfigDrawer (integration)', () => {
       })
     )
 
-    await vi.waitFor(() => expect(getCookie('sidebar_state')).toBe('true'))
+    await vi.waitFor(() =>
+      expect(getCookie('sidebar_state')).toBe(String(defaultSidebarOpen))
+    )
     await vi.waitFor(() => expect(getCookie('dir')).toBeUndefined())
     await vi.waitFor(() => expect(getCookie('vite-ui-theme')).toBeUndefined())
-    await vi.waitFor(() => expect(getCookie('layout_variant')).toBe('inset'))
-    await vi.waitFor(() => expect(getCookie('layout_collapsible')).toBe('icon'))
     await vi.waitFor(() =>
-      expect(document.documentElement.getAttribute('dir')).toBe('ltr')
+      expect(getCookie('layout_variant')).toBe(adminPreferenceDefaults.sidebar)
+    )
+    await vi.waitFor(() =>
+      expect(getCookie('layout_collapsible')).toBe(defaultCollapsible)
+    )
+    await vi.waitFor(() =>
+      expect(document.documentElement.getAttribute('dir')).toBe(
+        adminPreferenceDefaults.direction
+      )
     )
   })
 })
