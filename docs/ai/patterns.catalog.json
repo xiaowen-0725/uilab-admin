@@ -107,6 +107,14 @@
   "cli": {
     "name": "uilab-admin",
     "doc": "docs/ai/cli.md",
-    "status": "planned-min-set"
+    "bin": "cli/uilab-admin.mjs",
+    "status": "cli-1-shipped",
+    "commands": {
+      "check": "shipped",
+      "add": "shipped",
+      "set-shell": "shipped",
+      "init": "planned",
+      "apply-scenario": "planned"
+    }
   }
 }

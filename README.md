@@ -79,6 +79,17 @@ skill/uilab-admin/ # Agent skill 入口
 本地 skill 入口：`$uilab-admin`。  
 仓库门禁：`pnpm check:ai`。
 
+CLI-1（可执行）：
+
+```bash
+pnpm uilab-admin check
+pnpm uilab-admin add data-table-list --domain orders --title 订单列表
+pnpm uilab-admin add settings-section --section billing --title 账单
+pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --direction ltr
+```
+
+`init` / `apply-scenario` 仍为 CLI-2 planned。
+
 典型能力：
 
 - 场景推荐与初始化编排

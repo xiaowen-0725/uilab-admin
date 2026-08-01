@@ -82,6 +82,15 @@ pnpm check:ai   # AI 合同 / skill / pattern 门禁
 CLI 合同：`docs/ai/cli.md`  
 Bootstrap 合同：`docs/ai/bootstrap.md`
 
+本地 CLI-1：
+
+```bash
+pnpm uilab-admin check
+pnpm uilab-admin add data-table-list --domain <id> --title <中文标题>
+pnpm uilab-admin add settings-section --section <id> --title <中文标题>
+pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --direction ltr
+```
+
 详细见 `docs/ai/` 与 skill references。
 
 薄模板目录：`scaffolds/data-table-list`、`scaffolds/settings-section`（复制后替换占位符，再对照 feature 参考补全）。

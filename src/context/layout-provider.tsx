@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import { getCookie, setCookie } from '@/lib/cookies'
+import { adminPreferenceDefaults } from '@/config/admin-preferences'
 
 export type Collapsible = 'offcanvas' | 'icon' | 'none'
 type Variant = 'inset' | 'sidebar' | 'floating'
@@ -10,8 +11,9 @@ const LAYOUT_VARIANT_COOKIE_NAME = 'layout_variant'
 const LAYOUT_COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
 
 // Default values
-const DEFAULT_VARIANT = 'inset'
-const DEFAULT_COLLAPSIBLE = 'icon'
+const DEFAULT_VARIANT = adminPreferenceDefaults.sidebar
+const DEFAULT_COLLAPSIBLE =
+  adminPreferenceDefaults.layout === 'full' ? 'offcanvas' : 'icon'
 
 type LayoutContextType = {
   resetLayout: () => void

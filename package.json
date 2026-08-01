@@ -19,7 +19,9 @@
     "test:browser:install": "playwright install chromium --with-deps",
     "typecheck": "tsc --noEmit",
     "check:ai": "node scripts/check-ai.mjs",
-    "check": "pnpm typecheck && pnpm run check:ai"
+    "check": "pnpm typecheck && pnpm run check:ai",
+    "uilab-admin": "node cli/uilab-admin.mjs",
+    "cli:check": "node cli/uilab-admin.mjs check"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -80,5 +82,8 @@
     "vitest": "^4.1.4",
     "vitest-browser-react": "^2.2.0"
   },
-  "packageManager": "pnpm@10.33.3"
+  "packageManager": "pnpm@10.33.3",
+  "bin": {
+    "uilab-admin": "cli/uilab-admin.mjs"
+  }
 }

@@ -162,7 +162,8 @@
 | 模板内 discover / scaffold / shell / review | shipped（skill） |
 | pattern scaffolds + check:ai | shipped |
 | scenario catalog / bootstrap 合同 | **spec shipped / runtime partial** |
-| CLI `uilab-admin init/add/check` | **planned** |
+| CLI `uilab-admin check/add/set-shell` | **shipped (CLI-1)** |
+| CLI `uilab-admin init/apply-scenario` | **planned (CLI-2)** |
 | Electron/Tauri host | **planned** |
 
 Agent 话术：

@@ -108,6 +108,7 @@ async function main() {
     'docs/ai/scenarios/saas-admin.md',
     'docs/ai/scenarios/agent-desktop.md',
     'desktop/README.md',
+    'cli/uilab-admin.mjs',
     'skill/uilab-admin/SKILL.md',
     'skill/uilab-admin/references/bootstrap.md',
     'skill/uilab-admin/references/extend.md',

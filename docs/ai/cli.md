@@ -3,7 +3,7 @@
 命令名：**`uilab-admin`**  
 定位：确定性装配引擎。Skill 负责判断与编排，CLI 负责准确落盘。
 
-> 状态：本文是合同与目标 UX。实现可分阶段；未实现的命令要在 `--help` 与文档中标 planned，禁止 skill 假装已执行成功。
+> 状态：CLI-1 已落地（`check` / `add` / `set-shell`）。`init` / `apply-scenario` 仍为 planned。未实现命令要在 `--help` 标 planned，禁止 skill 假装已执行成功。
 
 ## 设计原则
 
@@ -140,10 +140,11 @@ Skill 在 bootstrap/extend 中应：
 - 本文件 + scenarios catalog
 - skill 路由认识 bootstrap/extend
 
-### Phase CLI-1（最小可用）
-- `check`（可先包装 `node scripts/check-ai.mjs`）
+### Phase CLI-1（最小可用）— shipped
+- `check`（包装 `scripts/check-ai.mjs`）
 - `add data-table-list|settings-section`
 - `set-shell`
+- 入口：`pnpm uilab-admin` / `node cli/uilab-admin.mjs` / package bin `uilab-admin`
 
 ### Phase CLI-2（0→1）
 - `init`
@@ -161,3 +162,15 @@ Skill 在 bootstrap/extend 中应：
 - bin 名：`uilab-admin`
 - 本地开发：`pnpm uilab-admin` / `node cli/dist/index.js`
 - 发布：后置；第一期可仅 repo-local
+
+## 本地用法（CLI-1）
+
+```bash
+pnpm uilab-admin --help
+pnpm uilab-admin check
+pnpm uilab-admin add data-table-list --domain orders --title 订单列表
+pnpm uilab-admin add settings-section --section billing --title 账单
+pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --direction ltr
+```
+
+常用 flag：`--dir`、`--json`、`--dry-run`、`--force`、`--no-nav`

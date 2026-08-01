@@ -9,6 +9,14 @@
 3. 需要时看 Theme Settings / Config Drawer 的导出能力
 4. 读 [map.md](../../../docs/ai/map.md) 的 App Config 段
 
+## 优先 CLI
+
+```bash
+pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --direction ltr
+```
+
+这会写 `src/config/admin-preferences.ts`；providers 已消费该 defaults。
+
 ## 两类改动
 
 ### A. 项目默认布局（应用 A / 应用 B 不同默认壳）

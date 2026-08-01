@@ -25,11 +25,11 @@ Extend 不是单路线，而是一组已有 route 的总称：
 
 1. 先 `discover`（若对仓库不熟）
 2. 一次只改一类意图（加页 / 改壳 / 审查）
-3. 有 CLI 时优先：
-   - `uilab-admin add ...`
-   - `uilab-admin set-shell ...`
-   - `uilab-admin check`
-4. CLI 未实现则按现有 scaffolds + 手改，并跑 `pnpm check:ai`
+3. 优先 CLI-1：
+   - `pnpm uilab-admin add ...`
+   - `pnpm uilab-admin set-shell ...`
+   - `pnpm uilab-admin check`
+4. 仅当需要高度定制时才手改 scaffolds；仍跑 `pnpm check:ai`
 
 ## 完成
 

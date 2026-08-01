@@ -41,6 +41,7 @@
 ```bash
 pnpm typecheck
 pnpm build
+pnpm uilab-admin check   # 或 pnpm check:ai
 ```
 
 若环境不允许，结论必须是 `Insufficient evidence` 或明确列出未验证项。

@@ -15,6 +15,15 @@
    - `scaffolds/settings-section/*`
    再对照 `src/features/tasks` / `src/features/settings/*` 补全细节
 
+## 优先 CLI（确定性）
+
+```bash
+pnpm uilab-admin add data-table-list --domain <id> --title <中文标题>
+pnpm uilab-admin add settings-section --section <id> --title <中文标题>
+```
+
+CLI 不可用或需定制时，再手工复制 scaffolds。
+
 ## 通用步骤
 
 1. 定 domain / section 英文 slug（路由与目录用）
