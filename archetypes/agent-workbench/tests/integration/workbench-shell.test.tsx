@@ -3,6 +3,10 @@ import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import { WorkbenchApp } from '@/app/composition/workbench-app'
 
+const INSET = 8
+const NAV_WIDTH = 272
+const GEOMETRY_TOLERANCE = 2
+
 describe('Workbench Shell integration (visible behavior)', () => {
   it('renders project, tasks, and static fixture disclosure', async () => {
     await render(<WorkbenchApp />)
@@ -34,6 +38,110 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(document.querySelector('[data-testid="work-surface-host"]')).toBeNull()
   })
 
+  it('1440 expanded: Navigator ~272px, Workspace inset, single task top bar', async () => {
+    await page.viewport(1440, 900)
+    await render(<WorkbenchApp />)
+
+    const shell = page.getByTestId('workbench-shell')
+    await expect.element(shell).toHaveAttribute('data-viewport', 'wide')
+    await expect.element(shell).toHaveAttribute('data-nav-open', 'true')
+
+    const nav = page.getByTestId('navigator').element()
+    const workspace = page.getByTestId('workbench-workspace').element()
+    const navBox = nav.getBoundingClientRect()
+    const wsBox = workspace.getBoundingClientRect()
+
+    expect(Math.abs(navBox.width - NAV_WIDTH)).toBeLessThanOrEqual(
+      GEOMETRY_TOLERANCE
+    )
+    // Workspace: 8px top/right/bottom; left sits against Navigator (no extra gap).
+    expect(Math.abs(wsBox.top - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+    expect(
+      Math.abs(window.innerWidth - wsBox.right - INSET)
+    ).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+    expect(
+      Math.abs(window.innerHeight - wsBox.bottom - INSET)
+    ).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+    expect(Math.abs(wsBox.left - navBox.right)).toBeLessThanOrEqual(
+      GEOMETRY_TOLERANCE
+    )
+
+    // Exactly one visible Task title/top bar (merged chrome).
+    await expect
+      .element(page.getByTestId('workspace-top-bar'))
+      .toBeInTheDocument()
+    const titles = document.querySelectorAll(
+      '[data-testid="workspace-top-bar"] h1'
+    )
+    expect(titles.length).toBe(1)
+    expect(titles[0]?.textContent).toMatch(/任务 A/)
+    // TaskSurface is content-only — no second task title chrome inside the surface.
+    expect(
+      document.querySelectorAll('[data-testid="task-surface"] h1').length
+    ).toBe(0)
+  })
+
+  it('1440 collapsed by pointer: Navigator inert, left inset, animated motion', async () => {
+    await page.viewport(1440, 900)
+    await render(<WorkbenchApp />)
+
+    const shell = page.getByTestId('workbench-shell')
+    await userEvent.click(page.getByTestId('toggle-navigator'))
+
+    await expect.element(shell).toHaveAttribute('data-nav-open', 'false')
+    await expect.element(shell).toHaveAttribute('data-nav-motion', 'animated')
+
+    await expect.element(page.getByTestId('navigator')).toHaveAttribute(
+      'data-open',
+      'false'
+    )
+    const nav = page.getByTestId('navigator').element()
+    expect(nav.getAttribute('aria-hidden')).toBe('true')
+    expect(nav.hasAttribute('inert')).toBe(true)
+    expect(page.getByTestId('navigator-filter').element().tabIndex).toBe(-1)
+    expect(page.getByTestId('task-task-a').element().tabIndex).toBe(-1)
+
+    // Wait for pointer motion / layout settle (180ms drawer curve).
+    await expect
+      .poll(() => {
+        const wsBox = page
+          .getByTestId('workbench-workspace')
+          .element()
+          .getBoundingClientRect()
+        return Math.abs(wsBox.left - INSET) <= GEOMETRY_TOLERANCE
+      })
+      .toBe(true)
+
+    const wsBox = page
+      .getByTestId('workbench-workspace')
+      .element()
+      .getBoundingClientRect()
+    // Collapsed: ~8px left inset; workspace expands into remaining viewport.
+    expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+    expect(wsBox.width).toBeGreaterThan(1400 - INSET * 2 - GEOMETRY_TOLERANCE)
+  })
+
+  it('keyboard Ctrl+B toggles navigator with instant motion', async () => {
+    await page.viewport(1440, 900)
+    await render(<WorkbenchApp />)
+    const shell = page.getByTestId('workbench-shell')
+    await shell.element().focus()
+
+    await userEvent.keyboard('{Control>}b{/Control}')
+    await expect.element(shell).toHaveAttribute('data-nav-open', 'false')
+    await expect.element(shell).toHaveAttribute('data-nav-motion', 'instant')
+    await expect
+      .element(page.getByTestId('navigator'))
+      .toHaveAttribute('data-open', 'false')
+
+    await userEvent.keyboard('{Control>}b{/Control}')
+    await expect.element(shell).toHaveAttribute('data-nav-open', 'true')
+    await expect.element(shell).toHaveAttribute('data-nav-motion', 'instant')
+    await expect
+      .element(page.getByTestId('navigator'))
+      .toHaveAttribute('data-open', 'true')
+  })
+
   it('toggles Context Panel', async () => {
     await render(<WorkbenchApp />)
     const panel = page.getByTestId('context-panel')
@@ -53,13 +161,19 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('opens Work Surface, switches tabs, maximizes, and closes', async () => {
     await render(<WorkbenchApp />)
 
-    await userEvent.click(page.getByTestId('open-work-surface'))
+    await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
     const host = page.getByTestId('work-surface-host')
     await expect.element(host).toBeInTheDocument()
     await expect.element(host).toHaveAttribute('data-maximized', 'false')
     await expect
       .element(page.getByTestId('work-surface-panel'))
       .toHaveTextContent('Phase 6')
+
+    // The merged top-bar control preserves the original Shell toggle behavior.
+    await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
+    expect(document.querySelector('[data-testid="work-surface-host"]')).toBeNull()
+    await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
+    await expect.element(host).toBeInTheDocument()
 
     await userEvent.click(page.getByTestId('work-tab-tab-browser'))
     await expect
@@ -77,7 +191,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await render(<WorkbenchApp />)
 
     // Configure Task A (leave Work Surface open but not maximized so Task/Context stay mounted)
-    await userEvent.click(page.getByTestId('open-work-surface'))
+    await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
     await userEvent.click(page.getByTestId('toggle-context'))
     await userEvent.click(page.getByTestId('work-tab-tab-browser'))
 
@@ -122,11 +236,15 @@ describe('Workbench Shell integration (visible behavior)', () => {
     const shell = page.getByTestId('workbench-shell')
     await shell.element().focus()
 
-    // Ctrl/Cmd+B toggles navigator
+    // Ctrl/Cmd+B toggles navigator (stays mounted; open=false)
     await userEvent.keyboard('{Control>}b{/Control}')
-    expect(document.querySelector('[data-testid="navigator"]')).toBeNull()
+    await expect
+      .element(page.getByTestId('navigator'))
+      .toHaveAttribute('data-open', 'false')
     await userEvent.keyboard('{Control>}b{/Control}')
-    await expect.element(page.getByTestId('navigator')).toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('navigator'))
+      .toHaveAttribute('data-open', 'true')
 
     // Ctrl/Cmd+I toggles context
     await userEvent.keyboard('{Control>}i{/Control}')
@@ -151,7 +269,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toHaveAttribute('data-maximized', 'false')
   })
 
-  it('Composer does not fake Runtime submission', async () => {
+  it('Composer does not fake Runtime submission and stays within Task Surface', async () => {
     await render(<WorkbenchApp />)
     const input = page.getByTestId('composer-input')
     const submit = page.getByTestId('composer-submit')
@@ -166,9 +284,15 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toHaveTextContent('不会调用 Agent Runtime')
     // Still local — no network / runtime status region appears
     expect(document.querySelector('[data-runtime-run]')).toBeNull()
+
+    // One Composer, contained by Task Surface.
+    const composers = document.querySelectorAll('[data-testid="composer"]')
+    expect(composers.length).toBe(1)
+    const task = page.getByTestId('task-surface').element()
+    expect(task.contains(composers[0]!)).toBe(true)
   })
 
-  it('medium 1024×768 keeps Task/Work on-screen without clipping; Context overlays', async () => {
+  it('medium 1024×768: overlay nav free when closed; Task/Work containment; Context overlay', async () => {
     await page.viewport(1024, 768)
     try {
       await render(<WorkbenchApp />)
@@ -177,12 +301,30 @@ describe('Workbench Shell integration (visible behavior)', () => {
         .element(page.getByTestId('workbench-shell'))
         .toHaveAttribute('data-viewport', 'medium')
 
-      await userEvent.click(page.getByTestId('open-work-surface'))
+      // Overlay Navigator closed by default after mode transition — no reserved width.
+      await expect
+        .element(page.getByTestId('workbench-shell'))
+        .toHaveAttribute('data-nav-open', 'false')
+      const workspace = page.getByTestId('workbench-workspace').element()
+      const wsBox = workspace.getBoundingClientRect()
+      expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(
+        GEOMETRY_TOLERANCE
+      )
+      // Overlay host may stay mounted but closed must not consume reserved width.
+      const overlay = document.querySelector('[data-testid="navigator-overlay"]')
+      if (overlay) {
+        expect(overlay.getAttribute('data-open')).toBe('false')
+        expect(getComputedStyle(overlay).pointerEvents).toBe('none')
+      }
+      const closedOverlayNav = page.getByTestId('navigator').element()
+      expect(closedOverlayNav.hasAttribute('inert')).toBe(true)
+      expect(page.getByTestId('navigator-filter').element().tabIndex).toBe(-1)
+
+      await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
       await expect
         .element(page.getByTestId('work-surface-host'))
         .toBeInTheDocument()
 
-      // Wait until Stage-aware clamp leaves Work fully inside Stage.
       await expect
         .poll(() => {
           const task = page.getByTestId('task-surface').element()
@@ -214,10 +356,8 @@ describe('Workbench Shell integration (visible behavior)', () => {
 
       expect(taskBox.width).toBeGreaterThanOrEqual(420)
       expect(workBox.width).toBeGreaterThanOrEqual(320)
-      // Work right edge must not exceed Stage right (1px tolerance).
       expect(workBox.right).toBeLessThanOrEqual(stageBox.right + 1)
 
-      // With side-by-side Work, Task is constrained → Context is overlay (overlaps stream).
       await userEvent.click(page.getByTestId('toggle-context'))
       await expect
         .element(page.getByTestId('context-panel'))
@@ -239,7 +379,6 @@ describe('Workbench Shell integration (visible behavior)', () => {
         panelBox.bottom > streamBox.top
       expect(overlaps).toBe(true)
 
-      // Pointer click on resize separator focuses it so keyboard resize continues.
       const resize = page.getByTestId('work-surface-resize')
       const valueBefore = Number(resize.element().getAttribute('aria-valuenow'))
       await userEvent.click(resize)
@@ -270,7 +409,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     }
   })
 
-  it('narrow 760×800 Context overlays Task-only; Work serial fills Stage without overflow', async () => {
+  it('narrow 760×800: full-bleed Workspace; Context overlay; Work serial', async () => {
     await page.viewport(760, 800)
     try {
       await render(<WorkbenchApp />)
@@ -283,7 +422,15 @@ describe('Workbench Shell integration (visible behavior)', () => {
         .toBeInTheDocument()
       expect(document.querySelector('[data-testid="work-surface-host"]')).toBeNull()
 
-      // Task-only at 760: Context must overlay (panel overlaps execution stream).
+      // Full-bleed: no outer margin on Workspace.
+      const wsBox = page
+        .getByTestId('workbench-workspace')
+        .element()
+        .getBoundingClientRect()
+      expect(Math.abs(wsBox.left)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+      expect(Math.abs(wsBox.top)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+      expect(Math.abs(wsBox.width - 760)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+
       await userEvent.click(page.getByTestId('toggle-context'))
       await expect
         .element(page.getByTestId('context-panel'))
@@ -312,8 +459,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
         document.body.clientWidth + 1
       )
 
-      // Open Work: serial full-stage — Task unmounts, Work matches Stage, no overflow.
-      await userEvent.click(page.getByTestId('open-work-surface'))
+      await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
       await expect
         .element(page.getByTestId('work-surface-host'))
         .toBeInTheDocument()
@@ -343,8 +489,6 @@ describe('Workbench Shell integration (visible behavior)', () => {
         document.body.clientWidth + 1
       )
 
-      // Returning to a split-capable viewport restores the Task-scoped desired width.
-      // Responsive geometry may cap rendered width, but must not overwrite Session state.
       await page.viewport(1024, 768)
       await expect
         .element(page.getByTestId('workbench-shell'))

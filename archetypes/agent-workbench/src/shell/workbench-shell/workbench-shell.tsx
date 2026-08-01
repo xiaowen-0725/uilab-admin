@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { PanelLeftIcon, PanelRightIcon, AppWindowIcon } from 'lucide-react'
 import type { TaskSurfaceView } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
 import type {
@@ -16,6 +17,9 @@ import { useStageWidth } from '../responsive-layout/use-stage-width'
 import { useViewportMode } from '../responsive-layout/use-viewport-mode'
 import { useWorkbenchShortcuts } from './use-workbench-shortcuts'
 
+/** Shell-owned motion modality — never stored in Session. */
+export type NavMotionSource = 'animated' | 'instant'
+
 export interface WorkbenchShellProps {
   view: WorkbenchSessionView
   commands: WorkbenchSessionCommands
@@ -24,7 +28,8 @@ export interface WorkbenchShellProps {
 }
 
 /**
- * Shell owns geometry, Navigator, responsive layout, focus order, and shortcuts.
+ * Shell owns geometry, Navigator, responsive layout, focus order, shortcuts,
+ * and pointer vs keyboard motion source for Navigator toggle.
  * Consumes Module root Interfaces only. Task fixture assembly stays in Composition Root.
  */
 export function WorkbenchShell({
@@ -33,18 +38,27 @@ export function WorkbenchShell({
   taskView,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
-  useWorkbenchShortcuts(view, commands)
+  const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
+
+  const toggleNavigatorFromPointer = useCallback(() => {
+    setNavMotion('animated')
+    commands.toggleNavigator()
+  }, [commands])
+
+  const toggleNavigatorFromKeyboard = useCallback(() => {
+    setNavMotion('instant')
+    commands.toggleNavigator()
+  }, [commands])
+
+  useWorkbenchShortcuts(view, commands, toggleNavigatorFromKeyboard)
 
   const stageRef = useRef<HTMLElement>(null)
   const stageWidth = useStageWidth(stageRef)
-  // Tracks whether we already auto-closed Navigator for the current non-wide stretch.
   const autoClosedNavForNonWideRef = useRef(false)
 
-  // Navigator reserved column only on wide; medium/narrow use overlay.
   const navigatorMode = viewport === 'wide' ? 'reserved' : 'overlay'
 
-  // Entering medium/narrow (including first paint): auto-close Navigator once if open.
-  // Afterwards the user may open overlay via 导航 without being re-closed.
+  // Entering medium/narrow: auto-close Navigator once if open (instant, not pointer).
   useEffect(() => {
     if (viewport === 'wide') {
       autoClosedNavForNonWideRef.current = false
@@ -52,6 +66,7 @@ export function WorkbenchShell({
     }
     if (!autoClosedNavForNonWideRef.current && view.navigatorOpen) {
       autoClosedNavForNonWideRef.current = true
+      setNavMotion('instant')
       commands.setNavigatorOpen(false)
     }
   }, [viewport, view.navigatorOpen, commands])
@@ -85,10 +100,12 @@ export function WorkbenchShell({
 
   return (
     <div
-      className='relative flex h-svh min-h-0 w-full overflow-hidden bg-background'
+      className='relative flex h-svh min-h-0 w-full overflow-hidden bg-sidebar'
       data-slot='workbench-shell'
       data-testid='workbench-shell'
       data-viewport={viewport}
+      data-nav-open={view.navigatorOpen ? 'true' : 'false'}
+      data-nav-motion={navMotion}
     >
       <a
         href='#workbench-main'
@@ -97,45 +114,77 @@ export function WorkbenchShell({
         跳到主内容
       </a>
 
-      {navigatorMode === 'reserved' && view.navigatorOpen ? (
-        <Navigator
-          project={view.project}
-          tasks={view.tasks}
-          selectedTaskId={view.selectedTaskId}
-          open
-          mode='reserved'
-          onSelectTask={commands.selectTask}
-        />
+      {/* Wide: reserved Navigator stays mounted for interruptible collapse. */}
+      {navigatorMode === 'reserved' ? (
+        <div className='nav-reserved-gap' aria-hidden={!view.navigatorOpen}>
+          <div className='nav-reserved-inner'>
+            <Navigator
+              project={view.project}
+              tasks={view.tasks}
+              selectedTaskId={view.selectedTaskId}
+              open={view.navigatorOpen}
+              mode='reserved'
+              onSelectTask={commands.selectTask}
+            />
+          </div>
+        </div>
       ) : null}
 
-      <div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
-        <header className='flex items-center gap-2 border-b border-border px-3 py-2'>
+      {/* Inset Workspace — sole foreground plane. */}
+      <div
+        className='workbench-workspace'
+        data-testid='workbench-workspace'
+        data-slot='workbench-workspace'
+      >
+        {/* Single task-aware top bar (replaces Shell + Task double header). */}
+        <header
+          className='flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-3'
+          data-testid='workspace-top-bar'
+        >
           <button
             type='button'
             data-testid='toggle-navigator'
-            className='rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
+            className='inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
             aria-pressed={view.navigatorOpen}
             aria-label='切换导航'
-            onClick={commands.toggleNavigator}
+            onClick={toggleNavigatorFromPointer}
           >
-            导航
+            <PanelLeftIcon className='size-4' aria-hidden />
           </button>
+
           <div className='min-w-0 flex-1'>
-            <p className='truncate text-sm font-semibold'>Agent Workbench</p>
-            <p className='truncate text-xs text-muted-foreground'>
-              静态 Shell 骨架 · 无 Runtime
-            </p>
+            <h1 className='truncate text-sm font-semibold'>{taskView.title}</h1>
+            {taskView.subtitle ? (
+              <p className='truncate text-xs text-muted-foreground'>
+                {taskView.subtitle}
+              </p>
+            ) : null}
           </div>
-          <button
-            type='button'
-            data-testid='toggle-work-surface-chrome'
-            className='rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
-            aria-pressed={view.layout.workSurfaceVisible}
-            aria-label='切换工作面'
-            onClick={commands.toggleWorkSurface}
-          >
-            工作面
-          </button>
+
+          <div className='flex shrink-0 items-center gap-1.5'>
+            <button
+              type='button'
+              data-testid='toggle-context'
+              className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
+              aria-pressed={view.layout.contextPanelOpen}
+              aria-label='切换任务上下文面板'
+              onClick={commands.toggleContextPanel}
+            >
+              <PanelRightIcon className='size-3.5' aria-hidden />
+              上下文
+            </button>
+            <button
+              type='button'
+              data-testid='toggle-work-surface-chrome'
+              className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
+              aria-pressed={view.layout.workSurfaceVisible}
+              aria-label='切换工作面'
+              onClick={commands.toggleWorkSurface}
+            >
+              <AppWindowIcon className='size-3.5' aria-hidden />
+              工作面
+            </button>
+          </div>
         </header>
 
         <main
@@ -151,7 +200,6 @@ export function WorkbenchShell({
                 sideBySide
                   ? {
                       minWidth: TASK_SURFACE_MIN_WIDTH,
-                      // Cap Task so Work keeps its min when Stage is tight.
                       ...(stageWidth > 0
                         ? {
                             maxWidth: Math.max(
@@ -166,10 +214,11 @@ export function WorkbenchShell({
             >
               <TaskSurface
                 view={taskView}
-                callbacks={{
-                  onToggleContext: commands.toggleContextPanel,
-                  onOpenWorkSurface: commands.openWorkSurface,
-                }}
+                onCloseContextPanel={
+                  taskView.contextPanelOpen
+                    ? commands.toggleContextPanel
+                    : undefined
+                }
               />
             </div>
           ) : null}
@@ -196,6 +245,7 @@ export function WorkbenchShell({
         </main>
       </div>
 
+      {/* Medium/narrow: overlay Navigator stays mounted for motion; closed is inert. */}
       {navigatorMode === 'overlay' ? (
         <Navigator
           project={view.project}
@@ -205,9 +255,13 @@ export function WorkbenchShell({
           mode='overlay'
           onSelectTask={(id) => {
             commands.selectTask(id)
+            setNavMotion('instant')
             commands.setNavigatorOpen(false)
           }}
-          onClose={() => commands.setNavigatorOpen(false)}
+          onClose={() => {
+            setNavMotion('animated')
+            commands.setNavigatorOpen(false)
+          }}
         />
       ) : null}
     </div>

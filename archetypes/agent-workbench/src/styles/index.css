@@ -6,6 +6,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Phase 3A Shell geometry + motion tokens (Shell-owned, not Session). */
+:root {
+  --navigator-width: 272px;
+  --workspace-inset: 8px;
+  --workspace-radius: 12px;
+  --content-max-width: 880px;
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --nav-motion-duration: 0ms;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -18,7 +28,7 @@
   }
 
   body {
-    @apply m-0 h-full min-h-svh w-full overflow-x-hidden bg-background font-sans text-foreground antialiased;
+    @apply m-0 h-full min-h-svh w-full overflow-x-hidden bg-sidebar font-sans text-foreground antialiased;
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
       'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   }
@@ -49,6 +59,147 @@
   }
 }
 
+/* --- Workbench Shell inset geometry (Phase 3A) --- */
+
+[data-slot='workbench-shell'][data-nav-motion='animated'] {
+  --nav-motion-duration: 180ms;
+}
+
+[data-slot='workbench-shell'][data-nav-motion='instant'] {
+  --nav-motion-duration: 0ms;
+}
+
+/* Reserved Navigator column: width transition only (interruptible). */
+.nav-reserved-gap {
+  position: relative;
+  flex-shrink: 0;
+  /* min-width:0 so flex does not lock to Navigator content width when collapsed. */
+  min-width: 0;
+  width: 0;
+  overflow: hidden;
+  transition: width var(--nav-motion-duration) var(--ease-drawer);
+}
+
+[data-slot='workbench-shell'][data-nav-open='true'][data-viewport='wide']
+  .nav-reserved-gap {
+  width: var(--navigator-width);
+}
+
+.nav-reserved-inner {
+  width: var(--navigator-width);
+  height: 100%;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition:
+    opacity var(--nav-motion-duration) var(--ease-drawer),
+    transform var(--nav-motion-duration) var(--ease-drawer);
+  pointer-events: none;
+}
+
+[data-slot='workbench-shell'][data-nav-open='true'][data-viewport='wide']
+  .nav-reserved-inner {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* Inset Workspace — foreground plane. */
+.workbench-workspace {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Desktop wide + medium: 8px inset, 12px radius, border + shadow. */
+[data-slot='workbench-shell'][data-viewport='wide'] .workbench-workspace,
+[data-slot='workbench-shell'][data-viewport='medium'] .workbench-workspace {
+  margin-block: var(--workspace-inset);
+  margin-inline-end: var(--workspace-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--workspace-radius);
+  box-shadow:
+    0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
+    0 8px 24px color-mix(in oklch, var(--foreground) 6%, transparent);
+}
+
+/* Wide expanded: left margin 0 (sits against Navigator). */
+[data-slot='workbench-shell'][data-viewport='wide'][data-nav-open='true']
+  .workbench-workspace {
+  margin-inline-start: 0;
+  transition: margin-inline-start var(--nav-motion-duration) var(--ease-drawer);
+}
+
+/* Wide collapsed: 8px left inset. */
+[data-slot='workbench-shell'][data-viewport='wide'][data-nav-open='false']
+  .workbench-workspace {
+  margin-inline-start: var(--workspace-inset);
+  transition: margin-inline-start var(--nav-motion-duration) var(--ease-drawer);
+}
+
+/* Medium: overlay nav — full 8px inset all sides. */
+[data-slot='workbench-shell'][data-viewport='medium'] .workbench-workspace {
+  margin-inline-start: var(--workspace-inset);
+}
+
+/* Narrow: full-bleed, no chrome. */
+[data-slot='workbench-shell'][data-viewport='narrow'] .workbench-workspace {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Overlay Navigator host — transform + opacity only; closed does not intercept. */
+.navigator-overlay-host {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  pointer-events: none;
+}
+
+.navigator-overlay-host[data-open='true'] {
+  pointer-events: auto;
+}
+
+.navigator-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklch, var(--foreground) 20%, transparent);
+  opacity: 0;
+  transition: opacity var(--nav-motion-duration) var(--ease-drawer);
+  pointer-events: none;
+}
+
+.navigator-overlay-host[data-open='true'] .navigator-overlay-backdrop {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.navigator-overlay-panel {
+  position: relative;
+  z-index: 10;
+  height: 100%;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition:
+    opacity var(--nav-motion-duration) var(--ease-drawer),
+    transform var(--nav-motion-duration) var(--ease-drawer);
+  pointer-events: none;
+}
+
+.navigator-overlay-host[data-open='true'] .navigator-overlay-panel {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
 /* Task Surface is a size container for Context reserved / overlay modes. */
 @utility task-container {
   container-type: inline-size;
@@ -59,7 +210,7 @@
  * Context panel host modes (CSS container queries on Task width):
  * - reserved when Task ≥820px (1440 Task-only, 1024 Task-only stay reserved)
  * - overlay when Task ≤819px (1024 split ~544, 760 Task-only must overlay)
- * Seamless pair: min-width 820 / max-width 819 — not viewport media queries.
+ * Content-height card (not default full-height); max-height = available lane.
  */
 .context-panel-slot {
   pointer-events: none;
@@ -70,6 +221,10 @@
 }
 
 .context-panel-card {
+  display: flex;
+  max-height: 100%;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--border);
   background: color-mix(in oklch, var(--card) 96%, transparent);
   box-shadow:
@@ -78,21 +233,23 @@
   backdrop-filter: blur(8px);
 }
 
-/* Reserved-space when Task container is wide enough. */
+/* Reserved-space when Task container is wide enough — upper-right of lane. */
 @container task (min-width: 820px) {
   .context-panel-slot[data-open='true'] {
     position: relative;
     z-index: 1;
     display: flex;
     width: min(300px, 36%);
+    max-height: calc(100% - 1.5rem);
     flex-shrink: 0;
-    align-self: stretch;
+    align-self: flex-start;
     padding: 0.75rem 0.75rem 0.75rem 0;
   }
 
   .context-panel-slot[data-open='true'] .context-panel-card {
-    height: 100%;
     width: 100%;
+    height: auto;
+    max-height: 100%;
     border-radius: 0.75rem;
   }
 
@@ -101,19 +258,22 @@
   }
 }
 
-/* Overlay when Task Surface is constrained (≤819px). */
+/* Overlay when Task Surface is constrained (≤819px) — top-right content height. */
 @container task (max-width: 819px) {
   .context-panel-slot[data-open='true'] {
     position: absolute;
-    inset-block: 0.75rem;
-    inset-inline-end: 0.75rem;
+    top: 0.75rem;
+    right: 0.75rem;
+    bottom: auto;
     z-index: 30;
     width: min(320px, calc(100% - 1.5rem));
+    max-height: calc(100% - 1.5rem);
   }
 
   .context-panel-slot[data-open='true'] .context-panel-card {
-    height: 100%;
     width: 100%;
+    height: auto;
+    max-height: 100%;
     border-radius: 0.75rem;
   }
 

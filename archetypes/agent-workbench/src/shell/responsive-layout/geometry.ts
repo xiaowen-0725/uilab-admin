@@ -1,7 +1,8 @@
 /**
- * Shell-owned geometry constants for Stage split (not Session Interface).
- * Aligns with work order medium desktop mins.
+ * Shell-owned Stage split constraints (not Session Interface).
+ * Visual inset geometry and motion tokens live in styles/index.css.
  */
+
 export const TASK_SURFACE_MIN_WIDTH = 420
 export const WORK_SURFACE_MIN_WIDTH = 320
 

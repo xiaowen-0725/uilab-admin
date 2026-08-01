@@ -12,6 +12,10 @@ export interface NavigatorProps {
   onClose?: () => void
 }
 
+/**
+ * Navigator remains mounted while open or closed so pointer motion can animate.
+ * Closed: inert / aria-hidden / unfocusable; overlay also blocks pointer/focus.
+ */
 export function Navigator({
   project,
   tasks,
@@ -33,32 +37,40 @@ export function Navigator({
     )
   }, [filter, tasks])
 
-  if (!open) {
-    return null
-  }
-
   const panel = (
     <nav
-      className='flex h-full w-[min(280px,80vw)] min-w-[240px] max-w-[280px] flex-col border-r border-border bg-sidebar text-sidebar-foreground'
+      className='flex h-full flex-col bg-sidebar text-sidebar-foreground'
+      style={{
+        width: 'var(--navigator-width)',
+        maxWidth: 'min(var(--navigator-width), 80vw)',
+      }}
       data-slot='navigator'
       data-testid='navigator'
       data-mode={mode}
+      data-open={open ? 'true' : 'false'}
       aria-label='工作台导航'
+      aria-hidden={!open}
+      // React 19 supports inert; keep focus out while collapsed/closed.
+      {...({ inert: open ? undefined : true } as { inert?: boolean })}
     >
-      <div className='flex items-start justify-between gap-2 border-b border-sidebar-border px-3 py-3'>
-        <div className='min-w-0'>
-          <p className='text-[10px] font-medium tracking-wide text-muted-foreground uppercase'>
+      <div className='flex items-start justify-between gap-2 px-2 pt-2 pb-1'>
+        <div className='min-w-0 rounded-lg px-2 py-1.5'>
+          <p className='truncate text-[11px] font-medium text-muted-foreground'>
             项目
           </p>
-          <h2 className='truncate text-sm font-semibold' data-testid='project-name'>
+          <h2
+            className='truncate text-sm font-semibold tracking-tight'
+            data-testid='project-name'
+          >
             {project.name}
           </h2>
         </div>
         {mode === 'overlay' && onClose ? (
           <button
             type='button'
-            className='rounded-md px-2 py-1 text-xs hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50'
+            className='mt-1 shrink-0 rounded-md px-2 py-1 text-xs hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50'
             aria-label='关闭导航'
+            tabIndex={open ? 0 : -1}
             onClick={onClose}
           >
             关闭
@@ -66,7 +78,7 @@ export function Navigator({
         ) : null}
       </div>
 
-      <div className='border-b border-sidebar-border px-3 py-2'>
+      <div className='px-2 pb-2'>
         <label className='sr-only' htmlFor='navigator-task-filter'>
           筛选任务
         </label>
@@ -75,15 +87,17 @@ export function Navigator({
           data-testid='navigator-filter'
           placeholder='筛选任务…'
           value={filter}
+          tabIndex={open ? 0 : -1}
+          className='h-8 bg-sidebar-accent/40 shadow-none'
           onChange={(e) => setFilter(e.target.value)}
         />
       </div>
 
-      <div className='min-h-0 flex-1 overflow-y-auto p-2'>
-        <p className='px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase'>
+      <div className='min-h-0 flex-1 overflow-y-auto px-2 pb-2'>
+        <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
           任务
         </p>
-        <ul className='flex flex-col gap-1' role='list'>
+        <ul className='flex flex-col gap-0.5' role='list'>
           {visibleTasks.map((task) => {
             const selected = task.id === selectedTaskId
             return (
@@ -92,6 +106,7 @@ export function Navigator({
                   type='button'
                   data-testid={`task-${task.id}`}
                   aria-current={selected ? 'true' : undefined}
+                  tabIndex={open ? 0 : -1}
                   className={
                     selected
                       ? 'w-full rounded-lg bg-sidebar-accent px-2.5 py-2 text-left text-sm font-medium text-sidebar-accent-foreground focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -112,7 +127,7 @@ export function Navigator({
         </ul>
       </div>
 
-      <footer className='border-t border-sidebar-border px-3 py-2 text-[10px] text-muted-foreground'>
+      <footer className='px-4 py-2 text-[10px] text-muted-foreground'>
         Phase 3 · 静态 Shell
       </footer>
     </nav>
@@ -121,16 +136,19 @@ export function Navigator({
   if (mode === 'overlay') {
     return (
       <div
-        className='absolute inset-0 z-40 flex'
+        className='navigator-overlay-host'
         data-testid='navigator-overlay'
+        data-open={open ? 'true' : 'false'}
+        aria-hidden={!open}
       >
         <button
           type='button'
-          className='absolute inset-0 bg-foreground/20'
+          className='navigator-overlay-backdrop'
           aria-label='关闭导航遮罩'
+          tabIndex={open ? 0 : -1}
           onClick={onClose}
         />
-        <div className='relative z-10 h-full shadow-xl'>{panel}</div>
+        <div className='navigator-overlay-panel shadow-xl'>{panel}</div>
       </div>
     )
   }

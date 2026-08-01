@@ -11,10 +11,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
 /**
  * Global keyboard shortcuts for Shell chrome.
  * Escape exits Work Surface maximize before any other action.
+ * Navigator keyboard toggle stays Shell-owned for motion source.
  */
 export function useWorkbenchShortcuts(
   view: WorkbenchSessionView,
-  commands: WorkbenchSessionCommands
+  commands: WorkbenchSessionCommands,
+  onToggleNavigatorKeyboard: () => void
 ): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -29,12 +31,11 @@ export function useWorkbenchShortcuts(
       const mod = event.metaKey || event.ctrlKey
       if (!mod) return
 
-      // Allow shortcuts even from composer for panel toggles, except plain typing.
       const key = event.key.toLowerCase()
 
       if (key === 'b' && !event.shiftKey) {
         event.preventDefault()
-        commands.toggleNavigator()
+        onToggleNavigatorKeyboard()
         return
       }
 
@@ -45,17 +46,19 @@ export function useWorkbenchShortcuts(
       }
 
       if (key === 'w' && event.shiftKey) {
-        // Avoid conflicting with browser close when not intentional — we use Ctrl/Cmd+Shift+W.
         event.preventDefault()
         commands.toggleWorkSurface()
         return
       }
 
-      // Ignore other mod combos while typing in editable fields.
       if (isEditableTarget(event.target)) return
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [commands, view.layout.workSurfaceMaximized])
+  }, [
+    commands,
+    onToggleNavigatorKeyboard,
+    view.layout.workSurfaceMaximized,
+  ])
 }

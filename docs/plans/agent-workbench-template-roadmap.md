@@ -24,6 +24,7 @@
 - Template Platform monorepo：`archetypes/admin`（可运行 Admin）、`archetypes/agent-workbench`（Phase 3 可运行静态 Shell）、`tooling/template-cli`、`tooling/quality-gates`、根兼容 wrapper 与 `skill/uilab-admin` 前门。
 - **Phase 2A minimal Foundation seam**：`packages/foundation`（`@uilab/foundation`）公开 Interface 仅 `ui/button`、`ui/input`、`styles/tokens.css`；Admin 经 `@/components/ui/*` 兼容 re-export 消费；Workbench 直接消费公开子路径；`check:foundation` 边界门禁；`init` copy-and-own 到派生应用 `packages/foundation` + mini-workspace。
 - **Phase 3 Workbench Shell skeleton（shipped）**：Composition Root、Navigator、Task Surface、Composer、Adaptive Context Panel、placeholder Work Surface Host、task-scoped layout session、静态 fixture、`check:workbench`。
+- **Phase 3A inset layout polish（shipped）**：Admin inset / Codex 空间关系 — sidebar 背景、272px Navigator、8px inset Workspace、合并顶栏、TaskSurface content-only、浮动 Composer、pointer/keyboard 分源动效；独立 Playwright/动效证据已落盘。**非** Phase 4。
 - Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn Base UI + TanStack 基础栈（Admin 源在 `archetypes/admin`；Workbench 使用小型 code-defined Router）。
 - Admin Shell、主题、动画、数据表格、认证、设置与错误页参考实现。
 - Admin-owned AI 合同：`archetypes/admin/docs/ai/*` 与 `archetypes/admin/scaffolds/*`。
@@ -167,7 +168,34 @@ Playwright 验证：导航可达、搜索可打开、设置抽屉可操作、用
 - Navigator、Composer、Context Panel 与 Work Surface 可完全通过键盘操作。
 - Playwright 对 Task-only、Context-open、Work-open、Work-maximized 四个状态截图回归。
 
+## Phase 3A — Workbench inset layout polish
+
+### Status
+
+**Shipped.** Work order: [`phase-3a-workbench-inset-layout-polish-work-order.md`](./phase-3a-workbench-inset-layout-polish-work-order.md). Evidence: [`phase-3a-workbench-inset-layout-polish.md`](../evidence/phase-3a-workbench-inset-layout-polish.md).
+
+### Purpose
+
+Align Workbench Shell with Admin `inset` spatial model and Codex-style hierarchy **without** starting Phase 4 Runtime work.
+
+### Deliverables
+
+- Sidebar background plane + inset Workspace (8px / 12px radius / border+shadow; narrow full-bleed).
+- 272px reserved Navigator; always mounted while collapsed for interruptible motion; overlay closed is non-interactive.
+- Single task-aware Workspace top bar; TaskSurface content-only.
+- Centered execution stream + floating Composer (still no Runtime).
+- Content-height Context card; reserved/overlay container queries preserved.
+- Pointer Navigator toggle 180ms drawer curve; keyboard `Ctrl/Cmd+B` instant; Shell-owned motion source.
+
+### Non-goals
+
+No Runtime, Surfaces, theme provider, CLI Workbench generation, Admin Shell changes, or Foundation export expansion.
+
 ## Phase 4 — Implement the Task lifecycle with a Fake Runtime
+
+### Status
+
+**Paused** — Phase 3A layout polish precedes any Runtime work.
 
 ### Purpose
 

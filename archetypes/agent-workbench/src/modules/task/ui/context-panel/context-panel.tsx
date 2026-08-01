@@ -9,6 +9,7 @@ export interface ContextPanelProps {
 /**
  * Adaptive Context Panel visual card.
  * Placement (reserved vs overlay) is controlled by CSS container queries on the Task Surface.
+ * Card sizes to content up to available-height max (not default full-height).
  */
 export function ContextPanel({ open, sections, onClose }: ContextPanelProps) {
   return (
@@ -20,8 +21,8 @@ export function ContextPanel({ open, sections, onClose }: ContextPanelProps) {
       aria-hidden={!open}
       aria-label='任务上下文面板'
     >
-      <div className='context-panel-card flex h-full min-h-0 flex-col overflow-hidden'>
-        <header className='flex items-center justify-between gap-2 border-b border-border px-3 py-2'>
+      <div className='context-panel-card min-h-0'>
+        <header className='flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2'>
           <h2 className='text-sm font-semibold'>任务上下文</h2>
           {onClose ? (
             <button
@@ -34,7 +35,7 @@ export function ContextPanel({ open, sections, onClose }: ContextPanelProps) {
             </button>
           ) : null}
         </header>
-        <div className='min-h-0 flex-1 space-y-4 overflow-y-auto p-3'>
+        <div className='min-h-0 space-y-4 overflow-y-auto p-3'>
           {sections.map((section) => (
             <section key={section.id} aria-labelledby={`ctx-${section.id}`}>
               <h3
