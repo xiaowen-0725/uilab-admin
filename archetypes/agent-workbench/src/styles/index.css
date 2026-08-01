@@ -57,6 +57,14 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Explicit View Transition bypass (pointer Work path also skips in JS). */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+    animation-duration: 0s !important;
+  }
 }
 
 /* --- Workbench Shell inset geometry (Phase 3A) --- */
@@ -206,6 +214,46 @@
   container-name: task;
 }
 
+/* --- Phase 3B: Task / Work pane chrome + pointer View Transitions --- */
+
+[data-slot='task-pane'] {
+  view-transition-name: task-pane;
+}
+
+[data-slot='work-surface-host'] {
+  view-transition-name: work-surface;
+}
+
+/*
+ * Allow pointer events to reach live controls during active transitions so
+ * rapid toggle/close/maximize can skipTransition and retarget (work order).
+ */
+::view-transition {
+  pointer-events: none;
+}
+
+/* Suppress root crossfade + UA default 0.25s root group (keeps lifecycle at 180ms). */
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(task-pane),
+::view-transition-group(work-surface) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+::view-transition-old(task-pane),
+::view-transition-new(task-pane),
+::view-transition-old(work-surface),
+::view-transition-new(work-surface) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
 /*
  * Context panel host modes (CSS container queries on Task width):
  * - reserved when Task ≥820px (1440 Task-only, 1024 Task-only stay reserved)
@@ -231,6 +279,26 @@
     0 10px 30px color-mix(in oklch, var(--foreground) 8%, transparent),
     0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent);
   backdrop-filter: blur(8px);
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Pointer Context open: 140ms opacity + translateY entry; close is immediate. */
+[data-slot='workbench-shell'][data-context-motion='animated']
+  .context-panel-slot[data-open='true']
+  .context-panel-card {
+  transition-property: opacity, transform;
+  transition-duration: 140ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@starting-style {
+  [data-slot='workbench-shell'][data-context-motion='animated']
+    .context-panel-slot[data-open='true']
+    .context-panel-card {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 /* Reserved-space when Task container is wide enough — upper-right of lane. */

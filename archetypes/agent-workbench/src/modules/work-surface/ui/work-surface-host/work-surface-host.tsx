@@ -1,9 +1,19 @@
-import { useCallback, useRef, type KeyboardEvent, type PointerEvent } from 'react'
+import {
+  useCallback,
+  useRef,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react'
+import { Maximize2, Minimize2, X } from 'lucide-react'
 import type { WorkSurfaceTab } from '@/modules/workbench-session'
 
 /** Work Surface Module Implementation copy — Phase 6 surfaces not present. */
 const WORK_SURFACE_PLACEHOLDER_NOTICE =
   '占位 Work Surface — 具体 Document / Browser / Review Surface Module 在 Phase 6 交付，当前仅验证 Host（显隐、tabs、调宽、最大化）。'
+
+const TOOLBAR_CONTROL_CLASS =
+  'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-muted'
 
 export interface WorkSurfaceHostView {
   visible: boolean
@@ -28,6 +38,11 @@ export interface WorkSurfaceHostProps {
   callbacks: WorkSurfaceHostCallbacks
   /** When true, host occupies full stage (narrow serial / maximize). */
   fullStage?: boolean
+  /**
+   * Optional Shell-owned chrome inserted at the leading edge of the Work toolbar.
+   * Composition only — Host does not own Navigator state or callbacks.
+   */
+  toolbarLeading?: ReactNode
 }
 
 function tabPlaceholderBody(tabId: string, label: string): string {
@@ -45,6 +60,7 @@ export function WorkSurfaceHost({
   view,
   callbacks,
   fullStage = false,
+  toolbarLeading,
 }: WorkSurfaceHostProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -116,13 +132,15 @@ export function WorkSurfaceHost({
       ? undefined
       : { width: view.width, minWidth: view.minWidth }
 
+  // Split only: left divider between Task and Work. Full-stage has no internal left edge.
+  const hostClassName =
+    view.maximized || fullStage
+      ? 'relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col bg-background'
+      : 'relative flex h-full min-h-0 shrink-0 flex-col border-l border-border bg-background'
+
   return (
     <section
-      className={
-        view.maximized || fullStage
-          ? 'relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col border-l border-border bg-card'
-          : 'relative flex h-full min-h-0 shrink-0 flex-col border-l border-border bg-card'
-      }
+      className={hostClassName}
       style={styleWidth}
       data-slot='work-surface-host'
       data-testid='work-surface-host'
@@ -148,7 +166,15 @@ export function WorkSurfaceHost({
         />
       ) : null}
 
-      <header className='flex items-center gap-2 border-b border-border px-2 py-1.5'>
+      <header
+        className='flex h-11 shrink-0 items-center gap-2 border-b border-border px-2'
+        data-slot='work-surface-toolbar'
+      >
+        {toolbarLeading != null ? (
+          <div className='flex shrink-0 items-center' data-slot='work-toolbar-leading'>
+            {toolbarLeading}
+          </div>
+        ) : null}
         <div
           className='flex min-w-0 flex-1 items-center gap-1 overflow-x-auto'
           role='tablist'
@@ -180,21 +206,27 @@ export function WorkSurfaceHost({
         <button
           type='button'
           data-testid='work-surface-maximize'
-          className='rounded-md px-2 py-1 text-xs hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
+          className={TOOLBAR_CONTROL_CLASS}
           aria-pressed={view.maximized}
           aria-label={view.maximized ? '退出最大化' : '最大化工作面'}
+          title={view.maximized ? '退出最大化' : '最大化工作面'}
           onClick={callbacks.onToggleMaximize}
         >
-          {view.maximized ? '还原' : '最大化'}
+          {view.maximized ? (
+            <Minimize2 className='size-4' aria-hidden />
+          ) : (
+            <Maximize2 className='size-4' aria-hidden />
+          )}
         </button>
         <button
           type='button'
           data-testid='work-surface-close'
-          className='rounded-md px-2 py-1 text-xs hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
+          className={TOOLBAR_CONTROL_CLASS}
           aria-label='关闭工作面'
+          title='关闭工作面'
           onClick={callbacks.onClose}
         >
-          关闭
+          <X className='size-4' aria-hidden />
         </button>
       </header>
 

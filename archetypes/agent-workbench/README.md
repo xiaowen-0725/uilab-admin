@@ -1,6 +1,6 @@
 # Agent Workbench（`@uilab/agent-workbench`）
 
-生产级 Agent Workbench Archetype 的 **Phase 3 静态 Shell 骨架**，含 **Phase 3A inset 布局打磨**。
+生产级 Agent Workbench Archetype 的 **Phase 3 静态 Shell 骨架**，含 **Phase 3A inset 布局** 与 **Phase 3B pane chrome / motion**。
 独立于 Admin Console，不共享 UniversalShell。
 
 ## 当前状态（shipped vs planned）
@@ -8,7 +8,8 @@
 | 能力 | 状态 |
 |---|---|
 | Workbench Shell + Navigator | **shipped**（Phase 3） |
-| Inset Workspace 空间模型 + 合并顶栏 + Navigator 动效 | **shipped**（Phase 3A layout polish） |
+| Inset Workspace 空间模型 + Navigator 动效 | **shipped**（Phase 3A layout polish） |
+| Task/Work pane chrome + pointer View Transition | **shipped**（Phase 3B；Playwright/动效证据已落盘） |
 | Task Surface + Composer + Adaptive Context Panel | **shipped**（静态 fixture） |
 | Work Surface Host（Single-pane + Tabs，显隐/调宽/最大化） | **shipped**（占位内容） |
 | Agent Runtime / 流式投影 | **planned**（Phase 4，当前暂停） |
@@ -38,16 +39,19 @@ pnpm --filter @uilab/agent-workbench test
 - Dev：`http://localhost:5174/`
 - Preview：`pnpm preview:workbench`（根）或包内 `preview`（4174）
 
-## 空间模型（Phase 3A）
+## 空间模型（Phase 3A + 3B）
 
 ```text
 Sidebar background plane
 ├── Navigator（宽屏 reserved 272px；中/窄 overlay）
 └── Inset Workspace（前景平面）
-    ├── 单一 task-aware top bar
     └── Workbench Stage
-        ├── Task Surface（content-only：execution · Composer · Context）
-        └── Work Surface Host（placeholder tabs）
+        ├── Task pane
+        │   ├── 44px Task toolbar（compat testid workspace-top-bar）
+        │   └── Task Surface（content-only：execution · Composer · Context）
+        └── Work pane（Work Surface Host）
+            ├── 44px tab toolbar + maximize/close icons
+            └── placeholder panel
 ```
 
 - 根背景为 `sidebar` plane；Workspace 为唯一前景平面（desktop/medium：8px inset、12px radius、border/shadow；narrow full-bleed）。
@@ -55,15 +59,16 @@ Sidebar background plane
 - Context / Work Surface 显隐、宽度、活动 tab、最大化 **按 Task 保存**。
 - Context Panel：宽 Task 用 reserved-space，窄 Task 用 overlay（CSS container query）；卡片按内容高度/最大高度，不默认满高。
 - Navigator pointer 切换：180ms `cubic-bezier(0.32, 0.72, 0, 1)`；键盘 `Ctrl/Cmd+B` 瞬时；动效源在 Shell，不进 Session。
+- **Phase 3B**：pointer Work open/close/maximize/restore 走 View Transition（`task-pane` / `work-surface`，180ms strong ease-in-out）；keyboard Work / Escape / Context 为 instant；Context pointer 打开 140ms opacity+translateY entry。
 
 ## 快捷键
 
 | 快捷键 | 行为 |
 |---|---|
 | `Ctrl/Cmd+B` | 切换 Navigator（瞬时，无动画） |
-| `Ctrl/Cmd+I` | 切换 Context Panel |
-| `Ctrl/Cmd+Shift+W` | 切换 Work Surface Host |
-| `Escape` | 退出 Work Surface 最大化（优先） |
+| `Ctrl/Cmd+I` | 切换 Context Panel（瞬时） |
+| `Ctrl/Cmd+Shift+W` | 切换 Work Surface Host（瞬时） |
+| `Escape` | 退出 Work Surface 最大化（优先，瞬时） |
 
 ## Foundation
 
@@ -84,3 +89,5 @@ Composer 使用原生 `textarea`（Foundation 尚无 textarea Interface）。
 - 路线图：[`docs/plans/agent-workbench-template-roadmap.md`](../../docs/plans/agent-workbench-template-roadmap.md)
 - Phase 3A work order：[`docs/plans/phase-3a-workbench-inset-layout-polish-work-order.md`](../../docs/plans/phase-3a-workbench-inset-layout-polish-work-order.md)
 - Phase 3A evidence：[`docs/evidence/phase-3a-workbench-inset-layout-polish.md`](../../docs/evidence/phase-3a-workbench-inset-layout-polish.md)
+- Phase 3B work order：[`docs/plans/phase-3b-codex-pane-chrome-motion-work-order.md`](../../docs/plans/phase-3b-codex-pane-chrome-motion-work-order.md)
+- Phase 3B evidence：[`docs/evidence/phase-3b-codex-pane-chrome-motion.md`](../../docs/evidence/phase-3b-codex-pane-chrome-motion.md)

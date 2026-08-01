@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { WorkbenchSessionCommands, WorkbenchSessionView } from '@/modules/workbench-session'
+import type { WorkbenchSessionView } from '@/modules/workbench-session'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -8,22 +8,37 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable
 }
 
+/** Shell-owned keyboard toggles — motion source stays outside Session. */
+export interface WorkbenchShortcutCallbacks {
+  onToggleNavigatorKeyboard: () => void
+  onToggleContextKeyboard: () => void
+  onToggleWorkKeyboard: () => void
+  /** Escape exits maximize instantly (no View Transition). */
+  onExitMaximizeKeyboard: () => void
+}
+
 /**
  * Global keyboard shortcuts for Shell chrome.
  * Escape exits Work Surface maximize before any other action.
- * Navigator keyboard toggle stays Shell-owned for motion source.
+ * Navigator / Context / Work keyboard toggles are Shell-owned for motion source.
  */
 export function useWorkbenchShortcuts(
   view: WorkbenchSessionView,
-  commands: WorkbenchSessionCommands,
-  onToggleNavigatorKeyboard: () => void
+  callbacks: WorkbenchShortcutCallbacks
 ): void {
+  const {
+    onToggleNavigatorKeyboard,
+    onToggleContextKeyboard,
+    onToggleWorkKeyboard,
+    onExitMaximizeKeyboard,
+  } = callbacks
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (view.layout.workSurfaceMaximized) {
           event.preventDefault()
-          commands.exitMaximize()
+          onExitMaximizeKeyboard()
         }
         return
       }
@@ -41,13 +56,13 @@ export function useWorkbenchShortcuts(
 
       if (key === 'i' && !event.shiftKey) {
         event.preventDefault()
-        commands.toggleContextPanel()
+        onToggleContextKeyboard()
         return
       }
 
       if (key === 'w' && event.shiftKey) {
         event.preventDefault()
-        commands.toggleWorkSurface()
+        onToggleWorkKeyboard()
         return
       }
 
@@ -57,8 +72,10 @@ export function useWorkbenchShortcuts(
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
-    commands,
     onToggleNavigatorKeyboard,
+    onToggleContextKeyboard,
+    onToggleWorkKeyboard,
+    onExitMaximizeKeyboard,
     view.layout.workSurfaceMaximized,
   ])
 }

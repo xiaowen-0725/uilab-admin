@@ -18,6 +18,7 @@
 
 ### Changed
 
+- **Phase 3B Codex pane chrome + motion**: Task/Work peer 44px toolbars (Task toolbar owns former Workspace-wide header; Work Host keeps tab chrome + icon-only maximize/close); pointer Work open/close/maximize/restore via private View Transition helper (`task-pane` / `work-surface`, 180ms strong ease-in-out, root crossfade suppressed); keyboard Work/Context/Escape stay instant; Context pointer open 140ms opacity+translateY; Playwright and animation evidence recorded. Does **not** claim Runtime, Surfaces, or Phase 4
 - **Phase 3A Workbench inset layout polish**: Agent Workbench root uses sidebar background plane; 272px reserved Navigator; 8px inset Workspace (12px radius, border/shadow on desktop/medium; full-bleed narrow); merged task-aware top bar; TaskSurface content-only Interface; Codex-style floating Composer; content-height Context card; pointer 180ms drawer motion vs keyboard-instant `Ctrl/Cmd+B` (Shell-owned motion source); `lucide-react` in Workbench package only. Does **not** claim Runtime, Surfaces, or Phase 4
 - Migrated component base to official shadcn Base UI (`base-nova`)
 - Localized primary admin surfaces to Chinese-first
