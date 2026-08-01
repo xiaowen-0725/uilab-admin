@@ -38,11 +38,7 @@ export function Dashboard() {
             <Button>Download</Button>
           </div>
         </div>
-        <Tabs
-          orientation='vertical'
-          defaultValue='overview'
-          className='space-y-4'
-        >
+        <Tabs defaultValue='overview' className='space-y-4'>
           <div className='w-full overflow-x-auto pb-2'>
             <TabsList>
               <TabsTrigger value='overview'>Overview</TabsTrigger>
