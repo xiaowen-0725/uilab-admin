@@ -59,11 +59,13 @@
   @apply after:pointer-events-none after:absolute after:inset-s-0 after:bottom-0 after:hidden after:h-32 after:w-full after:rounded-b-2xl after:bg-[linear-gradient(180deg,transparent_10%,var(--background)_70%)] md:after:block;
 }
 
-/* Sidebar nav collapsible animation (Base UI) */
+/* Sidebar nav collapsible animation (Base UI).
+   Keep this snappy: chevron already uses 200ms, and taller groups
+   (e.g. Settings) feel sluggish at 300ms with height transitions. */
 .CollapsibleContent {
   overflow: hidden;
   height: var(--collapsible-panel-height);
-  transition: height 300ms ease-out;
+  transition: height 180ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .CollapsibleContent[data-starting-style],
 .CollapsibleContent[data-ending-style] {

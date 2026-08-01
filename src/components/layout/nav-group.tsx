@@ -99,7 +99,7 @@ function SidebarMenuCollapsible({
             {item.icon && <item.icon />}
             <span>{item.title}</span>
             {item.badge && <NavBadge>{item.badge}</NavBadge>}
-            <ChevronRight className='ms-auto transition-transform duration-200 group-data-open/collapsible:rotate-90 rtl:rotate-180' />
+            <ChevronRight className='ms-auto transition-transform duration-[180ms] group-data-open/collapsible:rotate-90 rtl:rotate-180' />
           </SidebarMenuButton>
         }
       />
@@ -142,7 +142,7 @@ function SidebarMenuCollapsedDropdown({
             {item.icon && <item.icon />}
             <span>{item.title}</span>
             {item.badge && <NavBadge>{item.badge}</NavBadge>}
-            <ChevronRight className='ms-auto transition-transform duration-200 group-data-open/collapsible:rotate-90' />
+            <ChevronRight className='ms-auto transition-transform duration-[180ms] group-data-open/collapsible:rotate-90' />
           </SidebarMenuButton>} />
         <DropdownMenuContent side='right' align='start' sideOffset={4}>
           <DropdownMenuLabel>
