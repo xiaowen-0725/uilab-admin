@@ -79,13 +79,13 @@ export function DataTableBulkActions<TData>({
                   size='icon'
                   className='size-8'
                   aria-label='更新状态'
-                  title='Update status'
+                  title='更新状态'
                 >
                   <CircleArrowUp />
-                  <span className='sr-only'>Update status</span>
+                  <span className='sr-only'>更新状态</span>
                 </Button>} />} />
             <TooltipContent>
-              <p>Update status</p>
+              <p>更新状态</p>
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent sideOffset={14}>
@@ -111,13 +111,13 @@ export function DataTableBulkActions<TData>({
                   size='icon'
                   className='size-8'
                   aria-label='更新优先级'
-                  title='Update priority'
+                  title='更新优先级'
                 >
                   <ArrowUpDown />
-                  <span className='sr-only'>Update priority</span>
+                  <span className='sr-only'>更新优先级</span>
                 </Button>} />} />
             <TooltipContent>
-              <p>Update priority</p>
+              <p>更新优先级</p>
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent sideOffset={14}>
@@ -143,13 +143,13 @@ export function DataTableBulkActions<TData>({
               onClick={() => handleBulkExport()}
               className='size-8'
               aria-label='导出任务'
-              title='Export tasks'
+              title='导出任务'
             >
               <Download />
-              <span className='sr-only'>Export tasks</span>
+              <span className='sr-only'>导出任务</span>
             </Button>} />
           <TooltipContent>
-            <p>Export tasks</p>
+            <p>导出任务</p>
           </TooltipContent>
         </Tooltip>
 
@@ -160,13 +160,13 @@ export function DataTableBulkActions<TData>({
               onClick={() => setShowDeleteConfirm(true)}
               className='size-8'
               aria-label='删除所选任务'
-              title='Delete selected tasks'
+              title='删除所选任务'
             >
               <Trash2 />
-              <span className='sr-only'>Delete selected tasks</span>
+              <span className='sr-only'>删除所选任务</span>
             </Button>} />
           <TooltipContent>
-            <p>Delete selected tasks</p>
+            <p>删除所选任务</p>
           </TooltipContent>
         </Tooltip>
       </BulkActionsToolbar>

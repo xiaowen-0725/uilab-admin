@@ -49,7 +49,7 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
               <ChevronsUpDown className='ms-auto' />
             </SidebarMenuButton>} />
           <DropdownMenuContent
-            className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
+            className='min-w-56 rounded-lg'
             align='start'
             side={isMobile ? 'bottom' : 'right'}
             sideOffset={4}

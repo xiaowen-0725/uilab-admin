@@ -41,10 +41,10 @@ export function TasksMultiDeleteDialog<TData>({
         setValue('')
         table.resetRowSelection()
         return `已删除 ${selectedRows.length} ${
-          selectedRows.length > 1 ? 'tasks' : 'task'
+          selectedRows.length > 1 ? '个任务' : '个任务'
         }`
       },
-      error: 'Error',
+      error: '删除失败',
     })
   }
 
@@ -61,7 +61,7 @@ export function TasksMultiDeleteDialog<TData>({
             size={18}
           />{' '}
           删除 {selectedRows.length}{' '}
-          {selectedRows.length > 1 ? 'tasks' : 'task'}
+          {selectedRows.length > 1 ? '个任务' : '个任务'}
         </span>
       }
       desc={
@@ -83,7 +83,7 @@ export function TasksMultiDeleteDialog<TData>({
             <Input
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder={`Type "${CONFIRM_WORD}" 以确认。`}
+              placeholder={`输入 "${CONFIRM_WORD}" 以确认`}
               autoFocus
             />
           </Label>
@@ -91,7 +91,7 @@ export function TasksMultiDeleteDialog<TData>({
           <Alert variant='destructive'>
             <AlertTitle>Warning!</AlertTitle>
             <AlertDescription>
-              Please be careful, this operation can not be rolled back.
+              请谨慎操作，此操作无法回滚。
             </AlertDescription>
           </Alert>
         </form>
