@@ -4,6 +4,7 @@
 
 - [ ] `pnpm typecheck` 通过
 - [ ] `pnpm build` 通过
+- [ ] `pnpm check:ai` 通过
 - [ ] 无新增 `@radix-ui/*` / `asChild` 回潮
 
 ## 新增页面

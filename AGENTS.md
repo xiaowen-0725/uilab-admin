@@ -53,6 +53,7 @@
 ```bash
 pnpm typecheck
 pnpm build
+pnpm check:ai   # AI 合同 / skill / pattern 门禁
 ```
 
 若改了路由/页面，还需目视或说明：

@@ -17,7 +17,9 @@
     "test:browser": "vitest",
     "test:coverage": "vitest run --coverage --browser.headless",
     "test:browser:install": "playwright install chromium --with-deps",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:ai": "node scripts/check-ai.mjs",
+    "check": "pnpm typecheck && pnpm run check:ai"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

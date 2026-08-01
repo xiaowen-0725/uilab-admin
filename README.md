@@ -14,6 +14,7 @@ pnpm dev
 ```bash
 pnpm typecheck
 pnpm build
+pnpm check:ai
 ```
 
 ## 技术栈
@@ -57,6 +58,9 @@ skill/uilab-admin/ # Agent skill 入口
 运行时个人偏好仍走 cookie；项目默认用于“应用 A / 应用 B 不同默认壳”。
 
 ## AI-first
+
+本地 skill 入口：`$uilab-admin`。
+仓库门禁：`pnpm check:ai`。
 
 本仓库面向 Agent 装配：
 

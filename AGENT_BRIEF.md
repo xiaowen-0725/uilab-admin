@@ -46,3 +46,9 @@
 - 不要把表格退回简单 Select 过滤
 - 不要回潮 Radix / `asChild`
 - 不要只改 feature 不改 route/sidebar
+
+## 门禁
+
+```bash
+pnpm check:ai
+```
