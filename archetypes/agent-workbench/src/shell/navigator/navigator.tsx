@@ -1,6 +1,23 @@
 import { useMemo, useState } from 'react'
-import { Input } from '@uilab/foundation/ui/input'
+import {
+  Clock,
+  Folder,
+  GitPullRequest,
+  Globe,
+  MessageSquarePlus,
+  Puzzle,
+  Search,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import type {
+  NavigatorUtility,
+  ProjectFolder,
+  TaskNavMeta,
+} from '@/config/fixtures'
 import type { ProjectSummary, TaskSummary } from '@/modules/workbench-session'
+import { cn } from '@/lib/utils'
 import { NavigatorUserMenu } from './navigator-user-menu'
 
 export interface NavigatorProps {
@@ -9,36 +26,71 @@ export interface NavigatorProps {
   selectedTaskId: string
   open: boolean
   mode: 'reserved' | 'overlay'
+  utilities: NavigatorUtility[]
+  projectFolders: ProjectFolder[]
+  taskNavMeta: Record<string, TaskNavMeta>
   onSelectTask: (taskId: string) => void
+  onNewChat?: () => void
   onClose?: () => void
   onOpenSettings?: () => void
 }
 
-/**
- * Navigator remains mounted while open or closed so pointer motion can animate.
- * Closed: inert / aria-hidden / unfocusable; overlay also blocks pointer/focus.
- */
+const UTILITY_ICONS = {
+  'git-pull-request': GitPullRequest,
+  globe: Globe,
+  clock: Clock,
+  puzzle: Puzzle,
+} as const
+
+/** Left rail: 新对话, utility rows, 置顶 sessions, 项目 folders. */
 export function Navigator({
   project,
   tasks,
   selectedTaskId,
   open,
   mode,
+  utilities,
+  projectFolders,
+  taskNavMeta,
   onSelectTask,
+  onNewChat,
   onClose,
   onOpenSettings,
 }: NavigatorProps) {
   const [filter, setFilter] = useState('')
 
-  const visibleTasks = useMemo(() => {
-    const normalizedFilter = filter.trim().toLowerCase()
-    if (!normalizedFilter) return tasks
-    return tasks.filter(
-      (task) =>
-        task.title.toLowerCase().includes(normalizedFilter) ||
-        (task.subtitle?.toLowerCase().includes(normalizedFilter) ?? false)
-    )
-  }, [filter, tasks])
+  const { pinned, byFolder, ungrouped } = useMemo(() => {
+    const normalized = filter.trim().toLowerCase()
+    const match = (task: TaskSummary) => {
+      if (!normalized) return true
+      return (
+        task.title.toLowerCase().includes(normalized) ||
+        (task.subtitle?.toLowerCase().includes(normalized) ?? false)
+      )
+    }
+    const pinnedList: TaskSummary[] = []
+    const ungroupedList: TaskSummary[] = []
+    const folderMap = new Map<string, TaskSummary[]>()
+    for (const folder of projectFolders) folderMap.set(folder.id, [])
+
+    for (const task of tasks) {
+      if (!match(task)) continue
+      const meta = taskNavMeta[task.id]
+      if (meta?.pinned) {
+        pinnedList.push(task)
+        continue
+      }
+      const folderId = meta?.projectFolderId
+      if (folderId && folderMap.has(folderId)) {
+        folderMap.get(folderId)!.push(task)
+      } else {
+        ungroupedList.push(task)
+      }
+    }
+    return { pinned: pinnedList, byFolder: folderMap, ungrouped: ungroupedList }
+  }, [tasks, taskNavMeta, projectFolders, filter])
+
+  const tabIndex = open ? 0 : -1
 
   const panel = (
     <nav
@@ -55,11 +107,9 @@ export function Navigator({
       aria-hidden={!open}
       inert={!open}
     >
-      <div className='flex items-start justify-between gap-2 px-2 pt-2 pb-1'>
-        <div className='min-w-0 rounded-lg px-2 py-1.5'>
-          <p className='truncate text-[11px] font-medium text-muted-foreground'>
-            项目
-          </p>
+      <div className='flex items-center justify-between gap-2 px-3 pt-3 pb-2'>
+        <div className='min-w-0'>
+          <p className='truncate text-[11px] text-muted-foreground'>工作区</p>
           <h2
             className='truncate text-sm font-semibold tracking-tight'
             data-testid='project-name'
@@ -68,66 +118,128 @@ export function Navigator({
           </h2>
         </div>
         {mode === 'overlay' && onClose ? (
-          <button
+          <Button
             type='button'
-            className='mt-1 shrink-0 rounded-md px-2 py-1 text-xs hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50'
+            variant='ghost'
+            size='sm'
+            className='h-7 shrink-0 px-2 text-xs'
             aria-label='关闭导航'
-            tabIndex={open ? 0 : -1}
+            tabIndex={tabIndex}
             onClick={onClose}
           >
             关闭
-          </button>
+          </Button>
         ) : null}
       </div>
 
       <div className='px-2 pb-2'>
+        <Button
+          type='button'
+          variant='outline'
+          data-testid='navigator-new-chat'
+          tabIndex={tabIndex}
+          className='h-auto w-full justify-start gap-2 rounded-xl border-border/80 bg-sidebar-accent/30 px-3 py-2 text-sm font-normal hover:bg-sidebar-accent'
+          onClick={() => onNewChat?.()}
+        >
+          <MessageSquarePlus aria-hidden />
+          <span className='flex-1 text-left'>新对话</span>
+          <Search className='opacity-50' aria-hidden />
+        </Button>
         <label className='sr-only' htmlFor='navigator-task-filter'>
           筛选任务
         </label>
         <Input
           id='navigator-task-filter'
           data-testid='navigator-filter'
-          placeholder='筛选任务…'
+          placeholder='筛选…'
           value={filter}
-          tabIndex={open ? 0 : -1}
-          className='h-8 bg-sidebar-accent/40 shadow-none'
+          tabIndex={tabIndex}
+          className='mt-2 h-8 bg-sidebar-accent/30 text-xs shadow-none'
           onChange={(e) => setFilter(e.target.value)}
         />
       </div>
 
-      <div className='min-h-0 flex-1 overflow-y-auto px-2 pb-2'>
-        <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
-          任务
-        </p>
-        <ul className='flex flex-col gap-0.5' role='list'>
-          {visibleTasks.map((task) => {
-            const selected = task.id === selectedTaskId
+      <ScrollArea className='min-h-0 flex-1 px-2 pb-2'>
+        <ul className='mb-3 flex flex-col gap-0.5' data-testid='navigator-utilities'>
+          {utilities.map((item) => {
+            const Icon = UTILITY_ICONS[item.icon]
             return (
-              <li key={task.id}>
-                <button
+              <li key={item.id}>
+                <Button
                   type='button'
-                  data-testid={`task-${task.id}`}
-                  aria-current={selected ? 'true' : undefined}
-                  tabIndex={open ? 0 : -1}
-                  className={
-                    selected
-                      ? 'w-full rounded-lg bg-sidebar-accent px-2.5 py-2 text-left text-sm font-medium text-sidebar-accent-foreground focus-visible:ring-3 focus-visible:ring-ring/50'
-                      : 'w-full rounded-lg px-2.5 py-2 text-left text-sm hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/50'
-                  }
-                  onClick={() => onSelectTask(task.id)}
+                  variant='ghost'
+                  data-testid={`navigator-utility-${item.id}`}
+                  tabIndex={tabIndex}
+                  className='h-auto w-full justify-start gap-2 rounded-lg px-2.5 py-1.5 text-sm font-normal text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'
                 >
-                  <span className='block truncate'>{task.title}</span>
-                  {task.subtitle ? (
-                    <span className='mt-0.5 block truncate text-xs text-muted-foreground'>
-                      {task.subtitle}
-                    </span>
-                  ) : null}
-                </button>
+                  <Icon aria-hidden />
+                  <span className='truncate'>{item.label}</span>
+                </Button>
               </li>
             )
           })}
         </ul>
-      </div>
+
+        {pinned.length > 0 ? (
+          <section className='mb-3' data-testid='navigator-pinned'>
+            <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
+              置顶
+            </p>
+            <ul className='flex flex-col gap-0.5'>
+              {pinned.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  selected={task.id === selectedTaskId}
+                  tabIndex={tabIndex}
+                  onSelect={onSelectTask}
+                />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <section data-testid='navigator-projects'>
+          <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
+            项目
+          </p>
+          <ul className='flex flex-col gap-1'>
+            {projectFolders.map((folder) => {
+              const folderTasks = byFolder.get(folder.id) ?? []
+              return (
+                <li key={folder.id} data-testid={`navigator-folder-${folder.id}`}>
+                  <div className='flex items-center gap-2 px-2.5 py-1 text-sm text-muted-foreground'>
+                    <Folder className='size-4 shrink-0' aria-hidden />
+                    <span className='truncate'>{folder.name}</span>
+                  </div>
+                  {folderTasks.length > 0 ? (
+                    <ul className='ms-2 flex flex-col gap-0.5 border-l border-sidebar-border ps-1'>
+                      {folderTasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          selected={task.id === selectedTaskId}
+                          tabIndex={tabIndex}
+                          onSelect={onSelectTask}
+                        />
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              )
+            })}
+            {ungrouped.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                selected={task.id === selectedTaskId}
+                tabIndex={tabIndex}
+                onSelect={onSelectTask}
+              />
+            ))}
+          </ul>
+        </section>
+      </ScrollArea>
 
       <NavigatorUserMenu
         interactive={open}
@@ -148,7 +260,7 @@ export function Navigator({
           type='button'
           className='navigator-overlay-backdrop'
           aria-label='关闭导航遮罩'
-          tabIndex={open ? 0 : -1}
+          tabIndex={tabIndex}
           onClick={onClose}
         />
         <div className='navigator-overlay-panel shadow-xl'>{panel}</div>
@@ -157,4 +269,37 @@ export function Navigator({
   }
 
   return panel
+}
+
+function TaskRow({
+  task,
+  selected,
+  tabIndex,
+  onSelect,
+}: {
+  task: TaskSummary
+  selected: boolean
+  tabIndex: number
+  onSelect: (id: string) => void
+}) {
+  return (
+    <li>
+      <Button
+        type='button'
+        variant='ghost'
+        data-testid={`task-${task.id}`}
+        aria-current={selected ? 'true' : undefined}
+        tabIndex={tabIndex}
+        className={cn(
+          'h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal',
+          selected
+            ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent'
+            : 'hover:bg-sidebar-accent/70'
+        )}
+        onClick={() => onSelect(task.id)}
+      >
+        <span className='block min-w-0 flex-1 truncate'>{task.title}</span>
+      </Button>
+    </li>
+  )
 }

@@ -60,7 +60,7 @@ async function expectPaneSettledInstant(
 }
 
 describe('Workbench Shell integration (visible behavior)', () => {
-  it('renders project, tasks, and static fixture disclosure', async () => {
+  it('renders project, left-rail chrome, empty hub, and capture stream', async () => {
     await render(<WorkbenchApp />)
 
     await expect
@@ -68,27 +68,87 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBeInTheDocument()
     await expect
       .element(page.getByTestId('project-name'))
-      .toHaveTextContent('UI Lab 演示项目')
+      .toHaveTextContent('lot-sentry-ai-agent')
 
+    // A — left rail structure
     await expect
-      .element(page.getByRole('button', { name: /任务 A/ }))
+      .element(page.getByTestId('navigator-new-chat'))
+      .toHaveTextContent('新对话')
+    await expect
+      .element(page.getByTestId('navigator-utility-pull-requests'))
+      .toHaveTextContent('拉取请求')
+    await expect
+      .element(page.getByTestId('navigator-utility-sites'))
+      .toHaveTextContent('站点')
+    await expect
+      .element(page.getByTestId('navigator-utility-scheduled'))
+      .toHaveTextContent('已安排')
+    await expect
+      .element(page.getByTestId('navigator-utility-plugins'))
+      .toHaveTextContent('插件')
+    await expect
+      .element(page.getByTestId('navigator-pinned'))
       .toBeInTheDocument()
     await expect
-      .element(page.getByRole('button', { name: /任务 B/ }))
-      .toBeInTheDocument()
-    await expect
-      .element(page.getByRole('button', { name: /任务 C/ }))
+      .element(page.getByTestId('navigator-projects'))
       .toBeInTheDocument()
 
+    // B — empty hub + card click loads stream
+    await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('empty-hub-title'))
+      .toHaveTextContent('lot-sentry-ai-agent')
+    await expect
+      .element(page.getByTestId('empty-hub-action-explore'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('empty-hub-action-build'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('empty-hub-action-review'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('empty-hub-action-fix'))
+      .toBeInTheDocument()
+
+    await userEvent.click(page.getByTestId('empty-hub-action-explore'))
+    await expect
+      .element(page.getByTestId('task-surface'))
+      .toHaveAttribute('data-content-mode', 'stream')
+    await expect
+      .element(page.getByTestId('task-surface'))
+      .toHaveAttribute('data-last-launch-action', 'explore')
+    await expect
+      .element(page.getByTestId('stream-status-label'))
+      .toHaveTextContent('已处理')
+    await expect
+      .element(page.getByTestId('stream-status-duration'))
+      .toHaveTextContent('1m 18s')
+    await expect
+      .element(page.getByTestId('stream-tool-rows'))
+      .toBeInTheDocument()
+    expect(
+      document.body.textContent?.includes('WeixinJSBridge') ?? false
+    ).toBe(true)
+    expect(
+      document.querySelectorAll('[data-testid="simple-markdown"]').length
+    ).toBeGreaterThan(0)
+
+    // C — select pinned task with capture stream
+    await userEvent.click(page.getByTestId('task-task-a'))
+    await expect
+      .element(page.getByTestId('execution-stream'))
+      .toHaveAttribute('data-capture-id', 'golden-weixin-audio')
     await expect
       .element(page.getByTestId('fixture-disclosure'))
-      .toHaveTextContent('静态 Phase 3 fixture')
-    await expect.element(page.getByTestId('task-surface')).toBeInTheDocument()
-    // Task-only: Work host compat test id omitted while hidden
+      .toHaveTextContent('事件流回放')
+    await expect
+      .element(page.getByTestId('stream-status-label'))
+      .toHaveTextContent('已处理')
+
     expect(
       document.querySelector('[data-testid="work-surface-host"]')
     ).toBeNull()
-    // Drawer slot always mounted at zero width
     const slot = workDrawerSlot()
     expect(slot).toBeTruthy()
     expect(slot.getBoundingClientRect().width).toBeLessThanOrEqual(
@@ -135,13 +195,13 @@ describe('Workbench Shell integration (visible behavior)', () => {
       '[data-testid="workspace-top-bar"] h1'
     )
     expect(titles.length).toBe(1)
-    expect(titles[0]?.textContent).toMatch(/任务 A/)
+    expect(titles[0]?.textContent).toMatch(/新任务/)
 
     // Subtitle must not appear in Task toolbar chrome.
     expect(
       document.querySelectorAll('[data-testid="workspace-top-bar"] p').length
     ).toBe(0)
-    expect(topBar.textContent).not.toMatch(/验证 Task-only/)
+    expect(topBar.textContent).not.toMatch(/开场区/)
 
     // TaskSurface is content-only — no second task title chrome inside the surface.
     expect(
@@ -245,15 +305,23 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('navigator-user-menu'))
       .toHaveTextContent('demo@uilab.dev')
 
-    // Closed: no menu panel in the document.
+    // Closed: Base UI may keep portal with data-closed after first open; before open it's absent.
+    const closedPanel = document.querySelector(
+      '[data-testid="navigator-user-menu-panel"]'
+    )
     expect(
-      document.querySelector('[data-testid="navigator-user-menu-panel"]')
-    ).toBeNull()
+      closedPanel == null || closedPanel.hasAttribute('data-closed')
+    ).toBe(true)
 
     await userEvent.click(trigger)
     await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
     const panel = page.getByTestId('navigator-user-menu-panel')
     await expect.element(panel).toBeInTheDocument()
+    await expect
+      .poll(() =>
+        panel.element().hasAttribute('data-closed') ? 'closed' : 'open'
+      )
+      .toBe('open')
     await expect
       .element(page.getByTestId('navigator-user-settings'))
       .toHaveTextContent('设置')
@@ -271,9 +339,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // Settings opens the modal dialog (profile section by default).
     await userEvent.click(page.getByTestId('navigator-user-settings'))
     await expect.element(trigger).toHaveAttribute('aria-expanded', 'false')
-    expect(
-      document.querySelector('[data-testid="navigator-user-menu-panel"]')
-    ).toBeNull()
+    await expect
+      .poll(() => {
+        const el = document.querySelector(
+          '[data-testid="navigator-user-menu-panel"]'
+        )
+        return el == null || el.hasAttribute('data-closed') ? 'closed' : 'open'
+      })
+      .toBe('closed')
     await expect
       .element(page.getByTestId('settings-dialog'))
       .toBeInTheDocument()
@@ -296,9 +369,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await userEvent.click(page.getByTestId('settings-theme-light'))
     expect(document.documentElement.classList.contains('dark')).toBe(false)
 
-    // Escape closes the settings dialog.
+    // Escape closes the settings dialog (Base UI may keep closed popup in DOM).
     await userEvent.keyboard('{Escape}')
-    expect(document.querySelector('[data-testid="settings-dialog"]')).toBeNull()
+    await expect
+      .poll(() => {
+        const el = document.querySelector('[data-testid="settings-dialog"]')
+        return el == null || el.hasAttribute('data-closed') ? 'closed' : 'open'
+      })
+      .toBe('closed')
 
     // Sign-out is fixture-only honesty.
     await userEvent.click(trigger)
@@ -341,9 +419,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(shell)
       .toHaveAttribute('data-context-motion', 'animated')
     await expect.element(panel).toHaveTextContent('环境')
-    await expect.element(panel).toHaveTextContent('变更')
-    await expect.element(panel).toHaveTextContent('来源')
-    await expect.element(panel).toHaveTextContent('子 Agent')
+    await expect.element(panel).toHaveTextContent('开场区')
 
     await userEvent.click(page.getByTestId('toggle-context'))
     await expect.element(panel).toHaveAttribute('data-open', 'false')
@@ -761,6 +837,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('restores per-Task layout when switching A → B → A', async () => {
     await render(<WorkbenchApp />)
 
+    // Start on task-a so layout is stored against A (default seed is empty hub).
+    await userEvent.click(page.getByTestId('task-task-a'))
+
     // Configure Task A (leave Work Surface open but not maximized so Task/Context stay mounted)
     await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
     await userEvent.click(page.getByTestId('toggle-context'))
@@ -777,7 +856,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toHaveTextContent('浏览器预览')
 
     // Task B defaults: Task-only
-    await userEvent.click(page.getByRole('button', { name: /任务 B/ }))
+    await userEvent.click(page.getByTestId('task-task-b'))
     expect(
       document.querySelector('[data-testid="work-surface-host"]')
     ).toBeNull()
@@ -789,7 +868,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toHaveAttribute('data-task-id', 'task-b')
 
     // Back to A restores
-    await userEvent.click(page.getByRole('button', { name: /任务 A/ }))
+    await userEvent.click(page.getByTestId('task-task-a'))
     await expect
       .element(page.getByTestId('task-surface'))
       .toHaveAttribute('data-task-id', 'task-a')
@@ -871,6 +950,23 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await render(<WorkbenchApp />)
     const input = page.getByTestId('composer-input')
     const submit = page.getByTestId('composer-submit')
+
+    // Codex-like dock chrome
+    await expect
+      .element(page.getByTestId('composer-context-bar'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('composer-chip-project'))
+      .toHaveTextContent('lot-sentry-ai-agent')
+    await expect
+      .element(page.getByTestId('composer-chip-env'))
+      .toHaveTextContent('本地')
+    await expect
+      .element(page.getByTestId('composer-access'))
+      .toHaveTextContent('完全访问')
+    await expect
+      .element(page.getByTestId('composer-model'))
+      .toBeInTheDocument()
 
     await expect.element(submit).toBeDisabled()
     await userEvent.fill(input, 'hello fixture')
@@ -981,16 +1077,17 @@ describe('Workbench Shell integration (visible behavior)', () => {
         .getByTestId('context-panel')
         .element()
         .getBoundingClientRect()
-      const streamBox = page
-        .getByTestId('execution-stream')
+      // Task content may be empty-hub or stream; both share task-surface bounds.
+      const contentBox = page
+        .getByTestId('task-surface')
         .element()
         .getBoundingClientRect()
 
       const overlaps =
-        panelBox.left < streamBox.right &&
-        panelBox.right > streamBox.left &&
-        panelBox.top < streamBox.bottom &&
-        panelBox.bottom > streamBox.top
+        panelBox.left < contentBox.right &&
+        panelBox.right > contentBox.left &&
+        panelBox.top < contentBox.bottom &&
+        panelBox.bottom > contentBox.top
       expect(overlaps).toBe(true)
 
       const resize = page.getByTestId('work-surface-resize')
@@ -1058,15 +1155,15 @@ describe('Workbench Shell integration (visible behavior)', () => {
             .getByTestId('context-panel')
             .element()
             .getBoundingClientRect()
-          const streamBox = page
-            .getByTestId('execution-stream')
+          const contentBox = page
+            .getByTestId('task-surface')
             .element()
             .getBoundingClientRect()
           return (
-            panelBox.left < streamBox.right &&
-            panelBox.right > streamBox.left &&
-            panelBox.top < streamBox.bottom &&
-            panelBox.bottom > streamBox.top
+            panelBox.left < contentBox.right &&
+            panelBox.right > contentBox.left &&
+            panelBox.top < contentBox.bottom &&
+            panelBox.bottom > contentBox.top
           )
         })
         .toBe(true)

@@ -1,14 +1,26 @@
 /**
  * Task Module — public Interface.
- * Owns Task Surface, execution fixture presentation, Composer, and Task Context Panel UI.
- * Does not model Turn/Run/RuntimeEvent (Phase 4+).
- *
- * Public surface is intentionally minimal: TaskSurface + TaskSurfaceView (+ optional close).
- * Composer, ContextPanel, and ExecutionStream stay Module Implementation.
- * Workspace chrome (title / Context / Work toggles) lives in Shell top bar (Phase 3A).
+ * Owns Task Surface, capture-driven stream presentation, Composer, Context Panel.
+ * Does not model live Runtime (Phase 4+).
  */
 
 export { TaskSurface } from './ui/task-surface/task-surface'
-export type { TaskSurfaceView } from './ui/task-surface/task-surface'
+export type { TaskSurfaceView, TaskSurfaceProps } from './ui/task-surface/task-surface'
 
-export type { ContextSection, ExecutionItem } from './model/types'
+export type {
+  ContextSection,
+  ExecutionItem,
+  LaunchAction,
+  TaskContentMode,
+} from './model/types'
+
+export {
+  foldCaptureToView,
+  formatDurationMs,
+} from './model/stream-events'
+export type {
+  EventStreamCapture,
+  StreamEvent,
+  StreamViewModel,
+  TurnViewModel,
+} from './model/stream-events'

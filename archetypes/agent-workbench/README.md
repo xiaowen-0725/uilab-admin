@@ -70,16 +70,25 @@ Sidebar background plane
 | `Ctrl/Cmd+Shift+W` | 切换 Work Surface Host（瞬时）         |
 | `Escape`           | 退出 Work Surface 最大化（优先，瞬时） |
 
+## UI 栈（shadcn Base UI）
+
+与 Admin / 平台统一：
+
+- `components.json` — 官方 shadcn **base-nova**
+- `@/components/ui/*` — 按需安装的 shadcn 组件；Button / Input 为 Foundation 兼容 re-export
+- `@/lib/utils` — `cn`（`clsx` + `tailwind-merge`）
+- 样式：`shadcn/tailwind.css` + `tw-animate-css` + Archetype `tokens.css`
+
 ## Foundation
 
-通过公开子路径消费：
+Button / Input / tokens 经兼容层消费（实现仍在 `@uilab/foundation`）：
 
-- `@uilab/foundation/ui/button`
-- `@uilab/foundation/ui/input`
-- `@uilab/foundation/styles/tokens.css`
+- `@/components/ui/button` → `@uilab/foundation/ui/button`
+- `@/components/ui/input` → `@uilab/foundation/ui/input`
+- `src/styles/tokens.css` → `@uilab/foundation/styles/tokens.css`
 
 图标：Workbench 包自有 `lucide-react`（不扩 Foundation）。
-Composer 使用原生 `textarea`（Foundation 尚无 textarea Interface）。
+Composer 使用 `@/components/ui/textarea`（shadcn）；Foundation 仍仅公开 Button / Input / tokens。
 
 ## 相关文档
 

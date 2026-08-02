@@ -502,8 +502,8 @@ async function checkAdminConsumption() {
 
 /**
  * Workbench is the second consumer of Phase 2A Button/Input/tokens.
- * Imports public Foundation subpaths directly (no Admin-style re-export required).
- * Does not expand Foundation exports.
+ * Same pattern as Admin: @/components/ui/* re-exports public Foundation subpaths
+ * (or direct subpath imports). Does not expand Foundation exports.
  */
 async function checkWorkbenchConsumption() {
   if (!workbenchRoot) {

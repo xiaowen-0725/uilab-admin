@@ -1,4 +1,4 @@
-/** Task Module view types for static Phase 3 fixtures (no Runtime model). */
+/** Task Module view types for static fixtures / capture replay (no live Runtime). */
 
 export interface ExecutionItem {
   id: string
@@ -14,3 +14,16 @@ export interface ContextSection {
   title: string
   items: string[]
 }
+
+/** Empty-hub action card (fixture-honest; not Runtime). */
+export interface LaunchAction {
+  id: string
+  label: string
+  /** Prompt stub inserted / used to open a capture stream. */
+  promptStub: string
+  /** Optional capture to load when the card is activated. */
+  captureId?: string
+  icon: 'explore' | 'build' | 'review' | 'fix'
+}
+
+export type TaskContentMode = 'empty' | 'stream'

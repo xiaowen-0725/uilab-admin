@@ -26,5 +26,5 @@
 
 - 包名：`@uilab/agent-workbench`
 - Composition Root 唯一装配；Module 根 `index.ts` 为唯一跨界 Interface
-- 依赖 `@uilab/foundation` workspace 公开子路径
+- UI 栈与平台统一：官方 shadcn Base UI（`base-nova`）+ `@/components/ui/*`；Foundation Button/Input/tokens 经兼容 re-export
 - 中文 UI 文案

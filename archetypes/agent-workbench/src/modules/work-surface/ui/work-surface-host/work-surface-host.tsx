@@ -5,15 +5,15 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react'
-import type { WorkSurfaceTab } from '@/modules/workbench-session'
 import { Maximize2, Minimize2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ToolbarIconButton } from '@/components/toolbar-icon-button'
+import type { WorkSurfaceTab } from '@/modules/workbench-session'
+import { cn } from '@/lib/utils'
 
 /** Work Surface Module Implementation copy — Phase 6 surfaces not present. */
 const WORK_SURFACE_PLACEHOLDER_NOTICE =
   '占位 Work Surface — 具体 Document / Browser / Review Surface Module 在 Phase 6 交付，当前仅验证 Host（显隐、tabs、调宽、最大化）。'
-
-const TOOLBAR_CONTROL_CLASS =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-muted'
 
 export interface WorkSurfaceHostView {
   visible: boolean
@@ -184,51 +184,48 @@ export function WorkSurfaceHost({
           {view.tabs.map((tab) => {
             const selected = tab.id === view.activeTabId
             return (
-              <button
+              <Button
                 key={tab.id}
                 type='button'
+                variant='ghost'
+                size='sm'
                 role='tab'
                 id={`work-tab-${tab.id}`}
                 aria-selected={selected}
                 aria-controls='work-surface-panel'
                 data-testid={view.visible ? `work-tab-${tab.id}` : undefined}
-                className={
+                className={cn(
+                  'h-auto rounded-md px-2.5 py-1.5 text-xs font-medium',
                   selected
-                    ? 'rounded-md bg-muted px-2.5 py-1.5 text-xs font-medium focus-visible:ring-3 focus-visible:ring-ring/50'
-                    : 'rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50'
-                }
+                    ? 'bg-muted'
+                    : 'text-muted-foreground hover:bg-muted/60'
+                )}
                 onClick={() => callbacks.onActivateTab(tab.id)}
               >
                 {tab.label}
-              </button>
+              </Button>
             )
           })}
         </div>
-        <button
-          type='button'
-          data-testid={view.visible ? 'work-surface-maximize' : undefined}
-          className={TOOLBAR_CONTROL_CLASS}
-          aria-pressed={view.maximized}
-          aria-label={view.maximized ? '退出最大化' : '最大化工作面'}
-          title={view.maximized ? '退出最大化' : '最大化工作面'}
+        <ToolbarIconButton
+          testId={view.visible ? 'work-surface-maximize' : undefined}
+          pressed={view.maximized}
+          label={view.maximized ? '退出最大化' : '最大化工作面'}
           onClick={callbacks.onToggleMaximize}
         >
           {view.maximized ? (
-            <Minimize2 className='size-4' aria-hidden />
+            <Minimize2 aria-hidden />
           ) : (
-            <Maximize2 className='size-4' aria-hidden />
+            <Maximize2 aria-hidden />
           )}
-        </button>
-        <button
-          type='button'
-          data-testid={view.visible ? 'work-surface-close' : undefined}
-          className={TOOLBAR_CONTROL_CLASS}
-          aria-label='关闭工作面'
-          title='关闭工作面'
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          testId={view.visible ? 'work-surface-close' : undefined}
+          label='关闭工作面'
           onClick={callbacks.onClose}
         >
-          <X className='size-4' aria-hidden />
-        </button>
+          <X aria-hidden />
+        </ToolbarIconButton>
       </header>
 
       <div

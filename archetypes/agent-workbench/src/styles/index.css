@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 @import './tokens.css';
 
 /* Tailwind 4: scan Foundation source (workspace via node_modules). */

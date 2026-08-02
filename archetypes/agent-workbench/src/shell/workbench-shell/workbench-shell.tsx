@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, TransitionEvent } from 'react'
-import type { TaskSurfaceView } from '@/modules/task'
-import { TaskSurface } from '@/modules/task'
-import { WorkSurfaceHost } from '@/modules/work-surface'
-import type {
-  WorkbenchSessionCommands,
-  WorkbenchSessionView,
-} from '@/modules/workbench-session'
 import {
   FolderIcon,
   PanelBottom,
   PanelLeftIcon,
   SlidersHorizontal,
 } from 'lucide-react'
+import { ToolbarIconButton } from '@/components/toolbar-icon-button'
+import type {
+  NavigatorUtility,
+  ProjectFolder,
+  TaskNavMeta,
+} from '@/config/fixtures'
+import type {
+  LaunchAction,
+  TaskSurfaceView,
+} from '@/modules/task'
+import { TaskSurface } from '@/modules/task'
+import { WorkSurfaceHost } from '@/modules/work-surface'
+import type {
+  WorkbenchSessionCommands,
+  WorkbenchSessionView,
+} from '@/modules/workbench-session'
 import { Navigator } from '../navigator/navigator'
 import {
   SettingsDialog,
@@ -28,14 +37,11 @@ import { useViewportMode } from '../responsive-layout/use-viewport-mode'
 import { useWorkbenchShortcuts } from './use-workbench-shortcuts'
 
 /** Shell-owned motion modality — never stored in Session. */
-export type NavMotionSource = 'animated' | 'instant'
-export type ContextMotionSource = 'animated' | 'instant'
-
-/**
- * Phase 3B contract: animated vs instant source only (data-pane-motion).
- * Never stored in Session.
- */
-export type PaneMotionSource = 'animated' | 'instant'
+export type MotionSource = 'animated' | 'instant'
+export type NavMotionSource = MotionSource
+export type ContextMotionSource = MotionSource
+/** Phase 3B: animated vs instant only (data-pane-motion). */
+export type PaneMotionSource = MotionSource
 
 /**
  * Shell-owned Work drawer action — drives CSS duration/easing only
@@ -47,9 +53,6 @@ export type PaneTransition =
   | 'maximize'
   | 'restore'
   | 'instant'
-
-const TOOLBAR_CONTROL_CLASS =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-muted'
 
 /**
  * Task flex constraints for split layout.
@@ -84,6 +87,11 @@ export interface WorkbenchShellProps {
   commands: WorkbenchSessionCommands
   /** Assembled Task view from Composition Root (Shell does not load fixtures). */
   taskView: TaskSurfaceView
+  navigatorUtilities: NavigatorUtility[]
+  projectFolders: ProjectFolder[]
+  taskNavMeta: Record<string, TaskNavMeta>
+  onLaunchAction?: (action: LaunchAction) => void
+  onNewChat?: () => void
 }
 
 /**
@@ -95,6 +103,11 @@ export function WorkbenchShell({
   view,
   commands,
   taskView,
+  navigatorUtilities,
+  projectFolders,
+  taskNavMeta,
+  onLaunchAction,
+  onNewChat,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -263,6 +276,18 @@ export function WorkbenchShell({
 
   const widthAnimating = paneMotionSource === 'animated'
 
+  const navigatorShared = {
+    project: view.project,
+    tasks: view.tasks,
+    selectedTaskId: view.selectedTaskId,
+    open: view.navigatorOpen,
+    utilities: navigatorUtilities,
+    projectFolders,
+    taskNavMeta,
+    onNewChat,
+    onOpenSettings: openSettings,
+  }
+
   return (
     <div
       className='relative flex h-svh min-h-0 w-full overflow-hidden bg-sidebar'
@@ -287,13 +312,9 @@ export function WorkbenchShell({
         <div className='nav-reserved-gap' aria-hidden={!view.navigatorOpen}>
           <div className='nav-reserved-inner'>
             <Navigator
-              project={view.project}
-              tasks={view.tasks}
-              selectedTaskId={view.selectedTaskId}
-              open={view.navigatorOpen}
+              {...navigatorShared}
               mode='reserved'
               onSelectTask={selectTaskFromShell}
-              onOpenSettings={openSettings}
             />
           </div>
         </div>
@@ -325,17 +346,14 @@ export function WorkbenchShell({
               data-testid='workspace-top-bar'
               data-slot='task-pane-toolbar'
             >
-              <button
-                type='button'
-                data-testid={workFullStage ? undefined : 'toggle-navigator'}
-                className={TOOLBAR_CONTROL_CLASS}
-                aria-pressed={view.navigatorOpen}
-                aria-label='切换导航'
-                title='切换导航'
+              <ToolbarIconButton
+                testId={workFullStage ? undefined : 'toggle-navigator'}
+                pressed={view.navigatorOpen}
+                label='切换导航'
                 onClick={toggleNavigatorFromPointer}
               >
                 <PanelLeftIcon className='size-4' aria-hidden />
-              </button>
+              </ToolbarIconButton>
 
               <FolderIcon
                 className='size-4 shrink-0 text-muted-foreground'
@@ -349,34 +367,29 @@ export function WorkbenchShell({
               </div>
 
               <div className='flex shrink-0 items-center gap-0.5'>
-                <button
-                  type='button'
-                  data-testid='toggle-context'
-                  className={TOOLBAR_CONTROL_CLASS}
-                  aria-pressed={view.layout.contextPanelOpen}
-                  aria-label='切换任务上下文面板'
-                  title='切换任务上下文面板'
+                <ToolbarIconButton
+                  testId='toggle-context'
+                  pressed={view.layout.contextPanelOpen}
+                  label='切换任务上下文面板'
                   onClick={toggleContextFromPointer}
                 >
                   <SlidersHorizontal className='size-4' aria-hidden />
-                </button>
-                <button
-                  type='button'
-                  data-testid='toggle-work-surface-chrome'
-                  className={TOOLBAR_CONTROL_CLASS}
-                  aria-pressed={view.layout.workSurfaceVisible}
-                  aria-label='切换工作面'
-                  title='切换工作面'
+                </ToolbarIconButton>
+                <ToolbarIconButton
+                  testId='toggle-work-surface-chrome'
+                  pressed={view.layout.workSurfaceVisible}
+                  label='切换工作面'
                   onClick={toggleWorkFromPointer}
                 >
                   <PanelBottom className='size-4' aria-hidden />
-                </button>
+                </ToolbarIconButton>
               </div>
             </header>
 
             <div className='flex min-h-0 min-w-0 flex-1'>
               <TaskSurface
                 view={taskView}
+                onLaunchAction={onLaunchAction}
                 onCloseContextPanel={
                   taskView.contextPanelOpen
                     ? () => {
@@ -417,17 +430,14 @@ export function WorkbenchShell({
               fullStage={workFullStage}
               toolbarLeading={
                 workFullStage && view.layout.workSurfaceVisible ? (
-                  <button
-                    type='button'
-                    data-testid='toggle-navigator'
-                    className={TOOLBAR_CONTROL_CLASS}
-                    aria-pressed={view.navigatorOpen}
-                    aria-label='切换导航'
-                    title='切换导航'
+                  <ToolbarIconButton
+                    testId='toggle-navigator'
+                    pressed={view.navigatorOpen}
+                    label='切换导航'
                     onClick={toggleNavigatorFromPointer}
                   >
                     <PanelLeftIcon className='size-4' aria-hidden />
-                  </button>
+                  </ToolbarIconButton>
                 ) : undefined
               }
             />
@@ -438,10 +448,7 @@ export function WorkbenchShell({
       {/* Medium/narrow: overlay Navigator stays mounted for motion; closed is inert. */}
       {navigatorMode === 'overlay' ? (
         <Navigator
-          project={view.project}
-          tasks={view.tasks}
-          selectedTaskId={view.selectedTaskId}
-          open={view.navigatorOpen}
+          {...navigatorShared}
           mode='overlay'
           onSelectTask={(id) => {
             selectTaskFromShell(id)
@@ -452,7 +459,6 @@ export function WorkbenchShell({
             setNavMotion('animated')
             commands.setNavigatorOpen(false)
           }}
-          onOpenSettings={openSettings}
         />
       ) : null}
 

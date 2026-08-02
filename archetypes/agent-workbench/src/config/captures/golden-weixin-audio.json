@@ -1,0 +1,76 @@
+{
+  "id": "golden-weixin-audio",
+  "title": "微信 WebView 音频解锁方案",
+  "prompt": "微信内 H5 语音播报首次进入失败，分析 WeixinJSBridge 与 Chrome 差异并给出处理方案。",
+  "notes": "Synthetic capture modeled on Codex task-surface UI (处理中→已处理, 已搜索网页 folds, Markdown). Not a live Runtime recording. Markdown renderer is Workbench-local (no extra npm dep).",
+  "events": [
+    {
+      "id": "u1",
+      "type": "user_message",
+      "ts": 0,
+      "text": "微信内 H5 语音播报首次进入失败，分析 WeixinJSBridge 与 Chrome 差异并给出处理方案。"
+    },
+    {
+      "id": "s-run",
+      "type": "turn_status",
+      "ts": 50,
+      "status": "running",
+      "label": "处理中"
+    },
+    {
+      "id": "tool-search-1",
+      "type": "tool_activity",
+      "ts": 120,
+      "toolKind": "web_search",
+      "status": "running",
+      "label": "正在搜索网页",
+      "detail": "WeixinJSBridgeReady audio autoplay"
+    },
+    {
+      "id": "tool-search-1",
+      "type": "tool_activity",
+      "ts": 4200,
+      "toolKind": "web_search",
+      "status": "completed",
+      "label": "已搜索网页",
+      "detail": "WeixinJSBridgeReady audio autoplay H5 微信 浏览器",
+      "items": [
+        "developers.weixin.qq.com · WeixinJSBridgeReady 与 getNetworkType",
+        "微信开放文档 · 音频播放与用户手势限制"
+      ]
+    },
+    {
+      "id": "tool-search-2",
+      "type": "tool_activity",
+      "ts": 4300,
+      "toolKind": "web_search",
+      "status": "completed",
+      "label": "已搜索网页",
+      "detail": "微信开放文档 WeixinJSBridgeReady getNetworkType audio play",
+      "items": [
+        "getNetworkType 回调可用于提前解锁 Audio",
+        "页面高度需按 visualViewport 校验"
+      ]
+    },
+    {
+      "id": "a1",
+      "type": "assistant_message",
+      "ts": 5000,
+      "markdown": "这个差异很重要。微信 WebView **不是**普通 Chrome：页面高度要按微信的 `visualViewport` 验证，语音也要看 `WeixinJSBridge` 是否真正完成解锁。刚才的视觉验证只能证明响应式布局在 Chromium 小屏下正常，不能替代微信真机结论；语音的 Chrome `NotAllowedError` 也不能直接等同于微信结果。\n\n我先核对现有微信桥接实现和微信当前可用的音频解锁能力，再给出微信环境的处理方案。"
+    },
+    {
+      "id": "a2",
+      "type": "assistant_message",
+      "ts": 5200,
+      "markdown": "那处理方案要调整。我收回“微信里首次进入一定需要点击”的绝对结论。\n\n当前代码虽然有 `WeixinJSBridgeReady`，但执行时机太晚：它要等 TTS 请求完成、音频创建、首次播放失败后才注册桥接恢复。正式环境生成音频约需 3 秒，此时微信桥接事件很可能早已结束。\n\n微信环境应改为：\n\n1. 页面初始化时立即创建一个全局复用的 `Audio` 实例。\n2. 首屏加载阶段就监听 `WeixinJSBridgeReady`。\n3. 桥接就绪后调用 `getNetworkType`，在回调中提前解锁该 Audio。\n4. TTS 返回后，把 Blob URL 设置给同一个 Audio 实例并播放，不再每条回复新建 Audio。\n5. 如果桥接解锁仍失败，再显示“点击开启语音播报”作为兜底。\n6. 增加桥接阶段埋点，区分：\n   - 微信桥接是否存在\n   - `WeixinJSBridgeReady` 是否触发\n   - `getNetworkType` 是否回调\n   - 最终 `audio.play()` 成功还是失败"
+    },
+    {
+      "id": "s-done",
+      "type": "turn_status",
+      "ts": 78000,
+      "status": "completed",
+      "label": "已处理",
+      "durationMs": 78000
+    }
+  ]
+}

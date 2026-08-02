@@ -29,7 +29,7 @@
 | agent-desktop 工作区 | **MVP Done** | Workspace 首页 + threads 列表 + L2 desktop 边界 |
 | Agent Workbench 架构 | **Phase 0 Done** | 领域语言、ADR、目录蓝图、路线图与 Admin baseline 已落盘 |
 | Template Platform Monorepo | **Phase 1 Done（through 1C）** | Admin 源、tooling、Admin assets 与合同已对齐 |
-| Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin 兼容 re-export；Workbench 直接子路径消费；`check:foundation`；init copy-and-own |
+| Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin + Workbench 均经 `@/components/ui/*` 兼容 re-export；`check:foundation`；init copy-and-own |
 | Agent Workbench Shell | **Phase 3 Done** | 静态 Shell / task-scoped layout / placeholder Host；`check:workbench`；Playwright 证据；**无** Runtime / 具体 Surface |
 | Workbench inset layout polish | **Phase 3A Done** | sidebar 平面 + 272px Navigator + 8px inset Workspace + 合并顶栏 + pointer/keyboard 分源动效；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
 | Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Codex 语义图标；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |

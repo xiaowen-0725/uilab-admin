@@ -1,74 +1,190 @@
-import type { ExecutionItem } from '../../model/types'
-
-/** Phase 3 UI honesty copy — static fixture only, not Runtime projection. */
-const FIXTURE_DISCLOSURE =
-  '静态 Phase 3 fixture — 非真实 Agent Runtime / 非真实执行流'
+import { useState, type ReactNode } from 'react'
+import { ChevronDown, Globe, Info } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
+import type { StreamViewModel, ToolRowView } from '../../model/stream-events'
+import { SimpleMarkdown } from '../markdown/simple-markdown'
 
 export interface ExecutionStreamProps {
-  items: ExecutionItem[]
+  stream: StreamViewModel
 }
 
-function itemClassName(kind: ExecutionItem['kind']): string {
-  switch (kind) {
-    case 'user':
-      return 'ml-8 rounded-xl border border-border bg-primary/5 px-3 py-2 text-sm'
-    case 'tool':
-      return 'rounded-xl border border-dashed border-border bg-muted/30 px-3 py-2 text-sm'
-    case 'assistant':
-      return 'mr-8 rounded-xl border border-border bg-card px-3 py-2 text-sm shadow-sm'
-  }
-}
-
-function itemRoleLabel(kind: ExecutionItem['kind']): string {
-  switch (kind) {
-    case 'user':
-      return '用户'
-    case 'assistant':
-      return '助手'
-    case 'tool':
-      return '工具活动'
-  }
-}
-
-export function ExecutionStream({ items }: ExecutionStreamProps) {
+/**
+ * Capture-driven task event stream UI (replay only).
+ * shadcn: Alert disclosure, Badge turn status, Collapsible tool rows.
+ */
+export function ExecutionStream({ stream }: ExecutionStreamProps) {
   return (
     <div
       className='flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3'
       data-slot='execution-stream'
       data-testid='execution-stream'
-      aria-label='执行流（静态 fixture）'
+      data-capture-id={stream.captureId}
+      aria-label='任务事件流（回放）'
     >
-      <div className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-3'>
-        <p
-          className='rounded-md border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground'
+      <div className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-1'>
+        <Alert
+          className='mb-2 border-dashed bg-muted/40'
           data-testid='fixture-disclosure'
         >
-          {FIXTURE_DISCLOSURE}
-        </p>
+          <Info aria-hidden />
+          <AlertDescription>
+            事件流回放（capture:{' '}
+            <span className='font-mono'>{stream.captureId}</span>
+            ）— 非真实 Agent Runtime
+          </AlertDescription>
+        </Alert>
 
-        <ul className='flex flex-col gap-3'>
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className={itemClassName(item.kind)}
-              data-kind={item.kind}
-            >
-              <div className='mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground'>
-                <span>{itemRoleLabel(item.kind)}</span>
-                {item.kind === 'tool' && (
-                  <span className='rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground'>
-                    {item.status === 'completed' ? '已完成' : item.status}
-                  </span>
-                )}
-                {item.title ? (
-                  <span className='font-mono'>{item.title}</span>
-                ) : null}
-              </div>
-              <p className='whitespace-pre-wrap text-foreground'>{item.body}</p>
+        {stream.userMessages.map((msg) => (
+          <div
+            key={msg.id}
+            className='mb-3 flex w-full flex-col items-end py-2'
+            data-kind='user'
+            data-testid={`stream-user-${msg.id}`}
+          >
+            <div className='max-w-[77%] rounded-2xl bg-muted px-3 py-2 text-sm leading-[22px]'>
+              {msg.text}
+            </div>
+          </div>
+        ))}
+
+        <TurnHeader turn={stream.turn} />
+        <Separator className='mb-2' />
+
+        <div className='flex flex-col gap-0.5 py-1' data-testid='stream-tool-rows'>
+          {stream.turn.toolRows.map((row) => (
+            <ToolRow key={row.id} row={row} />
+          ))}
+        </div>
+
+        {stream.turn.markdownParts.map((md, index) => (
+          <SimpleMarkdown
+            key={`md-${index}`}
+            source={md}
+            className='text-foreground'
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TurnHeader({ turn }: { turn: StreamViewModel['turn'] }) {
+  const completed = turn.status === 'completed'
+  return (
+    <div
+      className='mb-2 flex items-center gap-2 pt-1'
+      data-testid='stream-turn-status'
+      data-status={turn.status}
+    >
+      <span
+        className={cn(
+          'text-sm font-medium',
+          completed ? 'text-muted-foreground' : 'text-foreground'
+        )}
+        data-testid='stream-status-label'
+      >
+        {turn.statusLabel}
+      </span>
+      {turn.durationLabel ? (
+        <Badge
+          variant='secondary'
+          className='tabular-nums'
+          data-testid='stream-status-duration'
+        >
+          {turn.durationLabel}
+        </Badge>
+      ) : null}
+      {completed ? (
+        <ChevronDown className='size-4 text-muted-foreground' aria-hidden />
+      ) : null}
+    </div>
+  )
+}
+
+function ToolRowLabel({
+  row,
+  chevron,
+}: {
+  row: ToolRowView
+  chevron?: ReactNode
+}) {
+  return (
+    <>
+      <Globe className='size-4 shrink-0 opacity-80' aria-hidden />
+      <span
+        className={
+          row.status === 'running' ? 'animate-pulse text-foreground' : undefined
+        }
+      >
+        {row.label}
+      </span>
+      {row.detail ? (
+        <span className='min-w-0 truncate font-mono text-[12px] opacity-70'>
+          {row.detail}
+        </span>
+      ) : null}
+      {chevron}
+    </>
+  )
+}
+
+function ToolRow({ row }: { row: ToolRowView }) {
+  const [open, setOpen] = useState(row.defaultExpanded)
+  const hasItems = row.items.length > 0
+  const rowProps = {
+    className: 'py-1' as const,
+    'data-testid': `stream-tool-${row.id}`,
+    'data-tool-status': row.status,
+  }
+
+  if (!hasItems) {
+    return (
+      <div {...rowProps}>
+        <div className='flex w-full items-center gap-2 py-0.5 text-sm text-muted-foreground'>
+          <ToolRowLabel row={row} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} {...rowProps}>
+      <CollapsibleTrigger
+        className={cn(
+          'flex w-full items-center gap-2 py-0.5 text-left text-sm text-muted-foreground',
+          'hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50'
+        )}
+      >
+        <ToolRowLabel
+          row={row}
+          chevron={
+            <ChevronDown
+              className={cn(
+                'ms-auto size-3.5 shrink-0 transition-transform',
+                open && 'rotate-180'
+              )}
+              aria-hidden
+            />
+          }
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className='mt-1 flex flex-col gap-1 border-l border-border ps-4 ms-2 text-xs text-muted-foreground'>
+          {row.items.map((item) => (
+            <li key={item} className='truncate'>
+              {item}
             </li>
           ))}
         </ul>
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

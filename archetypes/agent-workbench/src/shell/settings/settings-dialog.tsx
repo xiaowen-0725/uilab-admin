@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import {
   Monitor,
   Moon,
@@ -7,6 +7,17 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
 import {
   DEMO_NAVIGATOR_USER,
   type NavigatorUser,
@@ -33,8 +44,24 @@ const SECTIONS: {
   { id: 'appearance', label: '外观', icon: Sun },
 ]
 
+const THEME_OPTIONS: {
+  value: ThemePreference
+  label: string
+  icon: typeof Monitor
+  Preview: () => ReactNode
+}[] = [
+  {
+    value: 'system',
+    label: '跟随系统',
+    icon: Monitor,
+    Preview: SystemThemePreview,
+  },
+  { value: 'light', label: '浅色', icon: Sun, Preview: LightThemePreview },
+  { value: 'dark', label: '深色', icon: Moon, Preview: DarkThemePreview },
+]
+
 /**
- * Modal settings shell for the Workbench template.
+ * Modal settings shell for the Workbench template (shadcn Base UI Dialog).
  * Sections stay fixture-honest: profile is demo data; appearance toggles local theme only.
  */
 export function SettingsDialog({
@@ -44,55 +71,30 @@ export function SettingsDialog({
   onClose,
   user = DEMO_NAVIGATOR_USER,
 }: SettingsDialogProps) {
-  const titleId = useId()
-  const closeRef = useRef<HTMLButtonElement>(null)
   const { preference, setPreference } = useThemePreference()
-
-  useEffect(() => {
-    if (!open) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    const t = window.setTimeout(() => closeRef.current?.focus(), 0)
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        event.stopPropagation()
-        onClose()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      window.clearTimeout(t)
-      document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', onKeyDown, true)
-    }
-  }, [open, onClose])
-
-  if (!open) return null
+  const sectionLabel =
+    SECTIONS.find((item) => item.id === section)?.label ?? '设置'
 
   return (
-    <div
-      className='fixed inset-0 z-[100] flex items-center justify-center p-4'
-      data-slot='settings-dialog-root'
-      data-testid='settings-dialog'
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
     >
-      <button
-        type='button'
-        className='absolute inset-0 bg-foreground/40'
-        aria-label='关闭设置'
-        data-testid='settings-dialog-backdrop'
-        onClick={onClose}
-      />
-
-      <div
-        role='dialog'
-        aria-modal='true'
-        aria-labelledby={titleId}
-        data-testid='settings-dialog-panel'
-        className='relative flex h-[min(640px,85vh)] w-full max-w-[880px] overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-[0_24px_80px_color-mix(in_oklch,var(--foreground)_22%,transparent)]'
+      <DialogContent
+        showCloseButton={false}
+        data-testid='settings-dialog'
+        className={cn(
+          'flex h-[min(640px,85vh)] w-full max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-2xl bg-background p-0 text-foreground sm:max-w-[880px]',
+          'shadow-[0_24px_80px_color-mix(in_oklch,var(--foreground)_22%,transparent)]'
+        )}
       >
-        {/* Left section nav */}
+        <DialogTitle className='sr-only'>设置</DialogTitle>
+        <DialogDescription className='sr-only'>
+          工作台设置：个人资料与外观
+        </DialogDescription>
+
         <aside
           className='flex w-[200px] shrink-0 flex-col border-r border-border bg-muted/40'
           data-slot='settings-nav'
@@ -106,57 +108,61 @@ export function SettingsDialog({
               const Icon = item.icon
               const selected = section === item.id
               return (
-                <button
+                <Button
                   key={item.id}
                   type='button'
+                  variant='ghost'
                   data-testid={`settings-nav-${item.id}`}
                   data-selected={selected ? 'true' : 'false'}
-                  className={
+                  className={cn(
+                    'h-auto w-full justify-start gap-2 rounded-lg px-3 py-2 text-sm font-normal',
                     selected
-                      ? 'flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-left text-sm font-medium shadow-sm'
-                      : 'flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground hover:bg-background/70 hover:text-foreground'
-                  }
+                      ? 'bg-background font-medium shadow-sm hover:bg-background'
+                      : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                  )}
                   onClick={() => onSectionChange(item.id)}
                 >
-                  <Icon className='size-4 shrink-0' aria-hidden />
+                  <Icon aria-hidden />
                   {item.label}
-                </button>
+                </Button>
               )
             })}
           </nav>
         </aside>
 
-        {/* Main pane */}
         <div className='flex min-w-0 flex-1 flex-col'>
           <header className='flex h-12 shrink-0 items-center justify-between border-b border-border px-5'>
-            <h2 id={titleId} className='text-sm font-semibold'>
-              {SECTIONS.find((s) => s.id === section)?.label ?? '设置'}
-            </h2>
-            <button
-              ref={closeRef}
-              type='button'
+            <h2 className='text-sm font-semibold'>{sectionLabel}</h2>
+            <DialogClose
               data-testid='settings-dialog-close'
-              className='inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50'
-              aria-label='关闭设置'
-              onClick={onClose}
+              render={
+                <Button
+                  variant='ghost'
+                  size='icon-sm'
+                  className='text-muted-foreground'
+                  aria-label='关闭设置'
+                />
+              }
             >
-              <X className='size-4' aria-hidden />
-            </button>
+              <X aria-hidden />
+            </DialogClose>
           </header>
 
-          <div className='min-h-0 flex-1 overflow-y-auto p-5'>
-            {section === 'profile' ? (
-              <ProfileSection user={user} />
-            ) : (
-              <AppearanceSection
-                preference={preference}
-                onPreferenceChange={setPreference}
-              />
-            )}
-          </div>
+          <ScrollArea className='min-h-0 flex-1'>
+            <div className='p-5'>
+              {section === 'profile' ? (
+                <ProfileSection user={user} />
+              ) : (
+                <AppearanceSection
+                  preference={preference}
+                  onPreferenceChange={setPreference}
+                />
+              )}
+            </div>
+          </ScrollArea>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -198,7 +204,7 @@ function AppearanceSection({
   onPreferenceChange: (next: ThemePreference) => void
 }) {
   return (
-    <div className='space-y-4'>
+    <div className='flex flex-col gap-4'>
       <div>
         <h3 className='text-sm font-medium'>主题</h3>
         <p className='mt-1 text-xs text-muted-foreground'>
@@ -206,80 +212,48 @@ function AppearanceSection({
         </p>
       </div>
 
-      <div
+      <RadioGroup
+        value={preference}
+        onValueChange={(value) =>
+          onPreferenceChange(value as ThemePreference)
+        }
         className='grid grid-cols-1 gap-3 sm:grid-cols-3'
-        role='radiogroup'
         aria-label='主题'
         data-testid='settings-theme-group'
       >
-        <ThemeCard
-          value='system'
-          label='跟随系统'
-          selected={preference === 'system'}
-          onSelect={onPreferenceChange}
-          preview={<SystemThemePreview />}
-        />
-        <ThemeCard
-          value='light'
-          label='浅色'
-          selected={preference === 'light'}
-          onSelect={onPreferenceChange}
-          preview={<LightThemePreview />}
-        />
-        <ThemeCard
-          value='dark'
-          label='深色'
-          selected={preference === 'dark'}
-          onSelect={onPreferenceChange}
-          preview={<DarkThemePreview />}
-        />
-      </div>
+        {THEME_OPTIONS.map((option) => {
+          const selected = preference === option.value
+          const Icon = option.icon
+          const Preview = option.Preview
+          return (
+            <label
+              key={option.value}
+              data-testid={`settings-theme-${option.value}`}
+              data-selected={selected ? 'true' : 'false'}
+              className={cn(
+                'flex cursor-pointer flex-col gap-2 rounded-xl bg-card p-2 text-left transition-colors',
+                'focus-within:ring-3 focus-within:ring-ring/50',
+                selected
+                  ? 'border-2 border-primary shadow-sm'
+                  : 'border border-border hover:border-foreground/25'
+              )}
+            >
+              <RadioGroupItem value={option.value} className='sr-only' />
+              <div className='overflow-hidden rounded-lg border border-border'>
+                <Preview />
+              </div>
+              <span className='flex items-center gap-1.5 px-1 pb-0.5 text-sm font-medium'>
+                <Icon className='size-3.5 text-muted-foreground' aria-hidden />
+                {option.label}
+              </span>
+            </label>
+          )
+        })}
+      </RadioGroup>
     </div>
   )
 }
 
-function ThemeCard({
-  value,
-  label,
-  selected,
-  onSelect,
-  preview,
-}: {
-  value: ThemePreference
-  label: string
-  selected: boolean
-  onSelect: (value: ThemePreference) => void
-  preview: ReactNode
-}) {
-  const Icon =
-    value === 'system' ? Monitor : value === 'light' ? Sun : Moon
-
-  return (
-    <button
-      type='button'
-      role='radio'
-      aria-checked={selected}
-      data-testid={`settings-theme-${value}`}
-      data-selected={selected ? 'true' : 'false'}
-      className={
-        selected
-          ? 'flex flex-col gap-2 rounded-xl border-2 border-primary bg-card p-2 text-left shadow-sm focus-visible:ring-3 focus-visible:ring-ring/50'
-          : 'flex flex-col gap-2 rounded-xl border border-border bg-card p-2 text-left hover:border-foreground/25 focus-visible:ring-3 focus-visible:ring-ring/50'
-      }
-      onClick={() => onSelect(value)}
-    >
-      <div className='overflow-hidden rounded-lg border border-border'>
-        {preview}
-      </div>
-      <span className='flex items-center gap-1.5 px-1 pb-0.5 text-sm font-medium'>
-        <Icon className='size-3.5 text-muted-foreground' aria-hidden />
-        {label}
-      </span>
-    </button>
-  )
-}
-
-/** Mini mock window — system (split light/dark). */
 function SystemThemePreview() {
   return (
     <div className='flex h-20 w-full overflow-hidden'>

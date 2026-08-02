@@ -1,38 +1,92 @@
-import { getTaskFixture, phase3SessionSeed } from '@/config/fixtures'
-import type { TaskSurfaceView } from '@/modules/task'
+import { useCallback, useMemo, useState } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  getStreamViewForTask,
+  getTaskFixture,
+  launchActions,
+  navigatorUtilities,
+  phase3SessionSeed,
+  projectFolders,
+  taskNavMeta,
+} from '@/config/fixtures'
+import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
 import { useWorkbenchSession } from '@/modules/workbench-session'
 import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 
 /**
- * Composition Root — only place that creates the session controller
- * and wires static fixtures into the Shell. No production Adapter in Phase 3.
- *
- * ThemeProvider is mounted here so browser tests that render WorkbenchApp
- * directly still resolve theme context without a separate AppProviders wrap.
- * Mount-level AppProviders also provides ThemeProvider; nesting is harmless
- * (inner value wins for Shell).
+ * Composition Root — session + fixtures + capture replay (no live Runtime).
  */
 export function WorkbenchApp() {
   const session = useWorkbenchSession(phase3SessionSeed)
-  const fixture = getTaskFixture(session.view.selectedTaskId)
+  const [captureOverride, setCaptureOverride] = useState<
+    Record<string, string>
+  >({})
+  const [forceStream, setForceStream] = useState<Record<string, boolean>>({})
 
-  const taskView: TaskSurfaceView = {
-    taskId: session.view.selectedTaskId,
-    title: session.view.selectedTask.title,
-    subtitle: session.view.selectedTask.subtitle,
-    execution: fixture.execution,
-    contextSections: fixture.context,
-    contextPanelOpen: session.view.layout.contextPanelOpen,
-  }
+  const taskId = session.view.selectedTaskId
+  const fixture = getTaskFixture(taskId)
+  const overrideId = captureOverride[taskId]
+  const showStream =
+    Boolean(forceStream[taskId]) || fixture.contentMode === 'stream'
+  const stream = showStream
+    ? getStreamViewForTask(taskId, overrideId)
+    : null
+  const mode = showStream ? ('stream' as const) : ('empty' as const)
+
+  const taskView: TaskSurfaceView = useMemo(
+    () => ({
+      taskId,
+      title: session.view.selectedTask.title,
+      subtitle: session.view.selectedTask.subtitle,
+      projectName: session.view.project.name,
+      mode,
+      stream,
+      launchActions,
+      contextSections: fixture.context,
+      contextPanelOpen: session.view.layout.contextPanelOpen,
+    }),
+    [
+      taskId,
+      session.view.selectedTask.title,
+      session.view.selectedTask.subtitle,
+      session.view.project.name,
+      session.view.layout.contextPanelOpen,
+      mode,
+      stream,
+      fixture.context,
+    ]
+  )
+
+  const onLaunchAction = useCallback(
+    (action: LaunchAction) => {
+      if (!action.captureId) return
+      const captureId = action.captureId
+      setCaptureOverride((prev) => ({ ...prev, [taskId]: captureId }))
+      setForceStream((prev) => ({ ...prev, [taskId]: true }))
+    },
+    [taskId]
+  )
+
+  const onNewChat = useCallback(() => {
+    session.commands.selectTask('task-empty')
+    setForceStream((prev) => ({ ...prev, 'task-empty': false }))
+  }, [session.commands])
 
   return (
     <ThemeProvider>
-      <WorkbenchShell
-        view={session.view}
-        commands={session.commands}
-        taskView={taskView}
-      />
+      <TooltipProvider delay={400}>
+        <WorkbenchShell
+          view={session.view}
+          commands={session.commands}
+          taskView={taskView}
+          navigatorUtilities={navigatorUtilities}
+          projectFolders={projectFolders}
+          taskNavMeta={taskNavMeta}
+          onLaunchAction={onLaunchAction}
+          onNewChat={onNewChat}
+        />
+      </TooltipProvider>
     </ThemeProvider>
   )
 }

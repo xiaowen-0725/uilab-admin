@@ -25,11 +25,12 @@
 ## 定位
 
 - **Template Platform**：根目录承载共享合同、skill 发现入口、兼容 CLI/门禁 wrapper，以及跨 Archetype 文档
-- **Admin Archetype**：`archetypes/admin` — Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（**Base UI / base-nova**）+ TanStack Router / Query / Table
-- **Agent Workbench Archetype**：`archetypes/agent-workbench` — 独立 Task-first Shell（Phase 3：静态 fixture；**无** Runtime / 具体 Surface）
+- **统一 UI 栈（全模板）**：后续所有 Archetype / 派生应用均基于 **Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（Base UI / `base-nova`）**。组件按需 `shadcn add` 进应用源码（`components.json` + `@/components/ui/*`）；**Base UI 约束**：`render={...}`，禁止 `asChild` 与 `@radix-ui/*`
+- **Admin Archetype**：`archetypes/admin` — 上述 UI 栈 + TanStack Router / Query / Table 的中后台 Console 场景
+- **Agent Workbench Archetype**：`archetypes/agent-workbench` — **同一 UI 栈**上的独立 Task-first Shell 场景（Phase 3：静态 fixture；**无** Runtime / 具体 Surface）
 - 中文优先文案，代码标识英文
-- 与 UI Lab **弱连接**：不依赖 UI Lab runtime / Design Package 主链路
-- 目标：多个前端应用基于本模板装配，而不是每次重造壳层；Admin 与 Workbench **平级**，不共享 UniversalShell
+- 与 UI Lab **弱连接**：不依赖 UI Lab runtime / Design Package 主链路；UI Lab 仅作可选参考 / 注册源，装配仍落在各应用 shadcn 路径
+- 目标：多个前端应用基于本模板装配，而不是每次重造壳层；Admin 与 Workbench **平级场景**，**共享 UI 栈与 Foundation**，**不**共享 UniversalShell
 
 ## 平台目录（当前）
 
@@ -52,6 +53,16 @@ uilab-templates/
 
 **Workbench 派生生成尚未 shipped**（Phase 8）；当前仅 monorepo 内源应用可运行。
 
+### UI 栈与 shadcn Base UI（平台硬约束）
+
+- **所有模板**（Admin、Workbench、后续新 Archetype）默认同一条 UI 装配链：
+  1. 应用根 `components.json`（`style: base-nova`）
+  2. 原子 / 复合组件：`src/components/ui/*`（官方 shadcn 源码进仓，按需安装）
+  3. `cn`：`src/lib/utils.ts`（`clsx` + `tailwind-merge`）
+  4. 样式：`shadcn/tailwind.css` + `tw-animate-css` + Archetype tokens
+- **禁止**再走「Workbench 无 shadcn、只手写 Tailwind」的旁路；场景差异体现在 Shell / Module / fixture，不体现在 UI 基座分叉
+- **Base UI 约束**（跨 Archetype）：`render={...}`；禁止 `asChild` 与 `@radix-ui/*`
+
 ### Foundation（Phase 2A）
 
 - 包名：`@uilab/foundation`（private，**source-consumed**，本阶段不发 npm）
@@ -59,15 +70,15 @@ uilab-templates/
   - `@uilab/foundation/ui/button`
   - `@uilab/foundation/ui/input`
   - `@uilab/foundation/styles/tokens.css`
-- 禁止根 barrel；`cn` 为包内 private Implementation
+- 禁止根 barrel；Foundation 内 `cn` 为包内 private Implementation
 - 依赖方向：`archetypes/*` → `@uilab/foundation`；Foundation 不得反向依赖任何 Archetype
-- **消费者**：Admin（兼容 re-export）与 Workbench（直接公开子路径）— 仍**不**宣称完整 Phase 2（无共享 theme provider / 更广 primitives）
+- **与 shadcn 的关系**：Foundation 是跨 Archetype 的 **最小共享 primitives / tokens**；应用侧仍通过 `@/components/ui/button|input` **兼容 re-export** 消费（Admin 与 Workbench 同模式），其余 UI 走 shadcn 按需安装。仍**不**宣称完整 Phase 2（无共享 theme provider / 更广 primitives）
 - 门禁：`pnpm check:foundation`（规范实现 `tooling/quality-gates/check-foundation-boundaries.mjs`）
-- Admin 仍通过 `@/components/ui/*` 兼容 re-export 消费；Workbench 直接 import 公开子路径
 
 ### Agent Workbench（Phase 3 shipped）
 
 - 包名：`@uilab/agent-workbench`
+- UI 栈：与 Admin 相同的 shadcn Base UI（`components.json` / `@/components/ui/*` / Foundation re-export）
 - Composition Root + Deep Modules：`workbench-session` / `task` / `work-surface`
 - Shell：Navigator、Task Surface、Composer、Adaptive Context Panel、placeholder Work Surface Host
 - 静态 fixture only — **无** Agent Runtime、**无** Surface Registry、**无** Document/Browser/Review 实现
@@ -90,7 +101,7 @@ uilab-templates/
 2. **feature 厚，route 薄**
 3. **表格页必须复用 data-table pattern**
 4. **组件复用顺序**：pattern / feature → `components/ui` → bespoke
-5. **Base UI 约束**：`render={...}`；禁止 `asChild` 与 `@radix-ui/*`
+5. **Base UI 约束**（平台级，Admin/Workbench 共用）：`render={...}`；禁止 `asChild` 与 `@radix-ui/*`
 6. **布局差异走配置**（`admin-preferences` / cookie / Theme Settings）
 7. **中文优先**（用户可见文案）
 8. **示例可删，模式保留**

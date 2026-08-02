@@ -1,186 +1,228 @@
 /**
- * Static Phase 3 app fixtures only — not a real Agent Runtime projection.
- * View-data types are owned by Task Module; this file supplies seed data only.
+ * Static Workbench fixtures + capture wiring (no live Runtime).
+ * One TaskSeed list derives session seed, nav meta, and surface fixtures.
  */
 
-import type { ContextSection, ExecutionItem } from '@/modules/task'
+import {
+  DEFAULT_GOLDEN_CAPTURE_ID,
+  getEventStreamCapture,
+} from '@/config/captures'
+import {
+  foldCaptureToView,
+  type ContextSection,
+  type LaunchAction,
+  type StreamViewModel,
+  type TaskContentMode,
+} from '@/modules/task'
 import type { WorkbenchSessionSeed } from '@/modules/workbench-session'
+
+export interface NavigatorUtility {
+  id: string
+  label: string
+  /** lucide key resolved in Navigator UI */
+  icon: 'git-pull-request' | 'globe' | 'clock' | 'puzzle'
+}
+
+export interface ProjectFolder {
+  id: string
+  name: string
+}
+
+/** Navigator-only placement (pinned / folder). Surface mode lives on TaskFixture. */
+export interface TaskNavMeta {
+  pinned?: boolean
+  projectFolderId?: string | null
+}
 
 export interface TaskFixture {
   taskId: string
-  execution: ExecutionItem[]
+  contentMode: TaskContentMode
+  captureId?: string
+  /** Optional intermediate fold stop for demos */
+  untilEventId?: string
   context: ContextSection[]
 }
 
+/** Single task definition — source of truth for seed / nav / surface fixtures. */
+interface TaskSeed {
+  id: string
+  title: string
+  subtitle?: string
+  pinned?: boolean
+  projectFolderId?: string | null
+  contentMode: TaskContentMode
+  captureId?: string
+  untilEventId?: string
+  /** Stream context panel tag; empty tasks use emptyContext(). */
+  contextTag?: string
+}
+
+export const launchActions: LaunchAction[] = [
+  {
+    id: 'explore',
+    label: '探索并理解代码',
+    promptStub: '探索并理解当前仓库结构与关键模块。',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    icon: 'explore',
+  },
+  {
+    id: 'build',
+    label: '构建新功能、应用或工具',
+    promptStub: '在当前项目中构建一个小功能并说明改动点。',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    icon: 'build',
+  },
+  {
+    id: 'review',
+    label: '审查代码并提出修改建议',
+    promptStub: '审查最近改动并给出修改建议。',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    icon: 'review',
+  },
+  {
+    id: 'fix',
+    label: '修复问题和失败',
+    promptStub: '定位并修复当前失败用例或类型错误。',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    icon: 'fix',
+  },
+]
+
+export const navigatorUtilities: NavigatorUtility[] = [
+  { id: 'pull-requests', label: '拉取请求', icon: 'git-pull-request' },
+  { id: 'sites', label: '站点', icon: 'globe' },
+  { id: 'scheduled', label: '已安排', icon: 'clock' },
+  { id: 'plugins', label: '插件', icon: 'puzzle' },
+]
+
+export const projectFolders: ProjectFolder[] = [
+  { id: 'folder-uilab', name: 'ui-components' },
+  { id: 'folder-skills', name: 'zhoujw-skills' },
+  { id: 'folder-parking', name: 'parking-agent' },
+  { id: 'folder-hermes', name: 'ake-hermes-agent' },
+]
+
+const TASK_SEEDS: TaskSeed[] = [
+  {
+    id: 'task-empty',
+    title: '新任务',
+    subtitle: '开场区',
+    contentMode: 'empty',
+  },
+  {
+    id: 'task-a',
+    title: '微信 WebView 音频解锁方案',
+    subtitle: 'golden capture 回放',
+    pinned: true,
+    contentMode: 'stream',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    contextTag: 'golden capture',
+  },
+  {
+    id: 'task-b',
+    title: '裁决架构评审规格',
+    subtitle: '置顶会话',
+    pinned: true,
+    contentMode: 'stream',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    contextTag: 'pinned',
+  },
+  {
+    id: 'task-c',
+    title: '对齐 Agent 定位与后端路线',
+    subtitle: 'ui-components',
+    projectFolderId: 'folder-uilab',
+    contentMode: 'stream',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    contextTag: 'project folder',
+  },
+  {
+    id: 'task-d',
+    title: 'parking-agent 实现',
+    subtitle: '项目会话',
+    projectFolderId: 'folder-parking',
+    contentMode: 'empty',
+  },
+]
+
+export const taskNavMeta: Record<string, TaskNavMeta> = Object.fromEntries(
+  TASK_SEEDS.map((task) => [
+    task.id,
+    {
+      pinned: task.pinned,
+      projectFolderId: task.projectFolderId,
+    } satisfies TaskNavMeta,
+  ])
+)
+
+export const taskFixtures: Record<string, TaskFixture> = Object.fromEntries(
+  TASK_SEEDS.map((task) => [
+    task.id,
+    {
+      taskId: task.id,
+      contentMode: task.contentMode,
+      captureId: task.captureId,
+      untilEventId: task.untilEventId,
+      context:
+        task.contentMode === 'stream' && task.contextTag
+          ? streamContext(task.contextTag)
+          : emptyContext(),
+    } satisfies TaskFixture,
+  ])
+)
+
 export const phase3SessionSeed: WorkbenchSessionSeed = {
   project: {
-    id: 'proj-uilab-demo',
-    name: 'UI Lab 演示项目',
+    id: 'proj-lot-sentry',
+    name: 'lot-sentry-ai-agent',
   },
-  tasks: [
-    {
-      id: 'task-a',
-      title: '任务 A · 布局规格',
-      subtitle: '验证 Task-only 与 Context 占位',
-    },
-    {
-      id: 'task-b',
-      title: '任务 B · 浏览器预览',
-      subtitle: '验证 Work Surface 与 tabs',
-    },
-    {
-      id: 'task-c',
-      title: '任务 C · 静态 fixture',
-      subtitle: '验证 Task 切换恢复布局',
-    },
-  ],
-  selectedTaskId: 'task-a',
+  tasks: TASK_SEEDS.map(({ id, title, subtitle }) => ({ id, title, subtitle })),
+  selectedTaskId: 'task-empty',
   workSurfaceTabs: [
     { id: 'tab-layout', label: '布局规格.md' },
     { id: 'tab-browser', label: '浏览器预览' },
   ],
 }
 
-export const taskFixtures: Record<string, TaskFixture> = {
-  'task-a': {
-    taskId: 'task-a',
-    execution: [
-      {
-        id: 'a-u1',
-        kind: 'user',
-        body: '先搭一个 Task-first 的 Workbench Shell，Context 要自适应宽度。',
-      },
-      {
-        id: 'a-a1',
-        kind: 'assistant',
-        body: '收到。这是静态 fixture 中的助手回复：宽 Task 使用 reserved-space Context，窄 Task 切换为 overlay 卡片。',
-      },
-      {
-        id: 'a-t1',
-        kind: 'tool',
-        title: 'read_layout_spec',
-        status: 'completed',
-        body: '已完成（fixture）· 读取 docs/plans/phase-3-workbench-shell-skeleton-work-order.md',
-      },
-      {
-        id: 'a-a2',
-        kind: 'assistant',
-        body: '当前数据明确标注为静态 Phase 3 fixture，不会调用真实 Runtime。',
-      },
-    ],
-    context: [
-      {
-        id: 'env',
-        title: '环境',
-        items: ['Web Renderer', 'Phase 3 Shell', '无 Agent Runtime'],
-      },
-      {
-        id: 'changes',
-        title: '变更',
-        items: ['+ workbench-shell', '+ task surface', '+ context panel'],
-      },
-      {
-        id: 'source',
-        title: '来源',
-        items: ['fixtures.ts', 'work order Phase 3'],
-      },
-      {
-        id: 'subagent',
-        title: '子 Agent',
-        items: ['（无）— 本阶段不模拟子 Run'],
-      },
-    ],
-  },
-  'task-b': {
-    taskId: 'task-b',
-    execution: [
-      {
-        id: 'b-u1',
-        kind: 'user',
-        body: '打开 Work Surface，切换「布局规格.md」与「浏览器预览」两个占位 tab。',
-      },
-      {
-        id: 'b-a1',
-        kind: 'assistant',
-        body: 'Work Surface Host 是 Single-pane + Tabs 占位。具体 Document / Browser Surface 在 Phase 6 交付。',
-      },
-      {
-        id: 'b-t1',
-        kind: 'tool',
-        title: 'open_placeholder_surface',
-        status: 'completed',
-        body: '已完成（fixture）· 未注册真实 Surface Module',
-      },
-    ],
-    context: [
-      {
-        id: 'env',
-        title: '环境',
-        items: ['静态 fixture', 'Tabs host'],
-      },
-      {
-        id: 'changes',
-        title: '变更',
-        items: ['Work Surface open/close', 'tab activation'],
-      },
-      {
-        id: 'source',
-        title: '来源',
-        items: ['placeholder tabs only'],
-      },
-      {
-        id: 'subagent',
-        title: '子 Agent',
-        items: ['（无）'],
-      },
-    ],
-  },
-  'task-c': {
-    taskId: 'task-c',
-    execution: [
-      {
-        id: 'c-u1',
-        kind: 'user',
-        body: '在 Task A 与 Task C 之间切换，确认布局状态互不污染。',
-      },
-      {
-        id: 'c-a1',
-        kind: 'assistant',
-        body: '每个 Task 独立保存 Context / Work Surface 显隐 / 宽度 / 活动 tab / 最大化状态。',
-      },
-      {
-        id: 'c-t1',
-        kind: 'tool',
-        title: 'snapshot_layout',
-        status: 'completed',
-        body: '已完成（fixture）· 布局状态按 taskId 作用域隔离',
-      },
-    ],
-    context: [
-      {
-        id: 'env',
-        title: '环境',
-        items: ['task-scoped layout'],
-      },
-      {
-        id: 'changes',
-        title: '变更',
-        items: ['selectTask restore'],
-      },
-      {
-        id: 'source',
-        title: '来源',
-        items: ['workbench-session reducer'],
-      },
-      {
-        id: 'subagent',
-        title: '子 Agent',
-        items: ['（无）'],
-      },
-    ],
-  },
+export function getTaskFixture(taskId: string): TaskFixture {
+  return taskFixtures[taskId] ?? taskFixtures['task-empty']
 }
 
-export function getTaskFixture(taskId: string): TaskFixture {
-  return taskFixtures[taskId] ?? taskFixtures['task-a']
+export function getStreamViewForTask(
+  taskId: string,
+  overrideCaptureId?: string
+): StreamViewModel | null {
+  const fixture = getTaskFixture(taskId)
+  const captureId = overrideCaptureId ?? fixture.captureId
+  // overrideCaptureId allows empty-hub card clicks to load a golden stream.
+  if (!captureId) return null
+  const capture = getEventStreamCapture(captureId)
+  return foldCaptureToView(capture, {
+    untilEventId: overrideCaptureId ? undefined : fixture.untilEventId,
+  })
+}
+
+function emptyContext(): ContextSection[] {
+  return [
+    {
+      id: 'env',
+      title: '环境',
+      items: ['开场区', '无事件流', 'fixture 交互'],
+    },
+  ]
+}
+
+function streamContext(tag: string): ContextSection[] {
+  return [
+    {
+      id: 'env',
+      title: '环境',
+      items: ['事件流回放', tag, '无 Agent Runtime'],
+    },
+    {
+      id: 'source',
+      title: '来源',
+      items: ['config/captures/golden-weixin-audio.json'],
+    },
+  ]
 }
