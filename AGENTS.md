@@ -29,7 +29,8 @@
 - **Admin Archetype**：`archetypes/admin` — 上述 UI 栈 + TanStack Router / Query / Table 的中后台 Console 场景
 - **Agent Workbench Archetype**：`archetypes/agent-workbench` — **同一 UI 栈**上的独立 Task-first Shell 场景（Phase 3：静态 fixture；**无** Runtime / 具体 Surface）
 - 中文优先文案，代码标识英文
-- 与 UI Lab **弱连接**：不依赖 UI Lab runtime / Design Package 主链路；UI Lab 仅作可选参考 / 注册源，装配仍落在各应用 shadcn 路径
+- 与 UI Lab **弱连接、强复用**：不依赖 UI Lab runtime / Design Package 主链路；Agent 复合交互优先经 **shadcn registry 安装** UI Lab 组件源码进应用。组件缺陷与能力优化以 **UI Lab 仓库为真源并回流**，模板侧不长期平行 fork
+- **体验保真（尤其 Workbench）**：模板目标是「像真 Runtime 的本地产品体验」；未接远程后端 ≠ UI 只读演示。本地状态与交互应完整；诚实边界仅针对远程/后端未接通
 - 目标：多个前端应用基于本模板装配，而不是每次重造壳层；Admin 与 Workbench **平级场景**，**共享 UI 栈与 Foundation**，**不**共享 UniversalShell
 
 ## 平台目录（当前）

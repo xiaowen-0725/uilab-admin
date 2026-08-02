@@ -1,6 +1,6 @@
 # uilab-admin 项目状态快照
 
-> 更新时间：2026-08-01
+> 更新时间：2026-08-02
 > 分支：`main`
 > 架构基线提交：`81731f8`
 > Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C `c84be8d`
@@ -8,6 +8,7 @@
 > Phase 3：Agent Workbench Shell skeleton（证据已落盘）
 > Phase 3A：Workbench inset layout polish（布局/动效；Playwright 证据已落盘）
 > Phase 3B：Codex pane chrome + pointer motion（**Done**；Playwright/动效证据已落盘）
+> Phase 3C：Workbench Composer 产品保真（**Done**；本地 Runtime 交互 + UI Lab agent-composer 回流；Vitest 26 绿）
 > 远程：https://github.com/xiaowen-0725/uilab-admin.git
 > 用途：后续优化/追溯用状态真源；平台合同见根 `AGENTS.md`，Admin / 派生应用硬规则见 `archetypes/admin/AGENTS.md` 与 `archetypes/admin/docs/ai/*`。
 
@@ -33,14 +34,15 @@
 | Agent Workbench Shell | **Phase 3 Done** | 静态 Shell / task-scoped layout / placeholder Host；`check:workbench`；Playwright 证据；**无** Runtime / 具体 Surface |
 | Workbench inset layout polish | **Phase 3A Done** | sidebar 平面 + 272px Navigator + 8px inset Workspace + 合并顶栏 + pointer/keyboard 分源动效；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
 | Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Codex 语义图标；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
+| Workbench Composer fidelity | **Phase 3C Done** | UI Lab `agent-composer` 源码消费；context rail 三色层级；项目 picker（搜索/新建 Dialog/打开本地目录）；全宽 + 菜单；`/` 命令与技能 palette；技能内嵌标签（#7eb8f0）；场景级 `show*` 开关；**本地交互完整、远程诚实**；Vitest 26 绿 |
 | Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | Foundation 2/8；Admin 18/108；Workbench 2/21；共 137 tests |
-| 模板“产品打磨/去 demo 化” | **Planned** | 在 Monorepo 稳定后继续 |
+| Browser test suite | **Green** | Workbench integration **26** tests（本批）；Foundation/Admin 基线见既有证据 |
+| 模板“产品打磨/去 demo 化” | **In progress** | Workbench Composer 本地产品体验已推进；Admin 去 demo 仍 planned |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**
-Phase 1、**Phase 2A Foundation seam**、**Phase 3 Workbench Shell 骨架** 已完成并有独立验收证据。**Phase 3A** 与 **Phase 3B** 为 Workbench 布局/动效 polish（非 Phase 4），均已通过 Playwright 与动效验收。完整 Phase 2 仍未完成（primitives/providers 范围）。Runtime / Surface / CLI Workbench 生成均未开始；Phase 4 明确暂停。`agent-desktop` 仅作 Admin 兼容基线。
+Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B Shell** 已完成。**Phase 3C** 完成 Workbench Composer 对 Codex 的产品保真（本地 Runtime 交互 + UI Lab 复合块回流），**仍无**真实 Agent Runtime 后端 / Surface 实现。完整 Phase 2、Phase 4 Fake Runtime、CLI Workbench 生成均未开始；Phase 4 明确暂停。`agent-desktop` 仅作 Admin 兼容基线。
 
 ## 3. 已锁定决策（勿回退）
 
@@ -198,6 +200,15 @@ uilab-templates/
 - **未包含**：Runtime、Surface Registry、Document/Browser/Review、CLI Workbench 生成、desktop host
 - 证据：`docs/evidence/phase-3-workbench-shell-skeleton.md`
 
+### Phase 3C Workbench Composer fidelity（2026-08-02）
+
+- UI Lab `agent-composer` 进 `src/components/motion/agent-composer`（portal 菜单、全宽 FloatingPanel、SkillChip、ModeBadge）
+- Context rail：canvas / rail / shell 色阶；项目菜单（搜索、新建 Dialog、打开本地目录、不使用项目）；无项目时隐藏 env/branch
+- Composer：`+` shell 等宽添加菜单；`/` 命令+技能 palette；技能内嵌标签 `#7eb8f0`；textarea 局部去 focus 蓝环
+- 合同：根 / Workbench `AGENTS.md` 明确「本地 Runtime 体验 + 远程诚实」与 UI Lab 回流
+- 验收：`pnpm --filter @uilab/agent-workbench typecheck` + **26/26** vitest；真源副本同步 `~/develop/tmp/ui-components/components/motion/agent-composer`
+- **仍未包含**：真实 Runtime 后端、SSE、Skill 执行、插件区、完整 contenteditable 内嵌
+
 ## 7. 已知缺口 / 技术债
 
 ### 与 Phase 1 迁移无关（已知债务，不计入 Phase 1 验收）
@@ -218,8 +229,9 @@ uilab-templates/
 1. agent-desktop 主画布仍是 mock，未接真实 Agent runtime
 2. desktop host（Electron/Tauri）未实现
 3. OpenAPI → list scaffold 未做
-4. UI Lab 视觉弱接入未做
+4. UI Lab registry 正式 `shadcn add` 发布链（当前 Workbench 为源码同步 `components/motion/agent-composer`）
 5. 更强 `check:ai`（页面三件套静态扫描、禁止 Select 主筛选等）
+6. Composer：插件区 / 附加浏览器 / 真 Skill Runtime / 斜杠富文本 contenteditable 级内嵌（当前为 leading tag + textarea）
 
 ### P3
 
@@ -249,8 +261,10 @@ uilab-templates/
 ### Wave B — Workbench（Phase 3 done → 4+）
 
 1. ~~独立 `archetypes/agent-workbench` Shell 骨架~~（Phase 3）
-2. Phase 4 Fake Runtime + projection
-3. Phase 5–6 Surface Registry + Document/Browser/Review
+2. ~~Composer 产品保真（agent-composer / context rail / + / `/` / 项目 picker）~~（Phase 3C）
+3. Phase 4 Fake Runtime + projection
+4. Phase 5–6 Surface Registry + Document/Browser/Review
+5. UI Lab 真源正式发布与 `shadcn add` 回装流程固化
 
 ### Wave C — 装配系统增强
 
@@ -308,6 +322,7 @@ pnpm uilab-admin check
 | `c84be8d` | Phase 1 Batch 1C：Admin assets + 三根路径模型 + 合同对齐 |
 | `9d55b3c` | Phase 2A：minimal Foundation seam |
 | （本批） | Phase 3 Workbench Shell skeleton；具体 hash 以 `git log` 为准 |
+| （见 tip） | Phase 3C Workbench Composer 产品保真（agent-composer / + / `/` / 项目 picker） |
 
 ## 11. 状态更新约定
 

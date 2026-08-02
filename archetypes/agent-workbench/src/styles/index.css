@@ -20,6 +20,51 @@
   --nav-motion-duration: 0ms;
   --pane-motion-duration: 0ms;
   --pane-motion-easing: var(--ease-drawer);
+  --wb-hover: rgb(0 0 0 / 0.05);
+  --wb-hover-subtle: rgb(0 0 0 / 0.04);
+  --wb-hover-strong: rgb(0 0 0 / 0.1);
+  --wb-hover-stronger: rgb(0 0 0 / 0.1);
+  --wb-inset: rgb(0 0 0 / 0.05);
+  --wb-inset-strong: rgb(0 0 0 / 0.06);
+  --wb-inset-subtle: rgb(0 0 0 / 0.03);
+  --wb-inset-faint: rgb(0 0 0 / 0.02);
+  --wb-code-inline: rgb(0 0 0 / 0.07);
+  --wb-code-block: rgb(0 0 0 / 0.04);
+  --wb-border: rgb(0 0 0 / 0.12);
+  --wb-border-subtle: rgb(0 0 0 / 0.1);
+  --wb-border-strong: rgb(0 0 0 / 0.17);
+  --wb-border-emphasis: rgb(0 0 0 / 0.22);
+  --wb-divider: rgb(0 0 0 / 0.07);
+  --wb-hairline: rgb(0 0 0 / 0.12);
+  --wb-hairline-soft: rgb(0 0 0 / 0.1);
+  --wb-hairline-subtle: rgb(0 0 0 / 0.08);
+  --wb-control-hairline: rgb(0 0 0 / 0.08);
+  --wb-control-tick: rgb(0 0 0 / 0.2);
+  --wb-resize-handle: rgb(0 0 0 / 0.2);
+  --wb-surface: rgb(255 255 255);
+  --wb-surface-translucent: oklch(94.5% 0.002 250 / 0.75);
+  --wb-overlay-scrim: rgb(0 0 0 / 0.06);
+  --wb-surface-raised: rgb(255 255 255 / 0.95);
+  /* Composer dock: rail (chip strip) vs elevated shell — must differ from canvas. */
+  --wb-composer-rail: #e8e8e8;
+  --wb-surface-composer: rgb(255 255 255 / 0.94);
+  --wb-card: rgb(0 0 0 / 0.04);
+  --wb-inverse: oklch(20.5% 0 0);
+  --wb-inverse-fg: rgb(255 255 255);
+  --wb-accent-fg: rgb(255 255 255);
+  --wb-solid-control-fg: oklch(20.5% 0 0);
+  --wb-shimmer-dim: rgb(0 0 0 / 0.4);
+  --wb-shimmer-bright: rgb(0 0 0 / 0.85);
+  --wb-accent: #339cff;
+  --wb-success: oklch(59.6% 0.145 163.225);
+  --wb-success-border: oklch(69.6% 0.17 162.48);
+  --wb-danger: oklch(63.7% 0.237 25.331);
+  --wb-danger-strong: #fa423e;
+  --wb-danger-surface: oklch(63.7% 0.237 25.331);
+  --wb-warning: #e25507;
+  --wb-warning-text: oklch(64.6% 0.222 41.116);
+  --wb-warning-hover: oklch(70.5% 0.213 47.604);
+  --wb-warning-surface: #e25507;
 }
 
 @layer base {
@@ -369,4 +414,107 @@
   .context-panel-slot[data-open='false'] {
     display: none;
   }
+}
+
+.dark {
+  --wb-hover: rgb(255 255 255 / 0.1);
+  --wb-hover-subtle: rgb(255 255 255 / 0.05);
+  --wb-hover-strong: rgb(255 255 255 / 0.1);
+  --wb-hover-stronger: rgb(255 255 255 / 0.15);
+  --wb-inset: rgb(255 255 255 / 0.05);
+  --wb-inset-strong: rgb(255 255 255 / 0.1);
+  --wb-inset-subtle: rgb(255 255 255 / 0.05);
+  --wb-inset-faint: rgb(255 255 255 / 0.03);
+  --wb-code-inline: rgb(255 255 255 / 0.1);
+  --wb-code-block: rgb(255 255 255 / 0.05);
+  --wb-border: rgb(255 255 255 / 0.1);
+  --wb-border-subtle: rgb(255 255 255 / 0.1);
+  --wb-border-strong: rgb(255 255 255 / 0.15);
+  --wb-border-emphasis: rgb(255 255 255 / 0.2);
+  --wb-divider: rgb(255 255 255 / 0.06);
+  --wb-hairline: rgb(255 255 255 / 0.157);
+  --wb-hairline-soft: rgb(255 255 255 / 0.15);
+  --wb-hairline-subtle: rgb(255 255 255 / 0.1);
+  --wb-control-hairline: rgb(255 255 255 / 0.08);
+  --wb-control-tick: rgb(255 255 255 / 0.3);
+  --wb-resize-handle: rgb(255 255 255 / 0.25);
+  --wb-surface: oklch(20.5% 0 0);
+  --wb-surface-translucent: oklch(20.5% 0 0 / 0.6);
+  --wb-overlay-scrim: rgb(0 0 0 / 0.24);
+  --wb-surface-raised: oklch(26.9% 0 0 / 0.95);
+  /*
+   * Codex stack hierarchy (pixel-verified on live Workbench + Codex crop):
+   *   canvas  #0d0d0d
+   *   rail    visible fog strip above canvas (must be ≥~+20 RGB vs canvas or lip vanishes)
+   *   shell   elevated solid mid-gray (Codex body samples ~#232323; we lift higher so
+   *           rail↔shell also reads). Avoid low-α oklab here — composites muddy vs rail.
+   * Prior #161616 rail on #0d0d0d was only +9 luminance: self-check "passed" on numbers
+   * but humans saw no change.
+   */
+  --wb-composer-rail: #222222;
+  --wb-surface-composer: #303030;
+  --wb-card: oklch(26.9% 0 0 / 0.5);
+  --wb-inverse: rgb(255 255 255);
+  --wb-inverse-fg: oklch(20.5% 0 0);
+  --wb-accent-fg: rgb(255 255 255);
+  --wb-solid-control-fg: oklch(20.5% 0 0);
+  --wb-shimmer-dim: rgb(255 255 255 / 0.4);
+  --wb-shimmer-bright: rgb(255 255 255 / 0.95);
+  --wb-accent: #339cff;
+  --wb-success: #40c977;
+  --wb-success-border: oklch(69.6% 0.17 162.48);
+  --wb-danger: #fa423e;
+  --wb-danger-strong: #fa423e;
+  --wb-danger-surface: oklch(63.7% 0.237 25.331);
+  --wb-warning: #ff8549;
+  --wb-warning-text: #ff8549;
+  --wb-warning-hover: #e25507;
+  --wb-warning-surface: #e25507;
+}
+
+@theme inline {
+  --color-wb-hover: var(--wb-hover);
+  --color-wb-hover-subtle: var(--wb-hover-subtle);
+  --color-wb-hover-strong: var(--wb-hover-strong);
+  --color-wb-hover-stronger: var(--wb-hover-stronger);
+  --color-wb-inset: var(--wb-inset);
+  --color-wb-inset-strong: var(--wb-inset-strong);
+  --color-wb-inset-subtle: var(--wb-inset-subtle);
+  --color-wb-inset-faint: var(--wb-inset-faint);
+  --color-wb-code-inline: var(--wb-code-inline);
+  --color-wb-code-block: var(--wb-code-block);
+  --color-wb-border: var(--wb-border);
+  --color-wb-border-subtle: var(--wb-border-subtle);
+  --color-wb-border-strong: var(--wb-border-strong);
+  --color-wb-border-emphasis: var(--wb-border-emphasis);
+  --color-wb-divider: var(--wb-divider);
+  --color-wb-hairline: var(--wb-hairline);
+  --color-wb-hairline-soft: var(--wb-hairline-soft);
+  --color-wb-hairline-subtle: var(--wb-hairline-subtle);
+  --color-wb-control-hairline: var(--wb-control-hairline);
+  --color-wb-control-tick: var(--wb-control-tick);
+  --color-wb-resize-handle: var(--wb-resize-handle);
+  --color-wb-surface: var(--wb-surface);
+  --color-wb-surface-translucent: var(--wb-surface-translucent);
+  --color-wb-overlay-scrim: var(--wb-overlay-scrim);
+  --color-wb-surface-raised: var(--wb-surface-raised);
+  --color-wb-composer-rail: var(--wb-composer-rail);
+  --color-wb-surface-composer: var(--wb-surface-composer);
+  --color-wb-card: var(--wb-card);
+  --color-wb-inverse: var(--wb-inverse);
+  --color-wb-inverse-fg: var(--wb-inverse-fg);
+  --color-wb-accent-fg: var(--wb-accent-fg);
+  --color-wb-solid-control-fg: var(--wb-solid-control-fg);
+  --color-wb-shimmer-dim: var(--wb-shimmer-dim);
+  --color-wb-shimmer-bright: var(--wb-shimmer-bright);
+  --color-wb-accent: var(--wb-accent);
+  --color-wb-success: var(--wb-success);
+  --color-wb-success-border: var(--wb-success-border);
+  --color-wb-danger: var(--wb-danger);
+  --color-wb-danger-strong: var(--wb-danger-strong);
+  --color-wb-danger-surface: var(--wb-danger-surface);
+  --color-wb-warning: var(--wb-warning);
+  --color-wb-warning-text: var(--wb-warning-text);
+  --color-wb-warning-hover: var(--wb-warning-hover);
+  --color-wb-warning-surface: var(--wb-warning-surface);
 }

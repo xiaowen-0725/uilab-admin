@@ -2,6 +2,8 @@
 
 ### Added
 
+- **Phase 3C Workbench Composer fidelity**: UI Lab `agent-composer` motion block under `src/components/motion/agent-composer` (portal menus, full-width add/`/` panels, skill tags, mode badges)
+- Workbench Composer local product interactions: context-rail project picker (search / create dialog / open local folder / clear), shell-width `+` menu, `/` command+skill palette, inline skill tags (`#7eb8f0`), scenario `show*` toggles for context rail chips
 - AI-first contracts: `AGENTS.md`, Admin `docs/ai/*`, `$uilab-admin` skill, scaffolds
 - CLI `uilab-admin`: `check`, `add`, `set-shell`, `init`, `apply-scenario`
 - Scenario packs: `ops-console`, `saas-admin`, `agent-desktop`
@@ -18,6 +20,8 @@
 
 ### Changed
 
+- Workbench / platform contracts: UI Lab registry-first assembly + upstream sync; local Runtime-like interactivity with honest remote boundaries
+- Composer dock visual hierarchy (canvas / rail / shell colors), opaque floating panels, textarea focus ring scoped off global blue ring
 - **Phase 3B Codex pane chrome + motion**: Task/Work peer 44px toolbars; Context/Work controls use `SlidersHorizontal` / `PanelBottom`; Work is an always-mounted right-anchored reserved-space drawer whose left boundary advances while content stays at normal scale (open 200ms, close 160ms, maximize/restore 180ms); keyboard Work/Context/Escape stay instant; Context pointer open remains 140ms opacity+translateY. The earlier default View Transition snapshot morph was removed after frame-by-frame review. Does **not** claim Runtime, Surfaces, or Phase 4
 - **Phase 3A Workbench inset layout polish**: Agent Workbench root uses sidebar background plane; 272px reserved Navigator; 8px inset Workspace (12px radius, border/shadow on desktop/medium; full-bleed narrow); merged task-aware top bar; TaskSurface content-only Interface; Codex-style floating Composer; content-height Context card; pointer 180ms drawer motion vs keyboard-instant `Ctrl/Cmd+B` (Shell-owned motion source); `lucide-react` in Workbench package only. Does **not** claim Runtime, Surfaces, or Phase 4
 - Migrated component base to official shadcn Base UI (`base-nova`)

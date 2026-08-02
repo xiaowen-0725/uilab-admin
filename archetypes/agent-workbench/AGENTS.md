@@ -6,13 +6,15 @@
 ## 定位（Phase 3 + 3A + 3B pane chrome）
 
 - **技术栈（与平台统一）**：Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（**Base UI / base-nova**）+ TanStack Router（小型 code-defined 路由）
-- **UI 装配**：`components.json`（base-nova）→ `@/components/ui/*`（按需 `shadcn add`）→ `@/lib/utils`（`cn`）
+- **UI 装配**：`components.json`（base-nova）→ `@/components/ui/*`（按需 `shadcn add`）→ UI Lab registry 复合块（如 `agent-composer`）→ `@/lib/utils`（`cn`）
 - **Foundation**：Button / Input / tokens 经 `@/components/ui/button|input` 兼容 re-export；tokens 经 `src/styles/tokens.css` 导入；**不**扩 Foundation exports
 - 图标：包内 `lucide-react`（不扩 Foundation）
+- **体验目标（模板产品要求）**：**尽量像真 Runtime 一样可交互**。未接后端接口 ≠ 没有 Runtime 概念；本地应用状态、菜单、chip、模型/权限切换、发送反馈等应完整可用，接近真实产品。诚实边界是「数据/执行未接远程后端」，不是「UI 只可看不可用」。
+- **UI Lab 双仓**：复合 Agent 交互优先装 UI Lab 组件（registry / `shadcn add`）。若发现 UI Lab 组件缺陷、交互不足或需要优化，**在 UI Lab 仓库（`ui-components`）改真源并发布/同步**，再回装到本模板；禁止长期在 Workbench 内平行 fork 一套「改进版」却不回流。
 - **已交付**：静态 Workbench Shell 骨架（Navigator、Task Surface、Composer、Adaptive Context Panel、Single-pane + Tabs Work Surface Host）
 - **已交付（Phase 3A）**：Admin inset / 工作台空间关系 — sidebar 背景平面、272px Navigator、8px inset Workspace、TaskSurface content-only、浮动 Composer、内容高度 Context 卡、pointer/keyboard 分源 Navigator 动效
-- **已交付（Phase 3B）**：Task/Work 并列 44px pane chrome、语义图标、右锚定 reserved-space Work drawer（open 200ms / close 160ms / maximize-restore 180ms）与 keyboard instant 分源；Playwright/动效证据已落盘；**无** Runtime / 具体 Surface
-- **未交付（勿伪装）**：Agent Runtime、event projection、Surface Registry、Document/Browser/Review Surface、Resource Explorer、持久化、Git、文件系统、Electron/Tauri、Phase 4
+- **已交付（Phase 3B）**：Task/Work 并列 44px pane chrome、语义图标、右锚定 reserved-space Work drawer（open 200ms / close 160ms / maximize-restore 180ms）与 keyboard instant 分源；Playwright/动效证据已落盘
+- **未交付（勿伪装成已接远程）**：真实 Agent Runtime 后端、SSE/WS 流、Surface Registry 真实现、Document/Browser/Review、Resource Explorer、持久化、Git、文件系统、Electron/Tauri、Phase 4
 
 ## 目录约定
 
@@ -37,11 +39,12 @@ components.json        # shadcn 配置（base-nova）
 1. **Composition Root 唯一装配** — `src/app/composition` 创建 session controller 并挂 Shell。
 2. **Module 边界** — 只通过 `@/modules/<name>` 根 `index.ts` 消费；禁止跨 Module 引用内部路径。
 3. **禁止 dumping-ground** — 不建 `shared/`、`common/`、全局 `ports/`。
-4. **UI 复用顺序** — Module / Shell 已有组件 → `@/components/ui/*`（shadcn Base UI）→ 才允许 bespoke；新增原子/复合控件优先 `shadcn add`，不要平行手写第二套 primitives。
-5. **Foundation** — Button/Input 只经 `@/components/ui/*` re-export 或公开子路径；不扩 Foundation exports。Composer 输入走 `@/components/ui/textarea`，不要平行再写一套原生 textarea primitive。
-6. **Base UI 约束** — `render={...}`；禁止 `asChild` 与 `@radix-ui/*`；禁止 Desktop/Node built-in 进入 renderer 源码。
-7. **中文优先** — 用户可见文案中文；标识符英文。
-8. **静态 fixture 诚实** — UI 必须标明 Phase 3 fixture；不得假装 Runtime 已接通。
+4. **UI 复用顺序** — Module / Shell 已有 → UI Lab 复合块（registry）→ `@/components/ui/*`（shadcn Base UI）→ 才允许 bespoke；禁止平行手写第二套 primitives / 第二套 agent-composer。
+5. **UI Lab 回流** — 改 UI Lab 组件能力或修缺陷时，先/同步改 `ui-components` 真源；模板侧只做装配与场景 wiring，不长期维护分叉副本。
+6. **Foundation** — Button/Input 只经 `@/components/ui/*` re-export 或公开子路径；不扩 Foundation exports。
+7. **Base UI 约束** — `render={...}`；禁止 `asChild` 与 `@radix-ui/*`；禁止 Desktop/Node built-in 进入 renderer 源码。
+8. **中文优先** — 用户可见文案中文；标识符英文。
+9. **本地 Runtime 体验 + 远程诚实** — 交互与本地状态应尽量像真产品（可点、可切换、可反馈）；凡未接远程后端处须诚实（文案/状态/fixture 标识），**不得**把「未接后端」做成「控件不可用」。
 
 ## 完成定义（包级）
 

@@ -16,13 +16,14 @@
     "check:workbench": "node ../../scripts/check-workbench.mjs"
   },
   "dependencies": {
-    "@uilab/foundation": "workspace:*",
     "@base-ui/react": "^1.6.0",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-router": "^1.168.22",
+    "@uilab/foundation": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",
+    "motion": "^12.43.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "shadcn": "^4.16.1",

@@ -968,7 +968,99 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('composer-model'))
       .toBeInTheDocument()
 
+    // Project picker: search + list + create dialog + open folder + clear.
+    await userEvent.click(page.getByTestId('composer-chip-project'))
+    await expect
+      .element(page.getByTestId('composer-project-menu'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('composer-project-search'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('composer-project-create'))
+      .toHaveTextContent('新建项目')
+    await expect
+      .element(page.getByTestId('composer-project-open-folder'))
+      .toHaveTextContent('打开本地文件夹')
+    await expect
+      .element(page.getByTestId('composer-project-clear'))
+      .toHaveTextContent('不使用项目')
+
+    // Create project opens naming dialog (not instant auto-name).
+    await userEvent.click(page.getByTestId('composer-project-create'))
+    await expect
+      .element(page.getByTestId('composer-create-project-dialog'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('composer-create-project-confirm'))
+      .toBeDisabled()
+    await userEvent.fill(
+      page.getByTestId('composer-create-project-input'),
+      'my-demo-project'
+    )
+    await userEvent.click(page.getByTestId('composer-create-project-confirm'))
+    await expect
+      .element(page.getByTestId('composer-chip-project'))
+      .toHaveTextContent('my-demo-project')
+    await expect
+      .element(page.getByTestId('composer-notice'))
+      .toHaveTextContent('本地模拟')
+
+    // Switch to fixture project still works.
+    await userEvent.click(page.getByTestId('composer-chip-project'))
+    await userEvent.click(page.getByTestId('composer-project-option-ui-components'))
+    await expect
+      .element(page.getByTestId('composer-chip-project'))
+      .toHaveTextContent('ui-components')
+
+    // Clear → chip becomes「选择项目」; env/branch hidden without a project.
+    await userEvent.click(page.getByTestId('composer-chip-project'))
+    await userEvent.click(page.getByTestId('composer-project-clear'))
+    await expect
+      .element(page.getByTestId('composer-chip-project'))
+      .toHaveTextContent('选择项目')
+    expect(document.querySelector('[data-testid="composer-chip-env"]')).toBeNull()
+    expect(document.querySelector('[data-testid="composer-chip-branch"]')).toBeNull()
+    await userEvent.click(page.getByTestId('composer-chip-project'))
+    expect(document.querySelector('[data-testid="composer-project-clear"]')).toBeNull()
+    // Dismiss menu before the rest of the composer flow.
+    await userEvent.keyboard('{Escape}')
+
     await expect.element(submit).toBeDisabled()
+
+    // + menu is shell-full-width floating panel (no plugins / Chrome).
+    await userEvent.click(page.getByTestId('composer-add'))
+    await expect
+      .element(page.getByTestId('composer-add-panel'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('composer-add-files'))
+      .toHaveTextContent('文件和文件夹')
+    await expect
+      .element(page.getByTestId('composer-add-goal'))
+      .toHaveTextContent('目标')
+    await expect
+      .element(page.getByTestId('composer-add-plan'))
+      .toHaveTextContent('计划模式')
+    // Scope to add panel — navigator also has a「插件」utility row.
+    const addPanelText =
+      page.getByTestId('composer-add-panel').element().textContent ?? ''
+    expect(addPanelText).not.toMatch(/插件|Google Chrome|附加浏览器/)
+    await userEvent.click(page.getByTestId('composer-add-plan'))
+    await expect
+      .element(page.getByTestId('composer-mode-plan'))
+      .toHaveTextContent('计划模式')
+
+    // Slash palette: skill → violet token chip.
+    await userEvent.fill(input, '/')
+    await expect
+      .element(page.getByTestId('composer-slash-panel'))
+      .toBeInTheDocument()
+    await userEvent.click(page.getByTestId('composer-slash-skill-api-design'))
+    await expect
+      .element(page.getByTestId('composer-skill-skill-api-design'))
+      .toHaveTextContent('API Design')
+
     await userEvent.fill(input, 'hello fixture')
     await expect.element(submit).toBeEnabled()
 
