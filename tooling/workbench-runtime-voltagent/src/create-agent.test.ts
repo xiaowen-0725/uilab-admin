@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { after, describe, it } from 'node:test'
@@ -7,6 +7,11 @@ import {
   createWorkbenchAgent,
   officeFilesystemToolConfig,
 } from './create-agent.js'
+import {
+  OFFICE_OUTPUT_DIRS,
+  OFFICE_SKILL_IDS,
+  listSeededSkillIds,
+} from './office-skills.js'
 import { OFFICE_WORKSPACE_README_NAME } from './workspace-root.js'
 
 /** Stub model — never called; only needed to construct Agent. */
@@ -67,6 +72,13 @@ describe('createWorkbenchAgent', () => {
     const readme = await readFile(readmePath, 'utf8')
     assert.match(readme, /WORKSPACE_ROOT/)
 
+    // O3 skills seed
+    const skillIds = await listSeededSkillIds(root)
+    assert.deepEqual(skillIds, [...OFFICE_SKILL_IDS].sort())
+    for (const rel of OFFICE_OUTPUT_DIRS) {
+      await access(path.join(root, rel))
+    }
+
     // Agent carries workspace identity; tool names come from Workspace toolkit.
     assert.equal(bundle.agent.id, 'workbench')
     const fullState = await bundle.agent.getFullState()
@@ -78,9 +90,46 @@ describe('createWorkbenchAgent', () => {
       `expected Workspace FS tools, got: ${toolNames.join(',')}`,
     )
     assert.ok(
+      toolNames.includes('workspace_list_skills') ||
+        toolNames.includes('workspace_activate_skill'),
+      `expected skills toolkit tools, got: ${toolNames.join(',')}`,
+    )
+    assert.ok(
       !toolNames.includes('run_command'),
       'DIY run_command must not be primary tools in office profile',
     )
+
+    // Discover skills via Workspace API (no LLM).
+    assert.ok(bundle.workspace?.skills, 'workspace.skills present')
+    const discovered = await bundle.workspace!.skills!.discoverSkills({
+      refresh: true,
+    })
+    const discoveredNames = discovered.map((s) => s.name).sort()
+    for (const id of OFFICE_SKILL_IDS) {
+      assert.ok(
+        discoveredNames.includes(id) ||
+          discovered.some((s) => s.id.includes(id) || s.path.includes(id)),
+        `expected skill ${id} in ${JSON.stringify(discovered)}`,
+      )
+    }
+
+    // Activate + read → write deliverable path (simulates skill E2E without LLM).
+    const meta = await bundle.workspace!.skills!.activateSkill('meeting-notes')
+    assert.ok(meta, 'activate meeting-notes')
+    const loaded = await bundle.workspace!.skills!.loadSkill('meeting-notes')
+    assert.ok(loaded?.instructions.includes('output/meeting-notes'))
+
+    const deliverable = path.join(
+      root,
+      'output/meeting-notes',
+      'test-notes.md',
+    )
+    await writeFile(
+      deliverable,
+      '# 测试纪要\n\n- 决议：O3 skills 可用\n',
+      'utf8',
+    )
+    await access(deliverable)
   })
 
   it('minimal profile keeps DIY tools without Workspace', async () => {

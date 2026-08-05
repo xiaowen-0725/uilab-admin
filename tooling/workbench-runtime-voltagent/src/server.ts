@@ -85,7 +85,7 @@ logger.info(
     `workspaceRoot=${workspaceRoot}`,
     `tools=${tools.join(',')}`,
     resolvedProfile === 'office'
-      ? 'note=local office Runtime (Agent+Workspace FS); not remote production cluster'
+      ? 'note=local office Runtime (Agent+Workspace FS+Skills); not remote production cluster'
       : 'note=local minimal Runtime (DIY tools); not remote production cluster',
   ].join(' '),
 )

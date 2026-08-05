@@ -71,15 +71,20 @@ describe('resolveWorkspaceRoot', () => {
 })
 
 describe('toolsForProfile', () => {
-  it('office uses Workspace FS tool names, not DIY run_command', () => {
+  it('office uses Workspace FS + skills tools, not DIY run_command', () => {
     const tools = toolsForProfile('office')
     assert.ok(tools.includes('ls'))
     assert.ok(tools.includes('read_file'))
     assert.ok(tools.includes('write_file'))
     assert.ok(tools.includes('edit_file'))
     assert.ok(tools.includes('delete_file'))
+    assert.ok(tools.includes('workspace_list_skills'))
+    assert.ok(tools.includes('workspace_activate_skill'))
+    assert.ok(tools.includes('workspace_read_skill'))
     assert.ok(!tools.includes('run_command'))
-    assert.deepEqual([...tools], [...OFFICE_FS_TOOL_NAMES])
+    for (const name of OFFICE_FS_TOOL_NAMES) {
+      assert.ok(tools.includes(name), `missing FS tool ${name}`)
+    }
   })
 
   it('minimal keeps DIY tools', () => {

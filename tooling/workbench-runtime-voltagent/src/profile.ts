@@ -2,13 +2,14 @@
  * Agent profile selection for the local Workbench VoltAgent sidecar.
  *
  * - minimal: plain Agent + DIY read/write tools (M1–M3 baseline)
- * - office: Agent + Workspace Node filesystem toolkit (O1)
+ * - office: Agent + Workspace Node FS + Skills (O1–O3)
  *
  * Not a multi-tenant production Runtime.
  */
 
 import os from 'node:os'
 import path from 'node:path'
+import { OFFICE_SKILL_TOOL_NAMES } from './office-skills.js'
 
 export type AgentProfile = 'office' | 'minimal'
 
@@ -69,12 +70,20 @@ export const OFFICE_FS_TOOL_NAMES = [
   'grep',
 ] as const
 
+export { OFFICE_SKILL_TOOL_NAMES }
+
 export const MINIMAL_TOOL_NAMES = [
   'read_file',
   'write_file',
   'run_command',
 ] as const
 
+/** Office honesty list: FS tools + skills toolkit (no DIY run_command). */
+export const OFFICE_TOOL_NAMES = [
+  ...OFFICE_FS_TOOL_NAMES,
+  ...OFFICE_SKILL_TOOL_NAMES,
+] as const
+
 export function toolsForProfile(profile: AgentProfile): readonly string[] {
-  return profile === 'office' ? OFFICE_FS_TOOL_NAMES : MINIMAL_TOOL_NAMES
+  return profile === 'office' ? OFFICE_TOOL_NAMES : MINIMAL_TOOL_NAMES
 }

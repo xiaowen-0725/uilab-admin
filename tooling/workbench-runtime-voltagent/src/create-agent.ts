@@ -13,6 +13,10 @@ import {
 } from '@voltagent/core'
 import type { LanguageModel } from 'ai'
 import {
+  OFFICE_SKILLS_VIRTUAL_ROOT,
+  ensureOfficeSkills,
+} from './office-skills.js'
+import {
   type AgentProfile,
   resolveWorkspaceRoot,
   toolsForProfile,
@@ -67,6 +71,8 @@ export async function createWorkbenchAgent(
   if (profile === 'office') {
     // O2: create safe default root + first-run README when missing.
     await ensureOfficeWorkspace(workspaceRoot)
+    // O3: seed bundled skills + conventional output dirs.
+    await ensureOfficeSkills(workspaceRoot)
 
     const workspace = new Workspace({
       id: 'workbench-office',
@@ -79,30 +85,43 @@ export async function createWorkbenchAgent(
           contained: true,
         }),
       },
+      skills: {
+        rootPaths: [OFFICE_SKILLS_VIRTUAL_ROOT],
+        autoDiscover: true,
+      },
       toolConfig: officeFilesystemToolConfig(),
     })
 
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
-      purpose: '本机办公 Agent Runtime（Workspace FS）',
+      purpose: '本机办公 Agent Runtime（Workspace FS + Skills）',
       instructions: [
         'You are the local Office Agent Runtime for UI Lab Agent Workbench.',
         'Respond in Chinese unless the user writes in another language.',
         'Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root.',
-        'All file paths must be virtual workspace paths starting with / (e.g. /notes/a.md, /output/report.md).',
+        'Office skills live under /skills (meeting-notes, weekly-report, research-brief).',
+        'When a request matches a skill: workspace_list_skills or workspace_search_skills → workspace_activate_skill → workspace_read_skill → follow SKILL.md → write deliverable under the skill output path.',
+        'Deliverable paths: /output/meeting-notes/, /output/weekly-report/, /output/research-brief/.',
+        'All file paths must be virtual workspace paths starting with / (e.g. /notes/a.md, /output/meeting-notes/notes.md).',
         'Never use host absolute paths (/Users/..., /home/..., drive letters). Never paste operator host paths into tools.',
         'Prefer planning briefly, then read before write. Writes and deletes require user approval.',
         'Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar.',
       ].join(' '),
       model: options.model,
       workspace,
-      // O1: FS only — no sandbox / search / skills (O3–O5 / later tickets).
+      // O3: FS + skills; no sandbox / search yet (O4 MCP / O5 later).
       workspaceToolkits: {
         filesystem: {},
         sandbox: false,
         search: false,
-        skills: false,
+        skills: {},
+      },
+      workspaceSkillsPrompt: {
+        includeAvailable: true,
+        includeActivated: true,
+        maxAvailable: 10,
+        maxActivated: 5,
       },
       maxSteps: options.maxSteps ?? Number(env.VOLTAGENT_MAX_STEPS ?? 50),
     })

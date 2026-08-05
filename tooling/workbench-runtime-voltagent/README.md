@@ -23,7 +23,7 @@ cp .env.example .env   # 填入 DEEPSEEK_API_KEY（.env 已被 gitignore）
 | `AGENT_PROFILE` | 形态 | 工具 |
 | --- | --- | --- |
 | `minimal`（默认） | plain `Agent` + DIY tools | `read_file` / `write_file`（审批）/ `run_command` |
-| `office` | **`Agent` + `Workspace`**（Node FS，`virtualMode`） | Workspace FS：`ls`、`read_file`、`write_file`、`edit_file`、`delete_file`…；**写/删默认 needsApproval** |
+| `office` | **`Agent` + `Workspace`**（Node FS + Skills） | Workspace FS + `workspace_*_skill*`；**写/删默认 needsApproval** |
 
 ### Workspace root 策略（O2）
 
@@ -99,9 +99,26 @@ Then open empty / 新对话 and send a message. Capture tasks still use local-si
 | `ls` / `list_tree` / `read_file` / `stat` / … | 只读，Timeline 工具行可展开 |
 | `write_file` / `edit_file` | **needsApproval**；成功后 Adapter 合成 `file.changed` |
 | `delete_file` / `rmdir` | **needsApproval** |
-| sandbox / skills / MCP | **O1/O2 未启用**（O3 Skills / O4 MCP） |
+| sandbox / MCP | **未启用**（O4 MCP 后续） |
+| skills | **O3 已启用**：`/skills` 下 `meeting-notes` / `weekly-report` / `research-brief` |
 
 Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`contained` + `virtualMode`）与 DIY `resolvePathWithinRoot`。
+
+### Office Skills（O3）
+
+首次启动 office 工作区时，侧车会：
+
+1. 将内置 `bundled-skills/*` 复制到工作区 `skills/<id>/SKILL.md`（**已存在不覆盖**）
+2. 创建交付目录：`output/meeting-notes/`、`output/weekly-report/`、`output/research-brief/`
+3. 启用 Workspace skills toolkit + prompt 注入（`workspace_list_skills` / `activate` / `read` …）
+
+| Skill | 交付路径 |
+| --- | --- |
+| `meeting-notes` | `output/meeting-notes/` |
+| `weekly-report` | `output/weekly-report/` |
+| `research-brief` | `output/research-brief/` |
+
+Fake Runtime / capture 路径**不**加载这些 skills。
 
 ## API used by Adapter
 
@@ -126,6 +143,6 @@ pnpm --filter @uilab/workbench-runtime-voltagent typecheck
 ## Related
 
 - Spec: GitHub issue #9 / `docs/plans/voltagent-office-profile-spec.md`  
-- Ticket: #10 O1 Workspace FS · #11 O2 workspace root  
+- Ticket: #10 O1 · #11 O2 · #15 O3 skills  
 - Adapter tickets: #1–#8  
 - Domain: `RuntimePort`, `AgentRuntimeEventEnvelope`
