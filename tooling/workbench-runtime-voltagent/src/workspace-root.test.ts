@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import {
+  access,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { after, describe, it } from 'node:test'
+import { ensureOfficeSkills } from './office-skills.js'
 import {
   OFFICE_WORKSPACE_README_NAME,
   ensureOfficeWorkspace,
@@ -88,5 +96,51 @@ describe('ensureOfficeWorkspace', () => {
     assert.equal(result.createdRoot, false)
     assert.equal(result.wroteReadme, false)
     assert.equal(await readFile(readmePath, 'utf8'), '用户自定义说明\n')
+  })
+
+  it('refuses README that is a symlink to outside the workspace', async () => {
+    const base = await mkdtemp(path.join(os.tmpdir(), 'wb-o2-sym-'))
+    tempRoots.push(base)
+    const workspaceRoot = path.join(base, 'workspace')
+    const outside = path.join(base, 'outside-readme.md')
+    await writeFile(outside, 'escaped\n', 'utf8')
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(workspaceRoot, { recursive: true })
+    await symlink(outside, path.join(workspaceRoot, OFFICE_WORKSPACE_README_NAME))
+
+    await assert.rejects(
+      () => ensureOfficeWorkspace(workspaceRoot),
+      (err: Error) => {
+        assert.match(err.message, /路径越界|符号链接/)
+        return true
+      },
+    )
+    // Outside file must not be rewritten with bootstrap README.
+    assert.equal(await readFile(outside, 'utf8'), 'escaped\n')
+  })
+})
+
+describe('ensureOfficeSkills symlink safety', () => {
+  it('refuses skills root that is a symlink to outside', async () => {
+    const base = await mkdtemp(path.join(os.tmpdir(), 'wb-o3-sym-'))
+    tempRoots.push(base)
+    const workspaceRoot = path.join(base, 'workspace')
+    const outside = path.join(base, 'outside-skills')
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(workspaceRoot, { recursive: true })
+    await mkdir(outside, { recursive: true })
+    await symlink(outside, path.join(workspaceRoot, 'skills'))
+
+    await assert.rejects(
+      () => ensureOfficeSkills(workspaceRoot),
+      (err: Error) => {
+        assert.match(err.message, /路径越界|符号链接/)
+        return true
+      },
+    )
+    // Must not seed SKILL.md under outside via symlink.
+    const { readdir } = await import('node:fs/promises')
+    const names = await readdir(outside)
+    assert.equal(names.length, 0)
   })
 })

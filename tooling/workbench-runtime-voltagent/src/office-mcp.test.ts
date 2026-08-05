@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   applyMcpNeedsApproval,
+  filterProcessEnvForChild,
   formatMcpStatusLine,
   isSideEffectMcpToolName,
   loadOfficeMcpTools,
@@ -165,6 +166,52 @@ describe('loadOfficeMcpTools', () => {
     assert.equal(result.statuses.find((s) => s.id === 'docs')?.status, 'failed')
     assert.equal(result.tools.length, 0)
     await result.disconnect()
+  })
+})
+
+describe('filterProcessEnvForChild (connector-scoped)', () => {
+  it('does not leak calendar-only secrets into docs child', () => {
+    const docsEnv = filterProcessEnvForChild(
+      {
+        PATH: '/usr/bin',
+        FEISHU_APP_ID: 'app',
+        GOOGLE_APPLICATION_CREDENTIALS: '/secret/google.json',
+        DEEPSEEK_API_KEY: 'sk-should-never-pass',
+      },
+      'docs',
+    )
+    assert.ok(docsEnv)
+    assert.equal(docsEnv!.FEISHU_APP_ID, 'app')
+    assert.equal(docsEnv!.GOOGLE_APPLICATION_CREDENTIALS, undefined)
+    assert.equal(docsEnv!.DEEPSEEK_API_KEY, undefined)
+  })
+
+  it('allows google credentials for calendar only', () => {
+    const calEnv = filterProcessEnvForChild(
+      {
+        PATH: '/usr/bin',
+        GOOGLE_APPLICATION_CREDENTIALS: '/secret/google.json',
+        OPENAI_API_KEY: 'sk-nope',
+      },
+      'calendar',
+    )
+    assert.ok(calEnv)
+    assert.equal(calEnv!.GOOGLE_APPLICATION_CREDENTIALS, '/secret/google.json')
+    assert.equal(calEnv!.OPENAI_API_KEY, undefined)
+  })
+
+  it('honors MCP_DOCS_CHILD_ENV_KEYS without granting model keys', () => {
+    const docsEnv = filterProcessEnvForChild(
+      {
+        PATH: '/bin',
+        CUSTOM_DOCS_TOKEN: 'tok',
+        MCP_DOCS_CHILD_ENV_KEYS: 'CUSTOM_DOCS_TOKEN,DEEPSEEK_API_KEY',
+        DEEPSEEK_API_KEY: 'sk-nope',
+      },
+      'docs',
+    )
+    assert.equal(docsEnv!.CUSTOM_DOCS_TOKEN, 'tok')
+    assert.equal(docsEnv!.DEEPSEEK_API_KEY, undefined)
   })
 })
 

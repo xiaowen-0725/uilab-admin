@@ -4,11 +4,18 @@
  * Seeds three SKILL.md folders under workspace `/skills` (virtual) /
  * `skills/` on disk, plus conventional output directories.
  * Does not overwrite existing SKILL.md (user may customize).
+ * Bootstrap refuses symlink escape (Codex P1).
  */
 
-import { access, copyFile, mkdir, readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  assertCanonicalWithinRoot,
+  ensureDirWithinRoot,
+  pathExists,
+  writeFileIfAbsentWithinRoot,
+} from './workspace-root.js'
 
 /** Skill folder ids (= directory names under skills/). */
 export const OFFICE_SKILL_IDS = [
@@ -51,15 +58,6 @@ export type EnsureOfficeSkillsResult = {
   outputDirs: string[]
 }
 
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await access(target)
-    return true
-  } catch {
-    return false
-  }
-}
-
 /**
  * Resolve bundled-skills directory next to this package
  * (`tooling/workbench-runtime-voltagent/bundled-skills`).
@@ -84,24 +82,16 @@ export async function ensureOfficeSkills(
   options?: { packageRoot?: string; bundledSkillsDir?: string },
 ): Promise<EnsureOfficeSkillsResult> {
   const root = path.resolve(workspaceRoot)
-  const skillsRoot = path.join(root, OFFICE_SKILLS_DIR_NAME)
+  const skillsRoot = await ensureDirWithinRoot(root, OFFICE_SKILLS_DIR_NAME)
   const bundledRoot =
     options?.bundledSkillsDir ?? resolveBundledSkillsDir(options)
-
-  await mkdir(skillsRoot, { recursive: true })
 
   const seededSkillIds: OfficeSkillId[] = []
   const skippedSkillIds: OfficeSkillId[] = []
 
   for (const id of OFFICE_SKILL_IDS) {
-    const destDir = path.join(skillsRoot, id)
-    const destSkill = path.join(destDir, 'SKILL.md')
-    await mkdir(destDir, { recursive: true })
-
-    if (await pathExists(destSkill)) {
-      skippedSkillIds.push(id)
-      continue
-    }
+    await ensureDirWithinRoot(root, path.join(OFFICE_SKILLS_DIR_NAME, id))
+    const relSkill = path.join(OFFICE_SKILLS_DIR_NAME, id, 'SKILL.md')
 
     const srcSkill = path.join(bundledRoot, id, 'SKILL.md')
     if (!(await pathExists(srcSkill))) {
@@ -109,14 +99,17 @@ export async function ensureOfficeSkills(
         `缺少内置 Skill 模板：${srcSkill}（office profile O3）`,
       )
     }
-    await copyFile(srcSkill, destSkill)
-    seededSkillIds.push(id)
+
+    const content = await readFile(srcSkill, 'utf8')
+    // writeFileIfAbsentWithinRoot refuses symlink destinations and never overwrites.
+    const { wrote } = await writeFileIfAbsentWithinRoot(root, relSkill, content)
+    if (wrote) seededSkillIds.push(id)
+    else skippedSkillIds.push(id)
   }
 
   const outputDirs: string[] = []
   for (const rel of OFFICE_OUTPUT_DIRS) {
-    const abs = path.join(root, rel)
-    await mkdir(abs, { recursive: true })
+    const abs = await ensureDirWithinRoot(root, rel)
     outputDirs.push(abs)
   }
 
@@ -127,15 +120,26 @@ export async function ensureOfficeSkills(
 export async function listSeededSkillIds(
   workspaceRoot: string,
 ): Promise<string[]> {
-  const skillsRoot = path.join(path.resolve(workspaceRoot), OFFICE_SKILLS_DIR_NAME)
+  const root = path.resolve(workspaceRoot)
+  const skillsRoot = path.join(root, OFFICE_SKILLS_DIR_NAME)
   if (!(await pathExists(skillsRoot))) return []
+  await assertCanonicalWithinRoot(root, skillsRoot)
   const entries = await readdir(skillsRoot, { withFileTypes: true })
   const ids: string[] = []
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    if (await pathExists(path.join(skillsRoot, entry.name, 'SKILL.md'))) {
-      ids.push(entry.name)
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+    const skillMd = path.join(skillsRoot, entry.name, 'SKILL.md')
+    if (await pathExists(skillMd)) {
+      try {
+        await assertCanonicalWithinRoot(root, skillMd)
+        ids.push(entry.name)
+      } catch {
+        // skip escaped entries
+      }
     }
   }
   return ids.sort()
 }
+
+// re-export for callers that only need write helper via skills path
+export { writeFileIfAbsentWithinRoot }

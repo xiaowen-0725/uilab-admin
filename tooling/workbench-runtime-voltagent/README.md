@@ -115,8 +115,9 @@ Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`cont
 | **docs**（飞书文档/知识库语义） | `MCP_DOCS_URL` 或 `FEISHU_DOCS_MCP_URL`；或 `MCP_DOCS_COMMAND` + `MCP_DOCS_ARGS` |
 | **calendar**（日历语义） | `MCP_CALENDAR_URL` 或 `FEISHU_CALENDAR_MCP_URL`；或 `MCP_CALENDAR_COMMAND` + `MCP_CALENDAR_ARGS` |
 
-可选：`MCP_DOCS_BEARER_TOKEN` / `MCP_CALENDAR_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`；stdio 子进程环境白名单见 `MCP_CHILD_ENV_KEYS`。
-
+可选：`MCP_DOCS_BEARER_TOKEN` / `MCP_CALENDAR_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`。  
+stdio 子进程 env：**按连接器隔离**（docs 不会自动拿到 `GOOGLE_APPLICATION_CREDENTIALS`；calendar 不会替 docs 扩展无关密钥）。  
+扩展：`MCP_DOCS_CHILD_ENV_KEYS` / `MCP_CALENDAR_CHILD_ENV_KEYS`；共享非密钥：`MCP_CHILD_ENV_KEYS`。模型密钥（`DEEPSEEK_API_KEY` 等）永不转发。
 密钥只放在侧车 `.env`。Renderer **无** MCP SDK。CI 不连真实飞书账号。
 
 启动日志：`mcp=docs=ok(N),calendar=off` 或 `docs=fail`。

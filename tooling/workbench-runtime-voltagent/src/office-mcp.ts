@@ -172,7 +172,7 @@ export function resolveMcpConnector(
         type: 'stdio',
         command,
         args,
-        env: filterProcessEnvForChild(env),
+        env: filterProcessEnvForChild(env, id),
         timeout: Number(env.MCP_TIMEOUT_MS ?? 20_000) || 20_000,
       },
     }
@@ -181,31 +181,80 @@ export function resolveMcpConnector(
   return null
 }
 
-/** Do not leak the full process env into MCP child (avoid secrets scatter). */
-function filterProcessEnvForChild(
+/** Non-secret runtime essentials always allowed for stdio children. */
+const MCP_CHILD_BASE_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'NODE_ENV',
+] as const
+
+/**
+ * Connector-scoped secret defaults (Codex P1: no cross-connector leak).
+ * docs must not inherit calendar-only Google credentials and vice versa
+ * unless the operator explicitly opts in via MCP_*_CHILD_ENV_KEYS.
+ */
+const MCP_CONNECTOR_DEFAULT_SECRET_KEYS: Record<McpConnectorId, readonly string[]> =
+  {
+    docs: [
+      'FEISHU_APP_ID',
+      'FEISHU_APP_SECRET',
+      'LARK_APP_ID',
+      'LARK_APP_SECRET',
+      'FEISHU_DOCS_APP_ID',
+      'FEISHU_DOCS_APP_SECRET',
+    ],
+    calendar: [
+      'FEISHU_APP_ID',
+      'FEISHU_APP_SECRET',
+      'LARK_APP_ID',
+      'LARK_APP_SECRET',
+      'FEISHU_CALENDAR_APP_ID',
+      'FEISHU_CALENDAR_APP_SECRET',
+      'GOOGLE_APPLICATION_CREDENTIALS',
+      'GOOGLE_CALENDAR_ID',
+    ],
+  }
+
+/**
+ * Build env for a stdio MCP child.
+ * - Base: PATH/HOME/…
+ * - Connector defaults (docs vs calendar secrets separated)
+ * - Explicit: `MCP_DOCS_CHILD_ENV_KEYS` / `MCP_CALENDAR_CHILD_ENV_KEYS`
+ * - Shared non-secret extras only: `MCP_CHILD_ENV_KEYS` (never model API keys by default)
+ *
+ * Never auto-forwards DEEPSEEK_API_KEY / OPENAI_API_KEY.
+ */
+export function filterProcessEnvForChild(
   env: ProfileEnv,
+  connectorId: McpConnectorId,
 ): Record<string, string> | undefined {
-  const allow = [
-    'PATH',
-    'HOME',
-    'LANG',
-    'LC_ALL',
-    'NODE_ENV',
-    // Feishu / calendar common keys if operator set them for the MCP server
-    'FEISHU_APP_ID',
-    'FEISHU_APP_SECRET',
-    'LARK_APP_ID',
-    'LARK_APP_SECRET',
-    'GOOGLE_APPLICATION_CREDENTIALS',
-  ]
+  const allow = new Set<string>([
+    ...MCP_CHILD_BASE_ENV_KEYS,
+    ...MCP_CONNECTOR_DEFAULT_SECRET_KEYS[connectorId],
+  ])
+
+  const upper = connectorId === 'docs' ? 'DOCS' : 'CALENDAR'
+  for (const key of parseArgs(env[`MCP_${upper}_CHILD_ENV_KEYS`]) ?? []) {
+    allow.add(key)
+  }
+  // Shared extras — operator-controlled; still never force API keys.
+  for (const key of parseArgs(env.MCP_CHILD_ENV_KEYS) ?? []) {
+    allow.add(key)
+  }
+
+  // Hard deny model provider secrets even if listed by mistake.
+  const deny = new Set([
+    'DEEPSEEK_API_KEY',
+    'OPENAI_API_KEY',
+    'VOLTAGENT_API_KEY',
+    'ANTHROPIC_API_KEY',
+  ])
+
   const out: Record<string, string> = {}
   for (const key of allow) {
-    const v = env[key]
-    if (typeof v === 'string' && v.length > 0) out[key] = v
-  }
-  // Explicit pass-through map: MCP_CHILD_ENV_KEYS=FOO,BAR
-  const extra = parseArgs(env.MCP_CHILD_ENV_KEYS) ?? []
-  for (const key of extra) {
+    if (deny.has(key)) continue
     const v = env[key]
     if (typeof v === 'string' && v.length > 0) out[key] = v
   }
