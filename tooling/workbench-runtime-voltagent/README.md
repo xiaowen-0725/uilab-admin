@@ -104,6 +104,20 @@ Then open empty / 新对话 and send a message. Capture tasks still use local-si
 
 Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`contained` + `virtualMode`）与 DIY `resolvePathWithinRoot`。
 
+### 长任务默认（O5）
+
+| 配置 | 默认（office） | 说明 |
+| --- | --- | --- |
+| `VOLTAGENT_MAX_STEPS` | **80**（≥50，推荐 80–100） | 可覆盖；minimal 默认 12 |
+| `VOLTAGENT_SUMMARIZATION` | **on** | `false`/`off` 关闭 |
+| `VOLTAGENT_MEMORY` | **libsql** | `in-memory` / `off` 可选 |
+| `VOLTAGENT_MEMORY_URL` | `file:<workspace>/.voltagent/memory.db` | LibSQL 文件 URL |
+
+Adapter 已将 `conversationId` 对齐 `taskId`，同 Task 多轮可续上下文。  
+侧车启动日志打印 `maxSteps` / `summarization` / `memory`。
+
+**披露：** UI 与侧车均标明「本机 VoltAgent Office Runtime · 非远程生产集群」；Fake 路径文案不变。
+
 ### Office Skills（O3）
 
 首次启动 office 工作区时，侧车会：

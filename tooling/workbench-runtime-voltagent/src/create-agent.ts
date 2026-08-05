@@ -13,6 +13,10 @@ import {
 } from '@voltagent/core'
 import type { LanguageModel } from 'ai'
 import {
+  type MemoryKind,
+  resolveOfficeRuntimeDefaults,
+} from './office-runtime-defaults.js'
+import {
   OFFICE_SKILLS_VIRTUAL_ROOT,
   ensureOfficeSkills,
 } from './office-skills.js'
@@ -40,6 +44,10 @@ export type WorkbenchAgentBundle = {
   tools: readonly string[]
   /** Present only for office profile. */
   workspace?: Workspace
+  /** O5 resolved long-run defaults (for logs / tests). */
+  maxSteps: number
+  summarizationEnabled: boolean
+  memoryKind: MemoryKind
 }
 
 /**
@@ -74,6 +82,12 @@ export async function createWorkbenchAgent(
     // O3: seed bundled skills + conventional output dirs.
     await ensureOfficeSkills(workspaceRoot)
 
+    // O5: long-run defaults (maxSteps / summarization / memory).
+    const defaults = await resolveOfficeRuntimeDefaults(profile, env, {
+      workspaceRoot,
+      maxStepsOverride: options.maxSteps,
+    })
+
     const workspace = new Workspace({
       id: 'workbench-office',
       name: 'Workbench Office Workspace',
@@ -95,7 +109,7 @@ export async function createWorkbenchAgent(
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
-      purpose: '本机办公 Agent Runtime（Workspace FS + Skills）',
+      purpose: '本机办公 Agent Runtime（Workspace FS + Skills · 非远程生产集群）',
       instructions: [
         'You are the local Office Agent Runtime for UI Lab Agent Workbench.',
         'Respond in Chinese unless the user writes in another language.',
@@ -110,7 +124,7 @@ export async function createWorkbenchAgent(
       ].join(' '),
       model: options.model,
       workspace,
-      // O3: FS + skills; no sandbox / search yet (O4 MCP / O5 later).
+      // O3: FS + skills; no sandbox / search yet (O4 MCP).
       workspaceToolkits: {
         filesystem: {},
         sandbox: false,
@@ -123,17 +137,33 @@ export async function createWorkbenchAgent(
         maxAvailable: 10,
         maxActivated: 5,
       },
-      maxSteps: options.maxSteps ?? Number(env.VOLTAGENT_MAX_STEPS ?? 50),
+      maxSteps: defaults.maxSteps,
+      summarization: defaults.summarization,
+      // false = stateless; Memory instance = multi-turn (conversationId = taskId).
+      memory: defaults.memory,
     })
 
-    return { profile, agent, workspaceRoot, tools, workspace }
+    return {
+      profile,
+      agent,
+      workspaceRoot,
+      tools,
+      workspace,
+      maxSteps: defaults.maxSteps,
+      summarizationEnabled: defaults.summarization !== false,
+      memoryKind: defaults.memoryKind,
+    }
   }
 
   // minimal — DIY tools (M1–M3 baseline)
+  const defaults = await resolveOfficeRuntimeDefaults(profile, env, {
+    workspaceRoot,
+    maxStepsOverride: options.maxSteps,
+  })
   const agent = new Agent({
     id: 'workbench',
     name: 'workbench',
-    purpose: '本机最小 Agent Runtime（DIY 工具）',
+    purpose: '本机最小 Agent Runtime（DIY 工具 · 非远程生产集群）',
     instructions: [
       'You are the local Agent Runtime for UI Lab Agent Workbench.',
       'Respond in Chinese unless the user writes in another language.',
@@ -143,8 +173,16 @@ export async function createWorkbenchAgent(
     ].join(' '),
     model: options.model,
     tools: workbenchTools as (Tool<any, any> | Toolkit)[],
-    maxSteps: options.maxSteps ?? Number(env.VOLTAGENT_MAX_STEPS ?? 12),
+    maxSteps: defaults.maxSteps,
   })
 
-  return { profile, agent, workspaceRoot, tools }
+  return {
+    profile,
+    agent,
+    workspaceRoot,
+    tools,
+    maxSteps: defaults.maxSteps,
+    summarizationEnabled: false,
+    memoryKind: defaults.memoryKind,
+  }
 }

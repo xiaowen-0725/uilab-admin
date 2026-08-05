@@ -57,10 +57,16 @@ describe('createWorkbenchAgent', () => {
       model: stubModel,
       workspaceRoot: root,
       maxSteps: 20,
+      env: {
+        VOLTAGENT_MEMORY: 'in-memory',
+      } as NodeJS.ProcessEnv,
     })
 
     assert.equal(bundle.profile, 'office')
     assert.equal(bundle.workspaceRoot, root)
+    assert.equal(bundle.maxSteps, 20)
+    assert.equal(bundle.summarizationEnabled, true)
+    assert.equal(bundle.memoryKind, 'in-memory')
     assert.ok(bundle.workspace, 'workspace instance present')
     assert.ok(bundle.tools.includes('ls'))
     assert.ok(bundle.tools.includes('write_file'))
@@ -132,6 +138,25 @@ describe('createWorkbenchAgent', () => {
     await access(deliverable)
   })
 
+  it('office O5 defaults: maxSteps ≥ 50, summarization on, memory available', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-o5-'))
+    tempRoots.push(root)
+
+    const bundle = await createWorkbenchAgent({
+      profile: 'office',
+      model: stubModel,
+      workspaceRoot: root,
+      env: {
+        VOLTAGENT_MEMORY: 'in-memory',
+      } as NodeJS.ProcessEnv,
+    })
+
+    assert.ok(bundle.maxSteps >= 50)
+    assert.ok(bundle.maxSteps >= 80)
+    assert.equal(bundle.summarizationEnabled, true)
+    assert.equal(bundle.memoryKind, 'in-memory')
+  })
+
   it('minimal profile keeps DIY tools without Workspace', async () => {
     const bundle = await createWorkbenchAgent({
       profile: 'minimal',
@@ -142,6 +167,8 @@ describe('createWorkbenchAgent', () => {
 
     assert.equal(bundle.profile, 'minimal')
     assert.equal(bundle.workspace, undefined)
+    assert.equal(bundle.maxSteps, 8)
+    assert.equal(bundle.summarizationEnabled, false)
     assert.deepEqual([...bundle.tools], [
       'read_file',
       'write_file',

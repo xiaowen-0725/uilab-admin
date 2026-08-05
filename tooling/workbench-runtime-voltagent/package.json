@@ -13,6 +13,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",
     "@voltagent/core": "^2.9.2",
+    "@voltagent/libsql": "^2.1.2",
     "@voltagent/logger": "^2.0.0",
     "@voltagent/server-hono": "^2.0.0",
     "ai": "^6.0.0",

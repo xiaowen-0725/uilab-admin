@@ -46,22 +46,28 @@ const FAKE: RuntimeHonestyCopy = {
 }
 
 const VOLTAGENT: RuntimeHonestyCopy = {
-  banner: '本机 VoltAgent Runtime · 非远程生产集群 · 本地侧车',
-  timelineAriaLabel: '任务时间线（本机 VoltAgent Runtime）',
-  contextItems: ['本机 VoltAgent Runtime', '非远程生产集群', '本地侧车'],
-  submitAccepted: '已提交到本机 VoltAgent Runtime（非远程生产集群）',
-  cancelAccepted: '已请求取消（本机 VoltAgent Runtime，非远程生产集群）',
-  cancelRequested: '已请求取消（本机 VoltAgent Runtime，非远程生产集群）',
+  // O5: product path is local Office sidecar — never claim remote production.
+  banner: '本机 VoltAgent Office Runtime · 非远程生产集群 · 本地侧车',
+  timelineAriaLabel: '任务时间线（本机 VoltAgent Office Runtime）',
+  contextItems: [
+    '本机 VoltAgent Office Runtime',
+    '非远程生产集群',
+    '本地侧车',
+    'Fake ≠ 本机 Runtime',
+  ],
+  submitAccepted: '已提交到本机 VoltAgent Office Runtime（非远程生产集群）',
+  cancelAccepted: '已请求取消（本机 VoltAgent Office Runtime，非远程生产集群）',
+  cancelRequested: '已请求取消（本机 VoltAgent Office Runtime，非远程生产集群）',
   clarifyingSubmit: (preview) =>
-    `已提交澄清输入（本机 VoltAgent Runtime）：${preview}`,
+    `已提交澄清输入（本机 VoltAgent Office Runtime）：${preview}`,
   submitWithPreview: (preview) =>
-    `已提交到本机 VoltAgent Runtime（非远程生产集群）：${preview}`,
+    `已提交到本机 VoltAgent Office Runtime（非远程生产集群）：${preview}`,
   waitingApproval:
-    '当前 Run 等待审批。请在时间线中选择「允许一次」或「拒绝」（本机侧车；批准后可能写入工作区文件）。',
-  approvalApproved: '已允许一次（本机侧车；批准后可能写入工作区文件）',
-  approvalRejected: '已拒绝（本机侧车，未执行写操作）',
-  inputProvided: '已提供补充输入（本机 VoltAgent Runtime）',
-  recovery: '检测到事件序号缺口，可尝试对账恢复（本机 Runtime）。',
+    '当前 Run 等待审批。请在时间线中选择「允许一次」或「拒绝」（本机办公侧车；批准后可能写入工作区文件）。',
+  approvalApproved: '已允许一次（本机办公侧车；批准后可能写入工作区文件）',
+  approvalRejected: '已拒绝（本机办公侧车，未执行写操作）',
+  inputProvided: '已提供补充输入（本机 VoltAgent Office Runtime）',
+  recovery: '检测到事件序号缺口，可尝试对账恢复（本机 Office Runtime）。',
 }
 
 export function runtimeHonestyCopy(

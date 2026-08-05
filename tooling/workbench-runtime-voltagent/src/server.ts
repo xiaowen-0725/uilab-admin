@@ -59,11 +59,18 @@ const model = createLanguageModel(provider, modelId, modelApi)
 
 const profile = resolveAgentProfile(process.env)
 
-const { agent, workspaceRoot, tools, profile: resolvedProfile } =
-  await createWorkbenchAgent({
-    profile,
-    model,
-  })
+const {
+  agent,
+  workspaceRoot,
+  tools,
+  profile: resolvedProfile,
+  maxSteps,
+  summarizationEnabled,
+  memoryKind,
+} = await createWorkbenchAgent({
+  profile,
+  model,
+})
 
 new VoltAgent({
   agents: {
@@ -83,9 +90,12 @@ logger.info(
     `baseURL=${baseURL}`,
     'agentId=workbench',
     `workspaceRoot=${workspaceRoot}`,
+    `maxSteps=${maxSteps}`,
+    `summarization=${summarizationEnabled}`,
+    `memory=${memoryKind}`,
     `tools=${tools.join(',')}`,
     resolvedProfile === 'office'
-      ? 'note=local office Runtime (Agent+Workspace FS+Skills); not remote production cluster'
+      ? 'note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills); not remote production cluster'
       : 'note=local minimal Runtime (DIY tools); not remote production cluster',
   ].join(' '),
 )
