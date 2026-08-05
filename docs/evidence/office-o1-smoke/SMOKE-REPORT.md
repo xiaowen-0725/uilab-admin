@@ -158,3 +158,25 @@ Also: path normalization + office instructions force virtual paths.
 - Unit: `respondToApproval resumes stream with approval-responded UIMessage`
 - Workbench tests: **138** green
 
+---
+
+## Codex review fixes re-smoke (2026-08-05)
+
+**Commit:** `279a6c0` — suppress terminal while approval pending; honesty approval outcomes; validate before resolve; maxSteps opt-in; tools from sidecar metadata.
+
+### Live matrix
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Banner / aria not Fake | Pass | Timeline `本机 VoltAgent Runtime…` |
+| Waiting copy (侧车写盘风险) | Pass | `10-codex-fix-waiting-approval.png` |
+| No premature `run.completed` | Pass | UI stays **等待审批** until allow |
+| Approve notice not Fake | Pass | footer `已允许一次（本机侧车；批准后可能写入工作区文件）` |
+| Resume write on disk | Pass | `output/office-smoke-workspace/output/codex-p1-verify.md` = `codex-fix-ok` |
+| file.changed / edit row | Pass | Timeline **已编辑 codex-p1-verify.md** + Chinese confirm (`11-codex-fix-after-approve-write.png`) |
+| Unit | Pass | honesty 4 + adapter 9 |
+
+### Verdict
+
+**#10 O1 fully closed** for assembly + multi-step tools + approve→write + Codex P1/P2 residual. Fake ≠ production still holds.
+
