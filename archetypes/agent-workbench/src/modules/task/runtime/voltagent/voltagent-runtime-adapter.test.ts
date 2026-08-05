@@ -206,6 +206,104 @@ describe('VoltAgentRuntimeAdapter', () => {
     ).toMatchObject({ file_path: '/output/a.md', content: 'x' })
   })
 
+  it('approval pause does not emit run.completed before decision', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        sseBody([
+          {
+            type: 'tool-approval-request',
+            approvalId: 'apr-pause',
+            toolCall: {
+              type: 'tool-call',
+              toolCallId: 'call_p',
+              toolName: 'write_file',
+              input: { file_path: '/output/p.md', content: 'x' },
+            },
+          },
+          { type: 'finish', finishReason: 'tool-calls' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-pause')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-p',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-p',
+      schemaVersion: 1,
+      taskId: 'task-pause',
+      inputText: 'write',
+      proposedTurnId: 'turn-p',
+      proposedRunId: 'run-p',
+    })
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('approval.requested')
+    })
+    await new Promise((r) => setTimeout(r, 30))
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).not.toContain('run.completed')
+  })
+
+  it('respondToApproval rejects when pending missing or stream busy', async () => {
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const missing = await adapter.sendCommand({
+      type: 'respondToApproval',
+      commandId: 'cmd-miss',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-miss',
+      schemaVersion: 1,
+      taskId: 'task-miss',
+      payload: { requestId: 'nope', decision: 'approved' },
+    })
+    expect(missing.status).toBe('rejected')
+  })
+
+  it('getCapabilities loads tools from sidecar agent metadata', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (String(url).includes('/agents/workbench')) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              tools: [{ name: 'ls' }, { name: 'write_file' }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return new Response('no', { status: 404 })
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const caps = await adapter.getCapabilities('proj', 'local')
+    expect(caps.tools).toEqual(['ls', 'write_file'])
+    expect(caps.tools).not.toContain('run_command')
+  })
+
   it('respondToApproval resumes stream with approval-responded UIMessage', async () => {
     let call = 0
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -237,8 +335,11 @@ describe('VoltAgentRuntimeAdapter', () => {
       // Resume after approve
       const body = JSON.parse(String(init?.body ?? '{}')) as {
         input: unknown
+        options?: { maxSteps?: number }
       }
       expect(Array.isArray(body.input)).toBe(true)
+      // maxSteps omitted by default (sidecar Agent config wins)
+      expect(body.options?.maxSteps).toBeUndefined()
       const messages = body.input as Array<{
         role: string
         parts: Array<Record<string, unknown>>

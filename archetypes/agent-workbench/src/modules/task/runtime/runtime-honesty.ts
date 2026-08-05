@@ -19,6 +19,9 @@ export interface RuntimeHonestyCopy {
   clarifyingSubmit: (preview: string) => string
   submitWithPreview: (preview: string) => string
   waitingApproval: string
+  approvalApproved: string
+  approvalRejected: string
+  inputProvided: string
   recovery: string
 }
 
@@ -36,6 +39,9 @@ const FAKE: RuntimeHonestyCopy = {
     `已提交到 Deterministic Fake Runtime（非生产，不会调用远程 Agent Runtime）：${preview}`,
   waitingApproval:
     '当前 Run 等待审批。请在时间线中选择「允许一次」或「拒绝」（Fake，无真实副作用）。',
+  approvalApproved: '已允许一次（Fake 审批，非生产）',
+  approvalRejected: '已拒绝（Fake 审批，非生产）',
+  inputProvided: '已提供补充输入（Fake Runtime，非生产）',
   recovery: '检测到事件序号缺口，可尝试对账恢复（Fake reconcile）。',
 }
 
@@ -52,6 +58,9 @@ const VOLTAGENT: RuntimeHonestyCopy = {
     `已提交到本机 VoltAgent Runtime（非远程生产集群）：${preview}`,
   waitingApproval:
     '当前 Run 等待审批。请在时间线中选择「允许一次」或「拒绝」（本机侧车；批准后可能写入工作区文件）。',
+  approvalApproved: '已允许一次（本机侧车；批准后可能写入工作区文件）',
+  approvalRejected: '已拒绝（本机侧车，未执行写操作）',
+  inputProvided: '已提供补充输入（本机 VoltAgent Runtime）',
   recovery: '检测到事件序号缺口，可尝试对账恢复（本机 Runtime）。',
 }
 

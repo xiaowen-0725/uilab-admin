@@ -35,6 +35,16 @@ export interface VoltAgentRuntimeAdapterOptions {
   /** Fixed user id for VoltAgent memory scoping. */
   userId?: string
   nowIso?: () => string
+  /**
+   * Optional per-request maxSteps override for stream calls.
+   * When omitted, the sidecar Agent's configured maxSteps applies (preferred).
+   */
+  maxSteps?: number
+  /**
+   * Static tools list for getCapabilities when sidecar metadata is unavailable.
+   * Prefer live fetch from the sidecar agent endpoint when possible.
+   */
+  tools?: string[]
 }
 
 type PendingApproval = {
@@ -109,6 +119,9 @@ export function normalizeWorkspaceToolInput(input: unknown): unknown {
   return rec
 }
 
+/** Fallback tools when sidecar metadata cannot be loaded (minimal DIY). */
+const FALLBACK_TOOLS = ['read_file', 'write_file', 'run_command'] as const
+
 export class VoltAgentRuntimeAdapter implements RuntimePort {
   private readonly baseUrl: string
   private readonly agentId: string
@@ -117,6 +130,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   private readonly fetchImpl: typeof fetch
   private readonly userId: string
   private readonly nowIso: () => string
+  private readonly maxSteps: number | undefined
+  private readonly toolsOverride: string[] | undefined
+  private toolsCache: string[] | null = null
 
   private readonly listeners = new Map<string, Set<Listener>>()
   private readonly taskState = new Map<string, TaskStreamState>()
@@ -130,6 +146,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis)
     this.userId = options.userId ?? 'workbench-user'
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
+    this.maxSteps = options.maxSteps
+    this.toolsOverride =
+      options.tools && options.tools.length > 0 ? [...options.tools] : undefined
   }
 
   subscribe(
@@ -164,6 +183,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     _projectId: string,
     _environmentId: string,
   ): Promise<RuntimeCapabilities> {
+    const tools = await this.resolveActiveTools()
     return {
       projectId: this.projectId,
       environmentId: 'local-voltagent',
@@ -175,23 +195,37 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         cancel: true,
       },
       models: ['voltagent-sidecar'],
-      // Honest superset: minimal DIY tools + Office Workspace FS names (sidecar profile decides which are live).
-      tools: [
-        'read_file',
-        'write_file',
-        'run_command',
-        'ls',
-        'edit_file',
-        'delete_file',
-        'stat',
-        'mkdir',
-        'rmdir',
-        'list_tree',
-        'list_files',
-        'glob',
-        'grep',
-      ],
+      tools,
     }
+  }
+
+  /** Prefer live sidecar agent tools; fall back to override / minimal DIY. */
+  private async resolveActiveTools(): Promise<string[]> {
+    if (this.toolsOverride) return [...this.toolsOverride]
+    if (this.toolsCache) return [...this.toolsCache]
+    try {
+      const res = await this.fetchImpl(
+        `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}`,
+        { method: 'GET' },
+      )
+      if (res.ok) {
+        const json = (await res.json()) as {
+          data?: { tools?: Array<{ name?: string }> }
+          tools?: Array<{ name?: string }>
+        }
+        const raw = json.data?.tools ?? json.tools ?? []
+        const names = raw
+          .map((t) => (typeof t?.name === 'string' ? t.name : ''))
+          .filter(Boolean)
+        if (names.length > 0) {
+          this.toolsCache = names
+          return [...names]
+        }
+      }
+    } catch {
+      // Sidecar down — honest minimal fallback.
+    }
+    return [...FALLBACK_TOOLS]
   }
 
   async startRun(
@@ -403,9 +437,27 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       command.runId ?? pending?.runId ?? state.lastRunId ?? `run-${taskId}`
     const turnId =
       command.turnId ?? pending?.turnId ?? state.lastTurnId ?? `turn-${taskId}`
-    const occurredAt = this.nowIso()
     const approved = command.payload.decision === 'approved'
 
+    // Validate resumability *before* mutating approval state (Codex P2).
+    if (!pending) {
+      return rejected(
+        command.commandId,
+        'approval_not_found',
+        '未找到待审批请求，或已过期（请重新提交写操作）',
+      )
+    }
+    if (state.activeAbort) {
+      return rejected(
+        command.commandId,
+        'task_busy',
+        '当前任务仍有进行中的流，请稍后再批准',
+      )
+    }
+
+    state.pendingApprovals.delete(approvalId)
+
+    const occurredAt = this.nowIso()
     this.emitEnvelope(taskId, {
       eventId: `va-apr-${runId}-${state.nextSequence}`,
       eventType: 'approval.resolved',
@@ -424,19 +476,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       },
     })
     state.nextSequence += 1
-
-    if (!pending) {
-      return accepted(command.commandId, this.nowIso())
-    }
-
-    state.pendingApprovals.delete(approvalId)
-    if (state.activeAbort) {
-      return rejected(
-        command.commandId,
-        'task_busy',
-        '当前任务仍有进行中的流，请稍后再批准',
-      )
-    }
 
     // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
     const userText = pending.userText || state.lastUserText || ''
@@ -529,7 +568,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const { taskId, turnId, runId, input, signal, completeIfNoTerminal } = args
     const state = this.ensureTask(taskId)
     const url = `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}/stream`
-    const pendingCountBefore = state.pendingApprovals.size
 
     try {
       const response = await this.fetchImpl(url, {
@@ -545,7 +583,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
               userId: this.userId,
               conversationId: taskId,
             },
-            maxSteps: 50,
+            // Only override when explicitly configured; else sidecar Agent maxSteps wins.
+            ...(this.maxSteps != null ? { maxSteps: this.maxSteps } : {}),
           },
         }),
         signal,
@@ -571,6 +610,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       const decoder = new TextDecoder()
       let buffer = ''
       let sawFinish = false
+      let sawTerminalMapped = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -602,7 +642,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
             sawFinish = true
           }
 
+          // Record pending approvals *before* mapping finish → run.completed
+          // so we can suppress terminal completion while HITL is open (Codex P1).
           this.rememberApprovalFromChunk(taskId, runId, turnId, chunk)
+          const pausedForApproval = state.pendingApprovals.size > 0
 
           const mapped = mapFullStreamChunk(chunk, {
             projectId: this.projectId,
@@ -616,6 +659,20 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           })
           for (const env of mapped.envelopes) {
             if (env.eventType === 'run.started') continue
+            // Do not complete the Run while tools are waiting for approval.
+            if (
+              pausedForApproval &&
+              (env.eventType === 'run.completed' || env.eventType === 'run.failed')
+            ) {
+              continue
+            }
+            if (
+              env.eventType === 'run.completed' ||
+              env.eventType === 'run.failed' ||
+              env.eventType === 'run.cancelled'
+            ) {
+              sawTerminalMapped = true
+            }
             this.emitEnvelope(taskId, {
               ...env,
               taskSequence: state.nextSequence,
@@ -626,13 +683,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         }
       }
 
-      const pausedForApproval =
-        state.pendingApprovals.size > 0 ||
-        state.pendingApprovals.size > pendingCountBefore
+      const pausedForApproval = state.pendingApprovals.size > 0
 
       if (
         completeIfNoTerminal &&
         !sawFinish &&
+        !sawTerminalMapped &&
         !signal.aborted &&
         !pausedForApproval
       ) {

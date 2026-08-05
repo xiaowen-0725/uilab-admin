@@ -15,7 +15,16 @@ describe('runtimeHonestyCopy', () => {
     expect(c.banner).not.toMatch(/Fake/)
     expect(c.submitAccepted).not.toMatch(/Fake/)
     expect(c.waitingApproval).toMatch(/本机侧车/)
+    expect(c.approvalApproved).toMatch(/本机侧车/)
+    expect(c.approvalApproved).not.toMatch(/Fake/)
+    expect(c.approvalRejected).not.toMatch(/Fake/)
     expect(c.contextItems.some((i) => /VoltAgent/.test(i))).toBe(true)
+  })
+
+  it('fake approval outcomes keep Fake wording', () => {
+    const c = runtimeHonestyCopy('fake')
+    expect(c.approvalApproved).toMatch(/Fake/)
+    expect(c.approvalRejected).toMatch(/Fake/)
   })
 
   it('previewText truncates with ellipsis', () => {

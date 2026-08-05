@@ -333,8 +333,8 @@ export class TaskRuntimeController {
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice =
           decision === 'approved'
-            ? '已允许一次（Fake 审批，非生产）'
-            : '已拒绝（Fake 审批，非生产）'
+            ? this.honesty.approvalApproved
+            : this.honesty.approvalRejected
         this.maybeFlush()
       } else {
         this.notice = ack.message ?? `审批响应未接受：${ack.status}`
@@ -368,7 +368,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = '已提供补充输入（Fake Runtime，非生产）'
+        this.notice = this.honesty.inputProvided
         this.maybeFlush()
       } else {
         this.notice = ack.message ?? `补充输入未接受：${ack.status}`
