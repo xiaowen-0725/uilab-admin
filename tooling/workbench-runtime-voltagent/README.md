@@ -39,14 +39,21 @@ AGENT_PROFILE=office
 # .env 内配置，例如：
 # DEEPSEEK_API_KEY=sk-...
 # OPENAI_BASE_URL=https://api.deepseek.com
-# VOLTAGENT_MODEL=deepseek-chat
+# VOLTAGENT_MODEL=deepseek-v4-flash
+# VOLTAGENT_MODEL_API=chat   # default; multi-step tools. Use responses only for flash experiments.
 # AGENT_PROFILE=office
 # WORKSPACE_ROOT=/absolute/path/to/office-folder
 
 pnpm --filter @uilab/workbench-runtime-voltagent dev
 ```
 
-可选模型：`deepseek-chat`、`deepseek-reasoner`、`deepseek-v4-flash`、`deepseek-v4-pro`。
+| Model id | Notes |
+| --- | --- |
+| **`deepseek-v4-flash`**（默认） | V4 快档；Chat Completions 多步 tool 稳定；Responses 官方也支持 flash |
+| `deepseek-v4-pro` | V4 旗舰；**请用** `VOLTAGENT_MODEL_API=chat`（Responses 尚未支持 Pro） |
+| `deepseek-chat` / `deepseek-reasoner` | Legacy 别名，官方计划停用；勿作新默认 |
+
+**API 表面：** 默认 `VOLTAGENT_MODEL_API=chat`（`/chat/completions`）。AI SDK 的 `provider(modelId)` 会默认打 `/responses`，在 DeepSeek 上会导致多步 tool 400（`No tool call found for tool output with call_id`）；侧车已改为 `provider.chat(modelId)`。
 
 Server default: `http://127.0.0.1:3141`  
 Agent id: `workbench`

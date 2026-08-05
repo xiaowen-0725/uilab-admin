@@ -8,7 +8,8 @@
  * Env:
  *   DEEPSEEK_API_KEY or OPENAI_API_KEY
  *   OPENAI_BASE_URL — default https://api.deepseek.com (OpenAI-compatible)
- *   VOLTAGENT_MODEL — default deepseek-chat
+ *   VOLTAGENT_MODEL — default deepseek-v4-flash (legacy: deepseek-chat)
+ *   VOLTAGENT_MODEL_API — chat (default, stable tools) | responses (flash only)
  *   AGENT_PROFILE — office | minimal (default minimal)
  *   WORKSPACE_ROOT — absolute path tools may read/write
  *   PORT — default 3141
@@ -17,15 +18,21 @@
  * Never commit real API keys.
  */
 
-import { createOpenAI } from '@ai-sdk/openai'
 import { VoltAgent } from '@voltagent/core'
 import { createPinoLogger } from '@voltagent/logger'
 import { honoServer } from '@voltagent/server-hono'
 import { createWorkbenchAgent } from './create-agent.js'
+import {
+  createLanguageModel,
+  createProvider,
+  resolveModelApiSurface,
+  resolveModelId,
+} from './model.js'
 import { resolveAgentProfile } from './profile.js'
 
 const port = Number(process.env.PORT ?? 3141)
-const modelId = process.env.VOLTAGENT_MODEL ?? 'deepseek-chat'
+const modelId = resolveModelId(process.env)
+const modelApi = resolveModelApiSurface(process.env)
 const apiKey =
   process.env.DEEPSEEK_API_KEY ??
   process.env.OPENAI_API_KEY ??
@@ -47,17 +54,15 @@ if (!apiKey) {
   process.exit(1)
 }
 
-const provider = createOpenAI({
-  apiKey,
-  baseURL,
-})
+const provider = createProvider({ apiKey, baseURL })
+const model = createLanguageModel(provider, modelId, modelApi)
 
 const profile = resolveAgentProfile(process.env)
 
 const { agent, workspaceRoot, tools, profile: resolvedProfile } =
   await createWorkbenchAgent({
     profile,
-    model: provider(modelId),
+    model,
   })
 
 new VoltAgent({
@@ -74,6 +79,7 @@ logger.info(
     `profile=${resolvedProfile}`,
     `port=${port}`,
     `model=${modelId}`,
+    `modelApi=${modelApi}`,
     `baseURL=${baseURL}`,
     'agentId=workbench',
     `workspaceRoot=${workspaceRoot}`,

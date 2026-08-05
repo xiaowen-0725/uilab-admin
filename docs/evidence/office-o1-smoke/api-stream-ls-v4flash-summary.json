@@ -1,0 +1,29 @@
+{
+  "model": "deepseek-v4-flash",
+  "modelApi": "chat",
+  "events": [
+    {
+      "type": "start"
+    },
+    {
+      "type": "tool-call",
+      "toolName": "ls"
+    },
+    {
+      "type": "tool-result",
+      "output": "/notes/ (directory)\n/output/ (directory)"
+    },
+    {
+      "type": "finish-step"
+    },
+    {
+      "type": "finish-step"
+    },
+    {
+      "type": "finish",
+      "finishReason": "stop"
+    }
+  ],
+  "text": "根目录下包含两个目录：`/notes/` 和 `/output/`。如需查看其中的内容，我可以进一步列出这两个目录的文件。",
+  "ok": true
+}
