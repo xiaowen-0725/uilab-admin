@@ -59,13 +59,43 @@ export async function pathExists(target: string): Promise<boolean> {
   }
 }
 
-async function isSymlink(target: string): Promise<boolean> {
+export async function isSymlink(target: string): Promise<boolean> {
   try {
     const st = await lstat(target)
     return st.isSymbolicLink()
   } catch {
     return false
   }
+}
+
+/**
+ * Resolve a path for **open/read**: lexical check + realpath containment.
+ * Blocks symlink escape (e.g. workspace/evil → /etc).
+ */
+export async function resolveExistingPathWithinRoot(
+  root: string,
+  inputPath: string,
+): Promise<string> {
+  const lexical = resolvePathWithinRoot(root, inputPath)
+  return assertCanonicalWithinRoot(root, lexical)
+}
+
+/**
+ * Resolve a path for **create/write**: ensure parents under root, refuse symlink targets.
+ */
+export async function resolveCreatablePathWithinRoot(
+  root: string,
+  inputPath: string,
+): Promise<string> {
+  const lexical = resolvePathWithinRoot(root, inputPath)
+  await ensureDirWithinRoot(root, path.dirname(lexical))
+  if (await isSymlink(lexical)) {
+    throw new Error(`路径越界：拒绝写入符号链接（${lexical}）`)
+  }
+  if (await pathExists(lexical)) {
+    return assertCanonicalWithinRoot(root, lexical)
+  }
+  return lexical
 }
 
 /**

@@ -1,36 +1,71 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createTool } from '@voltagent/core'
+import { z } from 'zod'
 import {
   applyMcpNeedsApproval,
   filterProcessEnvForChild,
+  forceToolNeedsApproval,
   formatMcpStatusLine,
   isSideEffectMcpToolName,
   loadOfficeMcpTools,
   resolveAllMcpConnectors,
   resolveMcpConnector,
+  resolveMcpReadOnlyAllowlist,
 } from './office-mcp.js'
 
-describe('isSideEffectMcpToolName (exact allowlist fail-closed)', () => {
-  it('requires approval for mutators and compound unknown names', () => {
+describe('isSideEffectMcpToolName (empty default allowlist)', () => {
+  it('requires approval for everything by default', () => {
     assert.equal(isSideEffectMcpToolName('docs_write_document'), true)
-    assert.equal(isSideEffectMcpToolName('create_event'), true)
-    assert.equal(isSideEffectMcpToolName('calendar_delete_event'), true)
-    assert.equal(isSideEffectMcpToolName('update_calendar_event'), true)
-    assert.equal(isSideEffectMcpToolName('calendar_add_event'), true)
-    assert.equal(isSideEffectMcpToolName('docs_publish_document'), true)
-    assert.equal(isSideEffectMcpToolName('docs_get_or_create_document'), true)
-    assert.equal(isSideEffectMcpToolName('mystery_cloud_action'), true)
-    // Second-pass P0: read token inside compound mutator must NOT free the tool
+    assert.equal(isSideEffectMcpToolName('docs_read_document'), true)
+    assert.equal(isSideEffectMcpToolName('list_calendars'), true)
     assert.equal(isSideEffectMcpToolName('calendar_get_and_set_event'), true)
     assert.equal(isSideEffectMcpToolName('docs_mark_as_read'), true)
-    assert.equal(isSideEffectMcpToolName('docs_list_and_archive_items'), true)
+    assert.equal(isSideEffectMcpToolName('mystery_cloud_action'), true)
   })
 
-  it('frees only exact allowlisted pure-read names', () => {
-    assert.equal(isSideEffectMcpToolName('docs_read_document'), false)
-    assert.equal(isSideEffectMcpToolName('list_calendars'), false)
-    assert.equal(isSideEffectMcpToolName('search_wiki'), false)
-    assert.equal(isSideEffectMcpToolName('get_event'), false)
+  it('frees only exact env allowlist names', () => {
+    const allow = resolveMcpReadOnlyAllowlist({
+      MCP_READ_ONLY_TOOL_NAMES: 'docs_read_document,list_calendars',
+    })
+    assert.equal(isSideEffectMcpToolName('docs_read_document', allow), false)
+    assert.equal(isSideEffectMcpToolName('list_calendars', allow), false)
+    assert.equal(isSideEffectMcpToolName('docs_read_document_extra', allow), true)
+    assert.equal(isSideEffectMcpToolName('calendar_get_and_set_event', allow), true)
+  })
+})
+
+describe('forceToolNeedsApproval on real createTool instances', () => {
+  it('sets needsApproval=true on a real Tool', () => {
+    const tool = createTool({
+      name: 'docs_write_document',
+      description: 'write',
+      parameters: z.object({ path: z.string() }),
+      execute: async () => ({ ok: true }),
+    })
+    assert.notEqual(tool.needsApproval, true)
+    const forced = forceToolNeedsApproval(tool as any)
+    assert.equal(forced.needsApproval, true)
+    assert.equal(forced.name, 'docs_write_document')
+  })
+
+  it('applyMcpNeedsApproval forces real tools not on allowlist', () => {
+    const read = createTool({
+      name: 'docs_read_document',
+      description: 'read',
+      parameters: z.object({ path: z.string() }),
+      execute: async () => ({ ok: true }),
+    })
+    const write = createTool({
+      name: 'docs_write_document',
+      description: 'write',
+      parameters: z.object({ path: z.string() }),
+      execute: async () => ({ ok: true }),
+    })
+    const allow = new Set(['docs_read_document'])
+    const out = applyMcpNeedsApproval([read, write] as any, allow)
+    assert.notEqual(out[0].needsApproval, true)
+    assert.equal(out[1].needsApproval, true)
   })
 })
 
@@ -92,7 +127,7 @@ describe('loadOfficeMcpTools', () => {
     await result.disconnect()
   })
 
-  it('connects via host mock and marks write tools for approval', async () => {
+  it('connects via host mock; all tools need approval without env allowlist', async () => {
     const result = await loadOfficeMcpTools(
       {
         MCP_DOCS_URL: 'https://mcp.example/docs',
@@ -103,14 +138,18 @@ describe('loadOfficeMcpTools', () => {
           getTools: async (servers) => {
             const ids = Object.keys(servers)
             const tools = ids.flatMap((id) => [
-              {
+              createTool({
                 name: `${id}_read_item`,
                 description: 'read',
-              },
-              {
+                parameters: z.object({ q: z.string().optional() }),
+                execute: async () => ({ ok: true }),
+              }),
+              createTool({
                 name: `${id}_write_item`,
                 description: 'write',
-              },
+                parameters: z.object({ q: z.string().optional() }),
+                execute: async () => ({ ok: true }),
+              }),
             ]) as any[]
             return {
               tools,
@@ -124,14 +163,52 @@ describe('loadOfficeMcpTools', () => {
     assert.equal(result.statuses.filter((s) => s.status === 'connected').length, 2)
     assert.ok(result.toolNames.includes('docs_read_item'))
     assert.ok(result.toolNames.includes('calendar_write_item'))
-    const write = result.tools.find((t) => t.name === 'docs_write_item') as {
-      needsApproval?: boolean
+    for (const tool of result.tools) {
+      assert.equal(
+        (tool as { needsApproval?: boolean }).needsApproval,
+        true,
+        `expected approval for ${tool.name}`,
+      )
     }
+    await result.disconnect()
+  })
+
+  it('env allowlist frees exact read tool only', async () => {
+    const result = await loadOfficeMcpTools(
+      {
+        MCP_DOCS_URL: 'https://mcp.example/docs',
+        MCP_READ_ONLY_TOOL_NAMES: 'docs_read_item',
+      },
+      {
+        host: {
+          getTools: async () => ({
+            tools: [
+              createTool({
+                name: 'docs_read_item',
+                description: 'read',
+                parameters: z.object({}),
+                execute: async () => ({ ok: true }),
+              }),
+              createTool({
+                name: 'docs_write_item',
+                description: 'write',
+                parameters: z.object({}),
+                execute: async () => ({ ok: true }),
+              }),
+            ] as any[],
+            disconnect: async () => {},
+          }),
+        },
+      },
+    )
     const read = result.tools.find((t) => t.name === 'docs_read_item') as {
       needsApproval?: boolean
     }
-    assert.equal(write?.needsApproval, true)
+    const write = result.tools.find((t) => t.name === 'docs_write_item') as {
+      needsApproval?: boolean
+    }
     assert.notEqual(read?.needsApproval, true)
+    assert.equal(write?.needsApproval, true)
     await result.disconnect()
   })
 
@@ -150,7 +227,6 @@ describe('loadOfficeMcpTools', () => {
     const docs = result.statuses.find((s) => s.id === 'docs')
     assert.equal(docs?.status, 'failed')
     assert.match(docs?.reason ?? '', /ECONNREFUSED|连接失败/)
-    // calendar still reported disabled
     assert.equal(
       result.statuses.find((s) => s.id === 'calendar')?.status,
       'disabled',
@@ -228,11 +304,5 @@ describe('applyMcpNeedsApproval + formatMcpStatusLine', () => {
       { id: 'calendar', status: 'failed', toolNames: [], reason: 'x' },
     ])
     assert.equal(line, 'docs=ok(2),calendar=fail')
-  })
-
-  it('applyMcpNeedsApproval is idempotent on free tools', () => {
-    const tools = [{ name: 'list_events' }] as any[]
-    applyMcpNeedsApproval(tools)
-    assert.notEqual(tools[0].needsApproval, true)
   })
 })

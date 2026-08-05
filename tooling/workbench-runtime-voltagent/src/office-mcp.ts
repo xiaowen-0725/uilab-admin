@@ -8,7 +8,7 @@
  * Spec: docs/plans/voltagent-office-profile-spec.md (O4)
  */
 
-import { MCPConfiguration, type Tool } from '@voltagent/core'
+import { MCPConfiguration, createTool, type Tool } from '@voltagent/core'
 import type { ProfileEnv } from './profile.js'
 
 export type McpConnectorId = 'docs' | 'calendar'
@@ -62,51 +62,18 @@ type McpHost = {
 }
 
 /**
- * Fail-closed MCP approval (second-pass Codex P0).
+ * Fail-closed MCP approval (adversarial P1).
  *
  * Default: **every** MCP tool needs HITL approval.
- * Free only if the normalized name is on an **exact** read-only allowlist
- * (no substring / compound matching — blocks get_and_set, mark_as_read, …).
- *
- * Extra names: env `MCP_READ_ONLY_TOOL_NAMES=a,b,c` (merged into allowlist).
+ * Free only via **exact** names in `MCP_READ_ONLY_TOOL_NAMES` (env).
+ * Built-in free list is **empty** — no guessed pure-read names.
  */
 export function normalizeMcpToolName(name: string): string {
   return name.trim().toLowerCase().replace(/[-\s]+/g, '_')
 }
 
-/** Exact allowlist of pure read-only tool names (normalized). */
-export const DEFAULT_MCP_READ_ONLY_ALLOWLIST: ReadonlySet<string> = new Set([
-  // common pure-read names
-  'read',
-  'read_document',
-  'read_file',
-  'read_event',
-  'docs_read_document',
-  'docs_read_item',
-  'get_document',
-  'get_event',
-  'list',
-  'list_documents',
-  'list_calendars',
-  'list_events',
-  'list_files',
-  'search',
-  'search_wiki',
-  'search_documents',
-  'search_events',
-  'query',
-  'query_calendar',
-  'fetch_document',
-  'fetch_event',
-  'find_document',
-  'show_document',
-  'lookup_document',
-  'describe_document',
-  'stat',
-  'count',
-  // test host mocks
-  'calendar_read_item',
-])
+/** Empty by default — operators opt in free tools explicitly. */
+export const DEFAULT_MCP_READ_ONLY_ALLOWLIST: ReadonlySet<string> = new Set()
 
 export function resolveMcpReadOnlyAllowlist(
   env: ProfileEnv = process.env,
@@ -134,17 +101,61 @@ export function isSideEffectMcpToolName(
   return !isReadOnlyMcpToolName(name, allowlist)
 }
 
-/** Attach needsApproval to every non-allowlisted MCP tool (mutates tool objects). */
+/**
+ * Ensure non-allowlisted tools require approval on **real** Tool instances.
+ * Prefer in-place assign when writable; otherwise re-wrap with createTool.
+ */
 export function applyMcpNeedsApproval(
   tools: Tool<any, any>[],
   allowlist: ReadonlySet<string> = DEFAULT_MCP_READ_ONLY_ALLOWLIST,
 ): Tool<any, any>[] {
-  for (const tool of tools) {
-    if (!isReadOnlyMcpToolName(tool.name, allowlist)) {
+  return tools.map((tool) => {
+    if (isReadOnlyMcpToolName(tool.name, allowlist)) return tool
+    return forceToolNeedsApproval(tool)
+  })
+}
+
+export function forceToolNeedsApproval(tool: Tool<any, any>): Tool<any, any> {
+  const current = (tool as { needsApproval?: unknown }).needsApproval
+  if (current === true) return tool
+
+  // Fast path: mutable own property (VoltAgent createTool tools are writable).
+  try {
+    const desc = Object.getOwnPropertyDescriptor(tool, 'needsApproval')
+    if (!desc || desc.writable) {
       ;(tool as { needsApproval?: boolean }).needsApproval = true
+      if ((tool as { needsApproval?: unknown }).needsApproval === true) {
+        return tool
+      }
     }
+  } catch {
+    // fall through to wrap
   }
-  return tools
+
+  // Slow path: re-wrap so HITL cannot be dropped if the original object is frozen
+  // or needsApproval is a non-writable getter.
+  const anyTool = tool as Tool<any, any> & {
+    parameters?: unknown
+    execute?: (...args: any[]) => any
+    description?: string
+  }
+  if (typeof anyTool.execute !== 'function' || anyTool.parameters == null) {
+    // Last resort: keep mutation attempt; better than silent free.
+    try {
+      ;(tool as { needsApproval?: boolean }).needsApproval = true
+    } catch {
+      // ignore
+    }
+    return tool
+  }
+
+  return createTool({
+    name: tool.name,
+    description: anyTool.description ?? tool.name,
+    parameters: anyTool.parameters as any,
+    needsApproval: true,
+    execute: (...args: any[]) => anyTool.execute!(...args),
+  }) as Tool<any, any>
 }
 
 function parseArgs(raw: string | undefined): string[] | undefined {

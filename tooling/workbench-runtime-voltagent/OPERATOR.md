@@ -95,7 +95,7 @@ note=local VoltAgent Office Runtime …; not remote production cluster
 | 未设 `WORKSPACE_ROOT`（office） | `~/VoltAgent-Office/workspace`（首次 README） |
 | 写/删 FS | `needsApproval: true` |
 | 越界路径 | 拒绝（「路径越界」） |
-| MCP 写类工具 | 名称启发式 `needsApproval` |
+| MCP 工具 | **默认全部** `needsApproval`；仅 `MCP_READ_ONLY_TOOL_NAMES` 精确放行 |
 | Sandbox | 默认关 |
 
 ---

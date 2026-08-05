@@ -107,7 +107,8 @@ Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`cont
 
 ### MCP 连接器（O4 · 可选）
 
-文档/知识库与日历 MCP **默认关闭**。配置 URL 或 stdio 命令后注入 Agent tools；写类工具自动 `needsApproval`。  
+文档/知识库与日历 MCP **默认关闭**。配置 URL 或 stdio 命令后注入 Agent tools。  
+**默认全部工具 `needsApproval`**；仅当 env `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 列出时，精确匹配的名称可免审批（无内置猜测白名单）。  
 连接失败**不崩溃**，本地 Workspace FS + Skills 仍可用；`capabilities`/工具列表只反映真实已连接工具。
 
 | 连接器 | 启用方式（任选） |

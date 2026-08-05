@@ -1,6 +1,7 @@
 /**
  * Workspace-scoped DIY tools for Workbench M3 / minimal profile.
  * Writes outside WORKSPACE_ROOT are denied.
+ * Paths are checked with realpath containment (symlink escape blocked).
  * Office profile uses VoltAgent Workspace FS instead (see create-agent.ts).
  */
 
@@ -9,14 +10,13 @@ import path from 'node:path'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import { resolveWorkspaceRoot } from './profile.js'
-import { resolvePathWithinRoot } from './workspace-root.js'
+import {
+  resolveCreatablePathWithinRoot,
+  resolveExistingPathWithinRoot,
+} from './workspace-root.js'
 
 function workspaceRoot(): string {
   return resolveWorkspaceRoot(process.env, 'minimal')
-}
-
-function resolveSafePath(relativePath: string): string {
-  return resolvePathWithinRoot(workspaceRoot(), relativePath)
 }
 
 export const readFileTool = createTool({
@@ -27,7 +27,7 @@ export const readFileTool = createTool({
     path: z.string().describe('Relative path under workspace root'),
   }),
   execute: async ({ path: rel }) => {
-    const abs = resolveSafePath(rel)
+    const abs = await resolveExistingPathWithinRoot(workspaceRoot(), rel)
     const content = await readFile(abs, 'utf8')
     return {
       path: rel,
@@ -47,7 +47,7 @@ export const writeFileTool = createTool({
   }),
   needsApproval: true,
   execute: async ({ path: rel, content }) => {
-    const abs = resolveSafePath(rel)
+    const abs = await resolveCreatablePathWithinRoot(workspaceRoot(), rel)
     await mkdir(path.dirname(abs), { recursive: true })
     await writeFile(abs, content, 'utf8')
     const lines = content.split('\n').length
