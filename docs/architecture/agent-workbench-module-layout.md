@@ -101,6 +101,23 @@ archetypes/agent-workbench/
 - 单元测试与 Module 共置；Adapter 合同、跨 Module 集成和 Playwright 用户流程测试位于顶层 `tests`。
 - 跨 Archetype UI primitive 从 `packages/foundation` 导入；Archetype 内不建立模糊的 `components/common` 或 `shared/utils`。
 
+## Phase 4 seam refinement (4B+)
+
+Umbrella design `docs/superpowers/specs/2026-08-02-codex-task-pane-runtime-design.md` 对 Task Module 作局部 refinement（不改 Shell geometry 所有权）：
+
+| 层 | 所有者 | 说明 |
+|---|---|---|
+| Shell geometry / motion / Work drawer | `shell/*` | Preserve Phase 3/3A/3B contracts |
+| Task Pane product UI | `modules/task/ui/*` | 4C+ 重建 Timeline/header；4B 可不替换 capture UI |
+| Domain + commands + events | `modules/task/model` + `protocol` | Task/Turn/Run；无 Project 实体 |
+| RuntimePort / Fake / virtual clock | `modules/task/ports` + `runtime` | 4B；生产 Adapter 后续 |
+| EventStorePort | `modules/task/ports` | 4B 类型 + **4E MemoryEventStore**（进程内内存）；**IndexedDB 仍 planned**，非 4E 已交付 |
+| Projection / TaskReadModel | `modules/task/projection` | 4C–4D 深化 |
+| Project aggregate | `modules/project` | 独立 Module；Task 只持 `projectId` |
+| workbench-session | layout + selected task only | 不拥有 Runtime 或 Project |
+
+**诚实边界：** 4B Fake Runtime ≠ 生产 Runtime。默认 UI 在 4C 之前可继续使用 capture-driven stream。
+
 ## Lifecycle model
 
 ```text

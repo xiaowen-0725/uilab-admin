@@ -143,8 +143,11 @@ export function mapFullStreamChunk(
       const args = chunk.args ?? chunk.input ?? chunk.arguments
       if (isShellTool(name)) {
         push('command.started', {
+          toolId: callId,
           toolCallId: callId,
           toolName: name,
+          name,
+          label: name,
           command: typeof args === 'object' && args && 'command' in args
             ? String((args as { command: unknown }).command)
             : JSON.stringify(args ?? {}),
@@ -152,9 +155,11 @@ export function mapFullStreamChunk(
         })
       } else {
         push('tool.called', {
+          toolId: callId,
           toolCallId: callId,
           toolName: name,
           name,
+          label: name,
           args,
           toolKind: isWriteTool(name) ? 'generic' : 'generic',
         })
@@ -170,16 +175,21 @@ export function mapFullStreamChunk(
 
       if (isShellTool(name)) {
         push('command.completed', {
+          toolId: callId,
           toolCallId: callId,
           toolName: name,
+          name,
+          label: name,
           output,
           isError,
         })
       } else {
         push('tool.completed', {
+          toolId: callId,
           toolCallId: callId,
           toolName: name,
           name,
+          label: name,
           output,
           isError,
           status: isError ? 'error' : 'completed',

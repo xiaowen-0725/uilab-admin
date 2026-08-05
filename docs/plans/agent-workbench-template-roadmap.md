@@ -218,7 +218,14 @@ No Document/Browser/Review Surfaces, Runtime, conversation/Composer redesign, Se
 
 ### Status
 
-**Paused** — Phase 3A/3B layout polish precedes any Runtime work.
+**Fake path template-complete (2026-08-04).** Phase 4A Codex observation **Approve 12/12**. Phase 4B Kernel + Fake **shipped**. Phase 4C dual-path vertical slice **shipped**. Phase 4D reasoning/tool/approval **shipped**. Phase 4E MemoryEventStore + queue/steer/reconcile **shipped** (memory only). Phase 4F long-content fold + smart scroll **shipped**. Evidence: `docs/evidence/phase-4-fake-complete.md`. **Not** production Runtime / Surfaces / IndexedDB.
+
+Work orders:
+
+- 4A: `docs/superpowers/plans/2026-08-03-phase-4a-codex-observation.md` (sealed; evidence in worktree + Application Support raw)
+- 4B: `docs/plans/phase-4b-runtime-kernel-fake-work-order.md` + evidence `docs/evidence/phase-4b-runtime-kernel-fake.md` (shipped scaffold)
+- 4C: `docs/plans/phase-4c-task-pane-vertical-slice-work-order.md` + evidence `docs/evidence/phase-4c-task-pane-vertical-slice.md` (shipped dual-path vertical slice)
+- 4D–4F: per umbrella design §18 (`docs/superpowers/specs/2026-08-02-codex-task-pane-runtime-design.md`)
 
 ### Purpose
 

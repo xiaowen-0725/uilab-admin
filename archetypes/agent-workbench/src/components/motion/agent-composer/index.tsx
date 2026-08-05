@@ -44,12 +44,11 @@ export function Composer({
     <div
       data-testid={dataTestId}
       style={{
-        // Codex: white hairline on dark elevated shell + soft depth.
-        boxShadow:
-          "0 0 0 0.5px var(--wb-hairline-soft), 0 3px 7.5px rgba(0,0,0,0.04), 0 0 20px rgba(0,0,0,0.05)",
+        // Dark (Codex CDP): no shell shadow; light keeps hairline trio via token.
+        boxShadow: "var(--wb-composer-shell-shadow)",
       }}
       className={cn(
-        "relative z-10 flex flex-col rounded-[25px]",
+        "relative z-10 flex w-full max-w-full flex-col rounded-[25px] px-4 py-3",
         "bg-[var(--wb-surface-composer)] backdrop-blur-lg",
         className,
       )}
@@ -239,7 +238,7 @@ export function ComposerTextarea({
   );
 
   return (
-    <div className="max-h-[25dvh] overflow-y-auto px-4 pt-3.5 pb-1">
+    <div className="max-h-[25dvh] overflow-y-auto px-0 pt-0.5 pb-1">
       <div className="flex min-h-[44px] flex-wrap items-center gap-x-1.5 gap-y-1">
         {hasLeading ? (
           <div
@@ -261,11 +260,13 @@ export function ComposerTextarea({
           aria-label={ariaLabel}
           className={cn(
             "flex-1 resize-none border-none bg-transparent text-sm leading-5",
-            "outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
+            "shadow-none outline-none ring-0 focus:shadow-none focus:outline-none focus:ring-0",
+            "focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0",
             "placeholder:text-muted-foreground",
             hasLeading ? "min-h-[28px] min-w-[8rem]" : "min-h-[44px] w-full",
             className,
           )}
+          style={{ boxShadow: 'none' }}
         />
       </div>
     </div>
@@ -411,11 +412,9 @@ export interface ComposerSkillChipProps {
   "data-testid"?: string;
 }
 
-/** Codex-like skill mention blue (sampled from desktop skill tokens). */
-const SKILL_BLUE = "#7eb8f0";
-
 /**
- * Inline skill tag — soft pill + Codex skill blue; × only on hover/focus.
+ * Inline skill tag in the composer input.
+ * Neutral muted pill; icon crossfades to × on hover/focus (Codex-style tag chrome).
  */
 export function ComposerSkillChip({
   label,
@@ -424,41 +423,62 @@ export function ComposerSkillChip({
   className,
   "data-testid": dataTestId,
 }: ComposerSkillChipProps) {
+  const iconSlot =
+    icon && onRemove ? (
+      <span className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+        <span className="absolute inset-0 flex items-center justify-center opacity-100 transition-opacity group-hover/skill:opacity-0 group-focus-within/skill:opacity-0">
+          {icon}
+        </span>
+        <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/skill:opacity-100 group-focus-within/skill:opacity-100">
+          <X className="size-3.5" />
+        </span>
+      </span>
+    ) : icon ? (
+      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+        {icon}
+      </span>
+    ) : null
+
+  if (onRemove) {
+    const removeLabel =
+      typeof label === 'string' ? `移除 ${label}` : '移除技能'
+    return (
+      <button
+        type="button"
+        title={removeLabel}
+        aria-label={removeLabel}
+        onClick={onRemove}
+        data-testid={dataTestId}
+        className={cn(
+          'group/skill inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2',
+          'bg-[var(--wb-inset-strong)] text-[13px] text-muted-foreground',
+          'transition-colors hover:bg-[var(--wb-hover-strong)] hover:text-foreground',
+          className,
+        )}
+      >
+        {iconSlot}
+        <span className="truncate" aria-hidden="true">
+          {label}
+        </span>
+      </button>
+    )
+  }
+
   return (
     <span
       data-testid={dataTestId}
-      style={{
-        color: SKILL_BLUE,
-        backgroundColor: `color-mix(in oklab, ${SKILL_BLUE} 15%, transparent)`,
-      }}
       className={cn(
-        "group/skill inline-flex h-6 max-w-full items-center gap-1 align-middle",
-        "rounded-full px-2 text-[13px] font-medium",
+        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2',
+        'bg-[var(--wb-inset-strong)] text-[13px] text-muted-foreground',
         className,
       )}
     >
       {icon ? (
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center opacity-90">
+        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
           {icon}
         </span>
       ) : null}
       <span className="truncate">{label}</span>
-      {onRemove ? (
-        <button
-          type="button"
-          aria-label={
-            typeof label === "string" ? `移除技能 ${label}` : "移除技能"
-          }
-          onClick={onRemove}
-          className={cn(
-            "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full",
-            "opacity-0 transition-opacity",
-            "group-hover/skill:opacity-100 group-focus-within/skill:opacity-100",
-          )}
-        >
-          <X className="h-3 w-3" />
-        </button>
-      ) : null}
     </span>
   );
 }
@@ -924,6 +944,7 @@ export interface ComposerSendButtonProps {
   "aria-label"?: string;
   className?: string;
   "data-testid"?: string;
+  "data-send-mode"?: "send" | "stop";
   "aria-describedby"?: string;
 }
 
@@ -940,6 +961,7 @@ export function ComposerSendButton({
   "aria-label": ariaLabel,
   className,
   "data-testid": dataTestId,
+  "data-send-mode": dataSendMode,
   "aria-describedby": ariaDescribedBy,
 }: ComposerSendButtonProps) {
   const reduce = useReducedMotion() ?? false;
@@ -950,6 +972,7 @@ export function ComposerSendButton({
       onClick={onClick}
       disabled={disabled}
       data-testid={dataTestId}
+      data-send-mode={dataSendMode ?? (running ? "stop" : "send")}
       aria-describedby={ariaDescribedBy}
       aria-label={ariaLabel ?? (running ? "Stop" : "Send")}
       className={cn(

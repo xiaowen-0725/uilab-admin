@@ -71,6 +71,9 @@ describe('mapFullStreamChunks', () => {
       'tool.called',
       'tool.completed',
     ])
+    // Projection merges on payload.toolId — must be stable across call/result.
+    expect(envelopes[3]?.payload).toMatchObject({ toolId: 'c1', name: 'read_file' })
+    expect(envelopes[4]?.payload).toMatchObject({ toolId: 'c1' })
   })
 
   it('maps write tool result to tool.completed + file.changed', () => {
