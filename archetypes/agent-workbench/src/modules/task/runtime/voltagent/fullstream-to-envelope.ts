@@ -45,13 +45,33 @@ function textDelta(chunk: FullStreamChunk): string {
 }
 
 function isShellTool(name: string): boolean {
-  return /^(bash|shell|exec|run_command|runCommand)$/i.test(name)
+  return /^(bash|shell|exec|run_command|runCommand|execute_command)$/i.test(name)
 }
 
+/**
+ * Tools that mutate files and should synthesize `file.changed` after success.
+ * Covers DIY tools and VoltAgent Workspace FS toolkit names.
+ */
 function isWriteTool(name: string): boolean {
-  return /^(write|write_file|writeFile|create_file|createFile|edit|edit_file|editFile)$/i.test(
+  return /^(write|write_file|writeFile|create_file|createFile|edit|edit_file|editFile|delete_file|deleteFile|rmdir)$/i.test(
     name,
   )
+}
+
+function extractToolPath(
+  args: unknown,
+  output: unknown,
+): string | undefined {
+  const fromRecord = (value: unknown): string | undefined => {
+    if (typeof value !== 'object' || value === null) return undefined
+    const rec = value as Record<string, unknown>
+    for (const key of ['path', 'file_path', 'filePath', 'filepath'] as const) {
+      const v = rec[key]
+      if (typeof v === 'string' && v.length > 0) return v
+    }
+    return undefined
+  }
+  return fromRecord(args) ?? fromRecord(output)
 }
 
 /**
@@ -196,19 +216,11 @@ export function mapFullStreamChunk(
         })
       }
 
-      // Synthesize file.changed for write tools when path is known.
+      // Synthesize file.changed for write/edit/delete tools when path is known.
       if (!isError && isWriteTool(name)) {
         const args = chunk.args ?? chunk.input ?? chunk.arguments
-        const path =
-          typeof args === 'object' && args && args !== null && 'path' in args
-            ? String((args as { path: unknown }).path)
-            : typeof output === 'object' &&
-                output &&
-                output !== null &&
-                'path' in output
-              ? String((output as { path: unknown }).path)
-              : undefined
-        if (path) {
+        const filePath = extractToolPath(args, output)
+        if (filePath) {
           const additions =
             typeof output === 'object' &&
             output &&
@@ -220,9 +232,11 @@ export function mapFullStreamChunk(
             output &&
             typeof (output as { deletions?: unknown }).deletions === 'number'
               ? (output as { deletions: number }).deletions
-              : undefined
+              : /delete_file|rmdir/i.test(name)
+                ? 1
+                : undefined
           push('file.changed', {
-            path,
+            path: filePath,
             additions,
             deletions,
             toolCallId: callId,

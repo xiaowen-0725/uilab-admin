@@ -1,17 +1,17 @@
 /**
- * Workspace-scoped tools for Workbench M3 demo.
+ * Workspace-scoped DIY tools for Workbench M3 / minimal profile.
  * Writes outside WORKSPACE_ROOT are denied.
+ * Office profile uses VoltAgent Workspace FS instead (see create-agent.ts).
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
+import { resolveWorkspaceRoot } from './profile.js'
 
 function workspaceRoot(): string {
-  return path.resolve(
-    process.env.WORKSPACE_ROOT ?? path.join(process.cwd(), '../../'),
-  )
+  return resolveWorkspaceRoot(process.env, 'minimal')
 }
 
 function resolveSafePath(relativePath: string): string {

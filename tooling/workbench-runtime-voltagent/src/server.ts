@@ -9,6 +9,7 @@
  *   DEEPSEEK_API_KEY or OPENAI_API_KEY
  *   OPENAI_BASE_URL — default https://api.deepseek.com (OpenAI-compatible)
  *   VOLTAGENT_MODEL — default deepseek-chat
+ *   AGENT_PROFILE — office | minimal (default minimal)
  *   WORKSPACE_ROOT — absolute path tools may read/write
  *   PORT — default 3141
  *
@@ -17,10 +18,11 @@
  */
 
 import { createOpenAI } from '@ai-sdk/openai'
-import { Agent, VoltAgent } from '@voltagent/core'
+import { VoltAgent } from '@voltagent/core'
 import { createPinoLogger } from '@voltagent/logger'
 import { honoServer } from '@voltagent/server-hono'
-import { workbenchTools } from './tools.js'
+import { createWorkbenchAgent } from './create-agent.js'
+import { resolveAgentProfile } from './profile.js'
 
 const port = Number(process.env.PORT ?? 3141)
 const modelId = process.env.VOLTAGENT_MODEL ?? 'deepseek-chat'
@@ -50,29 +52,34 @@ const provider = createOpenAI({
   baseURL,
 })
 
-const workbenchAgent = new Agent({
-  id: 'workbench',
-  name: 'workbench',
-  instructions: [
-    'You are the local Agent Runtime for UI Lab Agent Workbench.',
-    'Respond in Chinese unless the user writes in another language.',
-    'You may use read_file, write_file (requires approval), and run_command tools when helpful.',
-    'Prefer concise answers. Stay within the workspace tools for file access.',
-    'This is a local demo sidecar, not a remote production cluster.',
-  ].join(' '),
-  model: provider(modelId),
-  tools: workbenchTools,
-  maxSteps: 12,
-})
+const profile = resolveAgentProfile(process.env)
+
+const { agent, workspaceRoot, tools, profile: resolvedProfile } =
+  await createWorkbenchAgent({
+    profile,
+    model: provider(modelId),
+  })
 
 new VoltAgent({
   agents: {
-    workbench: workbenchAgent,
+    workbench: agent,
   },
   server: honoServer({ port }),
   logger,
 })
 
 logger.info(
-  `Workbench VoltAgent sidecar starting port=${port} model=${modelId} baseURL=${baseURL} agentId=workbench workspaceRoot=${process.env.WORKSPACE_ROOT ?? '(default)'}`,
+  [
+    'Workbench VoltAgent sidecar starting',
+    `profile=${resolvedProfile}`,
+    `port=${port}`,
+    `model=${modelId}`,
+    `baseURL=${baseURL}`,
+    'agentId=workbench',
+    `workspaceRoot=${workspaceRoot}`,
+    `tools=${tools.join(',')}`,
+    resolvedProfile === 'office'
+      ? 'note=local office Runtime (Agent+Workspace FS); not remote production cluster'
+      : 'note=local minimal Runtime (DIY tools); not remote production cluster',
+  ].join(' '),
 )

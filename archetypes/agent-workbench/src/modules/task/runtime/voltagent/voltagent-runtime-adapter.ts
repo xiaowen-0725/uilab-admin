@@ -112,7 +112,22 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         cancel: true,
       },
       models: ['voltagent-sidecar'],
-      tools: ['read_file', 'write_file', 'run_command'],
+      // Honest superset: minimal DIY tools + Office Workspace FS names (sidecar profile decides which are live).
+      tools: [
+        'read_file',
+        'write_file',
+        'run_command',
+        'ls',
+        'edit_file',
+        'delete_file',
+        'stat',
+        'mkdir',
+        'rmdir',
+        'list_tree',
+        'list_files',
+        'glob',
+        'grep',
+      ],
     }
   }
 

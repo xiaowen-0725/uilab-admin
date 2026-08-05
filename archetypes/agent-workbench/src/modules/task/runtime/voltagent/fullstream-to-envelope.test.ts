@@ -103,6 +103,128 @@ describe('mapFullStreamChunks', () => {
     })
   })
 
+  it('maps Workspace FS write tools using file_path → file.changed', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'w2',
+          toolName: 'write_file',
+          args: { file_path: '/notes/memo.md', content: 'hello' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'w2',
+          toolName: 'write_file',
+          args: { file_path: '/notes/memo.md' },
+          output: { path: '/notes/memo.md', bytes: 5 },
+        },
+        {
+          type: 'tool-call',
+          toolCallId: 'e1',
+          toolName: 'edit_file',
+          args: {
+            file_path: '/notes/memo.md',
+            old_string: 'hello',
+            new_string: 'hello world',
+          },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'e1',
+          toolName: 'edit_file',
+          args: { file_path: '/notes/memo.md' },
+          output: { path: '/notes/memo.md' },
+        },
+        {
+          type: 'tool-call',
+          toolCallId: 'd1',
+          toolName: 'delete_file',
+          args: { file_path: '/notes/old.md' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'd1',
+          toolName: 'delete_file',
+          args: { file_path: '/notes/old.md' },
+          output: { path: '/notes/old.md' },
+        },
+      ],
+      baseCtx(),
+    )
+    const types = envelopes.map((e) => e.eventType)
+    expect(types).toEqual([
+      'tool.called',
+      'tool.completed',
+      'file.changed',
+      'tool.called',
+      'tool.completed',
+      'file.changed',
+      'tool.called',
+      'tool.completed',
+      'file.changed',
+    ])
+    expect(envelopes[2]?.payload).toMatchObject({
+      path: '/notes/memo.md',
+      toolName: 'write_file',
+    })
+    expect(envelopes[5]?.payload).toMatchObject({
+      path: '/notes/memo.md',
+      toolName: 'edit_file',
+    })
+    expect(envelopes[8]?.payload).toMatchObject({
+      path: '/notes/old.md',
+      toolName: 'delete_file',
+    })
+  })
+
+  it('maps Workspace FS read tools (ls / list_tree) as expandable tool rows', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'ls1',
+          toolName: 'ls',
+          args: { path: '/' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'ls1',
+          toolName: 'ls',
+          output: [{ path: '/notes', is_dir: true }],
+        },
+        {
+          type: 'tool-call',
+          toolCallId: 'lt1',
+          toolName: 'list_tree',
+          args: { path: '/notes' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'lt1',
+          toolName: 'list_tree',
+          output: { entries: ['memo.md'] },
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((e) => e.eventType)).toEqual([
+      'tool.called',
+      'tool.completed',
+      'tool.called',
+      'tool.completed',
+    ])
+    expect(envelopes[0]?.payload).toMatchObject({
+      toolId: 'ls1',
+      toolName: 'ls',
+      name: 'ls',
+    })
+    expect(envelopes[2]?.payload).toMatchObject({
+      toolId: 'lt1',
+      toolName: 'list_tree',
+    })
+  })
+
   it('maps bash tool to command.* events', () => {
     const { envelopes } = mapFullStreamChunks(
       [

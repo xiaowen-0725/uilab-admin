@@ -20,7 +20,7 @@
   - **4E**：`MemoryEventStore` 追加与重放；`queueFollowUp` / `steerRun` / `reconcileInterruptedRun`（Fake）
   - **4F**：长文折叠、智能滚动 follow/pin、「有新内容」
   - **Fake ≠ 生产 Runtime** — 无远程 Agent、无真实工具副作用
-- **可选 Local VoltAgent 侧车**（`VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`）：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程
+- **可选 Local VoltAgent 侧车**（`VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`）：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程。侧车 `AGENT_PROFILE=minimal|office`：`minimal` 为 DIY 读写；`office` 为 **Agent + Workspace Node FS**（写/删 needsApproval），仍非远程集群
 - **未交付（勿伪装成已接远程）**：云上多租户 Agent Runtime、Surface Registry 真实现、Document/Browser/Review、Resource Explorer、**IndexedDB** EventStore、Git 全量集成、Electron/Tauri
 
 ## 目录约定
