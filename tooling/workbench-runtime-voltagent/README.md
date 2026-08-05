@@ -25,7 +25,19 @@ cp .env.example .env   # 填入 DEEPSEEK_API_KEY（.env 已被 gitignore）
 | `minimal`（默认） | plain `Agent` + DIY tools | `read_file` / `write_file`（审批）/ `run_command` |
 | `office` | **`Agent` + `Workspace`**（Node FS，`virtualMode`） | Workspace FS：`ls`、`read_file`、`write_file`、`edit_file`、`delete_file`…；**写/删默认 needsApproval** |
 
-Office 未设 `WORKSPACE_ROOT` 时落到 `~/VoltAgent-Office/workspace`（不会默认整个 home 或 monorepo 根）。显式 `WORKSPACE_ROOT` 始终优先。
+### Workspace root 策略（O2）
+
+| 优先级 | 规则 |
+| --- | --- |
+| 1 | 显式 `WORKSPACE_ROOT`（绝对路径）始终优先 |
+| 2 | `AGENT_PROFILE=office` 且未配置 → **`~/VoltAgent-Office/workspace`** |
+| 3 | `minimal` 且未配置 → 历史 monorepo 相对默认（`cwd/../../`） |
+
+**禁止默认：** 用户 home 本身、整个 Documents、monorepo 仓库根作为 Office 工作区。
+
+**首次启动：** Office 会 `mkdir -p` 工作区根，并在根下写入简短 `README.md`（已存在则不覆盖）。侧车启动日志打印 `workspaceRoot=…` 便于排障。
+
+**越界：** DIY `read_file`/`write_file` 与 Workspace `contained + virtualMode` 均拒绝根外路径；错误文案含「路径越界」。
 
 ```bash
 # .env
@@ -87,9 +99,9 @@ Then open empty / 新对话 and send a message. Capture tasks still use local-si
 | `ls` / `list_tree` / `read_file` / `stat` / … | 只读，Timeline 工具行可展开 |
 | `write_file` / `edit_file` | **needsApproval**；成功后 Adapter 合成 `file.changed` |
 | `delete_file` / `rmdir` | **needsApproval** |
-| sandbox / skills / MCP | **O1 未启用**（后续 ticket） |
+| sandbox / skills / MCP | **O1/O2 未启用**（O3 Skills / O4 MCP） |
 
-Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`contained` + `virtualMode`）。
+Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`contained` + `virtualMode`）与 DIY `resolvePathWithinRoot`。
 
 ## API used by Adapter
 
@@ -114,6 +126,6 @@ pnpm --filter @uilab/workbench-runtime-voltagent typecheck
 ## Related
 
 - Spec: GitHub issue #9 / `docs/plans/voltagent-office-profile-spec.md`  
-- Ticket: #10 O1 Workspace FS  
+- Ticket: #10 O1 Workspace FS · #11 O2 workspace root  
 - Adapter tickets: #1–#8  
 - Domain: `RuntimePort`, `AgentRuntimeEventEnvelope`

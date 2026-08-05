@@ -9,19 +9,14 @@ import path from 'node:path'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import { resolveWorkspaceRoot } from './profile.js'
+import { resolvePathWithinRoot } from './workspace-root.js'
 
 function workspaceRoot(): string {
   return resolveWorkspaceRoot(process.env, 'minimal')
 }
 
 function resolveSafePath(relativePath: string): string {
-  const root = workspaceRoot()
-  const resolved = path.resolve(root, relativePath)
-  const rel = path.relative(root, resolved)
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(`路径越界：仅允许工作区根内文件（${root}）`)
-  }
-  return resolved
+  return resolvePathWithinRoot(workspaceRoot(), relativePath)
 }
 
 export const readFileTool = createTool({

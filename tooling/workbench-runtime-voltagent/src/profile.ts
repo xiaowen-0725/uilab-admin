@@ -29,10 +29,11 @@ export function resolveAgentProfile(env: ProfileEnv = process.env): AgentProfile
 }
 
 /**
- * Workspace root for FS tools.
+ * Workspace root for FS tools (Office Profile O2 productization).
  * Explicit WORKSPACE_ROOT always wins.
  * Office without config uses a safe default under the user home
- * (not home itself, not monorepo root). Full first-run README is O2.
+ * (`~/VoltAgent-Office/workspace` — not home itself, not monorepo root).
+ * First-run mkdir + README lives in ensureOfficeWorkspace (workspace-root.ts).
  * Minimal without config keeps the historical monorepo-relative default.
  */
 export function resolveWorkspaceRoot(

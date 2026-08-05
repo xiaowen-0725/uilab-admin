@@ -49,6 +49,17 @@ describe('resolveWorkspaceRoot', () => {
     assert.notEqual(root, '/Users/demo')
   })
 
+  it('office default is never monorepo root or Documents dump', () => {
+    const root = resolveWorkspaceRoot(
+      {},
+      'office',
+      { homeDir: '/Users/demo', cwd: '/repo/tooling/workbench-runtime-voltagent' },
+    )
+    assert.notEqual(root, path.resolve('/repo/tooling/workbench-runtime-voltagent', '../../'))
+    assert.notEqual(root, '/Users/demo/Documents')
+    assert.match(root, /VoltAgent-Office[/\\]workspace$/)
+  })
+
   it('minimal without config keeps monorepo-relative default from cwd', () => {
     const root = resolveWorkspaceRoot(
       {},

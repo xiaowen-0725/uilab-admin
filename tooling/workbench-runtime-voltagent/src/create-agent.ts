@@ -4,7 +4,6 @@
  * Minimal → plain Agent + DIY tools (legacy M3).
  */
 
-import { mkdir } from 'node:fs/promises'
 import {
   Agent,
   NodeFilesystemBackend,
@@ -19,6 +18,7 @@ import {
   toolsForProfile,
 } from './profile.js'
 import { workbenchTools } from './tools.js'
+import { ensureOfficeWorkspace } from './workspace-root.js'
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
@@ -65,7 +65,8 @@ export async function createWorkbenchAgent(
   const tools = toolsForProfile(profile)
 
   if (profile === 'office') {
-    await mkdir(workspaceRoot, { recursive: true })
+    // O2: create safe default root + first-run README when missing.
+    await ensureOfficeWorkspace(workspaceRoot)
 
     const workspace = new Workspace({
       id: 'workbench-office',

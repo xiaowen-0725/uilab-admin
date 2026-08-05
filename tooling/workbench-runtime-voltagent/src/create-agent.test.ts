@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { after, describe, it } from 'node:test'
@@ -7,6 +7,7 @@ import {
   createWorkbenchAgent,
   officeFilesystemToolConfig,
 } from './create-agent.js'
+import { OFFICE_WORKSPACE_README_NAME } from './workspace-root.js'
 
 /** Stub model — never called; only needed to construct Agent. */
 const stubModel = {
@@ -59,6 +60,12 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.tools.includes('ls'))
     assert.ok(bundle.tools.includes('write_file'))
     assert.ok(!bundle.tools.includes('run_command'))
+
+    // O2 first-run bootstrap
+    const readmePath = path.join(root, OFFICE_WORKSPACE_README_NAME)
+    await access(readmePath)
+    const readme = await readFile(readmePath, 'utf8')
+    assert.match(readme, /WORKSPACE_ROOT/)
 
     // Agent carries workspace identity; tool names come from Workspace toolkit.
     assert.equal(bundle.agent.id, 'workbench')
