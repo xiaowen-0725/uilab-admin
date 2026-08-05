@@ -17,6 +17,11 @@ import {
   resolveOfficeRuntimeDefaults,
 } from './office-runtime-defaults.js'
 import {
+  type McpConnectorStatus,
+  formatMcpStatusLine,
+  loadOfficeMcpTools,
+} from './office-mcp.js'
+import {
   OFFICE_SKILLS_VIRTUAL_ROOT,
   ensureOfficeSkills,
 } from './office-skills.js'
@@ -48,6 +53,10 @@ export type WorkbenchAgentBundle = {
   maxSteps: number
   summarizationEnabled: boolean
   memoryKind: MemoryKind
+  /** O4 MCP connector statuses (office only; empty for minimal). */
+  mcpStatuses: McpConnectorStatus[]
+  mcpStatusLine: string
+  disconnectMcp: () => Promise<void>
 }
 
 /**
@@ -88,6 +97,10 @@ export async function createWorkbenchAgent(
       maxStepsOverride: options.maxSteps,
     })
 
+    // O4: optional docs + calendar MCP (env-gated; degrade on failure).
+    const mcp = await loadOfficeMcpTools(env)
+    const honestyTools = [...tools, ...mcp.toolNames]
+
     const workspace = new Workspace({
       id: 'workbench-office',
       name: 'Workbench Office Workspace',
@@ -106,10 +119,19 @@ export async function createWorkbenchAgent(
       toolConfig: officeFilesystemToolConfig(),
     })
 
+    const mcpInstruction =
+      mcp.toolNames.length > 0
+        ? [
+            'Optional MCP tools may be available for docs/knowledge and calendar (names as listed in tools).',
+            'Prefer read-only MCP tools; write/update/delete MCP tools require user approval.',
+            'If MCP is unavailable, continue with local Workspace FS and skills only — do not invent cloud content.',
+          ].join(' ')
+        : 'MCP docs/calendar connectors are not connected in this session; use local Workspace FS and skills only.'
+
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
-      purpose: '本机办公 Agent Runtime（Workspace FS + Skills · 非远程生产集群）',
+      purpose: '本机办公 Agent Runtime（Workspace FS + Skills + 可选 MCP · 非远程生产集群）',
       instructions: [
         'You are the local Office Agent Runtime for UI Lab Agent Workbench.',
         'Respond in Chinese unless the user writes in another language.',
@@ -117,6 +139,7 @@ export async function createWorkbenchAgent(
         'Office skills live under /skills (meeting-notes, weekly-report, research-brief).',
         'When a request matches a skill: workspace_list_skills or workspace_search_skills → workspace_activate_skill → workspace_read_skill → follow SKILL.md → write deliverable under the skill output path.',
         'Deliverable paths: /output/meeting-notes/, /output/weekly-report/, /output/research-brief/.',
+        mcpInstruction,
         'All file paths must be virtual workspace paths starting with / (e.g. /notes/a.md, /output/meeting-notes/notes.md).',
         'Never use host absolute paths (/Users/..., /home/..., drive letters). Never paste operator host paths into tools.',
         'Prefer planning briefly, then read before write. Writes and deletes require user approval.',
@@ -124,7 +147,6 @@ export async function createWorkbenchAgent(
       ].join(' '),
       model: options.model,
       workspace,
-      // O3: FS + skills; no sandbox / search yet (O4 MCP).
       workspaceToolkits: {
         filesystem: {},
         sandbox: false,
@@ -137,6 +159,10 @@ export async function createWorkbenchAgent(
         maxAvailable: 10,
         maxActivated: 5,
       },
+      // MCP tools only when connected — never invent unavailable cloud tools.
+      ...(mcp.tools.length > 0
+        ? { tools: mcp.tools as (Tool<any, any> | Toolkit)[] }
+        : {}),
       maxSteps: defaults.maxSteps,
       summarization: defaults.summarization,
       // false = stateless; Memory instance = multi-turn (conversationId = taskId).
@@ -147,11 +173,14 @@ export async function createWorkbenchAgent(
       profile,
       agent,
       workspaceRoot,
-      tools,
+      tools: honestyTools,
       workspace,
       maxSteps: defaults.maxSteps,
       summarizationEnabled: defaults.summarization !== false,
       memoryKind: defaults.memoryKind,
+      mcpStatuses: mcp.statuses,
+      mcpStatusLine: formatMcpStatusLine(mcp.statuses),
+      disconnectMcp: mcp.disconnect,
     }
   }
 
@@ -184,5 +213,8 @@ export async function createWorkbenchAgent(
     maxSteps: defaults.maxSteps,
     summarizationEnabled: false,
     memoryKind: defaults.memoryKind,
+    mcpStatuses: [],
+    mcpStatusLine: 'docs=off,calendar=off',
+    disconnectMcp: async () => {},
   }
 }

@@ -136,6 +136,7 @@ describe('createWorkbenchAgent', () => {
       'utf8',
     )
     await access(deliverable)
+    await bundle.disconnectMcp()
   })
 
   it('office O5 defaults: maxSteps ≥ 50, summarization on, memory available', async () => {
@@ -155,6 +156,11 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.maxSteps >= 80)
     assert.equal(bundle.summarizationEnabled, true)
     assert.equal(bundle.memoryKind, 'in-memory')
+    // O4: no MCP env → both disabled; FS tools still present
+    assert.match(bundle.mcpStatusLine, /docs=off/)
+    assert.match(bundle.mcpStatusLine, /calendar=off/)
+    assert.ok(bundle.tools.includes('ls'))
+    await bundle.disconnectMcp()
   })
 
   it('minimal profile keeps DIY tools without Workspace', async () => {

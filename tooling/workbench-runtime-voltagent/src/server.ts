@@ -67,6 +67,9 @@ const {
   maxSteps,
   summarizationEnabled,
   memoryKind,
+  mcpStatusLine,
+  mcpStatuses,
+  disconnectMcp,
 } = await createWorkbenchAgent({
   profile,
   model,
@@ -79,6 +82,16 @@ new VoltAgent({
   server: honoServer({ port }),
   logger,
 })
+
+for (const s of mcpStatuses) {
+  if (s.status === 'failed') {
+    logger.warn(`MCP ${s.id} failed: ${s.reason ?? 'unknown'}`)
+  } else if (s.status === 'connected') {
+    logger.info(
+      `MCP ${s.id} connected transport=${s.transport ?? '?'} tools=${s.toolNames.join(',') || '(none)'}`,
+    )
+  }
+}
 
 logger.info(
   [
@@ -93,9 +106,25 @@ logger.info(
     `maxSteps=${maxSteps}`,
     `summarization=${summarizationEnabled}`,
     `memory=${memoryKind}`,
+    `mcp=${mcpStatusLine}`,
     `tools=${tools.join(',')}`,
     resolvedProfile === 'office'
-      ? 'note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills); not remote production cluster'
+      ? 'note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills+optional MCP); not remote production cluster'
       : 'note=local minimal Runtime (DIY tools); not remote production cluster',
   ].join(' '),
 )
+
+const shutdown = async () => {
+  try {
+    await disconnectMcp()
+  } catch {
+    // best-effort
+  }
+  process.exit(0)
+}
+process.once('SIGINT', () => {
+  void shutdown()
+})
+process.once('SIGTERM', () => {
+  void shutdown()
+})
