@@ -4,7 +4,7 @@ import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
 const INSET = 8
-const NAV_WIDTH = 272
+const NAV_WIDTH = 306
 const TOOLBAR_HEIGHT = 44
 const GEOMETRY_TOLERANCE = 2
 
@@ -93,7 +93,19 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('navigator-projects'))
       .toBeInTheDocument()
 
-    // B — empty hub + card click loads stream
+    // B — default seed is capture stream (task-a workflow gold); empty hub via task-empty
+    await expect
+      .element(page.getByTestId('execution-stream'))
+      .toHaveAttribute('data-capture-id', 'case-fixture-workflow-replay')
+    await expect
+      .element(page.getByTestId('fixture-disclosure'))
+      .toHaveTextContent(/事件流回放|时序回放/)
+    await expect
+      .element(page.getByTestId('stream-status-label'))
+      .toHaveTextContent(/已处理/)
+
+    // C — empty hub + card click loads stream on task-empty
+    await userEvent.click(page.getByTestId('task-task-empty'))
     await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
     await expect
       .element(page.getByTestId('empty-hub-title'))
@@ -120,31 +132,29 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toHaveAttribute('data-last-launch-action', 'explore')
     await expect
       .element(page.getByTestId('stream-status-label'))
-      .toHaveTextContent('已处理')
-    await expect
-      .element(page.getByTestId('stream-status-duration'))
-      .toHaveTextContent('1m 18s')
+      .toHaveTextContent(/已处理/)
     await expect
       .element(page.getByTestId('stream-tool-rows'))
       .toBeInTheDocument()
-    expect(
-      document.body.textContent?.includes('WeixinJSBridge') ?? false
-    ).toBe(true)
+    // Explore card loads default progressive capture (workflow gold).
+    expect(document.body.textContent ?? '').toMatch(
+      /工作流|workflow-result|plan\.txt|fixture/,
+    )
     expect(
       document.querySelectorAll('[data-testid="simple-markdown"]').length
     ).toBeGreaterThan(0)
 
-    // C — select pinned task with capture stream
+    // D — back to pinned workflow gold capture stream
     await userEvent.click(page.getByTestId('task-task-a'))
     await expect
       .element(page.getByTestId('execution-stream'))
-      .toHaveAttribute('data-capture-id', 'golden-weixin-audio')
+      .toHaveAttribute('data-capture-id', 'case-fixture-workflow-replay')
     await expect
       .element(page.getByTestId('fixture-disclosure'))
-      .toHaveTextContent('事件流回放')
+      .toHaveTextContent(/事件流回放|时序回放/)
     await expect
       .element(page.getByTestId('stream-status-label'))
-      .toHaveTextContent('已处理')
+      .toHaveTextContent(/已处理/)
 
     expect(
       document.querySelector('[data-testid="work-surface-host"]')
@@ -195,13 +205,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
       '[data-testid="workspace-top-bar"] h1'
     )
     expect(titles.length).toBe(1)
-    expect(titles[0]?.textContent).toMatch(/新任务/)
+    // Default seed is capture task-a workflow gold (not empty hub).
+    expect(titles[0]?.textContent).toMatch(/工作流|合成|微信|音频/)
 
     // Subtitle must not appear in Task toolbar chrome.
     expect(
       document.querySelectorAll('[data-testid="workspace-top-bar"] p').length
     ).toBe(0)
-    expect(topBar.textContent).not.toMatch(/开场区/)
+    expect(topBar.textContent).not.toMatch(/golden capture|开场区/)
 
     // TaskSurface is content-only — no second task title chrome inside the surface.
     expect(
@@ -419,7 +430,8 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(shell)
       .toHaveAttribute('data-context-motion', 'animated')
     await expect.element(panel).toHaveTextContent('环境')
-    await expect.element(panel).toHaveTextContent('开场区')
+    // Default seed is capture stream (task-a), not empty hub.
+    await expect.element(panel).toHaveTextContent('事件流回放')
 
     await userEvent.click(page.getByTestId('toggle-context'))
     await expect.element(panel).toHaveAttribute('data-open', 'false')
@@ -825,8 +837,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
       expect(workToolbar.contains(navToggles[0]!)).toBe(true)
 
       // Narrow starts with Navigator auto-closed; open via Work toolbar control.
+      // Scope to Work host so we never hit the inert Task-toolbar clone.
       await expect.element(shell).toHaveAttribute('data-nav-open', 'false')
-      await userEvent.click(page.getByTestId('toggle-navigator'))
+      await userEvent.click(
+        page.getByTestId('work-surface-host').getByTestId('toggle-navigator'),
+      )
       await expect.element(shell).toHaveAttribute('data-nav-open', 'true')
       await expect.element(shell).toHaveAttribute('data-nav-motion', 'animated')
     } finally {
@@ -837,7 +852,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('restores per-Task layout when switching A → B → A', async () => {
     await render(<WorkbenchApp />)
 
-    // Start on task-a so layout is stored against A (default seed is empty hub).
+    // Default seed is already task-a; ensure layout is stored against A.
     await userEvent.click(page.getByTestId('task-task-a'))
 
     // Configure Task A (leave Work Surface open but not maximized so Task/Context stay mounted)

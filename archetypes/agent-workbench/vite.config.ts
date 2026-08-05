@@ -39,6 +39,14 @@ export default defineConfig({
   },
   server: {
     port: 5174,
+    proxy: {
+      // Local VoltAgent sidecar (tooling/workbench-runtime-voltagent)
+      '/voltagent-runtime': {
+        target: 'http://127.0.0.1:3141',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/voltagent-runtime/, ''),
+      },
+    },
   },
   preview: {
     port: 4174,

@@ -3,7 +3,7 @@
 本项目是 **AI-first Agent Workbench Archetype**（Vite + React 桌面优先工作台）。
 硬规则以本文件为准；平台 monorepo 合同见仓库根 `AGENTS.md`。
 
-## 定位（Phase 3 + 3A + 3B pane chrome）
+## 定位（Phase 3 + Phase 4 Fake path template-complete）
 
 - **技术栈（与平台统一）**：Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（**Base UI / base-nova**）+ TanStack Router（小型 code-defined 路由）
 - **UI 装配**：`components.json`（base-nova）→ `@/components/ui/*`（按需 `shadcn add`）→ UI Lab registry 复合块（如 `agent-composer`）→ `@/lib/utils`（`cn`）
@@ -12,9 +12,16 @@
 - **体验目标（模板产品要求）**：**尽量像真 Runtime 一样可交互**。未接后端接口 ≠ 没有 Runtime 概念；本地应用状态、菜单、chip、模型/权限切换、发送反馈等应完整可用，接近真实产品。诚实边界是「数据/执行未接远程后端」，不是「UI 只可看不可用」。
 - **UI Lab 双仓**：复合 Agent 交互优先装 UI Lab 组件（registry / `shadcn add`）。若发现 UI Lab 组件缺陷、交互不足或需要优化，**在 UI Lab 仓库（`ui-components`）改真源并发布/同步**，再回装到本模板；禁止长期在 Workbench 内平行 fork 一套「改进版」却不回流。
 - **已交付**：静态 Workbench Shell 骨架（Navigator、Task Surface、Composer、Adaptive Context Panel、Single-pane + Tabs Work Surface Host）
-- **已交付（Phase 3A）**：Admin inset / 工作台空间关系 — sidebar 背景平面、272px Navigator、8px inset Workspace、TaskSurface content-only、浮动 Composer、内容高度 Context 卡、pointer/keyboard 分源 Navigator 动效
-- **已交付（Phase 3B）**：Task/Work 并列 44px pane chrome、语义图标、右锚定 reserved-space Work drawer（open 200ms / close 160ms / maximize-restore 180ms）与 keyboard instant 分源；Playwright/动效证据已落盘
-- **未交付（勿伪装成已接远程）**：真实 Agent Runtime 后端、SSE/WS 流、Surface Registry 真实现、Document/Browser/Review、Resource Explorer、持久化、Git、文件系统、Electron/Tauri、Phase 4
+- **已交付（Phase 3A/3B/3C）**：inset layout、pane chrome/motion、Composer 产品保真
+- **已交付（Phase 4A–4F Fake path）**：
+  - **4B Kernel**：领域 / Commands / Events / RuntimePort / VirtualClock / Run 状态机
+  - **4C dual-path**：默认 seed `task-a` → capture + `local-sim`（`不会调用 Agent Runtime`，无 `data-runtime-run`）；empty / 新对话 → Fake → projection → Timeline
+  - **4D**：reasoning / plan / tool / command / file / source / approval / input 投影与 Timeline；Fake 场景含审批/澄清/工具流
+  - **4E**：`MemoryEventStore` 追加与重放；`queueFollowUp` / `steerRun` / `reconcileInterruptedRun`（Fake）
+  - **4F**：长文折叠、智能滚动 follow/pin、「有新内容」
+  - **Fake ≠ 生产 Runtime** — 无远程 Agent、无真实工具副作用
+- **可选 Local VoltAgent 侧车**（`VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`）：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程
+- **未交付（勿伪装成已接远程）**：云上多租户 Agent Runtime、Surface Registry 真实现、Document/Browser/Review、Resource Explorer、**IndexedDB** EventStore、Git 全量集成、Electron/Tauri
 
 ## 目录约定
 
@@ -24,7 +31,7 @@ src/
   shell/               # Workbench geometry、Navigator、responsive layout、快捷键
   modules/
     workbench-session/ # Task 选择 + 每 Task 布局状态（公开 index.ts）
-    task/              # Task Surface / Composer / Context Panel
+    task/              # Task Surface / Composer / Context Panel + 4B–4F Kernel/Fake/projection/timeline
     work-surface/      # placeholder Host
   components/ui/       # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
   lib/                 # cn 等应用侧工具

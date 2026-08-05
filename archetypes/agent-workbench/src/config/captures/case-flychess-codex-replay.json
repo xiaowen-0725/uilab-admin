@@ -1,0 +1,296 @@
+{
+  "id": "case-flychess-codex-replay",
+  "title": "飞行棋调研 + HTML + 总结（Codex 冻结回放）",
+  "prompt": "【任务：飞行棋调研 + 可玩 HTML + 总结文档 — 固定产出，供 UI 回放金样】\n\n请在当前工作区由你本人串行完成（禁止子智能体）。产出 flychess/index.html 与 flychess/README.md。",
+  "notes": "Frozen from Codex Desktop rollout-2026-08-04T21-26-24 (no-subagent prompt; session interrupted mid-write — delivery tools completed from same-day gold artifacts). Real wall ~5m7s; progressive timeline compressed to ~90s for local-sim. Commentary = agent_message phases interleaved with tools; reasoning summaries = completed tool_activity rows (trajectory, not live status). Single web_search with queries[] (not N separate searches). Artifacts: docs/fidelity/case-flychess/capture/artifacts/flychess/. Not live Runtime.",
+  "events": [
+    {
+      "id": "u1",
+      "type": "user_message",
+      "ts": 0,
+      "text": "【任务：飞行棋调研 + 可玩 HTML + 总结文档 — 固定产出，供 UI 回放金样】\n\n请在当前工作区由你本人串行完成下面全部步骤。硬性禁止子智能体/并行委派。产出 flychess/index.html 与 flychess/README.md（中文、无 CDN）。调研 → 实现 → 总结 → 只读自检。"
+    },
+    {
+      "id": "s-run",
+      "type": "turn_status",
+      "ts": 80,
+      "status": "running",
+      "label": "正在思考"
+    },
+    {
+      "id": "reason-plan",
+      "type": "tool_activity",
+      "ts": 400,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "Planning fixed sequence web frontend",
+      "detail": "reasoning",
+      "items": ["agent_reasoning summary（轨迹行，非 live status）"]
+    },
+    {
+      "id": "a-plan",
+      "type": "assistant_message",
+      "ts": 900,
+      "markdown": "计划如下，全程由我在当前对话串行完成，不启动子智能体：\n\n1. 查阅公开资料，归纳 Ludo／飞行棋常见规则与网页 UI 模式。\n2. 确定适合演示的简化规则与交互状态。\n3. 实现单文件中文可玩页面 `flychess/index.html`。\n4. 编写调研与实现总结 `flychess/README.md`。\n5. 只读检查文件存在、非空，并做基础页面自检。\n\n我会使用本地 research / prototype 技能文件约束方法，它们只指导我本人工作，不会触发委派。接下来先读取技能说明。\n"
+    },
+    {
+      "id": "tool-plan-1",
+      "type": "tool_activity",
+      "ts": 1200,
+      "toolKind": "generic",
+      "status": "running",
+      "label": "正在更新计划…",
+      "detail": "单线程 5 步"
+    },
+    {
+      "id": "tool-plan-1",
+      "type": "tool_activity",
+      "ts": 2800,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "已更新计划",
+      "detail": "5 步",
+      "items": [
+        "1. 读取调研/原型指引（skill 文件，不 spawn 子 agent）",
+        "2. 公开网络检索规则与 UI 模式（单次 web_search · 多 query）",
+        "3. 实现 flychess/index.html",
+        "4. 撰写 flychess/README.md",
+        "5. 只读自检文件非空与脚本可解析"
+      ]
+    },
+    {
+      "id": "tool-read-research-skill",
+      "type": "tool_activity",
+      "ts": 3600,
+      "toolKind": "read",
+      "status": "running",
+      "label": "正在读取文件…",
+      "detail": "Research 技能"
+    },
+    {
+      "id": "tool-read-research-skill",
+      "type": "tool_activity",
+      "ts": 5200,
+      "toolKind": "read",
+      "status": "completed",
+      "label": "已读取 Research 技能",
+      "detail": "优先公开高可信来源",
+      "items": ["Research 技能（方法约束；不后台 agent）"]
+    },
+    {
+      "id": "tool-read-prototype-skill",
+      "type": "tool_activity",
+      "ts": 5800,
+      "toolKind": "read",
+      "status": "running",
+      "label": "正在读取文件…",
+      "detail": "Prototype 技能"
+    },
+    {
+      "id": "tool-read-prototype-skill",
+      "type": "tool_activity",
+      "ts": 7600,
+      "toolKind": "read",
+      "status": "completed",
+      "label": "已读取 Prototype 技能",
+      "detail": "单文件可玩产物",
+      "items": ["Prototype 技能（UI 分支方法；最终单文件）"]
+    },
+    {
+      "id": "reason-research",
+      "type": "tool_activity",
+      "ts": 8200,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "Planning targeted web research",
+      "detail": "reasoning",
+      "items": ["agent_reasoning summary"]
+    },
+    {
+      "id": "a-after-skills",
+      "type": "assistant_message",
+      "ts": 9000,
+      "markdown": "已读完技能说明。Prototype 技能要求制作多版本并等待用户挑选，与本任务「固定单文件产出、一次完成」的目标冲突，因此不采用其多版本流程；我会按任务约束直接实现一个完整版本。\n\n现在开始公开网页调研，重点核对起飞条件、移动/胜负规则，以及常见棋盘与操作区布局。\n"
+    },
+    {
+      "id": "tool-search-1",
+      "type": "tool_activity",
+      "ts": 9800,
+      "toolKind": "web_search",
+      "status": "running",
+      "label": "正在搜索…",
+      "detail": "Ludo / 飞行棋 · 3 queries"
+    },
+    {
+      "id": "tool-search-1",
+      "type": "tool_activity",
+      "ts": 18000,
+      "toolKind": "web_search",
+      "status": "completed",
+      "label": "已搜索网页",
+      "detail": "单次 web_search_end · queries[]",
+      "items": [
+        "q: Ludo rules roll six move pieces home official rules",
+        "q: 飞行棋 游戏规则 起飞 6 点 终点",
+        "q: online Ludo game UI board dice current player interface",
+        "2～4 色轮流掷骰、通常掷 6 起飞 / 可加掷",
+        "固定路径竞速；同格可撞回；精确点数进终点",
+        "高饱和四色棋盘 + 显著骰子 + 当前玩家高亮 + 事件记录"
+      ]
+    },
+    {
+      "id": "reason-impl",
+      "type": "tool_activity",
+      "ts": 19200,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "Planning implementation and directory inspection",
+      "detail": "reasoning",
+      "items": ["agent_reasoning summary"]
+    },
+    {
+      "id": "a-research-conclusion",
+      "type": "assistant_message",
+      "ts": 21000,
+      "markdown": "调研结论已足够支撑实现：主流版本都是 2～4 色玩家、六面骰、棋子沿固定路线前进；常见规则包括掷 6 出场、掷 6 加掷、落在对手格可击回、精确点数进终点。网页 UI 通常把彩色十字棋盘作为视觉中心，旁边或下方放当前玩家、骰子/掷骰按钮、可移动棋子提示和事件记录。\n\n本演示将收敛为更短局制：每位 2 枚棋子、环形公共跑道 + 各自终点跑道；保留掷 6 出场、击回、精确到达和胜负判断，并支持 2～4 人热座游玩。先做路径预检，再写单文件页面。\n"
+    },
+    {
+      "id": "tool-cmd-precheck",
+      "type": "tool_activity",
+      "ts": 23000,
+      "toolKind": "command",
+      "status": "running",
+      "label": "正在执行命令…",
+      "detail": "test ! -e flychess/index.html && test ! -e flychess/README.md"
+    },
+    {
+      "id": "tool-cmd-precheck",
+      "type": "tool_activity",
+      "ts": 27000,
+      "toolKind": "command",
+      "status": "completed",
+      "label": "已运行预检",
+      "detail": "exit 0",
+      "items": ["目标路径尚不存在，可安全创建"]
+    },
+    {
+      "id": "reason-mkdir",
+      "type": "tool_activity",
+      "ts": 28500,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "Implementing directory creation before patching",
+      "detail": "reasoning",
+      "items": ["agent_reasoning summary — 非 live status 文案"]
+    },
+    {
+      "id": "a-before-write",
+      "type": "assistant_message",
+      "ts": 30000,
+      "markdown": "工作区里还没有 `flychess/`。接下来创建目录并落盘可玩单文件：中文 UI、无 CDN、内联 CSS/JS，覆盖掷骰、起飞、移动、碰撞与归航。\n"
+    },
+    {
+      "id": "tool-write-html",
+      "type": "tool_activity",
+      "ts": 32000,
+      "toolKind": "generic",
+      "status": "running",
+      "label": "正在写入结果…",
+      "detail": "flychess/index.html"
+    },
+    {
+      "id": "tool-write-html",
+      "type": "tool_activity",
+      "ts": 52000,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "已写入 index.html",
+      "detail": "+672 -0",
+      "items": [
+        "flychess/index.html",
+        "+ 单文件 HTML/CSS/JS 飞行棋",
+        "+ 2～4 人、掷骰、起飞、碰撞、归航、胜负",
+        "+ 无外部 CDN"
+      ]
+    },
+    {
+      "id": "a-after-html",
+      "type": "assistant_message",
+      "ts": 54000,
+      "markdown": "`flychess/index.html` 已写入。接着补 `flychess/README.md`：规则摘要、实现取舍、公开参考来源列表（调研阶段冻结的短摘录，不再联网）。\n"
+    },
+    {
+      "id": "tool-write-readme",
+      "type": "tool_activity",
+      "ts": 56000,
+      "toolKind": "generic",
+      "status": "running",
+      "label": "正在写入结果…",
+      "detail": "flychess/README.md"
+    },
+    {
+      "id": "tool-write-readme",
+      "type": "tool_activity",
+      "ts": 68000,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "已写入 README.md",
+      "detail": "+69 -0",
+      "items": [
+        "flychess/README.md",
+        "+ 规则摘要 / 网页实现模式",
+        "+ index.html 实现说明",
+        "+ 6 条公开参考来源"
+      ]
+    },
+    {
+      "id": "a-before-verify",
+      "type": "assistant_message",
+      "ts": 70000,
+      "markdown": "两个目标文件都在磁盘上了。做一次只读自检：字节数非空，并确认内联脚本语法可解析。\n"
+    },
+    {
+      "id": "tool-cmd-verify",
+      "type": "tool_activity",
+      "ts": 72000,
+      "toolKind": "command",
+      "status": "running",
+      "label": "正在执行命令…",
+      "detail": "wc -c flychess/index.html flychess/README.md"
+    },
+    {
+      "id": "tool-cmd-verify",
+      "type": "tool_activity",
+      "ts": 78000,
+      "toolKind": "command",
+      "status": "completed",
+      "label": "已运行自检",
+      "detail": "exit 0",
+      "items": [
+        "index.html 非空（~25KB）",
+        "README.md 非空（~5KB）",
+        "内联 JS 语法可解析"
+      ]
+    },
+    {
+      "id": "a1",
+      "type": "assistant_message",
+      "ts": 84000,
+      "markdown": "## 交付\n\n已处理，且全程由本 agent **单线程**完成，无子智能体、无 Git 提交。\n\n| 文件 | 说明 |\n|---|---|\n| [flychess/index.html](wb-file:flychess/index.html:1) | 支持 2～4 人、掷骰、棋子移动、碰撞、安全格、归航与胜负判断的中文单文件游戏 |\n| [flychess/README.md](wb-file:flychess/README.md:1) | 规则摘要、网页实现模式、代码说明及 6 条公开参考来源 |\n\n### 规则要点（演示简化版）\n\n- 掷 6 起飞；公共环道 + 归航格\n- 非安全格可撞回机库；须恰好点数进终点\n- 无外部 CDN / 可双击打开\n\n### 自检\n\n两个文件非空，内联 JavaScript 语法正确，页面无外部运行依赖。\n"
+    },
+    {
+      "id": "a2",
+      "type": "assistant_message",
+      "ts": 87000,
+      "markdown": "### 说明\n\n> 本序列为 **Codex 冻结 capture** 的 progressive 回放（local-sim），**不是**生产 Agent Runtime 再联网调研。\n\n真会话墙钟约 **5m 7s**；本地回放时间轴已压缩以便演示。中间 narrative 来自 rollout 的 `agent_message`（commentary）；`agent_reasoning` 摘要在折叠轨迹里。工具轨迹默认收起，可点「已处理」展开。\n"
+    },
+    {
+      "id": "s-done",
+      "type": "turn_status",
+      "ts": 90000,
+      "status": "completed",
+      "label": "已处理",
+      "durationMs": 307000
+    }
+  ]
+}

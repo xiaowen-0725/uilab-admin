@@ -23,7 +23,8 @@ describe('foldCaptureToView (golden-weixin-audio)', () => {
     // Golden file reuses tool-search-1 for run+done; intermediate is after s-run only:
     const mid = foldCaptureToView(capture, { untilEventId: 's-run' })
     expect(mid.turn.status).toBe('running')
-    expect(mid.turn.statusLabel).toBe('处理中')
+    expect(mid.turn.statusLabel).toBe('正在思考')
+    expect(mid.liveStatus).toBe('正在思考')
     expect(mid.turn.durationLabel).toBeNull()
     expect(mid.turn.toolRows).toHaveLength(0)
 
@@ -52,7 +53,10 @@ describe('foldCaptureToView (golden-weixin-audio)', () => {
   it('tool rows merge by id so completed overwrites running', () => {
     const view = foldCaptureToView(capture)
     const search1 = view.turn.toolRows.find((r) => r.id === 'tool-search-1')
+    // completed tools must default to collapsed (Codex S-done-collapsed)
     expect(search1?.status).toBe('completed')
+    expect(search1?.defaultExpanded).toBe(false)
     expect(search1?.items.length).toBeGreaterThan(0)
   })
 })
+

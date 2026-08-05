@@ -26,4 +26,5 @@ export interface LaunchAction {
   icon: 'explore' | 'build' | 'review' | 'fix'
 }
 
-export type TaskContentMode = 'empty' | 'stream'
+/** empty = hub, stream = capture replay, runtime = Fake Runtime timeline */
+export type TaskContentMode = 'empty' | 'stream' | 'runtime'

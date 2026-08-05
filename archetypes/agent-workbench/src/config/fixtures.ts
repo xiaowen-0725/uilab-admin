@@ -111,21 +111,30 @@ const TASK_SEEDS: TaskSeed[] = [
   },
   {
     id: 'task-a',
+    title: '合成工作流回放',
+    subtitle: '金样 · 时序回放',
+    pinned: true,
+    contentMode: 'stream',
+    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
+    contextTag: 'case-fixture-workflow-replay',
+  },
+  {
+    id: 'task-flychess',
+    title: '飞行棋调研 + HTML + 总结',
+    subtitle: 'Codex 冻结 · 禁止子智能体',
+    pinned: true,
+    contentMode: 'stream',
+    captureId: 'case-flychess-codex-replay',
+    contextTag: 'case-flychess-codex-replay',
+  },
+  {
+    id: 'task-b',
     title: '微信 WebView 音频解锁方案',
     subtitle: 'golden capture 回放',
     pinned: true,
     contentMode: 'stream',
-    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
-    contextTag: 'golden capture',
-  },
-  {
-    id: 'task-b',
-    title: '裁决架构评审规格',
-    subtitle: '置顶会话',
-    pinned: true,
-    contentMode: 'stream',
-    captureId: DEFAULT_GOLDEN_CAPTURE_ID,
-    contextTag: 'pinned',
+    captureId: 'golden-weixin-audio',
+    contextTag: 'golden-weixin-audio',
   },
   {
     id: 'task-c',
@@ -171,13 +180,18 @@ export const taskFixtures: Record<string, TaskFixture> = Object.fromEntries(
   ])
 )
 
+/**
+ * Default seed selects a capture stream task so the common shell path stays
+ * local-sim / capture (non-regression for Composer「不会调用 Agent Runtime」).
+ * Empty hub + Fake Runtime vertical slice: select `task-empty` or 新对话.
+ */
 export const phase3SessionSeed: WorkbenchSessionSeed = {
   project: {
     id: 'proj-lot-sentry',
     name: 'lot-sentry-ai-agent',
   },
   tasks: TASK_SEEDS.map(({ id, title, subtitle }) => ({ id, title, subtitle })),
-  selectedTaskId: 'task-empty',
+  selectedTaskId: 'task-a',
   workSurfaceTabs: [
     { id: 'tab-layout', label: '布局规格.md' },
     { id: 'tab-browser', label: '浏览器预览' },
@@ -222,7 +236,13 @@ function streamContext(tag: string): ContextSection[] {
     {
       id: 'source',
       title: '来源',
-      items: ['config/captures/golden-weixin-audio.json'],
+      items: [
+        tag === 'golden-weixin-audio'
+          ? 'config/captures/golden-weixin-audio.json'
+          : tag === 'case-technical-audit-replay'
+            ? 'config/captures/case-technical-audit-replay.json'
+            : 'config/captures/case-fixture-workflow-replay.json',
+      ],
     },
   ]
 }

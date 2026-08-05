@@ -1,0 +1,132 @@
+{
+  "id": "case-technical-audit-replay",
+  "title": "技术审计全链路（观测派生回放）",
+  "prompt": "对当前仓库做一次技术审计：梳理模块边界、运行时风险、测试缺口，并输出可执行的改进清单与一份简短报告。",
+  "notes": "Sanitized progressive replay fixture derived from Phase 4A case-technical-audit-v1 observation (checkpoints + visible sequence), NOT raw CDP dumps. Timed events for true stream playback. No secrets/paths from Application Support raw.",
+  "events": [
+    {
+      "id": "u1",
+      "type": "user_message",
+      "ts": 0,
+      "text": "对当前仓库做一次技术审计：梳理模块边界、运行时风险、测试缺口，并输出可执行的改进清单与一份简短报告。"
+    },
+    {
+      "id": "s-run",
+      "type": "turn_status",
+      "ts": 80,
+      "status": "running",
+      "label": "处理中"
+    },
+    {
+      "id": "tool-explore-1",
+      "type": "tool_activity",
+      "ts": 400,
+      "toolKind": "generic",
+      "status": "running",
+      "label": "正在探索仓库结构",
+      "detail": "modules · composition · quality-gates"
+    },
+    {
+      "id": "tool-explore-1",
+      "type": "tool_activity",
+      "ts": 2800,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "已探索仓库结构",
+      "detail": "Admin / Workbench / Foundation 三包边界",
+      "items": [
+        "archetypes/agent-workbench — Task / Session / Work Surface",
+        "packages/foundation — button · input · tokens",
+        "tooling/quality-gates — check:workbench / foundation"
+      ]
+    },
+    {
+      "id": "tool-search-1",
+      "type": "tool_activity",
+      "ts": 3200,
+      "toolKind": "web_search",
+      "status": "running",
+      "label": "正在搜索网页",
+      "detail": "agent workbench deep modules projection event sourcing"
+    },
+    {
+      "id": "tool-search-1",
+      "type": "tool_activity",
+      "ts": 6200,
+      "toolKind": "web_search",
+      "status": "completed",
+      "label": "已搜索网页",
+      "detail": "deep modules · event projection · fake runtime",
+      "items": [
+        "Deep modules：窄接口 · 厚实现",
+        "Projection：append-only events → TaskReadModel",
+        "Fake Runtime：确定性时钟 + 可测状态机"
+      ]
+    },
+    {
+      "id": "tool-read-1",
+      "type": "tool_activity",
+      "ts": 6800,
+      "toolKind": "read",
+      "status": "running",
+      "label": "正在读取模块合同",
+      "detail": "AGENTS.md · module layout"
+    },
+    {
+      "id": "tool-read-1",
+      "type": "tool_activity",
+      "ts": 9000,
+      "toolKind": "read",
+      "status": "completed",
+      "label": "已读取模块合同",
+      "detail": "Composition Root 唯一装配 · 禁止跨 Module 内部路径",
+      "items": [
+        "modules/task 拥有 RuntimePort / Projection",
+        "Shell 只拥有 geometry / motion",
+        "无生产 Runtime 不得伪装已接通"
+      ]
+    },
+    {
+      "id": "tool-cmd-1",
+      "type": "tool_activity",
+      "ts": 9600,
+      "toolKind": "command",
+      "status": "running",
+      "label": "正在运行门禁",
+      "detail": "pnpm check:workbench"
+    },
+    {
+      "id": "tool-cmd-1",
+      "type": "tool_activity",
+      "ts": 12800,
+      "toolKind": "command",
+      "status": "completed",
+      "label": "门禁已完成",
+      "detail": "check:workbench OK",
+      "items": [
+        "Module boundaries: root Interfaces only",
+        "Forbidden: radix / asChild / node builtins"
+      ]
+    },
+    {
+      "id": "a1",
+      "type": "assistant_message",
+      "ts": 14000,
+      "markdown": "## 审计结论（流式回放）\n\n这是基于 **Phase 4A 技术审计观测** 派生的 **时序回放 fixture**（非 CDP 原始日志直灌）。时间线会按事件 `ts` 逐步展开：处理中 → 工具折叠 → Markdown 终稿。\n\n### 模块边界\n\n1. **Composition Root** 是唯一装配点；Fake / 未来生产 Adapter 只在这里替换。\n2. **Task Module** 拥有 Command、Event、Projection；UI 只读 `TaskReadModel`。\n3. **Foundation** 仅 Button / Input / tokens；不得反向依赖 Archetype。\n\n### 运行时风险\n\n- 若 UI 直接拼 stream chunk，刷新后状态会漂移——必须以事件投影为准。\n- `submitTurn` 在同 Task 忙时必须 **排队或拒绝**，不能并行两个 foreground Run。\n- 诚实边界：本地 Fake **不等于** 远程 Agent Runtime。\n\n### 测试缺口（优先）\n\n| 优先级 | 项 | 说明 |\n| --- | --- | --- |\n| P0 | 时序回放 | capture `ts` 驱动中间态，而不是终态一帧 |\n| P0 | Markdown | 标题 / 列表 / 代码块与 Codex 密度对齐 |\n| P1 | 审批 / 澄清 | 允许一次 · 拒绝 · provideRunInput |\n| P1 | 长文折叠 | 工具输出与报告体折叠 |\n"
+    },
+    {
+      "id": "a2",
+      "type": "assistant_message",
+      "ts": 18500,
+      "markdown": "### 可执行改进清单\n\n```text\n1. 默认任务走 capture progressive playback（本 fixture）\n2. Fake Runtime 使用 wall-clock VirtualClock，stepMs>0，禁止 demo autoFlush\n3. SimpleMarkdown 支持 # ## ### 与 blockquote\n4. Timeline 顺序：用户 → 状态 → 工具 → 助手\n5. 视觉：14px 正文 / 22px 行高 / 工具行折叠动画\n```\n\n### 简短报告摘要\n\n> 仓库已具备 Admin + Workbench 双 Archetype 与 Foundation seam。Workbench 的 Fake Runtime 竖切可验证状态机，但演示若瞬时 flush，会让验收误判「没有流式」。应以 **带时间戳的 capture 回放** 作为产品观感真源，再让 Fake 场景对齐同一投影与 UI 合同。\n\n如需我把某一条改成具体 PR 拆分，直接点名优先级即可。"
+    },
+    {
+      "id": "s-done",
+      "type": "turn_status",
+      "ts": 22000,
+      "status": "completed",
+      "label": "已处理",
+      "durationMs": 22000
+    }
+  ]
+}

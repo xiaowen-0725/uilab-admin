@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @uilab/admin dev",
     "dev:admin": "pnpm --filter @uilab/admin dev",
     "dev:workbench": "pnpm --filter @uilab/agent-workbench dev",
+    "dev:workbench-runtime": "pnpm --filter @uilab/workbench-runtime-voltagent dev",
     "build": "pnpm --filter @uilab/foundation build && pnpm --filter @uilab/admin build && pnpm --filter @uilab/agent-workbench build",
     "lint": "pnpm --filter @uilab/admin lint",
     "preview": "pnpm --filter @uilab/admin preview",

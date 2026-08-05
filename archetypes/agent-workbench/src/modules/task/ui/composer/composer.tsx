@@ -63,6 +63,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
+import type { RunStatus } from '../../model/lifecycle'
+
 export interface ComposerProps {
   /** Context chip — project / workspace name (local fixture state). */
   projectLabel?: string
@@ -86,6 +88,19 @@ export interface ComposerProps {
   showProjectChip?: boolean
   showEnvironmentChip?: boolean
   showBranchChip?: boolean
+  /**
+   * `local-sim` (default): local timer feedback; notice contains「不会调用 Agent Runtime」.
+   * `runtime`: Application Command → Fake Runtime; no local timer as domain authority.
+   */
+  mode?: 'local-sim' | 'runtime'
+  /** Active run status from TaskReadModel (runtime mode). */
+  runStatus?: RunStatus | null
+  /** Runtime mode: submit user text via controller. */
+  onSubmitText?: (text: string) => void | Promise<void>
+  /** Runtime mode: cancel active run via controller. */
+  onCancelRun?: () => void | Promise<void>
+  /** Optional notice override from runtime controller. */
+  runtimeNotice?: string | null
 }
 
 const ACCESS_LEVELS = ['只读', '需确认', '作用域自动', '完全访问'] as const
@@ -287,11 +302,27 @@ export function TaskComposer({
   showProjectChip = true,
   showEnvironmentChip = true,
   showBranchChip = true,
+  mode = 'local-sim',
+  runStatus = null,
+  onSubmitText,
+  onCancelRun,
+  runtimeNotice = null,
 }: ComposerProps) {
   const noticeId = useId()
   const [text, setText] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const isRuntimeMode = mode === 'runtime'
+  /**
+   * Send acts as Stop only while the run is actively executing / queued / cancelling.
+   * `waiting_for_input` must accept clarification text (→ provideRunInput via submitText).
+   * `waiting_for_approval` is resolved on the timeline, not via Send-as-Stop.
+   */
+  const sendActsAsStop =
+    isRuntimeMode &&
+    (runStatus === 'running' ||
+      runStatus === 'queued' ||
+      runStatus === 'cancelling')
   /** null = no project selected → chip shows「选择项目」. */
   const [project, setProject] = useState<string | null>(projectLabel || null)
   const [projectCatalog, setProjectCatalog] = useState<string[]>(() =>
@@ -333,8 +364,6 @@ export function TaskComposer({
   const [planMode, setPlanMode] = useState(false)
   const [slashHighlight, setSlashHighlight] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const addTriggerRef = useRef<HTMLButtonElement>(null)
-  const addPanelRef = useRef<HTMLDivElement>(null)
 
   const runTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -389,6 +418,29 @@ export function TaskComposer({
 
   const handleSend = useCallback(() => {
     if (recording) stopRecording()
+
+    // Runtime path: Application Command → Fake Runtime.
+    if (isRuntimeMode) {
+      // Stop only while actively running / queued / cancelling (not HITL waits).
+      if (sendActsAsStop) {
+        void onCancelRun?.()
+        setNotice('已请求取消（Deterministic Fake Runtime，非生产）')
+        return
+      }
+      if (!text.trim()) return
+      const payload = text.trim()
+      const clarifying = runStatus === 'waiting_for_input'
+      setNotice(
+        clarifying
+          ? `已提交澄清输入（Deterministic Fake Runtime，非生产）：${payload.slice(0, 40)}${payload.length > 40 ? '…' : ''}`
+          : `已提交到 Deterministic Fake Runtime（非生产，不会调用远程 Agent Runtime）：${payload.slice(0, 40)}${payload.length > 40 ? '…' : ''}`,
+      )
+      setText('')
+      void onSubmitText?.(payload)
+      return
+    }
+
+    // Local-sim path (default / capture): timer-only feedback; no RuntimePort.
     if (running) {
       if (runTimerRef.current) clearTimeout(runTimerRef.current)
       runTimerRef.current = null
@@ -407,7 +459,23 @@ export function TaskComposer({
       setNotice('本地模拟完成（不会调用 Agent Runtime）')
       runTimerRef.current = null
     }, RUN_DURATION_MS)
-  }, [recording, running, stopRecording, text])
+  }, [
+    recording,
+    running,
+    stopRecording,
+    text,
+    isRuntimeMode,
+    sendActsAsStop,
+    runStatus,
+    onCancelRun,
+    onSubmitText,
+  ])
+
+  // Prefer controller notice when runtime mode surfaces one.
+  const displayNotice =
+    isRuntimeMode && runtimeNotice != null && runtimeNotice.length > 0
+      ? runtimeNotice
+      : notice
 
   const model = MODELS.find((m) => m.id === modelId) ?? MODELS[0]
   const modelTriggerLabel = (
@@ -599,7 +667,6 @@ export function TaskComposer({
 
   const addTrigger = (
     <ComposerIconButton
-      ref={addTriggerRef}
       aria-label='添加文件等内容'
       data-testid='composer-add'
       aria-expanded={addOpen}
@@ -617,20 +684,25 @@ export function TaskComposer({
   useEffect(() => {
     if (!addOpen) return
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node
-      if (addPanelRef.current?.contains(target)) return
-      if (addTriggerRef.current?.contains(target)) return
+      const target = event.target as HTMLElement
+      if (
+        target.closest('[data-testid="composer-add-panel"]') ||
+        target.closest('[data-testid="composer-add"]')
+      ) {
+        return
+      }
       setAddOpen(false)
     }
     window.addEventListener('pointerdown', onPointerDown)
     return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [addOpen])
 
+  const sendRunning = isRuntimeMode ? sendActsAsStop : running
   const sendButton = (
     <ComposerSendButton
-      running={running}
+      running={sendRunning}
       disabled={
-        !running &&
+        !sendRunning &&
         !recording &&
         text.trim().length === 0 &&
         skillTokens.length === 0 &&
@@ -638,7 +710,8 @@ export function TaskComposer({
       }
       onClick={handleSend}
       data-testid='composer-submit'
-      aria-label={running ? '停止' : '发送'}
+      data-send-mode={sendRunning ? 'stop' : 'send'}
+      aria-label={sendRunning ? '停止' : '发送'}
       aria-describedby={noticeId}
     />
   )
@@ -680,6 +753,7 @@ export function TaskComposer({
       className='sticky bottom-0 z-30 shrink-0 px-4 pb-4 pt-2'
       data-slot='composer'
       data-testid='composer'
+      data-composer-mode={mode}
     >
       {/*
         Do not wrap the dock in pointer-events-none: upward popovers (project /
@@ -688,7 +762,10 @@ export function TaskComposer({
       */}
       <div className='relative mx-auto w-full max-w-[var(--content-max-width)]'>
         {renderContextBar ? (
-          <ComposerContextBar data-testid='composer-context-bar'>
+          <ComposerContextBar
+            data-testid='composer-context-bar'
+            className='mx-0'
+          >
             {showProjectChip ? (
               <ComposerMenuButton
                 label={
@@ -873,7 +950,6 @@ export function TaskComposer({
 
         <Composer data-testid='composer-shell'>
           <ComposerFloatingPanel
-            ref={addPanelRef}
             open={addOpen}
             data-testid='composer-add-panel'
           >
@@ -1107,7 +1183,7 @@ export function TaskComposer({
           role='status'
           aria-live='polite'
         >
-          {notice ?? ''}
+          {displayNotice ?? ''}
         </p>
       </div>
 

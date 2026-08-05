@@ -1,0 +1,149 @@
+{
+  "id": "case-fixture-workflow-replay",
+  "title": "合成工作流回放（计划→读取→命令→写文件→答复）",
+  "prompt": "按工作流执行：读取 plan 与 alpha，列出目录，写入 workflow-result.md 并总结。",
+  "notes": "V2 gold timed capture (~40s stream). Synthetic Codex-density sequence: plan → read plan.txt → read alpha.txt → command ls → write workflow-result.md (diff meta via tool detail) → final assistant. Not a live Runtime recording.",
+  "events": [
+    {
+      "id": "u1",
+      "type": "user_message",
+      "ts": 0,
+      "text": "按工作流执行：读取 plan 与 alpha，列出目录，写入 workflow-result.md 并总结。"
+    },
+    {
+      "id": "s-run",
+      "type": "turn_status",
+      "ts": 80,
+      "status": "running",
+      "label": "正在思考"
+    },
+    {
+      "id": "tool-plan-1",
+      "type": "tool_activity",
+      "ts": 600,
+      "toolKind": "generic",
+      "status": "running",
+      "label": "正在更新计划…",
+      "detail": "fixture workflow"
+    },
+    {
+      "id": "tool-plan-1",
+      "type": "tool_activity",
+      "ts": 2200,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "已更新计划",
+      "detail": "3 步",
+      "items": [
+        "1. 读取 plan.txt 与 alpha.txt",
+        "2. 运行 ls 确认目录",
+        "3. 写入 workflow-result.md 并总结"
+      ]
+    },
+    {
+      "id": "tool-read-plan",
+      "type": "tool_activity",
+      "ts": 2800,
+      "toolKind": "read",
+      "status": "running",
+      "label": "正在读取文件…",
+      "detail": "fixture/notes/plan.txt"
+    },
+    {
+      "id": "tool-read-plan",
+      "type": "tool_activity",
+      "ts": 5200,
+      "toolKind": "read",
+      "status": "completed",
+      "label": "已读取 plan.txt",
+      "detail": "fixture/notes/plan.txt",
+      "items": ["fixture/notes/plan.txt"]
+    },
+    {
+      "id": "tool-read-alpha",
+      "type": "tool_activity",
+      "ts": 5800,
+      "toolKind": "read",
+      "status": "running",
+      "label": "正在读取文件…",
+      "detail": "fixture/notes/alpha.txt"
+    },
+    {
+      "id": "tool-read-alpha",
+      "type": "tool_activity",
+      "ts": 9000,
+      "toolKind": "read",
+      "status": "completed",
+      "label": "已读取 alpha.txt",
+      "detail": "fixture/notes/alpha.txt",
+      "items": ["fixture/notes/alpha.txt"]
+    },
+    {
+      "id": "tool-cmd-ls",
+      "type": "tool_activity",
+      "ts": 9800,
+      "toolKind": "command",
+      "status": "running",
+      "label": "正在执行命令…",
+      "detail": "ls fixture/notes"
+    },
+    {
+      "id": "tool-cmd-ls",
+      "type": "tool_activity",
+      "ts": 14000,
+      "toolKind": "command",
+      "status": "completed",
+      "label": "已运行 ls",
+      "detail": "exit 0",
+      "items": [
+        "plan.txt",
+        "alpha.txt",
+        "workflow-result.md (pending)"
+      ]
+    },
+    {
+      "id": "tool-write-result",
+      "type": "tool_activity",
+      "ts": 15200,
+      "toolKind": "generic",
+      "status": "running",
+      "label": "正在写入结果…",
+      "detail": "fixture/notes/workflow-result.md"
+    },
+    {
+      "id": "tool-write-result",
+      "type": "tool_activity",
+      "ts": 22000,
+      "toolKind": "generic",
+      "status": "completed",
+      "label": "已写入 workflow-result.md",
+      "detail": "+10 -0",
+      "items": [
+        "fixture/notes/workflow-result.md",
+        "+ # Synthetic Fixture Workflow Result",
+        "+ Plan steps completed in Fake capture path.",
+        "+ Sources: plan.txt, alpha.txt, ls fixture/notes"
+      ]
+    },
+    {
+      "id": "a1",
+      "type": "assistant_message",
+      "ts": 25000,
+      "markdown": "## 工作流结果\n\n已按计划完成：\n\n1. 读取 [fixture/notes/plan.txt](wb-file:fixture/notes/plan.txt:1) 与 [alpha.txt](wb-file:fixture/notes/alpha.txt:1)\n2. 运行 `ls fixture/notes`\n3. 写入 [workflow-result.md](wb-file:fixture/notes/workflow-result.md:1)（+10 行）\n\n计划步骤对齐 [工作流计划 (line 1)](wb-file:fixture/notes/plan.txt:1)。\n"
+    },
+    {
+      "id": "a2",
+      "type": "assistant_message",
+      "ts": 32000,
+      "markdown": "### 摘要\n\n> 本序列为 **Codex 密度金样** 时序回放（capture），非生产 Agent Runtime。\n\n可点的文件引用与底部 **已编辑** 卡对齐 Codex 会话内容区；工具轨迹默认收起。\n\n如需继续，可指定下一文件或命令。"
+    },
+    {
+      "id": "s-done",
+      "type": "turn_status",
+      "ts": 40000,
+      "status": "completed",
+      "label": "已处理",
+      "durationMs": 40000
+    }
+  ]
+}

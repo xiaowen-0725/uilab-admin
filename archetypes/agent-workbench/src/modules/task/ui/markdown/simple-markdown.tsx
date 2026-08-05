@@ -1,152 +1,207 @@
 /**
- * Minimal Markdown → React for capture replay.
- * No extra npm dependency; covers paragraphs, bold, inline/code fences, lists.
+ * Timeline / stream Markdown — Streamdown + Codex file-reference chips.
+ * @see docs/research/codex-content-area-diff-and-acceptance.md
  */
 
-import type { ReactNode } from 'react'
+import type { ComponentPropsWithoutRef } from 'react'
+import { cjk } from '@streamdown/cjk'
+import { code } from '@streamdown/code'
+import { Streamdown, type PluginConfig } from 'streamdown'
+import { cn } from '@/lib/utils'
+import {
+  FileReferenceChip,
+  isFilePathToken,
+  parseFileRefTarget,
+} from './file-reference-chip'
+
+import 'streamdown/styles.css'
+
+const streamPlugins: PluginConfig = {
+  cjk,
+  code: code as PluginConfig['code'],
+}
+
+export type SimpleMarkdownProps = {
+  source: string
+  className?: string
+  isAnimating?: boolean
+  onOpenFileRef?: (info: {
+    path?: string
+    line?: number
+    label: string
+  }) => void
+}
+
+/**
+ * Harden-safe: turn file links into custom HTML tags Streamdown allows.
+ * - `[label](wb-file:path:38)` → `<file-ref path="..." line="38">label</file-ref>`
+ * - `` `path/to/file.ext` `` → same (path-like tokens only)
+ */
+export function preprocessFileReferences(source: string): string {
+  let s = source
+  s = s.replace(
+    /\[([^\]]+)\]\((?:wb-file:|file:\/\/)([^)\s]+)\)/g,
+    (_m, label: string, target: string) => {
+      const t = parseFileRefTarget(target, label)
+      const pathAttr = t.path ? ` path="${escapeAttr(t.path)}"` : ''
+      const lineAttr = t.line != null ? ` line="${t.line}"` : ''
+      return `<file-ref${pathAttr}${lineAttr}>${escapeText(label)}</file-ref>`
+    },
+  )
+  s = s.replace(/`([^`\n]+)`/g, (full, inner: string) => {
+    if (!isFilePathToken(inner)) return full
+    return `<file-ref path="${escapeAttr(inner)}">${escapeText(inner.split('/').pop() || inner)}</file-ref>`
+  })
+  return s
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
+function escapeText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function buildComponents(onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef']) {
+  return {
+    // Custom tag from preprocessFileReferences
+    'file-ref': ({
+      path,
+      line,
+      children,
+    }: {
+      path?: string
+      line?: string
+      children?: unknown
+    }) => {
+      const label = extractText(children) || path || 'file'
+      return (
+        <FileReferenceChip
+          label={label}
+          path={path}
+          line={line ? Number(line) : undefined}
+          onOpen={onOpenFileRef}
+        />
+      )
+    },
+    a: ({
+      href,
+      children,
+      ...rest
+    }: ComponentPropsWithoutRef<'a'>) => {
+      const childText = extractText(children)
+      const isFile =
+        Boolean(href && /^(wb-file:|file:|\/|\.\/)/i.test(href)) ||
+        /\(line\s*\d+\)/i.test(childText)
+      if (isFile) {
+        const t = parseFileRefTarget(href, childText)
+        return (
+          <FileReferenceChip
+            label={t.label}
+            path={t.path}
+            line={t.line}
+            onOpen={onOpenFileRef}
+          />
+        )
+      }
+      return (
+        <a
+          {...rest}
+          href={href}
+          className='font-medium underline-offset-2 hover:underline'
+          style={{ color: 'color(srgb 0.511373 0.712157 0.900392)' }}
+          target='_blank'
+          rel='noreferrer'
+        >
+          {children}
+        </a>
+      )
+    },
+    code: ({
+      className,
+      children,
+      ...rest
+    }: ComponentPropsWithoutRef<'code'>) => {
+      const text = extractText(children).trim()
+      const isBlock = Boolean(className?.includes('language-'))
+      if (!isBlock && isFilePathToken(text)) {
+        return (
+          <FileReferenceChip
+            label={text.split('/').pop() || text}
+            path={text}
+            onOpen={onOpenFileRef}
+          />
+        )
+      }
+      return (
+        <code
+          {...rest}
+          className={cn(
+            !isBlock &&
+              'rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12.5px] font-[445]',
+            className,
+          )}
+        >
+          {children}
+        </code>
+      )
+    },
+  }
+}
+
+function extractText(node: unknown): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(extractText).join('')
+  if (typeof node === 'object' && node !== null && 'props' in node) {
+    const p = node as { props?: { children?: unknown } }
+    return extractText(p.props?.children)
+  }
+  return ''
+}
 
 export function SimpleMarkdown({
   source,
   className,
-}: {
-  source: string
-  className?: string
-}) {
-  const blocks = splitBlocks(source)
+  isAnimating = false,
+  onOpenFileRef,
+}: SimpleMarkdownProps) {
+  const components = buildComponents(onOpenFileRef)
+  const prepared = preprocessFileReferences(source)
+
   return (
     <div
-      className={className}
+      className={cn(
+        'stream-markdown text-[14px] font-[445] leading-[22px] text-foreground',
+        '[&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:tracking-tight',
+        '[&_h2]:mb-1.5 [&_h2]:mt-3 [&_h2]:text-[15px] [&_h2]:font-semibold [&_h2]:tracking-tight',
+        '[&_h3]:mb-1 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-semibold',
+        '[&_p]:my-2 [&_p]:whitespace-pre-wrap',
+        '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
+        '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5',
+        '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5',
+        '[&_li]:leading-[22px]',
+        '[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border/40 [&_pre]:bg-muted/60',
+        '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+        className,
+      )}
       data-slot='simple-markdown'
       data-testid='simple-markdown'
     >
-      {blocks.map((block, index) => (
-        <Block key={index} block={block} />
-      ))}
+      <Streamdown
+        className='size-full'
+        plugins={streamPlugins}
+        components={components as never}
+        allowedTags={{ 'file-ref': ['path', 'line'] }}
+        isAnimating={isAnimating}
+        mode={isAnimating ? 'streaming' : 'static'}
+        controls={false}
+        lineNumbers={false}
+        parseIncompleteMarkdown
+      >
+        {prepared}
+      </Streamdown>
     </div>
   )
-}
-
-type Block =
-  | { kind: 'p'; text: string }
-  | { kind: 'ul'; items: string[] }
-  | { kind: 'ol'; items: string[] }
-  | { kind: 'code'; text: string }
-
-function splitBlocks(source: string): Block[] {
-  const lines = source.replace(/\r\n/g, '\n').split('\n')
-  const blocks: Block[] = []
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (line.trim() === '') {
-      i += 1
-      continue
-    }
-    if (line.startsWith('```')) {
-      const body: string[] = []
-      i += 1
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        body.push(lines[i])
-        i += 1
-      }
-      if (i < lines.length) i += 1
-      blocks.push({ kind: 'code', text: body.join('\n') })
-      continue
-    }
-    if (/^\d+\.\s+/.test(line)) {
-      const items: string[] = []
-      while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\.\s+/, ''))
-        i += 1
-      }
-      blocks.push({ kind: 'ol', items })
-      continue
-    }
-    if (/^[-*]\s+/.test(line)) {
-      const items: string[] = []
-      while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^[-*]\s+/, ''))
-        i += 1
-      }
-      blocks.push({ kind: 'ul', items })
-      continue
-    }
-    const para: string[] = [line]
-    i += 1
-    while (
-      i < lines.length &&
-      lines[i].trim() !== '' &&
-      !lines[i].startsWith('```') &&
-      !/^[-*]\s+/.test(lines[i]) &&
-      !/^\d+\.\s+/.test(lines[i])
-    ) {
-      para.push(lines[i])
-      i += 1
-    }
-    blocks.push({ kind: 'p', text: para.join('\n') })
-  }
-  return blocks
-}
-
-function Block({ block }: { block: Block }) {
-  if (block.kind === 'code') {
-    return (
-      <pre className='my-2 overflow-x-auto rounded-lg bg-muted px-3 py-2 font-mono text-[13px] leading-relaxed'>
-        <code>{block.text}</code>
-      </pre>
-    )
-  }
-  if (block.kind === 'ul' || block.kind === 'ol') {
-    const ListTag = block.kind === 'ul' ? 'ul' : 'ol'
-    const listClass =
-      block.kind === 'ul'
-        ? 'my-2 list-disc space-y-1 pl-5 text-sm leading-[22px]'
-        : 'my-2 list-decimal space-y-1 pl-5 text-sm leading-[22px]'
-    return (
-      <ListTag className={listClass}>
-        {block.items.map((item, i) => (
-          <li key={i}>{inline(item)}</li>
-        ))}
-      </ListTag>
-    )
-  }
-  return (
-    <p className='my-2 text-sm leading-[22px] whitespace-pre-wrap'>
-      {inline(block.text)}
-    </p>
-  )
-}
-
-/** Bold **x**, inline `code`. */
-function inline(text: string): ReactNode[] {
-  const nodes: ReactNode[] = []
-  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g
-  let last = 0
-  let match: RegExpExecArray | null
-  let key = 0
-  while ((match = re.exec(text)) !== null) {
-    if (match.index > last) {
-      nodes.push(text.slice(last, match.index))
-    }
-    const token = match[0]
-    if (token.startsWith('**')) {
-      nodes.push(
-        <strong key={key++} className='font-semibold'>
-          {token.slice(2, -2)}
-        </strong>
-      )
-    } else {
-      nodes.push(
-        <code
-          key={key++}
-          className='rounded bg-muted px-1 py-0.5 font-mono text-[12px]'
-        >
-          {token.slice(1, -1)}
-        </code>
-      )
-    }
-    last = match.index + token.length
-  }
-  if (last < text.length) nodes.push(text.slice(last))
-  return nodes
 }
