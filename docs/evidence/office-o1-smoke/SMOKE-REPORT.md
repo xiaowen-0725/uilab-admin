@@ -103,3 +103,40 @@ This is misleading for office/voltagent smoke (still “not production”, but s
 - `finish` without 400
 
 Artifacts: `api-stream-ls-v4flash.sse`, `api-stream-ls-v4flash-summary.json`
+
+---
+
+## Acceptance re-smoke (P1 honesty + write approval UI)
+
+### Environment
+- Sidecar: `AGENT_PROFILE=office`, `deepseek-v4-flash`, `modelApi=chat`
+- UI: `VITE_RUNTIME_ADAPTER=voltagent`
+
+### Pass
+
+| Check | Evidence |
+| --- | --- |
+| Honesty banner (not Fake) | `05-ui-ls-success-voltagent-honesty.png` — `本机 VoltAgent Runtime · 非远程生产集群 · 本地侧车` |
+| Composer notice | same UI — `已提交到本机 VoltAgent Runtime…` |
+| Multi-step ls + Chinese answer | `05` — Timeline shows summary of `/notes/` + `/output/` |
+| write needsApproval | API `tool-approval-request`; UI `06-ui-write-needs-approval.png` — **需要审批 / 允许一次 / 拒绝** |
+| Approve HITL UI | `07-ui-after-approve.png` — **决定：允许一次 / 已允许** |
+| Mapper `approvalId` | unit test + maps VoltAgent nested `toolCall` |
+
+### Residual (honest)
+
+**Approve → 工具真正写盘续跑**：VoltAgent hono 无 `/approvals` 路由；批准后 Timeline 会 `approval.resolved`，但侧车未必用 `tool-approval-response` 恢复同一 tool 执行，故磁盘文件可能仍未写出。完整「批准后继续 stream 写盘 + file.changed」属 Adapter 续跑协议 follow-up（非 O1 装配失败）。
+
+### Verdict on #10 AC
+
+| AC | Status |
+| --- | --- |
+| Office profile switch | **Pass** |
+| Workspace FS primary tools | **Pass** |
+| Write/delete needsApproval | **Pass** (stream + UI) |
+| Approve/reject Timeline 可读 | **Pass** (UI 已允许)；**续跑写盘** residual |
+| file.changed after write | **Partial** — mapper 已支持；依赖写盘成功 |
+| Read tools Timeline rows | **Pass** |
+| Renderer / RuntimePort only | **Pass** |
+| Unit tests + Fake no regression | **Pass** (135 tests) |
+| Honesty voltagent copy | **Pass** (P1) |

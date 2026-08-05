@@ -329,15 +329,21 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const turnId = command.turnId ?? state.lastTurnId ?? undefined
     const occurredAt = this.nowIso()
 
+    // Best-effort notify. VoltAgent server-hono has no dedicated /approvals route;
+    // full tool resume uses conversation message parts (tool-approval-response).
+    // We still emit approval.resolved so Timeline HITL unblocks; a follow-up
+    // submitTurn may re-drive the model for write completion.
     try {
+      const approved = command.payload.decision === 'approved'
       await this.fetchImpl(
         `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}/approvals`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            approvalId: command.payload.requestId,
             requestId: command.payload.requestId,
-            approved: command.payload.decision === 'approved',
+            approved,
             reason: command.payload.reason,
             options: {
               memory: {

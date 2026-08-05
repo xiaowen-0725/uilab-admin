@@ -29,6 +29,11 @@ import {
   Zap,
 } from 'lucide-react'
 import {
+  previewText,
+  runtimeHonestyCopy,
+  type RuntimeHonestyMode,
+} from '../../runtime/runtime-honesty'
+import {
   Composer,
   ComposerAccessChip,
   ComposerAttachmentChip,
@@ -101,6 +106,11 @@ export interface ComposerProps {
   onCancelRun?: () => void | Promise<void>
   /** Optional notice override from runtime controller. */
   runtimeNotice?: string | null
+  /**
+   * Honesty mode when `mode === 'runtime'`.
+   * Controls interim notices before controller notice arrives.
+   */
+  honestyMode?: RuntimeHonestyMode
 }
 
 const ACCESS_LEVELS = ['只读', '需确认', '作用域自动', '完全访问'] as const
@@ -307,7 +317,9 @@ export function TaskComposer({
   onSubmitText,
   onCancelRun,
   runtimeNotice = null,
+  honestyMode = 'fake',
 }: ComposerProps) {
+  const honesty = runtimeHonestyCopy(honestyMode)
   const noticeId = useId()
   const [text, setText] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -419,21 +431,22 @@ export function TaskComposer({
   const handleSend = useCallback(() => {
     if (recording) stopRecording()
 
-    // Runtime path: Application Command → Fake Runtime.
+    // Runtime path: Application Command → RuntimePort (Fake or VoltAgent).
     if (isRuntimeMode) {
       // Stop only while actively running / queued / cancelling (not HITL waits).
       if (sendActsAsStop) {
         void onCancelRun?.()
-        setNotice('已请求取消（Deterministic Fake Runtime，非生产）')
+        setNotice(honesty.cancelRequested)
         return
       }
       if (!text.trim()) return
       const payload = text.trim()
       const clarifying = runStatus === 'waiting_for_input'
+      const preview = previewText(payload)
       setNotice(
         clarifying
-          ? `已提交澄清输入（Deterministic Fake Runtime，非生产）：${payload.slice(0, 40)}${payload.length > 40 ? '…' : ''}`
-          : `已提交到 Deterministic Fake Runtime（非生产，不会调用远程 Agent Runtime）：${payload.slice(0, 40)}${payload.length > 40 ? '…' : ''}`,
+          ? honesty.clarifyingSubmit(preview)
+          : honesty.submitWithPreview(preview),
       )
       setText('')
       void onSubmitText?.(payload)
@@ -469,6 +482,7 @@ export function TaskComposer({
     runStatus,
     onCancelRun,
     onSubmitText,
+    honesty,
   ])
 
   // Prefer controller notice when runtime mode surfaces one.

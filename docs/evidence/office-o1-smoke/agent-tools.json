@@ -1,0 +1,17 @@
+{
+  "tools": [
+    "ls",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "delete_file",
+    "stat",
+    "mkdir",
+    "rmdir",
+    "list_tree",
+    "list_files",
+    "glob",
+    "grep"
+  ],
+  "status": "idle"
+}

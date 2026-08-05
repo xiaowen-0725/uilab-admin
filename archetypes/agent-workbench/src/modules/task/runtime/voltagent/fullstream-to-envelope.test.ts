@@ -280,4 +280,37 @@ describe('mapFullStreamChunks', () => {
     expect(envelopes[0]?.eventType).toBe('approval.requested')
     expect(envelopes[0]?.payload).toMatchObject({ requestId: 'apr-1' })
   })
+
+  it('maps VoltAgent tool-approval-request with approvalId + nested toolCall', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-approval-request',
+          approvalId: 'aitxt-ilSmfiRwHF67JtJApUd3AZzn',
+          toolCall: {
+            type: 'tool-call',
+            toolCallId: 'call_00_Ss4oNw3scombo8SKSyY79591',
+            toolName: 'write_file',
+            input: {
+              file_path: '/output/o1-smoke-note.md',
+              content: 'O1 smoke hello',
+              overwrite: true,
+            },
+          },
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes).toHaveLength(1)
+    expect(envelopes[0]?.eventType).toBe('approval.requested')
+    expect(envelopes[0]?.payload).toMatchObject({
+      requestId: 'aitxt-ilSmfiRwHF67JtJApUd3AZzn',
+      toolName: 'write_file',
+      toolCallId: 'call_00_Ss4oNw3scombo8SKSyY79591',
+      args: {
+        file_path: '/output/o1-smoke-note.md',
+        content: 'O1 smoke hello',
+      },
+    })
+  })
 })

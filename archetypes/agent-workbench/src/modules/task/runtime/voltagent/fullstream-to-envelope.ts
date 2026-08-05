@@ -293,14 +293,31 @@ export function mapFullStreamChunk(
       break
 
     // Approval is often UI-message stream; support explicit chunk types if present.
+    // VoltAgent AI SDK shape: { type: 'tool-approval-request', approvalId, toolCall: { toolCallId, toolName, input } }
     case 'tool-approval-request':
-    case 'approval-requested':
+    case 'approval-requested': {
+      const nested =
+        typeof chunk.toolCall === 'object' && chunk.toolCall !== null
+          ? (chunk.toolCall as FullStreamChunk)
+          : undefined
+      const nestedName = nested ? toolName(nested) : undefined
+      const nestedCallId = nested ? toolCallId(nested) : undefined
+      const nestedArgs = nested
+        ? (nested.args ?? nested.input ?? nested.arguments)
+        : undefined
       push('approval.requested', {
-        requestId: asString(chunk.requestId) ?? asString(chunk.id) ?? toolCallId(chunk),
-        toolName: toolName(chunk),
-        args: chunk.args ?? chunk.input,
+        requestId:
+          asString(chunk.approvalId) ??
+          asString(chunk.requestId) ??
+          asString(chunk.id) ??
+          nestedCallId ??
+          toolCallId(chunk),
+        toolName: nestedName ?? toolName(chunk),
+        toolCallId: nestedCallId ?? toolCallId(chunk),
+        args: nestedArgs ?? chunk.args ?? chunk.input,
       })
       break
+    }
 
     default:
       // Unknown chunk types: safe no-op (do not crash the stream).

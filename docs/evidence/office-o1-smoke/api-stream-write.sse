@@ -1,0 +1,194 @@
+data: {"type":"start","messageId":"yFcume9zZcybwcbN"}
+
+data: {"type":"start-step","request":{"body":{"model":"deepseek-v4-flash","messages":[{"role":"system","content":"You are the local Office Agent Runtime for UI Lab Agent Workbench. Respond in Chinese unless the user writes in another language. Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root. Prefer planning briefly, then read before write. Writes and deletes require user approval. Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar. Authorized workspace root (host path for operators): /Users/zhoujw/develop/github/uilab-admin/output/office-smoke-workspace\n\nYou have access to a workspace filesystem. All file paths must start with a /.\n\n- ls: list files in a directory (requires absolute path)\n- read_file: read a file from the filesystem\n- write_file: write to a file in the filesystem\n- edit_file: edit a file in the filesystem\n- delete_file: delete a file from the filesystem\n- stat: get file or directory metadata\n- mkdir: create a directory\n- rmdir: remove a directory\n- list_tree: list files and directories with depth control\n- list_files: list files and directories with depth control (alias)\n- glob: find files matching a pattern (e.g., \"**/*.ts\")\n- grep: search for text within files\n\nBest practices:\n- Read files before editing or overwriting existing content.\n- Prefer offset/limit in read_file for large files.\n- edit_file old_string must match exactly and be unique.\n- Do not include read_file line number prefixes in edit_file old_string/new_string."},{"role":"user","content":"请把内容「O1 smoke hello」写入文件 /output/o1-smoke-note.md（使用 write_file，overwrite 如需）。写完用一句话中文确认路径。"}],"tools":[{"type":"function","function":{"name":"ls","description":"List files and directories in a workspace directory","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"default":"/","description":"Directory path to list (default: /)","type":"string"}},"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"read_file","description":"Read file content with optional line range (offset/limit). Prefer targeted reads for large files.","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to read"},"offset":{"default":0,"description":"Line offset to start reading from (0-indexed)","type":"number"},"limit":{"default":2000,"description":"Maximum number of lines to read","type":"number"}},"required":["file_path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"write_file","description":"Write content to a file. Existing files require overwrite=true; parent directories can be created automatically.","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to write"},"content":{"type":"string","description":"Content to write to the file"},"overwrite":{"default":false,"description":"Whether to overwrite the file if it already exists","type":"boolean"},"create_parent_dirs":{"default":true,"description":"Whether to create parent directories if needed","type":"boolean"}},"required":["file_path","content"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"edit_file","description":"Edit a file by replacing exact text.\n\nUsage:\n- Read the file first and copy the exact text for old_string.\n- old_string must be unique unless replace_all=true.\n- Preserve indentation and whitespace exactly.\n- If read_file output includes line numbers, do not include those prefixes in old_string/new_string.","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to edit"},"old_string":{"type":"string","description":"String to be replaced (must match exactly)"},"new_string":{"type":"string","description":"String to replace with"},"replace_all":{"default":false,"description":"Whether to replace all occurrences","type":"boolean"}},"required":["file_path","old_string","new_string"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"delete_file","description":"Delete a file from the filesystem. Use recursive=true to remove a directory","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to delete"},"recursive":{"default":false,"description":"Whether to delete directories recursively","type":"boolean"}},"required":["file_path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"stat","description":"Get file or directory metadata","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"type":"string","description":"Absolute path to the file or directory"}},"required":["path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"mkdir","description":"Create a directory in the filesystem","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"type":"string","description":"Absolute path to the directory to create"},"recursive":{"default":true,"description":"Whether to create parent directories if needed (default: true)","type":"boolean"}},"required":["path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"rmdir","description":"Remove a directory from the filesystem","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"type":"string","description":"Absolute path to the directory to remove"},"recursive":{"default":false,"description":"Whether to remove contents recursively","type":"boolean"}},"required":["path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"list_tree","description":"List files and directories recursively with optional depth control","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"default":"/","description":"Base directory path (default: /)","type":"string"},"max_depth":{"default":3,"description":"Maximum depth to traverse (default: 3)","type":"integer","minimum":1,"maximum":9007199254740991}},"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"list_files","description":"List files and directories recursively with optional depth control","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"default":"/","description":"Base directory path (default: /)","type":"string"},"max_depth":{"default":3,"description":"Maximum depth to traverse (default: 3)","type":"integer","minimum":1,"maximum":9007199254740991}},"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"glob","description":"Find files matching a glob pattern (e.g., '**/*.ts' for all TypeScript files)","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern (e.g., '*.ts', '**/*.ts')"},"path":{"default":"/","description":"Base path to search from (default: /)","type":"string"}},"required":["pattern"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"grep","description":"Search for a regex pattern in files. Returns matching files and line numbers","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern to search for"},"path":{"default":"/","description":"Base path to search from (default: /)","type":"string"},"glob":{"anyOf":[{"type":"string"},{"type":"null"}],"description":"Optional glob pattern to filter files (e.g., '*.ts')"}},"required":["pattern"],"additionalProperties":false},"strict":false}}],"tool_choice":"auto","stream":true,"stream_options":{"include_usage":true}}},"warnings":[],"messageId":"yFcume9zZcybwcbN"}
+
+data: {"type":"tool-input-start","id":"call_00_LQr3rgaey92QRqjYPVo41505","toolName":"ls","dynamic":false}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"{"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"path"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":": "}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"Users"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"zhou"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"jw"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"develop"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/g"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"ithub"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"uil"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"ab"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"-admin"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/output"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"office"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"-sm"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"oke"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"-w"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"orks"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"pace"}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_LQr3rgaey92QRqjYPVo41505","delta":"}"}
+
+data: {"type":"tool-input-end","id":"call_00_LQr3rgaey92QRqjYPVo41505"}
+
+data: {"type":"tool-call","toolCallId":"call_00_LQr3rgaey92QRqjYPVo41505","toolName":"ls","input":{"path":"/Users/zhoujw/develop/github/uilab-admin/output/office-smoke-workspace"}}
+
+data: {"type":"tool-result","toolCallId":"call_00_LQr3rgaey92QRqjYPVo41505","toolName":"ls","input":{"path":"/Users/zhoujw/develop/github/uilab-admin/output/office-smoke-workspace"},"output":"No files found","dynamic":false}
+
+data: {"type":"tool-input-start","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","toolName":"stat","dynamic":false}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"{"}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"path"}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":": "}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"output"}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","delta":"}"}
+
+data: {"type":"tool-input-end","id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888"}
+
+data: {"type":"tool-call","toolCallId":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","toolName":"stat","input":{"path":"/output"}}
+
+data: {"type":"tool-result","toolCallId":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","toolName":"stat","input":{"path":"/output"},"output":"path: /output/\ntype: directory\ncreated_at: 2026-08-05T13:10:00.888Z\nmodified_at: 2026-08-05T13:10:00.888Z","dynamic":false}
+
+data: {"type":"text-start","id":"0"}
+
+data: {"type":"text-end","id":"0"}
+
+data: {"type":"finish-step","finishReason":"tool-calls","usage":{"inputTokens":2299,"inputTokenDetails":{"cacheReadTokens":2176},"outputTokens":268,"outputTokenDetails":{"reasoningTokens":175},"totalTokens":2567,"reasoningTokens":175,"cachedInputTokens":2176},"providerMetadata":{"openai":{}},"response":{"id":"565d15be-4ec9-462b-9464-4e853d405fcf","timestamp":"2026-08-05T13:43:19.000Z","modelId":"deepseek-v4-flash","headers":{"access-control-allow-credentials":"true","cache-control":"no-cache","connection":"keep-alive","content-type":"text/event-stream; charset=utf-8","date":"Wed, 05 Aug 2026 13:43:19 GMT","eo-cache-status":"MISS","eo-log-uuid":"18430299851862253221","server":"openresty","strict-transport-security":"max-age=31536000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"origin, access-control-request-method, access-control-request-headers","x-content-type-options":"nosniff","x-ds-trace-id":"a74ec2e8f3a13e5ec761eb73a1fa59ff"}}}
+
+data: {"type":"start-step","request":{"body":{"model":"deepseek-v4-flash","messages":[{"role":"system","content":"You are the local Office Agent Runtime for UI Lab Agent Workbench. Respond in Chinese unless the user writes in another language. Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root. Prefer planning briefly, then read before write. Writes and deletes require user approval. Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar. Authorized workspace root (host path for operators): /Users/zhoujw/develop/github/uilab-admin/output/office-smoke-workspace\n\nYou have access to a workspace filesystem. All file paths must start with a /.\n\n- ls: list files in a directory (requires absolute path)\n- read_file: read a file from the filesystem\n- write_file: write to a file in the filesystem\n- edit_file: edit a file in the filesystem\n- delete_file: delete a file from the filesystem\n- stat: get file or directory metadata\n- mkdir: create a directory\n- rmdir: remove a directory\n- list_tree: list files and directories with depth control\n- list_files: list files and directories with depth control (alias)\n- glob: find files matching a pattern (e.g., \"**/*.ts\")\n- grep: search for text within files\n\nBest practices:\n- Read files before editing or overwriting existing content.\n- Prefer offset/limit in read_file for large files.\n- edit_file old_string must match exactly and be unique.\n- Do not include read_file line number prefixes in edit_file old_string/new_string."},{"role":"user","content":"请把内容「O1 smoke hello」写入文件 /output/o1-smoke-note.md（使用 write_file，overwrite 如需）。写完用一句话中文确认路径。"},{"role":"assistant","content":null,"tool_calls":[{"id":"call_00_LQr3rgaey92QRqjYPVo41505","type":"function","function":{"name":"ls","arguments":"{\"path\":\"/Users/zhoujw/develop/github/uilab-admin/output/office-smoke-workspace\"}"}},{"id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","type":"function","function":{"name":"stat","arguments":"{\"path\":\"/output\"}"}}]},{"role":"tool","tool_call_id":"call_00_LQr3rgaey92QRqjYPVo41505","content":"No files found"},{"role":"tool","tool_call_id":"call_01_y5yHXUdZ5L2UUf6sFDmh5888","content":"path: /output/\ntype: directory\ncreated_at: 2026-08-05T13:10:00.888Z\nmodified_at: 2026-08-05T13:10:00.888Z"}],"tools":[{"type":"function","function":{"name":"ls","description":"List files and directories in a workspace directory","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"default":"/","description":"Directory path to list (default: /)","type":"string"}},"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"read_file","description":"Read file content with optional line range (offset/limit). Prefer targeted reads for large files.","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to read"},"offset":{"default":0,"description":"Line offset to start reading from (0-indexed)","type":"number"},"limit":{"default":2000,"description":"Maximum number of lines to read","type":"number"}},"required":["file_path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"write_file","description":"Write content to a file. Existing files require overwrite=true; parent directories can be created automatically.","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to write"},"content":{"type":"string","description":"Content to write to the file"},"overwrite":{"default":false,"description":"Whether to overwrite the file if it already exists","type":"boolean"},"create_parent_dirs":{"default":true,"description":"Whether to create parent directories if needed","type":"boolean"}},"required":["file_path","content"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"edit_file","description":"Edit a file by replacing exact text.\n\nUsage:\n- Read the file first and copy the exact text for old_string.\n- old_string must be unique unless replace_all=true.\n- Preserve indentation and whitespace exactly.\n- If read_file output includes line numbers, do not include those prefixes in old_string/new_string.","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to edit"},"old_string":{"type":"string","description":"String to be replaced (must match exactly)"},"new_string":{"type":"string","description":"String to replace with"},"replace_all":{"default":false,"description":"Whether to replace all occurrences","type":"boolean"}},"required":["file_path","old_string","new_string"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"delete_file","description":"Delete a file from the filesystem. Use recursive=true to remove a directory","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file to delete"},"recursive":{"default":false,"description":"Whether to delete directories recursively","type":"boolean"}},"required":["file_path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"stat","description":"Get file or directory metadata","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"type":"string","description":"Absolute path to the file or directory"}},"required":["path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"mkdir","description":"Create a directory in the filesystem","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"type":"string","description":"Absolute path to the directory to create"},"recursive":{"default":true,"description":"Whether to create parent directories if needed (default: true)","type":"boolean"}},"required":["path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"rmdir","description":"Remove a directory from the filesystem","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"type":"string","description":"Absolute path to the directory to remove"},"recursive":{"default":false,"description":"Whether to remove contents recursively","type":"boolean"}},"required":["path"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"list_tree","description":"List files and directories recursively with optional depth control","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"default":"/","description":"Base directory path (default: /)","type":"string"},"max_depth":{"default":3,"description":"Maximum depth to traverse (default: 3)","type":"integer","minimum":1,"maximum":9007199254740991}},"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"list_files","description":"List files and directories recursively with optional depth control","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"path":{"default":"/","description":"Base directory path (default: /)","type":"string"},"max_depth":{"default":3,"description":"Maximum depth to traverse (default: 3)","type":"integer","minimum":1,"maximum":9007199254740991}},"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"glob","description":"Find files matching a glob pattern (e.g., '**/*.ts' for all TypeScript files)","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern (e.g., '*.ts', '**/*.ts')"},"path":{"default":"/","description":"Base path to search from (default: /)","type":"string"}},"required":["pattern"],"additionalProperties":false},"strict":false}},{"type":"function","function":{"name":"grep","description":"Search for a regex pattern in files. Returns matching files and line numbers","parameters":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern to search for"},"path":{"default":"/","description":"Base path to search from (default: /)","type":"string"},"glob":{"anyOf":[{"type":"string"},{"type":"null"}],"description":"Optional glob pattern to filter files (e.g., '*.ts')"}},"required":["pattern"],"additionalProperties":false},"strict":false}}],"tool_choice":"auto","stream":true,"stream_options":{"include_usage":true}}},"warnings":[],"messageId":"yFcume9zZcybwcbN"}
+
+data: {"type":"tool-input-start","id":"call_00_Ss4oNw3scombo8SKSyY79591","toolName":"write_file","dynamic":false}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"{"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"file"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"_path"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":": "}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"/"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"output"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"/o"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"1"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"-sm"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"oke"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"-n"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"ote"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":".md"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":", "}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"content"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":": "}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"O"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"1"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":" smoke"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":" hello"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":", "}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"over"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"write"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"\""}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":": "}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"true"}
+
+data: {"type":"tool-input-delta","id":"call_00_Ss4oNw3scombo8SKSyY79591","delta":"}"}
+
+data: {"type":"tool-input-end","id":"call_00_Ss4oNw3scombo8SKSyY79591"}
+
+data: {"type":"tool-call","toolCallId":"call_00_Ss4oNw3scombo8SKSyY79591","toolName":"write_file","input":{"file_path":"/output/o1-smoke-note.md","content":"O1 smoke hello","overwrite":true,"create_parent_dirs":true}}
+
+data: {"type":"tool-approval-request","approvalId":"aitxt-ilSmfiRwHF67JtJApUd3AZzn","toolCall":{"type":"tool-call","toolCallId":"call_00_Ss4oNw3scombo8SKSyY79591","toolName":"write_file","input":{"file_path":"/output/o1-smoke-note.md","content":"O1 smoke hello","overwrite":true,"create_parent_dirs":true}}}
+
+data: {"type":"text-start","id":"0"}
+
+data: {"type":"text-end","id":"0"}
+
+data: {"type":"finish-step","finishReason":"tool-calls","usage":{"inputTokens":2638,"inputTokenDetails":{"cacheReadTokens":2560},"outputTokens":296,"outputTokenDetails":{"reasoningTokens":207},"totalTokens":2934,"reasoningTokens":207,"cachedInputTokens":2560},"providerMetadata":{"openai":{}},"response":{"id":"37cde7dd-bb17-4792-b48a-6da25ce9020c","timestamp":"2026-08-05T13:43:21.000Z","modelId":"deepseek-v4-flash","headers":{"access-control-allow-credentials":"true","cache-control":"no-cache","connection":"keep-alive","content-type":"text/event-stream; charset=utf-8","date":"Wed, 05 Aug 2026 13:43:21 GMT","eo-cache-status":"MISS","eo-log-uuid":"1148085929684211929","server":"openresty","strict-transport-security":"max-age=31536000; includeSubDomains; preload","transfer-encoding":"chunked","vary":"origin, access-control-request-method, access-control-request-headers","x-content-type-options":"nosniff","x-ds-trace-id":"a99846429da8e992ba10551608a3ef11"}}}
+
+data: {"type":"finish","finishReason":"tool-calls","totalUsage":{"inputTokens":4937,"inputTokenDetails":{"cacheReadTokens":4736},"outputTokens":564,"outputTokenDetails":{"reasoningTokens":382},"totalTokens":5501,"reasoningTokens":382,"cachedInputTokens":4736}}
+

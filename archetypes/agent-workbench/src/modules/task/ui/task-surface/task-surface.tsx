@@ -7,6 +7,7 @@ import { Composer } from '../composer/composer'
 import { ContextPanel } from '../context-panel/context-panel'
 import { EmptyHub } from '../empty-hub/empty-hub'
 import { ExecutionStream } from '../execution-stream/execution-stream'
+import type { RuntimeHonestyMode } from '../../runtime/runtime-honesty'
 import { Timeline } from '../timeline/timeline'
 
 export interface TaskSurfaceView {
@@ -36,6 +37,8 @@ export interface TaskSurfaceComposerRuntime {
   onReject?: (requestId: string) => void | Promise<void>
   onProvideInput?: (requestId: string, text: string) => void | Promise<void>
   onRetryTurn?: () => void | Promise<void>
+  /** Runtime honesty copy mode when mode === 'runtime'. */
+  honestyMode?: RuntimeHonestyMode
 }
 
 export interface TaskSurfaceProps {
@@ -61,6 +64,7 @@ export function TaskSurface({
   }
 
   const composerMode = composerRuntime?.mode ?? 'local-sim'
+  const honestyMode = composerRuntime?.honestyMode ?? 'fake'
 
   return (
     <section
@@ -81,6 +85,7 @@ export function TaskSurface({
               onReject={composerRuntime?.onReject}
               onProvideInput={composerRuntime?.onProvideInput}
               onRetryTurn={composerRuntime?.onRetryTurn}
+              honestyMode={honestyMode}
             />
           ) : view.mode === 'stream' && view.stream ? (
             <ExecutionStream
@@ -103,6 +108,7 @@ export function TaskSurface({
             onSubmitText={composerRuntime?.onSubmitText}
             onCancelRun={composerRuntime?.onCancelRun}
             runtimeNotice={composerRuntime?.runtimeNotice}
+            honestyMode={honestyMode}
           />
         </div>
         <ContextPanel

@@ -25,6 +25,10 @@ import type {
 } from '../projection/types'
 import type { CommandAcknowledgement } from '../protocol/commands'
 import type { DeterministicFakeRuntime } from '../runtime/fake-runtime'
+import {
+  runtimeHonestyCopy,
+  type RuntimeHonestyMode,
+} from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
 
@@ -40,6 +44,11 @@ export interface TaskRuntimeControllerOptions {
    * so stream steps apply synchronously (tests + demo).
    */
   autoFlush?: boolean
+  /**
+   * Honesty copy mode for user notices.
+   * Default `fake` for Deterministic Fake; pass `voltagent` for local sidecar.
+   */
+  honestyMode?: RuntimeHonestyMode
 }
 
 export type TaskRuntimeListener = () => void
@@ -81,6 +90,7 @@ export class TaskRuntimeController {
   private readonly projectId: string
   private readonly eventStore: EventStorePort | null
   private readonly autoFlush: boolean
+  private readonly honesty: ReturnType<typeof runtimeHonestyCopy>
   private readonly commands: CommandFactory
   private readonly listeners = new Set<TaskRuntimeListener>()
 
@@ -103,6 +113,7 @@ export class TaskRuntimeController {
     this.projectId = options.projectId
     this.eventStore = options.eventStore ?? null
     this.autoFlush = options.autoFlush ?? true
+    this.honesty = runtimeHonestyCopy(options.honestyMode ?? 'fake')
     const clock: CommandClock = isFakeRuntime(options.runtime)
       ? options.runtime.clock
       : { nowIso: () => new Date().toISOString() }
@@ -257,8 +268,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice =
-          '已提交到 Deterministic Fake Runtime（非生产，不会调用远程 Agent Runtime）'
+        this.notice = this.honesty.submitAccepted
         this.maybeFlush()
       } else {
         this.notice =
@@ -288,7 +298,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = '已请求取消（Deterministic Fake Runtime，非生产）'
+        this.notice = this.honesty.cancelAccepted
         this.maybeFlush()
       } else {
         this.notice =

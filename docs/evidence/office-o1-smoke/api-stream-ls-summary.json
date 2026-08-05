@@ -1,0 +1,412 @@
+[
+  {
+    "type": "start",
+    "messageId": "jYCVIjPwufdwpj9P"
+  },
+  {
+    "type": "start-step"
+  },
+  {
+    "type": "tool-call",
+    "toolCallId": "call_00_3O82DMb6w8joF3TKoy2A5668",
+    "toolName": "ls"
+  },
+  {
+    "type": "tool-result",
+    "toolCallId": "call_00_3O82DMb6w8joF3TKoy2A5668",
+    "toolName": "ls",
+    "output": "/notes/ (directory)\n/output/ (directory)"
+  },
+  {
+    "type": "finish-step",
+    "finishReason": "tool-calls"
+  },
+  {
+    "type": "error",
+    "error": {
+      "name": "AI_APICallError",
+      "url": "https://api.deepseek.com/responses",
+      "requestBodyValues": {
+        "model": "deepseek-chat",
+        "input": [
+          {
+            "role": "system",
+            "content": "You are the local Office Agent Runtime for UI Lab Agent Workbench. Respond in Chinese unless the user writes in another language. Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root. Prefer planning briefly, then read before write. Writes and deletes require user approval. Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar. Authorized workspace root (host path for operators): /Users/zhoujw/develop/github/uilab-admin/output/office-smoke-workspace\n\nYou have access to a workspace filesystem. All file paths must start with a /.\n\n- ls: list files in a directory (requires absolute path)\n- read_file: read a file from the filesystem\n- write_file: write to a file in the filesystem\n- edit_file: edit a file in the filesystem\n- delete_file: delete a file from the filesystem\n- stat: get file or directory metadata\n- mkdir: create a directory\n- rmdir: remove a directory\n- list_tree: list files and directories with depth control\n- list_files: list files and directories with depth control (alias)\n- glob: find files matching a pattern (e.g., \"**/*.ts\")\n- grep: search for text within files\n\nBest practices:\n- Read files before editing or overwriting existing content.\n- Prefer offset/limit in read_file for large files.\n- edit_file old_string must match exactly and be unique.\n- Do not include read_file line number prefixes in edit_file old_string/new_string."
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "请调用 ls 工具列出路径 / 的内容，然后用一两句中文说明看到了 notes 和 output 目录。不要写文件。"
+              }
+            ]
+          },
+          {
+            "type": "item_reference",
+            "id": "3b50789b-8c76-4b20-938f-b512f3e5c9a4"
+          },
+          {
+            "type": "function_call_output",
+            "call_id": "call_00_3O82DMb6w8joF3TKoy2A5668",
+            "output": "/notes/ (directory)\n/output/ (directory)"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "ls",
+            "description": "List files and directories in a workspace directory",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "default": "/",
+                  "description": "Directory path to list (default: /)",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "read_file",
+            "description": "Read file content with optional line range (offset/limit). Prefer targeted reads for large files.",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "type": "string",
+                  "description": "Absolute path to the file to read"
+                },
+                "offset": {
+                  "default": 0,
+                  "description": "Line offset to start reading from (0-indexed)",
+                  "type": "number"
+                },
+                "limit": {
+                  "default": 2000,
+                  "description": "Maximum number of lines to read",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "file_path"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "write_file",
+            "description": "Write content to a file. Existing files require overwrite=true; parent directories can be created automatically.",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "type": "string",
+                  "description": "Absolute path to the file to write"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Content to write to the file"
+                },
+                "overwrite": {
+                  "default": false,
+                  "description": "Whether to overwrite the file if it already exists",
+                  "type": "boolean"
+                },
+                "create_parent_dirs": {
+                  "default": true,
+                  "description": "Whether to create parent directories if needed",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "file_path",
+                "content"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "edit_file",
+            "description": "Edit a file by replacing exact text.\n\nUsage:\n- Read the file first and copy the exact text for old_string.\n- old_string must be unique unless replace_all=true.\n- Preserve indentation and whitespace exactly.\n- If read_file output includes line numbers, do not include those prefixes in old_string/new_string.",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "type": "string",
+                  "description": "Absolute path to the file to edit"
+                },
+                "old_string": {
+                  "type": "string",
+                  "description": "String to be replaced (must match exactly)"
+                },
+                "new_string": {
+                  "type": "string",
+                  "description": "String to replace with"
+                },
+                "replace_all": {
+                  "default": false,
+                  "description": "Whether to replace all occurrences",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "file_path",
+                "old_string",
+                "new_string"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "delete_file",
+            "description": "Delete a file from the filesystem. Use recursive=true to remove a directory",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "type": "string",
+                  "description": "Absolute path to the file to delete"
+                },
+                "recursive": {
+                  "default": false,
+                  "description": "Whether to delete directories recursively",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "file_path"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "stat",
+            "description": "Get file or directory metadata",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path to the file or directory"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "mkdir",
+            "description": "Create a directory in the filesystem",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path to the directory to create"
+                },
+                "recursive": {
+                  "default": true,
+                  "description": "Whether to create parent directories if needed (default: true)",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "rmdir",
+            "description": "Remove a directory from the filesystem",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path to the directory to remove"
+                },
+                "recursive": {
+                  "default": false,
+                  "description": "Whether to remove contents recursively",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "list_tree",
+            "description": "List files and directories recursively with optional depth control",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "default": "/",
+                  "description": "Base directory path (default: /)",
+                  "type": "string"
+                },
+                "max_depth": {
+                  "default": 3,
+                  "description": "Maximum depth to traverse (default: 3)",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "list_files",
+            "description": "List files and directories recursively with optional depth control",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "default": "/",
+                  "description": "Base directory path (default: /)",
+                  "type": "string"
+                },
+                "max_depth": {
+                  "default": 3,
+                  "description": "Maximum depth to traverse (default: 3)",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "glob",
+            "description": "Find files matching a glob pattern (e.g., '**/*.ts' for all TypeScript files)",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Glob pattern (e.g., '*.ts', '**/*.ts')"
+                },
+                "path": {
+                  "default": "/",
+                  "description": "Base path to search from (default: /)",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          },
+          {
+            "type": "function",
+            "name": "grep",
+            "description": "Search for a regex pattern in files. Returns matching files and line numbers",
+            "parameters": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Regex pattern to search for"
+                },
+                "path": {
+                  "default": "/",
+                  "description": "Base path to search from (default: /)",
+                  "type": "string"
+                },
+                "glob": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional glob pattern to filter files (e.g., '*.ts')"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "additionalProperties": false
+            },
+            "strict": false
+          }
+        ],
+        "tool_choice": "auto",
+        "stream": true
+      },
+      "statusCode": 400,
+      "responseHeaders": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "180",
+        "content-type": "application/octet-stream",
+        "date": "Wed, 05 Aug 2026 13:11:02 GMT",
+        "eo-cache-status": "MISS",
+        "eo-log-uuid": "3654406448803345626",
+        "server": "openresty",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "77f8e0b4a4a19f2e3832afbd2c09581a"
+      },
+      "responseBody": "{\"error\":{\"message\":\"No tool call found for tool output with call_id call_00_3O82DMb6w8joF3TKoy2A5668.\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+      "isRetryable": false,
+      "data": {
+        "error": {
+          "message": "No tool call found for tool output with call_id call_00_3O82DMb6w8joF3TKoy2A5668.",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": "invalid_request_error"
+        }
+      }
+    },
+    "message": "{'name': 'AI_APICallError', 'url': 'https://api.deepseek.com/responses', 'requestBodyValues': {'model': 'deepseek-chat', 'input': [{'role': 'system', 'content': 'You are the local Office Agent Runtime for UI Lab Agent Workbench. Respond in Chinese unless the user writes in another language. Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root. Prefer "
+  }
+]

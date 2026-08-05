@@ -163,6 +163,15 @@ export {
 } from './runtime/voltagent/voltagent-runtime-adapter'
 export type { VoltAgentRuntimeAdapterOptions } from './runtime/voltagent/voltagent-runtime-adapter'
 
+export {
+  previewText,
+  runtimeHonestyCopy,
+} from './runtime/runtime-honesty'
+export type {
+  RuntimeHonestyCopy,
+  RuntimeHonestyMode,
+} from './runtime/runtime-honesty'
+
 // --- Phase 4B Kernel: application ---
 export { dispatchCommand, validateCommand } from './application/dispatch'
 

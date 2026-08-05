@@ -34,6 +34,10 @@ import type {
 import { LiveStatusLine } from '../live-status-line'
 import { FileChangeSummaryCard } from '../markdown/file-change-summary-card'
 import { SimpleMarkdown } from '../markdown/simple-markdown'
+import {
+  runtimeHonestyCopy,
+  type RuntimeHonestyMode,
+} from '../../runtime/runtime-honesty'
 import { groupTimelineIntoTurns } from './group-timeline-turns'
 
 export const TIMELINE_FOLD_THRESHOLD = 600
@@ -45,6 +49,8 @@ export interface TimelineProps {
   onProvideInput?: (requestId: string, text: string) => void
   onRetryTurn?: () => void
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
+  /** Honesty mode for banner / HITL copy. Default fake. */
+  honestyMode?: RuntimeHonestyMode
 }
 
 function isActiveRunStatus(status: RunStatus | null): boolean {
@@ -130,6 +136,7 @@ export function Timeline({
   onProvideInput,
   onRetryTurn,
   onFollowModeChange,
+  honestyMode = 'fake',
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -186,6 +193,8 @@ export function Timeline({
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [setMode])
 
+  const honesty = runtimeHonestyCopy(honestyMode)
+
   return (
     <div
       ref={scrollRef}
@@ -196,7 +205,8 @@ export function Timeline({
       data-run-status={readModel.runStatus ?? undefined}
       data-recovery={readModel.recoveryRequired ? 'true' : undefined}
       data-follow-mode={followMode}
-      aria-label='任务时间线（Deterministic Fake Runtime）'
+      data-honesty-mode={honestyMode}
+      aria-label={honesty.timelineAriaLabel}
       onScroll={onScroll}
     >
       <div className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-1'>
@@ -205,7 +215,7 @@ export function Timeline({
           className='mb-2 text-[11px] leading-4 text-muted-foreground/80'
           data-testid='runtime-honesty-banner'
         >
-          Deterministic Fake Runtime · 非生产 · 本地事件投影
+          {honesty.banner}
         </p>
 
         {readModel.recoveryRequired ? (
@@ -213,7 +223,7 @@ export function Timeline({
             className='mb-2 text-[12px] text-amber-600 dark:text-amber-400'
             data-testid='runtime-recovery-notice'
           >
-            检测到事件序号缺口，可尝试对账恢复（Fake reconcile）。
+            {honesty.recovery}
           </p>
         ) : null}
 
@@ -222,7 +232,7 @@ export function Timeline({
             className='mb-2 text-[12px] text-muted-foreground'
             data-testid='runtime-approval-notice'
           >
-            当前 Run 等待审批。请在时间线中选择「允许一次」或「拒绝」（Fake，无真实副作用）。
+            {honesty.waitingApproval}
           </p>
         ) : null}
 

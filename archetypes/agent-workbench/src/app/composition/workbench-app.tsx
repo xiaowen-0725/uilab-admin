@@ -19,6 +19,7 @@ import {
   createDeterministicFakeRuntime,
   createMemoryEventStore,
   createVoltAgentRuntimeAdapter,
+  runtimeHonestyCopy,
   TaskRuntimeController,
   useCapturePlayback,
   useTaskRuntime,
@@ -110,6 +111,9 @@ export function WorkbenchApp() {
       ? voltRuntimeRef.current
       : fakeRuntimeRef.current
 
+  const honestyMode: 'fake' | 'voltagent' =
+    RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake'
+
   const controllerRef = useRef<TaskRuntimeController | null>(null)
   if (controllerRef.current == null) {
     controllerRef.current = new TaskRuntimeController({
@@ -117,6 +121,7 @@ export function WorkbenchApp() {
       projectId,
       eventStore: storeRef.current,
       seed: 'workbench',
+      honestyMode,
       /** Demo: wall clock drives Fake steps. Tests: autoFlush instant. VoltAgent ignores. */
       autoFlush: INSTANT_DEMO && RUNTIME_ADAPTER_MODE === 'fake',
     })
@@ -211,6 +216,7 @@ export function WorkbenchApp() {
       isRuntimePath
         ? {
             mode: 'runtime' as const,
+            honestyMode,
             runStatus: runtime.runStatus,
             onSubmitText: runtime.submitText,
             onCancelRun: runtime.cancelActiveRun,
@@ -228,6 +234,7 @@ export function WorkbenchApp() {
           },
     [
       isRuntimePath,
+      honestyMode,
       runtime.runStatus,
       runtime.submitText,
       runtime.cancelActiveRun,
@@ -279,15 +286,14 @@ export function WorkbenchApp() {
 }
 
 function runtimeContext() {
+  const honesty = runtimeHonestyCopy(
+    RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
+  )
   return [
     {
       id: 'env',
       title: '环境',
-      items: [
-        'Deterministic Fake Runtime',
-        '非生产',
-        '无远程 Agent Runtime',
-      ],
+      items: honesty.contextItems,
     },
   ]
 }
