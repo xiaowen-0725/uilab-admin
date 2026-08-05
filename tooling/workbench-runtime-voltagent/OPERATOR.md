@@ -70,7 +70,7 @@ note=local VoltAgent Office Runtime …; not remote production cluster
 ### 1.4 UI 演示路径
 
 1. 打开 Workbench → **新对话**（empty 路径，走 Runtime 而非 capture seed）。
-2. 确认 Timeline / Context 披露为 **本机 VoltAgent Office Runtime · 非远程生产集群**（不是 Fake）。
+2. 确认 Timeline / Context 披露为 **本机 VoltAgent Runtime · 非远程生产集群**（不是 Fake；Office/minimal 由侧车 `AGENT_PROFILE` 决定）。
 3. **读：**「列出工作区根目录」→ 应出现 `ls` 工具行。
 4. **Skill：**「用会议纪要 skill 整理：……」→ 可能 `workspace_*_skill*` 后写入 `/output/meeting-notes/…`（写文件需审批）。
 5. **写审批：** 时间线出现审批 →「允许一次」→ 文件落在 `WORKSPACE_ROOT`。

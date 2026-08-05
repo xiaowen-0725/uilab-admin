@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { after, describe, it } from 'node:test'
@@ -79,6 +79,24 @@ describe('resolveAgentMemory', () => {
     })
     assert.equal(memoryKind, 'disabled')
     assert.equal(memory, false)
+  })
+
+  it('refuses default libsql dir when .voltagent is a symlink outside workspace', async () => {
+    const base = await mkdtemp(path.join(os.tmpdir(), 'wb-o5-mem-sym-'))
+    tempRoots.push(base)
+    const workspaceRoot = path.join(base, 'workspace')
+    const outside = path.join(base, 'outside-voltagent')
+    await mkdir(workspaceRoot, { recursive: true })
+    await mkdir(outside, { recursive: true })
+    await symlink(outside, path.join(workspaceRoot, '.voltagent'))
+
+    await assert.rejects(
+      () => resolveAgentMemory('office', {}, workspaceRoot),
+      (err: Error) => {
+        assert.match(err.message, /路径越界|符号链接/)
+        return true
+      },
+    )
   })
 })
 

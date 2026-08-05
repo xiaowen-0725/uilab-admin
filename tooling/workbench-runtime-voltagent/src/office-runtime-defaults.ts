@@ -4,7 +4,6 @@
  * Honesty: local sidecar only; not a remote multi-tenant production Runtime.
  */
 
-import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import {
   InMemoryStorageAdapter,
@@ -13,6 +12,7 @@ import {
 } from '@voltagent/core'
 import { LibSQLMemoryAdapter } from '@voltagent/libsql'
 import type { AgentProfile, ProfileEnv } from './profile.js'
+import { ensureDirWithinRoot } from './workspace-root.js'
 
 /** Spec O5 recommended band is 80–100; default mid of that band. */
 export const DEFAULT_OFFICE_MAX_STEPS = 80
@@ -101,17 +101,25 @@ export async function resolveAgentMemory(
     }
   }
 
-  // libsql (default for office)
+  // libsql (default for office) — default path must stay inside workspace root
+  // (no symlink escape through `.voltagent` → outside).
+  const explicitUrl = env.VOLTAGENT_MEMORY_URL?.trim()
+  if (explicitUrl) {
+    return {
+      memory: new Memory({
+        storage: new LibSQLMemoryAdapter({ url: explicitUrl }),
+      }),
+      memoryKind: 'libsql',
+    }
+  }
+
   const root = workspaceRoot ? path.resolve(workspaceRoot) : process.cwd()
-  const defaultFile = path.join(root, '.voltagent', 'memory.db')
-  await mkdir(path.dirname(defaultFile), { recursive: true })
-  const url =
-    env.VOLTAGENT_MEMORY_URL?.trim() ||
-    `file:${defaultFile}`
+  const memDir = await ensureDirWithinRoot(root, '.voltagent')
+  const defaultFile = path.join(memDir, 'memory.db')
 
   return {
     memory: new Memory({
-      storage: new LibSQLMemoryAdapter({ url }),
+      storage: new LibSQLMemoryAdapter({ url: `file:${defaultFile}` }),
     }),
     memoryKind: 'libsql',
   }

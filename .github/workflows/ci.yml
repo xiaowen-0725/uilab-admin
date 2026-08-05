@@ -37,10 +37,13 @@ jobs:
       - name: Run Prettier check
         run: pnpm format:check
 
+      - name: Typecheck (includes Workbench sidecar)
+        run: pnpm typecheck
+
       - name: Install browsers
         run: pnpm test:browser:install
 
-      - name: Run tests
+      - name: Run tests (includes Workbench sidecar)
         run: pnpm test
 
       - name: Build the project

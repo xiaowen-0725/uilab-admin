@@ -62,38 +62,85 @@ type McpHost = {
 }
 
 /**
- * Fail-closed side-effect policy for MCP tools (O4 / Codex P0).
+ * Fail-closed MCP approval (second-pass Codex P0).
  *
- * Only **explicit read-only** name patterns run without approval.
- * Everything else (write/create/publish/add/upsert/unknown) needs HITL.
+ * Default: **every** MCP tool needs HITL approval.
+ * Free only if the normalized name is on an **exact** read-only allowlist
+ * (no substring / compound matching — blocks get_and_set, mark_as_read, …).
+ *
+ * Extra names: env `MCP_READ_ONLY_TOOL_NAMES=a,b,c` (merged into allowlist).
  */
-export function isReadOnlyMcpToolName(name: string): boolean {
-  const n = name.toLowerCase()
-  // Compound mutators that embed a read token (get_or_create, list_and_delete, …)
-  if (
-    /(create|write|update|delete|remove|edit|patch|append|publish|upsert|insert|schedule|send|post|put|modify|cancel)/.test(
-      n,
-    )
-  ) {
-    return false
+export function normalizeMcpToolName(name: string): string {
+  return name.trim().toLowerCase().replace(/[-\s]+/g, '_')
+}
+
+/** Exact allowlist of pure read-only tool names (normalized). */
+export const DEFAULT_MCP_READ_ONLY_ALLOWLIST: ReadonlySet<string> = new Set([
+  // common pure-read names
+  'read',
+  'read_document',
+  'read_file',
+  'read_event',
+  'docs_read_document',
+  'docs_read_item',
+  'get_document',
+  'get_event',
+  'list',
+  'list_documents',
+  'list_calendars',
+  'list_events',
+  'list_files',
+  'search',
+  'search_wiki',
+  'search_documents',
+  'search_events',
+  'query',
+  'query_calendar',
+  'fetch_document',
+  'fetch_event',
+  'find_document',
+  'show_document',
+  'lookup_document',
+  'describe_document',
+  'stat',
+  'count',
+  // test host mocks
+  'calendar_read_item',
+])
+
+export function resolveMcpReadOnlyAllowlist(
+  env: ProfileEnv = process.env,
+): Set<string> {
+  const set = new Set(DEFAULT_MCP_READ_ONLY_ALLOWLIST)
+  for (const raw of parseArgs(env.MCP_READ_ONLY_TOOL_NAMES) ?? []) {
+    const n = normalizeMcpToolName(raw)
+    if (n) set.add(n)
   }
-  return /(^|[_-])(read|list|get|search|query|fetch|find|show|lookup|describe|stat|count)([_-]|$)/.test(
-    n,
-  )
+  return set
 }
 
-/** @deprecated use !isReadOnlyMcpToolName — kept for call sites / tests */
-export function isSideEffectMcpToolName(name: string): boolean {
-  return !isReadOnlyMcpToolName(name)
+export function isReadOnlyMcpToolName(
+  name: string,
+  allowlist: ReadonlySet<string> = DEFAULT_MCP_READ_ONLY_ALLOWLIST,
+): boolean {
+  return allowlist.has(normalizeMcpToolName(name))
 }
 
-/** Attach needsApproval to every non-read-only MCP tool (mutates tool objects). */
+/** True when tool must request HITL (default yes). */
+export function isSideEffectMcpToolName(
+  name: string,
+  allowlist: ReadonlySet<string> = DEFAULT_MCP_READ_ONLY_ALLOWLIST,
+): boolean {
+  return !isReadOnlyMcpToolName(name, allowlist)
+}
+
+/** Attach needsApproval to every non-allowlisted MCP tool (mutates tool objects). */
 export function applyMcpNeedsApproval(
   tools: Tool<any, any>[],
+  allowlist: ReadonlySet<string> = DEFAULT_MCP_READ_ONLY_ALLOWLIST,
 ): Tool<any, any>[] {
   for (const tool of tools) {
-    if (!isReadOnlyMcpToolName(tool.name)) {
-      // VoltAgent Tool exposes needsApproval on the instance.
+    if (!isReadOnlyMcpToolName(tool.name, allowlist)) {
       ;(tool as { needsApproval?: boolean }).needsApproval = true
     }
   }
@@ -218,13 +265,38 @@ const MCP_CONNECTOR_DEFAULT_SECRET_KEYS: Record<McpConnectorId, readonly string[
   }
 
 /**
+ * True for LLM / model-provider secrets that must never reach stdio MCP children,
+ * even when listed in MCP_*_CHILD_ENV_KEYS.
+ */
+export function isModelProviderSecretKey(key: string): boolean {
+  const k = key.trim().toUpperCase()
+  if (!k) return false
+  // Connector app credentials (Feishu/Lark) are not LLM keys.
+  if (/^(FEISHU|LARK)_/.test(k)) return false
+  // Calendar path credential — connector-scoped, not an LLM API key string.
+  if (k === 'GOOGLE_APPLICATION_CREDENTIALS' || k === 'GOOGLE_CALENDAR_ID') {
+    return false
+  }
+  if (/_API_KEY$|_APIKEY$/.test(k)) return true
+  if (
+    /(OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GROQ|MISTRAL|COHERE|TOGETHER|FIREWORKS|XAI|VOLTAGENT|AZURE_OPENAI|GOOGLE_AI|VERTEX|CLAUDE)/.test(
+      k,
+    ) &&
+    /(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/.test(k)
+  ) {
+    return true
+  }
+  return false
+}
+
+/**
  * Build env for a stdio MCP child.
  * - Base: PATH/HOME/…
  * - Connector defaults (docs vs calendar secrets separated)
  * - Explicit: `MCP_DOCS_CHILD_ENV_KEYS` / `MCP_CALENDAR_CHILD_ENV_KEYS`
- * - Shared non-secret extras only: `MCP_CHILD_ENV_KEYS` (never model API keys by default)
+ * - Shared extras: `MCP_CHILD_ENV_KEYS`
  *
- * Never auto-forwards DEEPSEEK_API_KEY / OPENAI_API_KEY.
+ * Model provider secrets are hard-denied even if explicitly listed.
  */
 export function filterProcessEnvForChild(
   env: ProfileEnv,
@@ -239,22 +311,13 @@ export function filterProcessEnvForChild(
   for (const key of parseArgs(env[`MCP_${upper}_CHILD_ENV_KEYS`]) ?? []) {
     allow.add(key)
   }
-  // Shared extras — operator-controlled; still never force API keys.
   for (const key of parseArgs(env.MCP_CHILD_ENV_KEYS) ?? []) {
     allow.add(key)
   }
 
-  // Hard deny model provider secrets even if listed by mistake.
-  const deny = new Set([
-    'DEEPSEEK_API_KEY',
-    'OPENAI_API_KEY',
-    'VOLTAGENT_API_KEY',
-    'ANTHROPIC_API_KEY',
-  ])
-
   const out: Record<string, string> = {}
   for (const key of allow) {
-    if (deny.has(key)) continue
+    if (isModelProviderSecretKey(key)) continue
     const v = env[key]
     if (typeof v === 'string' && v.length > 0) out[key] = v
   }
@@ -347,7 +410,8 @@ export async function loadOfficeMcpTools(
         })
         continue
       }
-      const approved = applyMcpNeedsApproval(tools)
+      const allowlist = resolveMcpReadOnlyAllowlist(env)
+      const approved = applyMcpNeedsApproval(tools, allowlist)
       const names = approved.map((t) => t.name)
       allTools.push(...approved)
       allNames.push(...names)

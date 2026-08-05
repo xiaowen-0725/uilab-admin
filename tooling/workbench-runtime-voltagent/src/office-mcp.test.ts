@@ -10,8 +10,8 @@ import {
   resolveMcpConnector,
 } from './office-mcp.js'
 
-describe('isSideEffectMcpToolName (fail-closed)', () => {
-  it('marks write/create/delete/publish/add as side effects', () => {
+describe('isSideEffectMcpToolName (exact allowlist fail-closed)', () => {
+  it('requires approval for mutators and compound unknown names', () => {
     assert.equal(isSideEffectMcpToolName('docs_write_document'), true)
     assert.equal(isSideEffectMcpToolName('create_event'), true)
     assert.equal(isSideEffectMcpToolName('calendar_delete_event'), true)
@@ -20,9 +20,13 @@ describe('isSideEffectMcpToolName (fail-closed)', () => {
     assert.equal(isSideEffectMcpToolName('docs_publish_document'), true)
     assert.equal(isSideEffectMcpToolName('docs_get_or_create_document'), true)
     assert.equal(isSideEffectMcpToolName('mystery_cloud_action'), true)
+    // Second-pass P0: read token inside compound mutator must NOT free the tool
+    assert.equal(isSideEffectMcpToolName('calendar_get_and_set_event'), true)
+    assert.equal(isSideEffectMcpToolName('docs_mark_as_read'), true)
+    assert.equal(isSideEffectMcpToolName('docs_list_and_archive_items'), true)
   })
 
-  it('keeps pure read/list/search free', () => {
+  it('frees only exact allowlisted pure-read names', () => {
     assert.equal(isSideEffectMcpToolName('docs_read_document'), false)
     assert.equal(isSideEffectMcpToolName('list_calendars'), false)
     assert.equal(isSideEffectMcpToolName('search_wiki'), false)
@@ -205,13 +209,15 @@ describe('filterProcessEnvForChild (connector-scoped)', () => {
       {
         PATH: '/bin',
         CUSTOM_DOCS_TOKEN: 'tok',
-        MCP_DOCS_CHILD_ENV_KEYS: 'CUSTOM_DOCS_TOKEN,DEEPSEEK_API_KEY',
+        MCP_DOCS_CHILD_ENV_KEYS: 'CUSTOM_DOCS_TOKEN,DEEPSEEK_API_KEY,GEMINI_API_KEY',
         DEEPSEEK_API_KEY: 'sk-nope',
+        GEMINI_API_KEY: 'gem-nope',
       },
       'docs',
     )
     assert.equal(docsEnv!.CUSTOM_DOCS_TOKEN, 'tok')
     assert.equal(docsEnv!.DEEPSEEK_API_KEY, undefined)
+    assert.equal(docsEnv!.GEMINI_API_KEY, undefined)
   })
 })
 

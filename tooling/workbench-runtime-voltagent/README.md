@@ -134,7 +134,7 @@ stdio 子进程 env：**按连接器隔离**（docs 不会自动拿到 `GOOGLE_A
 Adapter 已将 `conversationId` 对齐 `taskId`，同 Task 多轮可续上下文。  
 侧车启动日志打印 `maxSteps` / `summarization` / `memory`。
 
-**披露：** UI 与侧车均标明「本机 VoltAgent Office Runtime · 非远程生产集群」；Fake 路径文案不变。
+**披露：** UI 标明「本机 VoltAgent Runtime · 非远程生产集群」（profile 由侧车 `AGENT_PROFILE` 决定）；侧车 log 在 office 时注明 Office；Fake 路径文案不变。
 
 ### Office Skills（O3）
 
