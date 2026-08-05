@@ -7,7 +7,7 @@ Local **Agent Runtime** process for `@uilab/agent-workbench`’s `VoltAgentRunti
 ## Requirements
 
 - Node 20+
-- Model API key for the configured provider (default OpenAI via `@ai-sdk/openai`)
+- Model API key（默认 **DeepSeek** OpenAI 兼容：`https://api.deepseek.com`）
 
 ## Setup
 
@@ -15,19 +15,22 @@ Local **Agent Runtime** process for `@uilab/agent-workbench`’s `VoltAgentRunti
 # from monorepo root
 pnpm install
 cd tooling/workbench-runtime-voltagent
-pnpm install   # if workspace does not hoist this package yet
+cp .env.example .env   # 填入 DEEPSEEK_API_KEY（.env 已被 gitignore）
 ```
 
-Add to root `pnpm-workspace.yaml` if needed (already under `tooling/*`).
-
-## Run
+## Run（DeepSeek）
 
 ```bash
-export OPENAI_API_KEY=sk-...
-export WORKSPACE_ROOT=/absolute/path/to/uilab-admin   # tool read/write root
-export PORT=3141
+# .env 内配置，例如：
+# DEEPSEEK_API_KEY=sk-...
+# OPENAI_BASE_URL=https://api.deepseek.com
+# VOLTAGENT_MODEL=deepseek-chat
+# WORKSPACE_ROOT=/absolute/path/to/uilab-admin
+
 pnpm --filter @uilab/workbench-runtime-voltagent dev
 ```
+
+可选模型：`deepseek-chat`、`deepseek-reasoner`、`deepseek-v4-flash`、`deepseek-v4-pro`。
 
 Server default: `http://127.0.0.1:3141`  
 Agent id: `workbench`
