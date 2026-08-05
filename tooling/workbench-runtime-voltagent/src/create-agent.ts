@@ -65,12 +65,14 @@ export type WorkbenchAgentBundle = {
 export function officeFilesystemToolConfig() {
   return {
     filesystem: {
+      // Fail closed for mutators; explicit reads stay free.
       defaults: { needsApproval: false },
       tools: {
         write_file: { needsApproval: true },
         edit_file: { needsApproval: true, requireReadBeforeWrite: true },
         delete_file: { needsApproval: true, requireReadBeforeWrite: true },
         rmdir: { needsApproval: true },
+        mkdir: { needsApproval: true },
       },
     },
   }

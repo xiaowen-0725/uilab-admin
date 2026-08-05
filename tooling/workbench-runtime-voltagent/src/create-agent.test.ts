@@ -37,13 +37,14 @@ after(async () => {
 })
 
 describe('officeFilesystemToolConfig', () => {
-  it('requires approval for write/edit/delete, not for default reads', () => {
+  it('requires approval for write/edit/delete/mkdir, not for default reads', () => {
     const cfg = officeFilesystemToolConfig()
     assert.equal(cfg.filesystem.defaults.needsApproval, false)
     assert.equal(cfg.filesystem.tools.write_file.needsApproval, true)
     assert.equal(cfg.filesystem.tools.edit_file.needsApproval, true)
     assert.equal(cfg.filesystem.tools.delete_file.needsApproval, true)
     assert.equal(cfg.filesystem.tools.rmdir.needsApproval, true)
+    assert.equal(cfg.filesystem.tools.mkdir.needsApproval, true)
   })
 })
 

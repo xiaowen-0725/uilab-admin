@@ -9,15 +9,19 @@ import {
   resolveMcpConnector,
 } from './office-mcp.js'
 
-describe('isSideEffectMcpToolName', () => {
-  it('marks write/create/delete as side effects', () => {
+describe('isSideEffectMcpToolName (fail-closed)', () => {
+  it('marks write/create/delete/publish/add as side effects', () => {
     assert.equal(isSideEffectMcpToolName('docs_write_document'), true)
     assert.equal(isSideEffectMcpToolName('create_event'), true)
     assert.equal(isSideEffectMcpToolName('calendar_delete_event'), true)
     assert.equal(isSideEffectMcpToolName('update_calendar_event'), true)
+    assert.equal(isSideEffectMcpToolName('calendar_add_event'), true)
+    assert.equal(isSideEffectMcpToolName('docs_publish_document'), true)
+    assert.equal(isSideEffectMcpToolName('docs_get_or_create_document'), true)
+    assert.equal(isSideEffectMcpToolName('mystery_cloud_action'), true)
   })
 
-  it('keeps read/list/search free', () => {
+  it('keeps pure read/list/search free', () => {
     assert.equal(isSideEffectMcpToolName('docs_read_document'), false)
     assert.equal(isSideEffectMcpToolName('list_calendars'), false)
     assert.equal(isSideEffectMcpToolName('search_wiki'), false)
@@ -146,6 +150,20 @@ describe('loadOfficeMcpTools', () => {
       result.statuses.find((s) => s.id === 'calendar')?.status,
       'disabled',
     )
+    await result.disconnect()
+  })
+
+  it('treats empty tool list as failed (not ok(0))', async () => {
+    const result = await loadOfficeMcpTools(
+      { MCP_DOCS_URL: 'https://mcp.example/docs' },
+      {
+        host: {
+          getTools: async () => ({ tools: [], disconnect: async () => {} }),
+        },
+      },
+    )
+    assert.equal(result.statuses.find((s) => s.id === 'docs')?.status, 'failed')
+    assert.equal(result.tools.length, 0)
     await result.disconnect()
   })
 })

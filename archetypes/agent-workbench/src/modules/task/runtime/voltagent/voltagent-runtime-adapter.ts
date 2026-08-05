@@ -119,8 +119,11 @@ export function normalizeWorkspaceToolInput(input: unknown): unknown {
   return rec
 }
 
-/** Fallback tools when sidecar metadata cannot be loaded (minimal DIY). */
-const FALLBACK_TOOLS = ['read_file', 'write_file', 'run_command'] as const
+/**
+ * When sidecar metadata cannot be loaded, return **no** tools rather than
+ * inventing DIY/minimal names (honesty: do not claim run_command on office).
+ */
+const FALLBACK_TOOLS: readonly string[] = []
 
 export class VoltAgentRuntimeAdapter implements RuntimePort {
   private readonly baseUrl: string

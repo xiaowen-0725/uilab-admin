@@ -9,17 +9,17 @@ describe('runtimeHonestyCopy', () => {
     expect(c.waitingApproval).toMatch(/Fake/)
   })
 
-  it('voltagent copy must not claim Fake and discloses local Office Runtime', () => {
+  it('voltagent copy must not claim Fake and discloses local sidecar Runtime', () => {
     const c = runtimeHonestyCopy('voltagent')
-    expect(c.banner).toMatch(/本机 VoltAgent Office/)
+    expect(c.banner).toMatch(/本机 VoltAgent/)
     expect(c.banner).toMatch(/非远程生产集群/)
     expect(c.banner).not.toMatch(/Fake/)
     expect(c.submitAccepted).not.toMatch(/Fake/)
-    expect(c.waitingApproval).toMatch(/本机办公侧车|本机侧车/)
-    expect(c.approvalApproved).toMatch(/本机办公侧车|本机侧车/)
+    expect(c.waitingApproval).toMatch(/本机侧车/)
+    expect(c.approvalApproved).toMatch(/本机侧车/)
     expect(c.approvalApproved).not.toMatch(/Fake/)
     expect(c.approvalRejected).not.toMatch(/Fake/)
-    expect(c.contextItems.some((i) => /VoltAgent Office/.test(i))).toBe(true)
+    expect(c.contextItems.some((i) => /VoltAgent/.test(i))).toBe(true)
     expect(c.contextItems.some((i) => /非远程生产集群/.test(i))).toBe(true)
   })
 

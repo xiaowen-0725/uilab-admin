@@ -62,30 +62,37 @@ type McpHost = {
 }
 
 /**
- * Heuristic: write / mutate cloud docs or calendar need HITL approval.
- * Read/list/search stay free.
+ * Fail-closed side-effect policy for MCP tools (O4 / Codex P0).
+ *
+ * Only **explicit read-only** name patterns run without approval.
+ * Everything else (write/create/publish/add/upsert/unknown) needs HITL.
  */
-export function isSideEffectMcpToolName(name: string): boolean {
+export function isReadOnlyMcpToolName(name: string): boolean {
   const n = name.toLowerCase()
-  // Read-like wins when both match (e.g. list_writable_calendars).
+  // Compound mutators that embed a read token (get_or_create, list_and_delete, …)
   if (
-    /(^|[_-])(read|list|get|search|query|fetch|find|show|lookup|describe|stat)([_-]|$)/.test(
+    /(create|write|update|delete|remove|edit|patch|append|publish|upsert|insert|schedule|send|post|put|modify|cancel)/.test(
       n,
     )
   ) {
     return false
   }
-  return /(^|[_-])(write|create|update|delete|remove|edit|patch|append|send|post|put|modify|insert|schedule|cancel_event|add_)([_-]|$)/.test(
+  return /(^|[_-])(read|list|get|search|query|fetch|find|show|lookup|describe|stat|count)([_-]|$)/.test(
     n,
   )
 }
 
-/** Attach needsApproval to side-effect MCP tools (mutates tool objects). */
+/** @deprecated use !isReadOnlyMcpToolName — kept for call sites / tests */
+export function isSideEffectMcpToolName(name: string): boolean {
+  return !isReadOnlyMcpToolName(name)
+}
+
+/** Attach needsApproval to every non-read-only MCP tool (mutates tool objects). */
 export function applyMcpNeedsApproval(
   tools: Tool<any, any>[],
 ): Tool<any, any>[] {
   for (const tool of tools) {
-    if (isSideEffectMcpToolName(tool.name)) {
+    if (!isReadOnlyMcpToolName(tool.name)) {
       // VoltAgent Tool exposes needsApproval on the instance.
       ;(tool as { needsApproval?: boolean }).needsApproval = true
     }
@@ -275,6 +282,22 @@ export async function loadOfficeMcpTools(
       const { tools, disconnect } = await host.getTools({
         [id]: conf.server,
       })
+      // Real SDK may return [] without throwing on soft failure — treat as failed.
+      if (tools.length === 0) {
+        try {
+          await disconnect()
+        } catch {
+          // ignore
+        }
+        statuses.push({
+          id,
+          status: 'failed',
+          reason: `MCP ${id} 已配置但未返回任何工具（连接可能失败或服务为空）`,
+          toolNames: [],
+          transport: conf.transport,
+        })
+        continue
+      }
       const approved = applyMcpNeedsApproval(tools)
       const names = approved.map((t) => t.name)
       allTools.push(...approved)
