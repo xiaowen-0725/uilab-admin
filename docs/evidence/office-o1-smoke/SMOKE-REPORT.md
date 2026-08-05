@@ -140,3 +140,21 @@ Artifacts: `api-stream-ls-v4flash.sse`, `api-stream-ls-v4flash-summary.json`
 | Renderer / RuntimePort only | **Pass** |
 | Unit tests + Fake no regression | **Pass** (135 tests) |
 | Honesty voltagent copy | **Pass** (P1) |
+
+---
+
+## Approve → write resume (fixed)
+
+**Fix:** `VoltAgentRuntimeAdapter` stores pending `tool-approval-request`, then on approve resumes with UIMessage:
+
+`tool-<name>` part `state: approval-responded` + `approval: { id, approved }`.
+
+Also: path normalization + office instructions force virtual paths.
+
+### Evidence
+- Disk: `output/office-smoke-workspace/output/ui-final-write.md` = `ui-final-ok`
+- UI: `08-write-waiting-approval.png`, `09-write-after-approve-resume.png`
+- Timeline: 已允许 → 已编辑 ui-final-write.md → 已完成写入
+- Unit: `respondToApproval resumes stream with approval-responded UIMessage`
+- Workbench tests: **138** green
+

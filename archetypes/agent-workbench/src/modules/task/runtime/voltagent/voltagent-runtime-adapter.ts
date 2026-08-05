@@ -37,14 +37,77 @@ export interface VoltAgentRuntimeAdapterOptions {
   nowIso?: () => string
 }
 
+type PendingApproval = {
+  approvalId: string
+  toolCallId: string
+  toolName: string
+  input: unknown
+  /** User prompt that started this turn (for resume UIMessages). */
+  userText: string
+  runId: string
+  turnId: string
+}
+
 type TaskStreamState = {
   nextSequence: number
   activeAbort: AbortController | null
   lastRunId: string | null
   lastTurnId: string | null
+  /** Last user text for this task (approval resume). */
+  lastUserText: string | null
+  /** Pending tool approvals keyed by approvalId. */
+  pendingApprovals: Map<string, PendingApproval>
 }
 
 type Listener = (event: RuntimeSubscriptionEvent) => void
+
+/** VoltAgent/AI SDK UIMessage tool part for approval resume. */
+type UiToolPart = {
+  type: string
+  toolCallId: string
+  toolName: string
+  state: 'approval-responded'
+  input: unknown
+  approval: { id: string; approved: boolean; reason?: string }
+}
+
+type StreamInput =
+  | string
+  | Array<{
+      id: string
+      role: 'user' | 'assistant'
+      parts: Array<{ type: string; text?: string } | UiToolPart>
+    }>
+
+/**
+ * Workspace tools use virtual paths (start with `/` under the authorized root).
+ * Models sometimes emit host absolute paths; map known shapes back to virtual
+ * so resume executes against the real workspace file.
+ */
+export function normalizeWorkspaceToolInput(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null) return input
+  const rec = { ...(input as Record<string, unknown>) }
+  for (const key of ['file_path', 'path', 'filePath'] as const) {
+    const v = rec[key]
+    if (typeof v !== 'string' || v.length === 0) continue
+    // Already a short virtual path — keep.
+    if (/^\/(output|notes|skills)(\/|$)/i.test(v) && !v.includes('/Users/')) {
+      continue
+    }
+    // Host absolute path: take the last /output/ or /notes/ segment.
+    const idx = Math.max(v.lastIndexOf('/output/'), v.lastIndexOf('/notes/'))
+    if (idx >= 0) {
+      rec[key] = v.slice(idx)
+      continue
+    }
+    // Fallback: basename under virtual /output/
+    if (v.includes('/Users/') || v.includes('/home/') || /^[A-Za-z]:\\/.test(v)) {
+      const base = v.split(/[/\\]/).filter(Boolean).pop()
+      if (base) rec[key] = `/output/${base}`
+    }
+  }
+  return rec
+}
 
 export class VoltAgentRuntimeAdapter implements RuntimePort {
   private readonly baseUrl: string
@@ -185,6 +248,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         activeAbort: null,
         lastRunId: null,
         lastTurnId: null,
+        lastUserText: null,
+        pendingApprovals: new Map(),
       }
       this.taskState.set(taskId, state)
     }
@@ -253,6 +318,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const { turnId, runId } = this.allocateIds(taskId, command)
     state.lastRunId = runId
     state.lastTurnId = turnId
+    state.lastUserText = command.inputText
+    state.pendingApprovals.clear()
     state.activeAbort = new AbortController()
     const abort = state.activeAbort
 
@@ -260,13 +327,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     const ack = accepted(command.commandId, this.nowIso())
 
-    // Fire-and-forget stream; errors emit run.failed.
     void this.streamAgent({
       taskId,
       turnId,
       runId,
-      inputText: command.inputText,
+      input: command.inputText,
       signal: abort.signal,
+      completeIfNoTerminal: true,
     }).finally(() => {
       if (state.activeAbort === abort) state.activeAbort = null
     })
@@ -279,13 +346,19 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     taskId: string,
   ): Promise<CommandAcknowledgement> {
     const state = this.taskState.get(taskId)
-    if (!state?.activeAbort) {
+    if (!state) {
+      return rejected(commandId, 'no_active_run', '没有可取消的 Run')
+    }
+    if (!state.activeAbort && state.pendingApprovals.size === 0) {
       return rejected(commandId, 'no_active_run', '没有可取消的 Run')
     }
     const runId = state.lastRunId ?? `run-${taskId}`
     const turnId = state.lastTurnId ?? undefined
-    state.activeAbort.abort('user_cancel')
-    state.activeAbort = null
+    if (state.activeAbort) {
+      state.activeAbort.abort('user_cancel')
+      state.activeAbort = null
+    }
+    state.pendingApprovals.clear()
 
     const occurredAt = this.nowIso()
     this.emitEnvelope(taskId, {
@@ -322,41 +395,16 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   private async handleApproval(
     command: RespondToApprovalCommand,
   ): Promise<CommandAcknowledgement> {
-    // Sidecar may expose approval via POST; best-effort notify + local resolve event.
     const taskId = command.taskId
     const state = this.ensureTask(taskId)
-    const runId = command.runId ?? state.lastRunId ?? `run-${taskId}`
-    const turnId = command.turnId ?? state.lastTurnId ?? undefined
+    const approvalId = command.payload.requestId
+    const pending = state.pendingApprovals.get(approvalId)
+    const runId =
+      command.runId ?? pending?.runId ?? state.lastRunId ?? `run-${taskId}`
+    const turnId =
+      command.turnId ?? pending?.turnId ?? state.lastTurnId ?? `turn-${taskId}`
     const occurredAt = this.nowIso()
-
-    // Best-effort notify. VoltAgent server-hono has no dedicated /approvals route;
-    // full tool resume uses conversation message parts (tool-approval-response).
-    // We still emit approval.resolved so Timeline HITL unblocks; a follow-up
-    // submitTurn may re-drive the model for write completion.
-    try {
-      const approved = command.payload.decision === 'approved'
-      await this.fetchImpl(
-        `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}/approvals`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            approvalId: command.payload.requestId,
-            requestId: command.payload.requestId,
-            approved,
-            reason: command.payload.reason,
-            options: {
-              memory: {
-                userId: this.userId,
-                conversationId: taskId,
-              },
-            },
-          }),
-        },
-      )
-    } catch {
-      // Local resolve still emitted so UI unblocks when sidecar uses client-driven approval.
-    }
+    const approved = command.payload.decision === 'approved'
 
     this.emitEnvelope(taskId, {
       eventId: `va-apr-${runId}-${state.nextSequence}`,
@@ -370,25 +418,118 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       occurredAt,
       receivedAt: occurredAt,
       payload: {
-        requestId: command.payload.requestId,
+        requestId: approvalId,
         decision: command.payload.decision,
         reason: command.payload.reason,
       },
     })
     state.nextSequence += 1
+
+    if (!pending) {
+      return accepted(command.commandId, this.nowIso())
+    }
+
+    state.pendingApprovals.delete(approvalId)
+    if (state.activeAbort) {
+      return rejected(
+        command.commandId,
+        'task_busy',
+        '当前任务仍有进行中的流，请稍后再批准',
+      )
+    }
+
+    // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
+    const userText = pending.userText || state.lastUserText || ''
+    const toolPart: UiToolPart = {
+      type: `tool-${pending.toolName}`,
+      toolCallId: pending.toolCallId,
+      toolName: pending.toolName,
+      state: 'approval-responded',
+      input: pending.input,
+      approval: {
+        id: pending.approvalId,
+        approved,
+        reason: command.payload.reason,
+      },
+    }
+    const resumeInput: StreamInput = [
+      {
+        id: `user-${taskId}-${this.seq}`,
+        role: 'user',
+        parts: [{ type: 'text', text: userText }],
+      },
+      {
+        id: `asst-${taskId}-${this.seq}`,
+        role: 'assistant',
+        parts: [toolPart],
+      },
+    ]
+
+    state.activeAbort = new AbortController()
+    const abort = state.activeAbort
+    void this.streamAgent({
+      taskId,
+      turnId,
+      runId,
+      input: resumeInput,
+      signal: abort.signal,
+      completeIfNoTerminal: true,
+    }).finally(() => {
+      if (state.activeAbort === abort) state.activeAbort = null
+    })
+
     return accepted(command.commandId, this.nowIso())
+  }
+
+  private rememberApprovalFromChunk(
+    taskId: string,
+    runId: string,
+    turnId: string,
+    chunk: FullStreamChunk,
+  ): void {
+    if (chunk.type !== 'tool-approval-request') return
+    const state = this.ensureTask(taskId)
+    const nested =
+      typeof chunk.toolCall === 'object' && chunk.toolCall !== null
+        ? (chunk.toolCall as FullStreamChunk)
+        : undefined
+    const approvalId =
+      (typeof chunk.approvalId === 'string' && chunk.approvalId) ||
+      (typeof chunk.requestId === 'string' && chunk.requestId) ||
+      null
+    if (!approvalId || !nested) return
+    const toolCallId =
+      (typeof nested.toolCallId === 'string' && nested.toolCallId) ||
+      (typeof nested.id === 'string' && nested.id) ||
+      approvalId
+    const toolName =
+      (typeof nested.toolName === 'string' && nested.toolName) ||
+      (typeof nested.name === 'string' && nested.name) ||
+      'tool'
+    const input = nested.input ?? nested.args ?? nested.arguments
+    state.pendingApprovals.set(approvalId, {
+      approvalId,
+      toolCallId,
+      toolName,
+      input: normalizeWorkspaceToolInput(input),
+      userText: state.lastUserText ?? '',
+      runId,
+      turnId,
+    })
   }
 
   private async streamAgent(args: {
     taskId: string
     turnId: string
     runId: string
-    inputText: string
+    input: StreamInput
     signal: AbortSignal
+    completeIfNoTerminal?: boolean
   }): Promise<void> {
-    const { taskId, turnId, runId, inputText, signal } = args
+    const { taskId, turnId, runId, input, signal, completeIfNoTerminal } = args
     const state = this.ensureTask(taskId)
     const url = `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}/stream`
+    const pendingCountBefore = state.pendingApprovals.size
 
     try {
       const response = await this.fetchImpl(url, {
@@ -398,13 +539,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           Accept: 'text/event-stream',
         },
         body: JSON.stringify({
-          input: inputText,
+          input,
           options: {
             memory: {
               userId: this.userId,
               conversationId: taskId,
             },
-            maxSteps: 12,
+            maxSteps: 50,
           },
         }),
         signal,
@@ -453,9 +594,16 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           } catch {
             continue
           }
-          if (chunk.type === 'finish' || chunk.type === 'abort' || chunk.type === 'error') {
+          if (
+            chunk.type === 'finish' ||
+            chunk.type === 'abort' ||
+            chunk.type === 'error'
+          ) {
             sawFinish = true
           }
+
+          this.rememberApprovalFromChunk(taskId, runId, turnId, chunk)
+
           const mapped = mapFullStreamChunk(chunk, {
             projectId: this.projectId,
             taskId,
@@ -466,7 +614,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
             nowIso: this.nowIso,
             eventIdPrefix: 'va',
           })
-          // Skip duplicate run.started from stream if we already bookkept.
           for (const env of mapped.envelopes) {
             if (env.eventType === 'run.started') continue
             this.emitEnvelope(taskId, {
@@ -479,8 +626,16 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         }
       }
 
-      if (!sawFinish && !signal.aborted) {
-        // Ensure terminal state for incomplete streams.
+      const pausedForApproval =
+        state.pendingApprovals.size > 0 ||
+        state.pendingApprovals.size > pendingCountBefore
+
+      if (
+        completeIfNoTerminal &&
+        !sawFinish &&
+        !signal.aborted &&
+        !pausedForApproval
+      ) {
         const occurredAt = this.nowIso()
         this.emitEnvelope(taskId, {
           eventId: `va-complete-${runId}-${state.nextSequence}`,
@@ -499,7 +654,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
     } catch (err) {
       if (signal.aborted) {
-        // cancel path already emitted cancelled
         return
       }
       const message =
