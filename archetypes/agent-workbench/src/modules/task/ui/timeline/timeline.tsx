@@ -409,22 +409,22 @@ function TimelineTurnBlock({
     else if (completed) setFoldOpen(false)
   }, [runActive, completed, latestTerminal?.id])
 
-  // Avoid double-painting the same tool line as liveStatus.
+  const hasRunningTool = processItems.some(
+    (i) =>
+      (i.category === 'tool-group' || i.category === 'command-execution') &&
+      i.status === 'running',
+  )
+  // better-ui: never dual-paint tool row + live bar. Bootstrap only when
+  // process body is empty (pre-tool thinking).
   const liveForBar =
-    runActive && liveStatus
-      ? processItems.some(
-          (i) =>
-            (i.category === 'tool-group' ||
-              i.category === 'command-execution') &&
-            i.status === 'running' &&
-            i.title === liveStatus,
-        )
-        ? null
-        : liveStatus
+    runActive && !hasRunningTool && processItems.length === 0
+      ? (liveStatus ?? '正在思考')
       : null
 
-  // Always show process chrome when a run-terminal exists (even text-only turns).
+  // Always show process chrome when a run-terminal exists.
   const showFold = Boolean(latestTerminal)
+  // Chevron while running (expanded) or completed with process body.
+  const canToggle = processItems.length > 0 || runActive
 
   return (
     <>
@@ -434,7 +434,7 @@ function TimelineTurnBlock({
           runActive={runActive}
           open={foldOpen}
           onOpenChange={setFoldOpen}
-          canToggle={!runActive && processItems.length > 0}
+          canToggle={canToggle}
         >
           {processItems.map((item) => (
             <TimelineRow
@@ -449,11 +449,8 @@ function TimelineTurnBlock({
               }
             />
           ))}
-          {runActive && processItems.length === 0 ? (
-            <LiveStatusLine
-              status={liveForBar ?? '正在思考'}
-              className='mt-1'
-            />
+          {liveForBar ? (
+            <LiveStatusLine status={liveForBar} className='mt-1' muted />
           ) : null}
         </ProcessFold>
       ) : null}
@@ -505,12 +502,6 @@ function ProcessFold({
   const baseLabel = chineseStatusLabel(terminal)
   const durationLabel =
     elapsedMs != null ? formatDurationMs(elapsedMs) : null
-  const display =
-    baseLabel === '已处理' && durationLabel
-      ? `已处理 ${durationLabel}`
-      : durationLabel
-        ? `${baseLabel} ${durationLabel}`
-        : baseLabel
 
   const statusClass = cn(
     'text-[14px] font-[445] leading-[21px]',
@@ -519,36 +510,44 @@ function ProcessFold({
       : statusTone(terminal.status),
   )
 
+  const labelNode = (
+    <span data-testid='timeline-run-status-label' className='inline-flex items-baseline gap-1'>
+      <span>{baseLabel}</span>
+      {durationLabel ? (
+        <span className='tabular-nums'>{durationLabel}</span>
+      ) : null}
+    </span>
+  )
+
   const header = canToggle ? (
     <button
       type='button'
       className={cn(
         'inline-flex items-center gap-1 rounded-md border border-transparent',
         'focus-visible:ring-2 focus-visible:ring-ring/50',
+        'active:scale-[0.96] transition-transform',
         statusClass,
       )}
       aria-expanded={open}
       data-testid='timeline-turn-toggle'
       onClick={() => onOpenChange(!open)}
     >
-      <span data-testid='timeline-run-status-label'>{display}</span>
+      {labelNode}
       <ChevronDown
         className={cn(
-          'size-3.5 shrink-0 opacity-70 transition-transform',
+          'size-3.5 shrink-0 opacity-70 transition-transform duration-150 ease-out',
           open ? 'rotate-0' : '-rotate-90',
         )}
         aria-hidden
       />
     </button>
   ) : (
-    <span className={statusClass} data-testid='timeline-run-status-label'>
-      {display}
-    </span>
+    <span className={statusClass}>{labelNode}</span>
   )
 
   return (
     <div
-      className='mb-2'
+      className='mb-3'
       data-kind='process-fold'
       data-testid={`timeline-item-${terminal.id}`}
       data-category='run-terminal'
@@ -557,8 +556,18 @@ function ProcessFold({
       data-fold-open={open ? 'true' : 'false'}
     >
       <div className='mb-1 flex items-center gap-2 pt-1'>{header}</div>
-      <Separator className='mb-2' />
-      {open ? <div className='flex flex-col gap-0.5'>{children}</div> : null}
+      <Separator className='mb-2 opacity-80' />
+      {open ? (
+        <div
+          className={cn(
+            'flex flex-col gap-0.5 border-s border-border/40 ps-3',
+            'text-[13px]',
+          )}
+          data-slot='process-fold-body'
+        >
+          {children}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -567,18 +576,23 @@ function FoldableBody({
   itemId,
   body,
   markdown = false,
+  muted = false,
 }: {
   itemId: string
   body: string
   markdown?: boolean
+  muted?: boolean
 }) {
   const long = body.length > TIMELINE_FOLD_THRESHOLD
   const [open, setOpen] = useState(!long)
+  const mdClass = muted ? 'text-muted-foreground' : 'text-foreground'
   if (!long) {
     return markdown ? (
-      <SimpleMarkdown source={body} className='text-foreground' />
+      <SimpleMarkdown source={body} className={mdClass} />
     ) : (
-      <div className='whitespace-pre-wrap text-sm'>{body}</div>
+      <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
+        {body}
+      </div>
     )
   }
   const preview = body.slice(0, TIMELINE_FOLD_THRESHOLD)
@@ -586,12 +600,14 @@ function FoldableBody({
     <div data-testid={`timeline-fold-${itemId}`}>
       {open ? (
         markdown ? (
-          <SimpleMarkdown source={body} className='text-foreground' />
+          <SimpleMarkdown source={body} className={mdClass} />
         ) : (
-          <div className='whitespace-pre-wrap text-sm'>{body}</div>
+          <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
+            {body}
+          </div>
         )
       ) : markdown ? (
-        <SimpleMarkdown source={`${preview}…`} className='text-foreground' />
+        <SimpleMarkdown source={`${preview}…`} className={mdClass} />
       ) : (
         <div className='whitespace-pre-wrap text-sm text-muted-foreground'>
           {preview}…
@@ -601,7 +617,7 @@ function FoldableBody({
         type='button'
         variant='ghost'
         size='sm'
-        className='mt-1 h-7 px-2 text-xs'
+        className='mt-1 h-7 px-2 text-xs active:scale-[0.96] transition-transform'
         data-testid={`timeline-fold-toggle-${itemId}`}
         onClick={() => setOpen((v) => !v)}
       >
@@ -672,6 +688,7 @@ function ToolRow({
           className={cn(
             'flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-[13px] leading-4 font-[445]',
             'text-foreground/85 hover:bg-wb-hover-subtle',
+            'active:scale-[0.96] transition-transform',
             item.status === 'running' && 'text-foreground',
           )}
           data-testid={`timeline-tool-trigger-${item.id}`}
@@ -759,29 +776,41 @@ function TimelineRow({
   switch (item.category) {
     case 'user-message':
       return <UserBubble item={item} />
-    case 'assistant-message':
+    case 'assistant-message': {
+      const isCommentary = item.meta?.messageRole === 'commentary'
       return (
         <div
-          className='mb-3 py-1 text-[14px] leading-[22px]'
+          className={cn(
+            'mb-2 py-1',
+            isCommentary
+              ? 'text-[13px] leading-[20px] text-muted-foreground'
+              : 'mb-3 text-[14px] leading-[22px] text-foreground',
+          )}
           data-kind='assistant-message'
           data-testid={`timeline-item-${item.id}`}
           data-category='assistant-message'
           data-status={item.status}
+          data-message-role={item.meta?.messageRole ?? 'final'}
         >
           <FoldableBody
             itemId={item.id}
             body={item.body ?? ''}
             markdown
+            muted={isCommentary}
           />
           {runActive && item.status === 'streaming' ? (
             <span
-              className='ms-0.5 inline-block h-[1.1em] w-[2px] translate-y-0.5 animate-pulse bg-foreground/70'
+              className={cn(
+                'ms-0.5 inline-block h-[1.1em] w-[2px] translate-y-0.5 animate-pulse',
+                isCommentary ? 'bg-muted-foreground/70' : 'bg-foreground/70',
+              )}
               aria-hidden
               data-testid='timeline-stream-caret'
             />
           ) : null}
         </div>
       )
+    }
     case 'reasoning-section':
       return (
         <Collapsible defaultOpen={(item.body?.length ?? 0) < TIMELINE_FOLD_THRESHOLD}>
