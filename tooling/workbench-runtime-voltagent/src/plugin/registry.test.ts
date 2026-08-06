@@ -10,9 +10,16 @@ describe('createPluginRegistry', () => {
   it('lists builtin manifests without hard-coded connector enum in API', () => {
     const reg = createPluginRegistry({ env: {} })
     const ids = reg.listManifests().map((m) => m.id).sort()
-    assert.deepEqual(ids, ['mcp.calendar', 'mcp.docs', 'skills.office'])
+    assert.deepEqual(ids, [
+      'cli.feishu',
+      'mcp.calendar',
+      'mcp.docs',
+      'skills.office',
+    ])
     assert.ok(reg.resolveEnabledIds().includes('mcp.docs'))
     assert.ok(reg.resolveEnabledIds().includes('skills.office'))
+    // domain CLI opt-in
+    assert.ok(!reg.resolveEnabledIds().includes('cli.feishu'))
   })
 
   it('loads disabled MCP when env empty', async () => {

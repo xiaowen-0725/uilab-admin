@@ -1,6 +1,5 @@
 /**
- * Builtin plugins (ticket #19 MCP, #20 Skills).
- * docs/calendar MCP env aliases preserved for operator compatibility.
+ * Builtin plugins (MCP / Skills / domain CLI).
  */
 
 import type { PluginManifest } from './manifest.js'
@@ -119,9 +118,82 @@ export const BUILTIN_SKILLS_OFFICE_PLUGIN: PluginManifest = {
   },
 }
 
-/** Default builtin set for Registry (MCP + office skills). */
+/**
+ * Example domain CLI (feishu-cli style). Opt-in: enable via PLUGINS_ENABLED=cli.feishu
+ * or set enabledByDefault when operators ship the binary. Missing binary → status missing.
+ */
+export const BUILTIN_CLI_FEISHU_PLUGIN: PluginManifest = {
+  schemaVersion: 1,
+  id: 'cli.feishu',
+  name: '飞书领域 CLI',
+  version: '0.1.0',
+  kind: 'builtin',
+  enabledByDefault: false,
+  contributes: {
+    cli: [
+      {
+        cliId: 'feishu',
+        command: 'feishu-cli',
+        commandFromEnv: ['FEISHU_CLI_PATH'],
+        packageHint: 'feishu-cli',
+        childEnvKeys: [
+          'FEISHU_APP_ID',
+          'FEISHU_APP_SECRET',
+          'LARK_APP_ID',
+          'LARK_APP_SECRET',
+        ],
+        defaultCwd: 'workspace',
+        commands: [
+          {
+            name: 'docs_get',
+            description: '读取飞书文档（只读示例）',
+            argv: ['docs', 'get', '--id', '{{documentId}}'],
+            parameters: [
+              {
+                name: 'documentId',
+                type: 'string',
+                description: '文档 ID',
+                required: true,
+              },
+            ],
+            readOnly: true,
+            needsApproval: false,
+          },
+          {
+            name: 'docs_write',
+            description: '写入飞书文档（需审批）',
+            argv: [
+              'docs',
+              'write',
+              '--id',
+              '{{documentId}}',
+              '--content',
+              '{{content}}',
+            ],
+            parameters: [
+              {
+                name: 'documentId',
+                type: 'string',
+                required: true,
+              },
+              {
+                name: 'content',
+                type: 'string',
+                required: true,
+              },
+            ],
+            needsApproval: true,
+          },
+        ],
+      },
+    ],
+  },
+}
+
+/** Default builtin set for Registry. */
 export const BUILTIN_PLUGINS: PluginManifest[] = [
   BUILTIN_MCP_DOCS_PLUGIN,
   BUILTIN_MCP_CALENDAR_PLUGIN,
   BUILTIN_SKILLS_OFFICE_PLUGIN,
+  BUILTIN_CLI_FEISHU_PLUGIN,
 ]

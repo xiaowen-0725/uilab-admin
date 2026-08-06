@@ -37,6 +37,9 @@ export {
 } from './secret-store.js'
 
 export type {
+  CliArgParam,
+  CliCommandContribution,
+  CliContribution,
   McpContribution,
   McpServerConfigShape,
   PluginContributes,
@@ -47,6 +50,7 @@ export type {
 
 export {
   BUILTIN_PLUGINS,
+  BUILTIN_CLI_FEISHU_PLUGIN,
   BUILTIN_MCP_CALENDAR_PLUGIN,
   BUILTIN_MCP_DOCS_PLUGIN,
   BUILTIN_SKILLS_OFFICE_PLUGIN,
@@ -88,4 +92,16 @@ export {
   type McpServerLoadStatus,
   type ResolvedMcpServer,
 } from './mcp-loader.js'
+
+export {
+  assertSafeArgvTemplate,
+  buildCliArgv,
+  cliToolName,
+  formatRegistryCliStatusLine,
+  loadCliContributions,
+  resolveCliExecutable,
+  type CliLoadAggregate,
+  type CliLoadStatus,
+  type CliRunner,
+} from './cli-loader.js'
 

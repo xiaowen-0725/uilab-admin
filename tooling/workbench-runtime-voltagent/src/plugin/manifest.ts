@@ -59,10 +59,49 @@ export type SkillsContribution = {
   seedStrategy?: 'missing-only'
 }
 
+/**
+ * Domain CLI (feishu-cli style) — not a free terminal.
+ * Host invokes via execFile(command, argv[]); no shell string join.
+ */
+export type CliArgParam = {
+  name: string
+  type?: 'string' | 'number' | 'boolean'
+  description?: string
+  /** Default true when omitted */
+  required?: boolean
+}
+
+export type CliCommandContribution = {
+  /** Tool suffix → tool name `cli.<cliId>.<name>` */
+  name: string
+  /** Argv template; placeholders `{{param}}` filled from structured args only */
+  argv: string[]
+  parameters?: CliArgParam[]
+  description?: string
+  /** Default true (fail-closed). Explicit false only when readOnly. */
+  needsApproval?: boolean
+  /** When true (and needsApproval not forced true), approval may be skipped */
+  readOnly?: boolean
+  timeoutMs?: number
+}
+
+export type CliContribution = {
+  cliId: string
+  /** Default binary name / path when env override empty */
+  command?: string
+  commandFromEnv?: string[]
+  packageHint?: string
+  childEnvKeys?: string[]
+  /** Default workspace root when load provides workspaceRoot */
+  defaultCwd?: 'workspace' | 'plugin' | string
+  commands: CliCommandContribution[]
+}
+
 export type PluginContributes = {
   mcp?: McpContribution[]
   skills?: SkillsContribution
-  /** Later tickets: cli, tools, auth */
+  cli?: CliContribution[]
+  /** Later tickets: tools, auth */
 }
 
 export type PluginManifest = {

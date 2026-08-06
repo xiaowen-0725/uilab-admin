@@ -1,10 +1,19 @@
 /**
- * PluginRegistry — discover / enable / isolate-load / aggregate tools + skills (#19–#20).
+ * PluginRegistry — discover / enable / isolate-load / aggregate tools + skills + CLI (#19–#21).
  */
 
 import type { Tool } from '@voltagent/core'
 import { BUILTIN_PLUGINS } from './builtins.js'
-import type { PluginManifest, SkillsContribution } from './manifest.js'
+import {
+  loadCliContributions,
+  type CliLoadStatus,
+  type CliRunner,
+} from './cli-loader.js'
+import type {
+  CliContribution,
+  PluginManifest,
+  SkillsContribution,
+} from './manifest.js'
 import {
   loadResolvedMcpServers,
   resolveMcpContribution,
@@ -31,6 +40,7 @@ export type PluginRuntimeRecord = {
   reason?: string
   mcp: McpServerLoadStatus[]
   skills?: SkillsSeedResult
+  cli: CliLoadStatus[]
 }
 
 export type PluginRegistryLoadResult = {
@@ -38,6 +48,7 @@ export type PluginRegistryLoadResult = {
   tools: Tool<any, any>[]
   toolNames: string[]
   mcpStatuses: McpServerLoadStatus[]
+  cliStatuses: CliLoadStatus[]
   /** Virtual skill roots for Workspace.skills.rootPaths */
   skillRoots: string[]
   skillsResults: SkillsSeedResult[]
@@ -64,6 +75,8 @@ export type CreatePluginRegistryOptions = {
   /** Additional manifests (local discovery later) */
   extra?: PluginManifest[]
   host?: McpHost
+  /** Inject domain CLI runner (tests / fake binary). */
+  cliRunner?: CliRunner
   /**
    * Explicit enable list. Default: all enabledByDefault builtins
    * minus PLUGINS_DISABLED, plus PLUGINS_ENABLED overrides.
@@ -107,6 +120,7 @@ export function createPluginRegistry(
       const expected: Array<{ pluginId: string; serverId: string }> = []
       const skillsItems: Array<{ pluginId: string; contrib: SkillsContribution }> =
         []
+      const cliItems: Array<{ pluginId: string; contrib: CliContribution }> = []
 
       for (const manifest of manifests) {
         const isEnabled = enabled.has(manifest.id)
@@ -120,6 +134,7 @@ export function createPluginRegistry(
             loadStatus: 'disabled',
             reason: '未启用',
             mcp: [],
+            cli: [],
           })
           continue
         }
@@ -131,7 +146,6 @@ export function createPluginRegistry(
             const resolved = resolveMcpContribution(manifest.id, c, env)
             if (resolved) resolvedServers.push(resolved)
           } catch (err) {
-            // Resolution errors counted at plugin level below via load
             plugins.push({
               id: manifest.id,
               name: manifest.name,
@@ -142,6 +156,7 @@ export function createPluginRegistry(
               reason:
                 err instanceof Error ? err.message : 'MCP 配置解析失败',
               mcp: [],
+              cli: [],
             })
           }
         }
@@ -153,7 +168,10 @@ export function createPluginRegistry(
           })
         }
 
-        // Placeholder; mcp/skills details filled after loaders
+        for (const c of manifest.contributes?.cli ?? []) {
+          cliItems.push({ pluginId: manifest.id, contrib: c })
+        }
+
         if (!plugins.some((p) => p.id === manifest.id)) {
           plugins.push({
             id: manifest.id,
@@ -163,6 +181,7 @@ export function createPluginRegistry(
             enabled: true,
             loadStatus: 'loaded',
             mcp: [],
+            cli: [],
           })
         }
       }
@@ -179,13 +198,20 @@ export function createPluginRegistry(
         bundledSkillsDir: loadOptions.bundledSkillsDir,
       })
 
-      // Attach mcp + skills statuses; mark failed when hard failures only
+      const cliAgg = await loadCliContributions(cliItems, {
+        env,
+        workspaceRoot: loadOptions.workspaceRoot,
+        runner: options.cliRunner,
+      })
+
       for (const rec of plugins) {
         if (!rec.enabled) continue
         const mcp = mcpAgg.statuses.filter((s) => s.pluginId === rec.id)
         rec.mcp = mcp
         const skills = skillsAgg.results.find((s) => s.pluginId === rec.id)
         if (skills) rec.skills = skills
+        const cli = cliAgg.statuses.filter((s) => s.pluginId === rec.id)
+        rec.cli = cli
 
         const mcpFailedOnly =
           mcp.length > 0 &&
@@ -193,13 +219,16 @@ export function createPluginRegistry(
           !mcp.some((s) => s.status === 'connected') &&
           !mcp.every((s) => s.status === 'disabled')
         const skillsFailed = skills?.status === 'failed'
+        // missing binary is observable but not fatal to other plugins
+        const cliHardFailed = cli.some((s) => s.status === 'failed')
 
-        if (mcpFailedOnly || skillsFailed) {
+        if (mcpFailedOnly || skillsFailed || cliHardFailed) {
           rec.loadStatus = 'failed'
           rec.reason =
             skillsFailed && skills?.reason
               ? skills.reason
-              : mcp.find((s) => s.status === 'failed')?.reason
+              : cli.find((s) => s.status === 'failed')?.reason ??
+                mcp.find((s) => s.status === 'failed')?.reason
         } else if (mcp.every((s) => s.status === 'disabled') && mcp.length > 0) {
           rec.loadStatus = 'loaded'
           rec.reason = rec.reason ?? 'MCP 未配置（disabled）'
@@ -210,9 +239,10 @@ export function createPluginRegistry(
 
       return {
         plugins,
-        tools: mcpAgg.tools,
-        toolNames: mcpAgg.toolNames,
+        tools: [...mcpAgg.tools, ...cliAgg.tools],
+        toolNames: [...mcpAgg.toolNames, ...cliAgg.toolNames],
         mcpStatuses: mcpAgg.statuses,
+        cliStatuses: cliAgg.statuses,
         skillRoots: skillsAgg.virtualRoots,
         skillsResults: skillsAgg.results,
         disconnect: mcpAgg.disconnect,

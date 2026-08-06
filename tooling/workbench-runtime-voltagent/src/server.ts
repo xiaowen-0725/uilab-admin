@@ -69,6 +69,8 @@ const {
   memoryKind,
   mcpStatusLine,
   mcpStatuses,
+  cliStatusLine,
+  cliStatuses,
   disconnectMcp,
 } = await createWorkbenchAgent({
   profile,
@@ -93,6 +95,16 @@ for (const s of mcpStatuses) {
   }
 }
 
+for (const s of cliStatuses) {
+  if (s.status === 'missing' || s.status === 'failed') {
+    logger.warn(`CLI ${s.cliId} ${s.status}: ${s.reason ?? 'unknown'}`)
+  } else if (s.status === 'ready') {
+    logger.info(
+      `CLI ${s.cliId} ready tools=${s.toolNames.join(',') || '(none)'}`,
+    )
+  }
+}
+
 logger.info(
   [
     'Workbench VoltAgent sidecar starting',
@@ -107,9 +119,10 @@ logger.info(
     `summarization=${summarizationEnabled}`,
     `memory=${memoryKind}`,
     `mcp=${mcpStatusLine}`,
+    `cli=${cliStatusLine}`,
     `tools=${tools.join(',')}`,
     resolvedProfile === 'office'
-      ? 'note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills+optional MCP); not remote production cluster'
+      ? 'note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills+optional MCP/CLI); not remote production cluster'
       : 'note=local minimal Runtime (DIY tools); not remote production cluster',
   ].join(' '),
 )

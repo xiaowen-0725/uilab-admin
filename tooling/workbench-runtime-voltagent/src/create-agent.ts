@@ -20,7 +20,9 @@ import {
 } from './office-runtime-defaults.js'
 import {
   createPluginRegistry,
+  formatRegistryCliStatusLine,
   formatRegistryMcpStatusLine,
+  type CliLoadStatus,
   type CreatePluginRegistryOptions,
   type McpServerLoadStatus,
 } from './plugin/index.js'
@@ -41,6 +43,8 @@ export type CreateWorkbenchAgentOptions = {
   maxSteps?: number
   /** Inject mock MCP host (tests). */
   mcpHost?: CreatePluginRegistryOptions['host']
+  /** Inject domain CLI runner (tests). */
+  cliRunner?: CreatePluginRegistryOptions['cliRunner']
 }
 
 export type WorkbenchAgentBundle = {
@@ -57,6 +61,8 @@ export type WorkbenchAgentBundle = {
   /** Plugin MCP statuses (office only; empty for minimal). */
   mcpStatuses: McpServerLoadStatus[]
   mcpStatusLine: string
+  cliStatuses: CliLoadStatus[]
+  cliStatusLine: string
   /** Virtual skill roots mounted on Workspace (office). */
   skillRoots: string[]
   disconnectMcp: () => Promise<void>
@@ -97,10 +103,11 @@ export async function createWorkbenchAgent(
       maxStepsOverride: options.maxSteps,
     })
 
-    // Single PluginRegistry load: seed skills + connect MCP builtins.
+    // Single PluginRegistry load: skills + MCP + domain CLI.
     const registry = createPluginRegistry({
       env,
       host: options.mcpHost,
+      cliRunner: options.cliRunner,
     })
     const plugins = await registry.load({ workspaceRoot })
 
@@ -195,6 +202,8 @@ export async function createWorkbenchAgent(
       memoryKind: defaults.memoryKind,
       mcpStatuses: plugins.mcpStatuses,
       mcpStatusLine: formatRegistryMcpStatusLine(plugins.mcpStatuses),
+      cliStatuses: plugins.cliStatuses,
+      cliStatusLine: formatRegistryCliStatusLine(plugins.cliStatuses),
       skillRoots,
       disconnectMcp: plugins.disconnect,
     }
@@ -231,6 +240,8 @@ export async function createWorkbenchAgent(
     memoryKind: defaults.memoryKind,
     mcpStatuses: [],
     mcpStatusLine: 'mcp=none',
+    cliStatuses: [],
+    cliStatusLine: 'cli=none',
     skillRoots: [],
     disconnectMcp: async () => {},
   }
