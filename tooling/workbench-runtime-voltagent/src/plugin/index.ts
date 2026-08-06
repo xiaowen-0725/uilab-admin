@@ -127,3 +127,18 @@ export {
   type ResolvePluginAuthOptions,
 } from './auth-status.js'
 
+export {
+  buildDoctorReport,
+  buildListReport,
+  collectDoctorFindings,
+  formatDoctorText,
+  formatListText,
+  runPluginDoctor,
+  runPluginList,
+  type DoctorFinding,
+  type PluginDoctorReport,
+  type PluginListReport,
+  type PluginListRow,
+  type RunOperatorOptions,
+} from './operator.js'
+

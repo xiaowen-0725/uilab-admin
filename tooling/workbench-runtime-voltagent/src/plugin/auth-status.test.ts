@@ -174,7 +174,12 @@ describe('format helpers', () => {
       ]),
       'a/r=missing',
     )
-    assert.match(sanitizeHint('token=ghp_abc123secret'), /\*\*\*/)
+    assert.match(sanitizeHint('token ghp_abc123secret'), /\*\*\*/)
+    // do not rewrite resource status lines
+    assert.match(
+      sanitizeHint('auth bearer=missing · 配置 MCP_DOCS_BEARER_TOKEN'),
+      /auth bearer=missing/,
+    )
     assert.equal(formatAuthDoctorLine([]), 'auth=none')
   })
 })

@@ -126,6 +126,14 @@ MCP 连接失败不崩溃；Skills seed 路径越界 fail-closed。密钥只放�
 
 **Auth（启用 ≠ 登录）：** 插件可声明 `contributes.auth`（`env_ref` / `static_bearer` / `cli_session`；`oauth2` 预留）。缺 env → `auth=missing`；配齐 → `connected`；`cli_session` 可用 `statusCommand` 探测。doctor 摘要**永不**打印 secret。
 
+**运维 list/doctor（非 Agent 终端）：**
+
+```bash
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:list
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor -- --json
+```
+
 ### 长任务默认（O5）
 
 | 配置 | 默认（office） | 说明 |

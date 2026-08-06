@@ -77,7 +77,25 @@ note=local VoltAgent Office Runtime …; not remote production cluster
 6. **取消（可选）：** 运行中点停止 → Composer 可再次发送。
 7. **侧车不可达：** 停掉 :3141 再发送 → 应看到可读错误，而非假成功。
 
-### 1.5 Fake / capture 回归
+### 1.5 插件 list / doctor（运维，非 Agent）
+
+宿主侧运维面，**不**作为 Agent 工具：
+
+```bash
+# 列出 builtin + PLUGIN_PATHS 发现的插件（id/version/enabled/status/贡献）
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:list
+
+# 医生检查：缺 env、MCP off、CLI missing、auth=missing 等（中文可读，无 secret）
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor
+
+# 机器可读（可脚本断言）
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:list -- --json
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor -- --json
+```
+
+退出码：`doctor` 有 warn/error 时为 `1`；实现失败为 `2`。
+
+### 1.6 Fake / capture 回归
 
 不设 `VITE_RUNTIME_ADAPTER`（默认 fake）或打开默认 seed 任务：
 
