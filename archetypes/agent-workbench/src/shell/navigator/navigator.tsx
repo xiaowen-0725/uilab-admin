@@ -94,10 +94,12 @@ export function Navigator({
 
   const panel = (
     <nav
-      className='flex h-full flex-col bg-sidebar text-sidebar-foreground'
+      className='flex h-full flex-col bg-sidebar text-sidebar-foreground dark:bg-[color(srgb_0.129412_0.129412_0.129412_/_0.7)]'
       style={{
         width: 'var(--navigator-width)',
-        maxWidth: 'min(var(--navigator-width), 80vw)',
+        maxWidth: 'none',
+        /* Codex full-width title bar sits above rail content (46px). */
+        paddingTop: 46,
       }}
       data-slot='navigator'
       data-testid='navigator'

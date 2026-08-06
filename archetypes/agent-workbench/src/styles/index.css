@@ -6,14 +6,26 @@
 /* Tailwind 4: scan Foundation source (workspace via node_modules). */
 @source '../../node_modules/@uilab/foundation/src/ui';
 
+/* Streamdown (+ plugins): scan utility classes used inside the packages. */
+@source '../../node_modules/streamdown/dist/*.js';
+@source '../../node_modules/@streamdown/code/dist/*.js';
+@source '../../node_modules/@streamdown/cjk/dist/*.js';
+
 @custom-variant dark (&:is(.dark *));
 
 /* Phase 3A/3B Shell geometry + motion tokens (Shell-owned, not Session). */
 :root {
-  --navigator-width: 272px;
+  /* Codex Desktop left rail CDP: 306 CSS px */
+  --navigator-width: 306px;
   --workspace-inset: 8px;
   --workspace-radius: 12px;
-  --content-max-width: 880px;
+  /* Codex content column ~736 */
+  --content-max-width: 736px;
+  --wb-app-bg: var(--sidebar);
+  --wb-font-weight: 400;
+  --wb-composer-shell-shadow:
+    0 0 0 0.5px var(--wb-hairline-soft), 0 3px 7.5px rgba(0, 0, 0, 0.04),
+    0 0 20px rgba(0, 0, 0, 0.05);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-drawer-close: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-pane-expand: cubic-bezier(0.77, 0, 0.175, 1);
@@ -79,17 +91,13 @@
   }
 
   body {
-    @apply m-0 h-full min-h-svh w-full overflow-x-hidden bg-sidebar font-sans text-foreground antialiased;
+    @apply m-0 h-full min-h-svh w-full overflow-x-hidden font-sans text-foreground antialiased;
+    background-color: var(--wb-app-bg);
+    font-weight: var(--wb-font-weight);
     font-family:
-      ui-sans-serif,
-      system-ui,
       -apple-system,
-      BlinkMacSystemFont,
+      system-ui,
       'Segoe UI',
-      Roboto,
-      'Helvetica Neue',
-      Arial,
-      'Noto Sans',
       sans-serif;
   }
 
@@ -443,16 +451,17 @@
   --wb-overlay-scrim: rgb(0 0 0 / 0.24);
   --wb-surface-raised: oklch(26.9% 0 0 / 0.95);
   /*
-   * Codex stack hierarchy (pixel-verified on live Workbench + Codex crop):
-   *   canvas  #0d0d0d
-   *   rail    visible fog strip above canvas (must be ≥~+20 RGB vs canvas or lip vanishes)
-   *   shell   elevated solid mid-gray (Codex body samples ~#232323; we lift higher so
-   *           rail↔shell also reads). Avoid low-α oklab here — composites muddy vs rail.
-   * Prior #161616 rail on #0d0d0d was only +9 luminance: self-check "passed" on numbers
-   * but humans saw no change.
+   * Codex CDP (2026-08-04 CFV gate):
+   *   app bg   #0e0e0e
+   *   main     #111111 (--background)
+   *   rail     slightly above canvas for context chips
+   *   shell    #262626 (rgb 38,38,38) — match processFile/composer probe
    */
+  --wb-app-bg: #0e0e0e;
+  --wb-font-weight: 445;
   --wb-composer-rail: #222222;
-  --wb-surface-composer: #303030;
+  --wb-surface-composer: #262626;
+  --wb-composer-shell-shadow: none;
   --wb-card: oklch(26.9% 0 0 / 0.5);
   --wb-inverse: rgb(255 255 255);
   --wb-inverse-fg: oklch(20.5% 0 0);
@@ -517,4 +526,56 @@
   --color-wb-warning-text: var(--wb-warning-text);
   --color-wb-warning-hover: var(--wb-warning-hover);
   --color-wb-warning-surface: var(--wb-warning-surface);
+}
+
+/* Codex-like live status shimmer (Task Pane intermediate chrome) */
+@keyframes wb-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* Alias for earlier draft name */
+@keyframes wb-shimmer-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.wb-live-status-shimmer {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: var(--wb-font-weight, 445);
+  /* Cadenced sweep closer to Codex _cadencedLoadingShimmer* (~1.2s) */
+  background-image: linear-gradient(
+    90deg,
+    var(--wb-shimmer-dim) 0%,
+    var(--wb-shimmer-dim) 30%,
+    var(--wb-shimmer-bright) 48%,
+    var(--wb-shimmer-bright) 52%,
+    var(--wb-shimmer-dim) 70%,
+    var(--wb-shimmer-dim) 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: wb-shimmer 1.25s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-live-status-shimmer {
+    animation: none;
+    color: var(--muted-foreground);
+    -webkit-text-fill-color: var(--muted-foreground);
+    background-image: none;
+  }
 }

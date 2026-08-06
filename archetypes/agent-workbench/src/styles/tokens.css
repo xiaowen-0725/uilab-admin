@@ -41,15 +41,13 @@
 
 .dark {
   /*
-   * Plane hierarchy (matches desktop workbench reference):
-   *   Navigator / chrome  — elevated gray (#1a1a1a)
-   *   Workspace main      — deeper black (#0d0d0d)
-   *   cards / composer    — mid lift on the black stage (#161616)
-   *
-   * Earlier we inverted this (black chrome + #111 stage); that read opposite
-   * of the reference (gray rail + black main).
+   * Codex Desktop CDP plane hierarchy (2026-08-04 gate):
+   *   app body          — #0e0e0e (rgb 14,14,14)
+   *   Task / main stage — #111111 (rgb 17,17,17)
+   *   Navigator rail    — srgb(0.129…) @ 0.7 (see --sidebar + navigator override)
+   *   Composer shell    — #262626 (rgb 38,38,38) via --wb-surface-composer
    */
-  --background: #0d0d0d;
+  --background: #111111;
   --foreground: #fcfcfc;
   --card: #161616;
   --card-foreground: #fcfcfc;
@@ -68,8 +66,8 @@
   --input: rgb(255 255 255 / 12%);
   --ring: #0169cc;
 
-  /* Left rail — grayer / elevated over the black stage */
-  --sidebar: #1a1a1a;
+  /* Solid fallback for chrome; navigator uses translucent token below. */
+  --sidebar: #212121;
   --sidebar-foreground: #fcfcfc;
   --sidebar-primary: #0169cc;
   --sidebar-primary-foreground: #ffffff;

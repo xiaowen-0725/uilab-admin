@@ -14,6 +14,7 @@ import type {
 } from '@/config/fixtures'
 import type {
   LaunchAction,
+  TaskSurfaceComposerRuntime,
   TaskSurfaceView,
 } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
@@ -92,6 +93,8 @@ export interface WorkbenchShellProps {
   taskNavMeta: Record<string, TaskNavMeta>
   onLaunchAction?: (action: LaunchAction) => void
   onNewChat?: () => void
+  /** Phase 4C dual-path: runtime composer props for empty/new-chat Fake path. */
+  composerRuntime?: TaskSurfaceComposerRuntime
 }
 
 /**
@@ -108,6 +111,7 @@ export function WorkbenchShell({
   taskNavMeta,
   onLaunchAction,
   onNewChat,
+  composerRuntime,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -290,7 +294,7 @@ export function WorkbenchShell({
 
   return (
     <div
-      className='relative flex h-svh min-h-0 w-full overflow-hidden bg-sidebar'
+      className='relative flex h-svh min-h-0 w-full overflow-hidden bg-[var(--wb-app-bg)]'
       data-slot='workbench-shell'
       data-testid='workbench-shell'
       data-viewport={viewport}
@@ -390,6 +394,7 @@ export function WorkbenchShell({
               <TaskSurface
                 view={taskView}
                 onLaunchAction={onLaunchAction}
+                composerRuntime={composerRuntime}
                 onCloseContextPanel={
                   taskView.contextPanelOpen
                     ? () => {
