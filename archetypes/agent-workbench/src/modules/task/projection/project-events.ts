@@ -786,14 +786,13 @@ export function applyRuntimeEvent(
     case 'tool.completed': {
       const toolId = payloadString(envelope.payload, 'toolId') ?? envelope.eventId
       const label = payloadString(envelope.payload, 'label')
-      // Prefer explicit summary/items; fall back to normalizing raw `output`
-      // so VoltAgent streams that only carry `output` still expand on Timeline.
-      const fromOutput =
+      // Prefer mapper summary/items; fall back to raw output for older streams.
+      const fallback =
         rec.output !== undefined ? normalizeToolOutput(rec.output) : undefined
       const summary =
-        payloadString(envelope.payload, 'summary') ?? fromOutput?.summary
+        payloadString(envelope.payload, 'summary') ?? fallback?.summary
       const children =
-        parseChildren(rec.items ?? rec.children) ?? fromOutput?.items
+        parseChildren(rec.items ?? rec.children) ?? fallback?.items
       upsertByKey(next, envelope, 'tool-group', toolId, {
         title: label ?? undefined,
         body: summary ? `${summary}\n` : undefined,

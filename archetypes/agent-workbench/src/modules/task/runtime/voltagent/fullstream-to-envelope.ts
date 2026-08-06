@@ -185,7 +185,7 @@ export function mapFullStreamChunk(
           name,
           label: name,
           args,
-          toolKind: isWriteTool(name) ? 'generic' : 'generic',
+          toolKind: 'generic',
         })
       }
       break
@@ -197,33 +197,24 @@ export function mapFullStreamChunk(
       const output = chunk.output ?? chunk.result ?? chunk.content
       const isError = chunk.isError === true || chunk.error != null
       const normalized = normalizeToolOutput(output)
-      // Path extraction uses raw output; envelope keeps a size-bounded redacted copy.
-      const safeOutput = sanitizeToolOutputForEnvelope(output)
+      // Path extraction uses raw `output`; envelope residual is size-bound + redacted.
+      const completedBase = {
+        toolId: callId,
+        toolCallId: callId,
+        toolName: name,
+        name,
+        label: name,
+        output: sanitizeToolOutputForEnvelope(output),
+        summary: normalized.summary,
+        items: normalized.items,
+        isError,
+      }
 
       if (isShellTool(name)) {
-        push('command.completed', {
-          toolId: callId,
-          toolCallId: callId,
-          toolName: name,
-          name,
-          label: name,
-          output: safeOutput,
-          // Presentation fields for projection (command body can use summary)
-          summary: normalized.summary,
-          items: normalized.items,
-          isError,
-        })
+        push('command.completed', completedBase)
       } else {
         push('tool.completed', {
-          toolId: callId,
-          toolCallId: callId,
-          toolName: name,
-          name,
-          label: name,
-          output: safeOutput,
-          summary: normalized.summary,
-          items: normalized.items,
-          isError,
+          ...completedBase,
           status: isError ? 'error' : 'completed',
         })
       }
