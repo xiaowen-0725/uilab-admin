@@ -8,10 +8,10 @@ import {
   officeFilesystemToolConfig,
 } from './create-agent.js'
 import {
-  OFFICE_OUTPUT_DIRS,
-  OFFICE_SKILL_IDS,
-  listSeededSkillIds,
-} from './office-skills.js'
+  OFFICE_BUILTIN_OUTPUT_DIRS,
+  OFFICE_BUILTIN_SKILL_IDS,
+  listWorkspaceSkillIds,
+} from './plugin/index.js'
 import { OFFICE_WORKSPACE_README_NAME } from './workspace-root.js'
 
 /** Stub model — never called; only needed to construct Agent. */
@@ -79,12 +79,13 @@ describe('createWorkbenchAgent', () => {
     const readme = await readFile(readmePath, 'utf8')
     assert.match(readme, /WORKSPACE_ROOT/)
 
-    // O3 skills seed
-    const skillIds = await listSeededSkillIds(root)
-    assert.deepEqual(skillIds, [...OFFICE_SKILL_IDS].sort())
-    for (const rel of OFFICE_OUTPUT_DIRS) {
+    // O3 skills seed via PluginRegistry skills.office
+    const skillIds = await listWorkspaceSkillIds(root)
+    assert.deepEqual(skillIds, [...OFFICE_BUILTIN_SKILL_IDS].sort())
+    for (const rel of OFFICE_BUILTIN_OUTPUT_DIRS) {
       await access(path.join(root, rel))
     }
+    assert.ok(bundle.skillRoots.includes('/skills'))
 
     // Agent carries workspace identity; tool names come from Workspace toolkit.
     assert.equal(bundle.agent.id, 'workbench')
@@ -112,7 +113,7 @@ describe('createWorkbenchAgent', () => {
       refresh: true,
     })
     const discoveredNames = discovered.map((s) => s.name).sort()
-    for (const id of OFFICE_SKILL_IDS) {
+    for (const id of OFFICE_BUILTIN_SKILL_IDS) {
       assert.ok(
         discoveredNames.includes(id) ||
           discovered.some((s) => s.id.includes(id) || s.path.includes(id)),

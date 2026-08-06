@@ -9,11 +9,22 @@
 
 import os from 'node:os'
 import path from 'node:path'
-import { OFFICE_SKILL_TOOL_NAMES } from './office-skills.js'
 
 export type AgentProfile = 'office' | 'minimal'
 
 export type ProfileEnv = Record<string, string | undefined>
+
+/** Tool names from Workspace skills toolkit (honesty list for capabilities). */
+export const OFFICE_SKILL_TOOL_NAMES = [
+  'workspace_list_skills',
+  'workspace_search_skills',
+  'workspace_read_skill',
+  'workspace_activate_skill',
+  'workspace_deactivate_skill',
+  'workspace_read_skill_reference',
+  'workspace_read_skill_script',
+  'workspace_read_skill_asset',
+] as const
 
 /**
  * Resolve profile from env.
@@ -69,8 +80,6 @@ export const OFFICE_FS_TOOL_NAMES = [
   'glob',
   'grep',
 ] as const
-
-export { OFFICE_SKILL_TOOL_NAMES }
 
 export const MINIMAL_TOOL_NAMES = [
   'read_file',

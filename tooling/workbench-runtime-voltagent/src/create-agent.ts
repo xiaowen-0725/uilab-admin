@@ -1,7 +1,9 @@
 /**
  * Build the Workbench sidecar Agent for the selected profile.
- * Office → Agent + Workspace (Node FS, write/delete need approval).
- * Minimal → plain Agent + DIY tools (legacy M3).
+ * Office → Workspace FS + PluginRegistry (MCP + Skills).
+ * Minimal → plain Agent + DIY tools.
+ *
+ * Honesty: local sidecar only — not a multi-tenant production Runtime.
  */
 
 import {
@@ -17,15 +19,11 @@ import {
   resolveOfficeRuntimeDefaults,
 } from './office-runtime-defaults.js'
 import {
-  type McpConnectorStatus,
-  formatMcpStatusLine,
-  loadOfficeMcpTools,
-} from './office-mcp.js'
-// MCP load is backed by PluginRegistry + builtin manifests (#19).
-import {
-  OFFICE_SKILLS_VIRTUAL_ROOT,
-  ensureOfficeSkills,
-} from './office-skills.js'
+  createPluginRegistry,
+  formatRegistryMcpStatusLine,
+  type CreatePluginRegistryOptions,
+  type McpServerLoadStatus,
+} from './plugin/index.js'
 import {
   type AgentProfile,
   resolveWorkspaceRoot,
@@ -41,6 +39,8 @@ export type CreateWorkbenchAgentOptions = {
   /** Override workspace root (tests). */
   workspaceRoot?: string
   maxSteps?: number
+  /** Inject mock MCP host (tests). */
+  mcpHost?: CreatePluginRegistryOptions['host']
 }
 
 export type WorkbenchAgentBundle = {
@@ -54,9 +54,11 @@ export type WorkbenchAgentBundle = {
   maxSteps: number
   summarizationEnabled: boolean
   memoryKind: MemoryKind
-  /** O4 MCP connector statuses (office only; empty for minimal). */
-  mcpStatuses: McpConnectorStatus[]
+  /** Plugin MCP statuses (office only; empty for minimal). */
+  mcpStatuses: McpServerLoadStatus[]
   mcpStatusLine: string
+  /** Virtual skill roots mounted on Workspace (office). */
+  skillRoots: string[]
   disconnectMcp: () => Promise<void>
 }
 
@@ -66,7 +68,6 @@ export type WorkbenchAgentBundle = {
 export function officeFilesystemToolConfig() {
   return {
     filesystem: {
-      // Fail closed for mutators; explicit reads stay free.
       defaults: { needsApproval: false },
       tools: {
         write_file: { needsApproval: true },
@@ -89,23 +90,32 @@ export async function createWorkbenchAgent(
   const tools = toolsForProfile(profile)
 
   if (profile === 'office') {
-    // O2: create safe default root + first-run README when missing.
     await ensureOfficeWorkspace(workspaceRoot)
-    // O3: seed bundled skills via skills.office plugin (missing-only).
-    await ensureOfficeSkills(workspaceRoot)
 
-    // O5: long-run defaults (maxSteps / summarization / memory).
     const defaults = await resolveOfficeRuntimeDefaults(profile, env, {
       workspaceRoot,
       maxStepsOverride: options.maxSteps,
     })
 
-    // O4: optional docs + calendar MCP (env-gated; degrade on failure).
-    // MCP + skills roots both come from PluginRegistry builtins (#19–#20);
-    // assembly single-registry cutover is #25.
-    const mcp = await loadOfficeMcpTools(env)
-    const honestyTools = [...tools, ...mcp.toolNames]
-    const skillRoots = [OFFICE_SKILLS_VIRTUAL_ROOT]
+    // Single PluginRegistry load: seed skills + connect MCP builtins.
+    const registry = createPluginRegistry({
+      env,
+      host: options.mcpHost,
+    })
+    const plugins = await registry.load({ workspaceRoot })
+
+    // Skills seed is required for office; path/symlink failures must not soft-pass.
+    for (const skill of plugins.skillsResults) {
+      if (skill.status === 'failed') {
+        throw new Error(
+          skill.reason ?? `插件 Skills 加载失败：${skill.pluginId}`,
+        )
+      }
+    }
+
+    const skillRoots =
+      plugins.skillRoots.length > 0 ? plugins.skillRoots : ['/skills']
+    const honestyTools = [...tools, ...plugins.toolNames]
 
     const workspace = new Workspace({
       id: 'workbench-office',
@@ -126,7 +136,7 @@ export async function createWorkbenchAgent(
     })
 
     const mcpInstruction =
-      mcp.toolNames.length > 0
+      plugins.toolNames.length > 0
         ? [
             'Optional MCP tools may be available for docs/knowledge and calendar (names as listed in tools).',
             'Prefer read-only MCP tools; write/update/delete MCP tools require user approval.',
@@ -137,7 +147,8 @@ export async function createWorkbenchAgent(
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
-      purpose: '本机办公 Agent Runtime（Workspace FS + Skills + 可选 MCP · 非远程生产集群）',
+      purpose:
+        '本机办公 Agent Runtime（Workspace FS + Skills + 可选 MCP · 非远程生产集群）',
       instructions: [
         'You are the local Office Agent Runtime for UI Lab Agent Workbench.',
         'Respond in Chinese unless the user writes in another language.',
@@ -165,13 +176,11 @@ export async function createWorkbenchAgent(
         maxAvailable: 10,
         maxActivated: 5,
       },
-      // MCP tools only when connected — never invent unavailable cloud tools.
-      ...(mcp.tools.length > 0
-        ? { tools: mcp.tools as (Tool<any, any> | Toolkit)[] }
+      ...(plugins.tools.length > 0
+        ? { tools: plugins.tools as (Tool<any, any> | Toolkit)[] }
         : {}),
       maxSteps: defaults.maxSteps,
       summarization: defaults.summarization,
-      // false = stateless; Memory instance = multi-turn (conversationId = taskId).
       memory: defaults.memory,
     })
 
@@ -184,13 +193,14 @@ export async function createWorkbenchAgent(
       maxSteps: defaults.maxSteps,
       summarizationEnabled: defaults.summarization !== false,
       memoryKind: defaults.memoryKind,
-      mcpStatuses: mcp.statuses,
-      mcpStatusLine: formatMcpStatusLine(mcp.statuses),
-      disconnectMcp: mcp.disconnect,
+      mcpStatuses: plugins.mcpStatuses,
+      mcpStatusLine: formatRegistryMcpStatusLine(plugins.mcpStatuses),
+      skillRoots,
+      disconnectMcp: plugins.disconnect,
     }
   }
 
-  // minimal — DIY tools (M1–M3 baseline)
+  // minimal — DIY tools
   const defaults = await resolveOfficeRuntimeDefaults(profile, env, {
     workspaceRoot,
     maxStepsOverride: options.maxSteps,
@@ -220,7 +230,8 @@ export async function createWorkbenchAgent(
     summarizationEnabled: false,
     memoryKind: defaults.memoryKind,
     mcpStatuses: [],
-    mcpStatusLine: 'docs=off,calendar=off',
+    mcpStatusLine: 'mcp=none',
+    skillRoots: [],
     disconnectMcp: async () => {},
   }
 }

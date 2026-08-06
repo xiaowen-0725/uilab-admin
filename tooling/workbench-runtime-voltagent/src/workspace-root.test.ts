@@ -10,7 +10,8 @@ import {
 import os from 'node:os'
 import path from 'node:path'
 import { after, describe, it } from 'node:test'
-import { ensureOfficeSkills } from './office-skills.js'
+import { BUILTIN_SKILLS_OFFICE_PLUGIN } from './plugin/builtins.js'
+import { seedSkillsContribution } from './plugin/skills-loader.js'
 import {
   OFFICE_WORKSPACE_README_NAME,
   ensureOfficeWorkspace,
@@ -120,7 +121,7 @@ describe('ensureOfficeWorkspace', () => {
   })
 })
 
-describe('ensureOfficeSkills symlink safety', () => {
+describe('skills seed symlink safety', () => {
   it('refuses skills root that is a symlink to outside', async () => {
     const base = await mkdtemp(path.join(os.tmpdir(), 'wb-o3-sym-'))
     tempRoots.push(base)
@@ -131,13 +132,14 @@ describe('ensureOfficeSkills symlink safety', () => {
     await mkdir(outside, { recursive: true })
     await symlink(outside, path.join(workspaceRoot, 'skills'))
 
-    await assert.rejects(
-      () => ensureOfficeSkills(workspaceRoot),
-      (err: Error) => {
-        assert.match(err.message, /路径越界|符号链接/)
-        return true
-      },
+    const contrib = BUILTIN_SKILLS_OFFICE_PLUGIN.contributes!.skills!
+    const result = await seedSkillsContribution(
+      'skills.office',
+      contrib,
+      workspaceRoot,
     )
+    assert.equal(result.status, 'failed')
+    assert.match(result.reason ?? '', /路径越界|符号链接/)
     // Must not seed SKILL.md under outside via symlink.
     const { readdir } = await import('node:fs/promises')
     const names = await readdir(outside)

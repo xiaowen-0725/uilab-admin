@@ -1,5 +1,6 @@
 /**
- * Sidecar plugin kernel public surface (#18 SecurityPolicy, #19 Registry).
+ * Sidecar plugin public surface — Registry, SecurityPolicy, SecretRef, loaders.
+ * Office assembly uses this package only (no office-mcp / office-skills façades).
  */
 
 export type {
@@ -74,4 +75,17 @@ export {
   type SkillsAggregate,
   type SkillsSeedResult,
 } from './skills-loader.js'
+
+export {
+  applyMcpNeedsApproval,
+  buildMcpChildEnv,
+  forceToolNeedsApproval,
+  mergeReadOnlyAllowlist,
+  resolveMcpChildEnvKeys,
+  resolveMcpContribution,
+  type McpHost,
+  type McpLoadAggregate,
+  type McpServerLoadStatus,
+  type ResolvedMcpServer,
+} from './mcp-loader.js'
 

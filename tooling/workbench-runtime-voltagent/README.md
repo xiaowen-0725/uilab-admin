@@ -105,21 +105,20 @@ Then open empty / 新对话 and send a message. Capture tasks still use local-si
 
 Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`contained` + `virtualMode`）与 DIY `resolvePathWithinRoot`。
 
-### MCP 连接器（O4 · 可选）
+### 插件系统（PluginRegistry）
 
-文档/知识库与日历 MCP **默认关闭**。配置 URL 或 stdio 命令后注入 Agent tools。  
-**默认全部工具 `needsApproval`**；仅当 env `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 列出时，精确匹配的名称可免审批（无内置猜测白名单）。  
-连接失败**不崩溃**，本地 Workspace FS + Skills 仍可用；`capabilities`/工具列表只反映真实已连接工具。
+office 装配**只经** `createPluginRegistry().load()` 聚合：
 
-| 连接器 | 启用方式（任选） |
-| --- | --- |
-| **docs**（飞书文档/知识库语义） | `MCP_DOCS_URL` 或 `FEISHU_DOCS_MCP_URL`；或 `MCP_DOCS_COMMAND` + `MCP_DOCS_ARGS` |
-| **calendar**（日历语义） | `MCP_CALENDAR_URL` 或 `FEISHU_CALENDAR_MCP_URL`；或 `MCP_CALENDAR_COMMAND` + `MCP_CALENDAR_ARGS` |
+| Builtin 插件 | 贡献 | 启用 |
+| --- | --- | --- |
+| `mcp.docs` | 文档/知识库 MCP | `MCP_DOCS_URL` / `FEISHU_DOCS_MCP_URL` 或 `MCP_DOCS_COMMAND` + `MCP_DOCS_ARGS` |
+| `mcp.calendar` | 日历 MCP | `MCP_CALENDAR_URL` / `FEISHU_CALENDAR_MCP_URL` 或 `MCP_CALENDAR_COMMAND` + `MCP_CALENDAR_ARGS` |
+| `skills.office` | `/skills` 下三 skill + output 目录 | 默认启用；`PLUGINS_DISABLED=skills.office` 可关 |
 
-可选：`MCP_DOCS_BEARER_TOKEN` / `MCP_CALENDAR_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`。  
-stdio 子进程 env：**按连接器隔离**（docs 不会自动拿到 `GOOGLE_APPLICATION_CREDENTIALS`；calendar 不会替 docs 扩展无关密钥）。  
-扩展：`MCP_DOCS_CHILD_ENV_KEYS` / `MCP_CALENDAR_CHILD_ENV_KEYS`；共享非密钥：`MCP_CHILD_ENV_KEYS`。模型密钥（`DEEPSEEK_API_KEY` 等）永不转发。
-密钥只放在侧车 `.env`。Renderer **无** MCP SDK。CI 不连真实飞书账号。
+可选：`MCP_*_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`；`PLUGINS_ENABLED` / `PLUGINS_DISABLED`。  
+MCP **默认全部 tools `needsApproval`**；仅 `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 精确免批。  
+stdio child env 按插件 `childEnvKeys` 隔离；`MCP_*_CHILD_ENV_KEYS` / `MCP_CHILD_ENV_KEYS` 可扩展；**模型密钥永不转发**。  
+MCP 连接失败不崩溃；Skills seed 路径越界 fail-closed。密钥只放侧车 `.env`。Renderer 无 MCP SDK。
 
 启动日志：`mcp=docs=ok(N),calendar=off` 或 `docs=fail`。
 
@@ -137,13 +136,13 @@ Adapter 已将 `conversationId` 对齐 `taskId`，同 Task 多轮可续上下文
 
 **披露：** UI 标明「本机 VoltAgent Runtime · 非远程生产集群」（profile 由侧车 `AGENT_PROFILE` 决定）；侧车 log 在 office 时注明 Office；Fake 路径文案不变。
 
-### Office Skills（O3）
+### Office Skills（`skills.office` builtin）
 
-首次启动 office 工作区时，侧车会：
+首次启动 office 时 Registry 会：
 
-1. 将内置 `bundled-skills/*` 复制到工作区 `skills/<id>/SKILL.md`（**已存在不覆盖**）
+1. 将 `bundled-skills/*` 复制到工作区 `skills/<id>/SKILL.md`（**已存在不覆盖**）
 2. 创建交付目录：`output/meeting-notes/`、`output/weekly-report/`、`output/research-brief/`
-3. 启用 Workspace skills toolkit + prompt 注入（`workspace_list_skills` / `activate` / `read` …）
+3. 启用 Workspace skills toolkit（`workspace_list_skills` / `activate` / `read` …）
 
 | Skill | 交付路径 |
 | --- | --- |

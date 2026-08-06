@@ -85,10 +85,10 @@ new VoltAgent({
 
 for (const s of mcpStatuses) {
   if (s.status === 'failed') {
-    logger.warn(`MCP ${s.id} failed: ${s.reason ?? 'unknown'}`)
+    logger.warn(`MCP ${s.serverId} failed: ${s.reason ?? 'unknown'}`)
   } else if (s.status === 'connected') {
     logger.info(
-      `MCP ${s.id} connected transport=${s.transport ?? '?'} tools=${s.toolNames.join(',') || '(none)'}`,
+      `MCP ${s.serverId} connected transport=${s.transport ?? '?'} tools=${s.toolNames.join(',') || '(none)'}`,
     )
   }
 }
