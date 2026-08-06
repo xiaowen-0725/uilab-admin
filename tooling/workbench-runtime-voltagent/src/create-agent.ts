@@ -21,6 +21,7 @@ import {
   formatMcpStatusLine,
   loadOfficeMcpTools,
 } from './office-mcp.js'
+// MCP load is backed by PluginRegistry + builtin manifests (#19).
 import {
   OFFICE_SKILLS_VIRTUAL_ROOT,
   ensureOfficeSkills,
