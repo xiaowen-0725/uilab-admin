@@ -8,10 +8,10 @@
 
 | Lane | Focus | Status |
 | --- | --- | --- |
-| Codex adversarial-review A | #18 SecurityPolicy + SecretRef | **Completed** (`review-msh1a6hl-avyptb`) — structured findings |
-| Codex adversarial-review B | #19+#20 Registry MCP + Skills | Intermediate (isolation / degraded paths); no final findings dump yet |
-| Codex adversarial-review C | #21 domain CLI | Intermediate: child-env + approval + partial tools-on-fail |
-| Codex adversarial-review D | #22–#25 auth/discovery/doctor/assembly | Intermediate: auth status-only; skills roots fallback |
+| Codex adversarial-review A | #18 SecurityPolicy + SecretRef | **Completed** (`review-msh1a6hl-avyptb`) — 3 P1 + 1 P2 |
+| Codex adversarial-review B | #19+#20 Registry MCP + Skills | **Completed** (`review-msh1a6hl-i1gpo0`) — 4 P1 + 1 P2 |
+| Codex adversarial-review C | #21 domain CLI | Intermediate (`pazeax`): env merge + placeholder + partial fail |
+| Codex adversarial-review D | #22–#25 auth/discovery/doctor | Intermediate (`56649f`): CLI secret prop, doctor tokens, auth injection |
 | Local explore (security) | Full stack adversarial | **Completed** — P0/P1/P2 |
 | Local explore (spec) | Ticket acceptance vs Spec | **Completed** — gap table |
 
@@ -58,7 +58,7 @@ env: options.env ? { ...process.env, ...options.env } : process.env
 
 ---
 
-## Codex #18 final findings (verbatim themes)
+## Codex #18 final findings
 
 Job `review-msh1a6hl-avyptb` — **No-ship: 3 P1 + 1 P2**
 
@@ -68,6 +68,18 @@ Job `review-msh1a6hl-avyptb` — **No-ship: 3 P1 + 1 P2**
 | high | Model-provider hard deny misses common credentials | e.g. `HF_TOKEN`, `AWS_SECRET_ACCESS_KEY`, …; `GOOGLE_APPLICATION_CREDENTIALS` exempt |
 | high | CLI manifests can disable approval for mutating commands | `needsApproval:false` without requiring `readOnly` |
 | medium | Keychain stub reports unsupported as “unconfigured” | `null` resolve / silent clear |
+
+## Codex #19+#20 final findings
+
+Job `review-msh1a6hl-i1gpo0` — **No-ship: 4 P1 + 1 P2**
+
+| Sev | Title | Notes |
+| --- | --- | --- |
+| high | Non-settling MCP blocks every later contribution | Serial `getTools` await, no hard deadline; Skills/CLI/auth wait behind MCP aggregate |
+| high | Local Skills can escape plugin root via paths/symlinks | absolute `bundledRelativeDir`; relative resolves to package root not plugin root; symlink follow on template |
+| high | One failed Skills plugin aborts entire Office sidecar | `create-agent` throws on any skills `failed`; skips registry `disconnect` |
+| high | `PLUGINS_DISABLED=skills.office` does not unmount seeded skills | fallback `skillRoots=['/skills']` + autoDiscover + hard-coded instructions |
+| medium | Failed empty-tools MCP hidden if sibling connects | plugin `loadStatus` stays `loaded` when any MCP connected |
 
 ---
 
@@ -123,11 +135,13 @@ Job `review-msh1a6hl-avyptb` — **No-ship: 3 P1 + 1 P2**
 
 ## Recommended fix order
 
-1. **P0/P1:** `defaultCliRunner` + auth statusCommand runner — closed env only.  
-2. **P1:** `decideCliCommandNeedsApproval` — `needsApproval:false` only with explicit `readOnly:true` (or host policy override).  
-3. **P1:** Align auth bearer env names with MCP `bearerTokenFromEnv` lists.  
-4. **P1:** Broaden model-secret classifier *or* document hard allowlist of child keys only (prefer closed allowlist).  
-5. **P2:** Keychain stub status `unsupported`; durable binding store later.
+1. **P0/P1:** `defaultCliRunner` + auth statusCommand runner — **closed env only** (no `...process.env`).  
+2. **P1:** MCP load timeout / isolation so hung docs cannot block calendar/skills/CLI.  
+3. **P1:** Skills: plugin-relative roots only; no absolute escape; office assembly soft-fail optional local skills; no `/skills` fallback when disabled.  
+4. **P1:** `decideCliCommandNeedsApproval` — `needsApproval:false` only with explicit `readOnly:true`.  
+5. **P1:** Align auth bearer env names with MCP `bearerTokenFromEnv` lists.  
+6. **P1:** Broaden model-secret classifier *or* closed child-key allowlist only.  
+7. **P2:** Plugin status when any MCP server failed; Keychain stub `unsupported`.
 
 ---
 
