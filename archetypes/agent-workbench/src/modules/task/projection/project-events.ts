@@ -17,6 +17,7 @@ import {
   type TurnId,
 } from '../model/lifecycle'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
+import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
 import type {
   ProjectionState,
@@ -785,8 +786,14 @@ export function applyRuntimeEvent(
     case 'tool.completed': {
       const toolId = payloadString(envelope.payload, 'toolId') ?? envelope.eventId
       const label = payloadString(envelope.payload, 'label')
-      const summary = payloadString(envelope.payload, 'summary')
-      const children = parseChildren(rec.items ?? rec.children)
+      // Prefer explicit summary/items; fall back to normalizing raw `output`
+      // so VoltAgent streams that only carry `output` still expand on Timeline.
+      const fromOutput =
+        rec.output !== undefined ? normalizeToolOutput(rec.output) : undefined
+      const summary =
+        payloadString(envelope.payload, 'summary') ?? fromOutput?.summary
+      const children =
+        parseChildren(rec.items ?? rec.children) ?? fromOutput?.items
       upsertByKey(next, envelope, 'tool-group', toolId, {
         title: label ?? undefined,
         body: summary ? `${summary}\n` : undefined,

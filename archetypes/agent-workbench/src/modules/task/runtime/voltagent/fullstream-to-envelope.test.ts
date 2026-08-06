@@ -76,6 +76,83 @@ describe('mapFullStreamChunks', () => {
     expect(envelopes[4]?.payload).toMatchObject({ toolId: 'c1' })
   })
 
+  it('normalizes read_file output into summary for Timeline expansion', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'r1',
+          toolName: 'read_file',
+          args: { path: '/notes/plan.txt' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'r1',
+          toolName: 'read_file',
+          output: { content: 'phase 1 plan\nnext steps', bytes: 24 },
+        },
+      ],
+      baseCtx(),
+    )
+    const completed = envelopes.find((e) => e.eventType === 'tool.completed')
+    expect(completed?.payload).toMatchObject({
+      toolId: 'r1',
+      summary: expect.stringContaining('phase 1 plan'),
+      output: { content: 'phase 1 plan\nnext steps', bytes: 24 },
+    })
+    const payload = completed?.payload as { items?: string[] }
+    // Multi-line content → expandable items
+    expect(payload.items).toEqual(['phase 1 plan', 'next steps'])
+  })
+
+  it('redacts secret-shaped strings in envelope output residual', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-result',
+          toolCallId: 'sec1',
+          toolName: 'read_file',
+          output: { content: 'token=super-secret-value\nline2' },
+        },
+      ],
+      baseCtx(),
+    )
+    const completed = envelopes.find((e) => e.eventType === 'tool.completed')
+    const payload = completed?.payload as {
+      summary?: string
+      items?: string[]
+      output?: { content?: string }
+    }
+    const blob = JSON.stringify(payload)
+    expect(blob).not.toMatch(/super-secret-value/)
+    expect(blob).toMatch(/\[redacted\]/)
+  })
+
+  it('normalizes ls string listing into items', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'ls1',
+          toolName: 'ls',
+          args: { path: '/' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'ls1',
+          toolName: 'ls',
+          output: '/notes/ (directory)\n/output/ (directory)',
+        },
+      ],
+      baseCtx(),
+    )
+    const completed = envelopes.find((e) => e.eventType === 'tool.completed')
+    expect(completed?.payload).toMatchObject({
+      toolId: 'ls1',
+      items: ['/notes/ (directory)', '/output/ (directory)'],
+    })
+  })
+
   it('maps write tool result to tool.completed + file.changed', () => {
     const { envelopes } = mapFullStreamChunks(
       [

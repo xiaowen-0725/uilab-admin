@@ -4,6 +4,10 @@
  */
 
 import type { AgentRuntimeEventEnvelope } from '../../protocol/events'
+import {
+  normalizeToolOutput,
+  sanitizeToolOutputForEnvelope,
+} from '../tool-output-normalize'
 
 export interface MapFullStreamContext {
   projectId: string
@@ -192,6 +196,9 @@ export function mapFullStreamChunk(
       const callId = toolCallId(chunk)
       const output = chunk.output ?? chunk.result ?? chunk.content
       const isError = chunk.isError === true || chunk.error != null
+      const normalized = normalizeToolOutput(output)
+      // Path extraction uses raw output; envelope keeps a size-bounded redacted copy.
+      const safeOutput = sanitizeToolOutputForEnvelope(output)
 
       if (isShellTool(name)) {
         push('command.completed', {
@@ -200,7 +207,10 @@ export function mapFullStreamChunk(
           toolName: name,
           name,
           label: name,
-          output,
+          output: safeOutput,
+          // Presentation fields for projection (command body can use summary)
+          summary: normalized.summary,
+          items: normalized.items,
           isError,
         })
       } else {
@@ -210,7 +220,9 @@ export function mapFullStreamChunk(
           toolName: name,
           name,
           label: name,
-          output,
+          output: safeOutput,
+          summary: normalized.summary,
+          items: normalized.items,
           isError,
           status: isError ? 'error' : 'completed',
         })

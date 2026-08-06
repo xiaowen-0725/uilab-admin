@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
+import { mapFullStreamChunks } from '../runtime/voltagent/fullstream-to-envelope'
 import { emptyProjectionState } from './empty-read-model'
 import { applyRuntimeEvent, projectEvents } from './project-events'
 
@@ -125,5 +126,71 @@ describe('projectEvents liveStatus + file meta', () => {
     ])
     const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
     expect(tool?.meta?.children).toEqual(['a.txt', 'b.txt'])
+  })
+
+  it('tool.completed falls back from raw output to expandable children', () => {
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = projectEvents(state, [
+      mk(1, 'run.started', {}),
+      mk(2, 'tool.called', {
+        toolId: 'ls1',
+        label: 'ls',
+        name: 'ls',
+      }),
+      mk(3, 'tool.completed', {
+        toolId: 'ls1',
+        label: 'ls',
+        // No summary/items — only raw VoltAgent-style output
+        output: '/notes/ (directory)\n/output/ (directory)',
+      }),
+    ])
+    const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
+    expect(tool?.status).toBe('completed')
+    expect(tool?.meta?.children).toEqual([
+      '/notes/ (directory)',
+      '/output/ (directory)',
+    ])
+    expect(tool?.body).toBeTruthy()
+  })
+
+  it('mapper ls envelopes project to expandable tool-group children', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'ls-e2e',
+          toolName: 'ls',
+          args: { path: '/' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'ls-e2e',
+          toolName: 'ls',
+          output: '/notes/ (directory)\n/output/ (directory)',
+        },
+      ],
+      {
+        projectId: 'p',
+        taskId: 't',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        nextSequence: 1,
+        schemaVersion: 1,
+        nowIso: () => '2026-08-05T00:00:00.000Z',
+        eventIdPrefix: 'test',
+      },
+    )
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = projectEvents(state, envelopes)
+    const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
+    expect(tool?.status).toBe('completed')
+    expect(tool?.meta?.children).toEqual([
+      '/notes/ (directory)',
+      '/output/ (directory)',
+    ])
+    // Expandable content is present (Timeline ToolRow uses meta.children / body).
+    expect(
+      (tool?.meta?.children?.length ?? 0) > 0 || Boolean(tool?.body?.trim()),
+    ).toBe(true)
   })
 })
