@@ -120,13 +120,22 @@ export function mapFullStreamChunk(
 
     case 'text-delta': {
       const delta = textDelta(chunk)
-      if (delta) push('output.delta', { text: delta, delta })
+      // phase optional: projection also infers; mid-stream defaults commentary.
+      if (delta) {
+        push('output.delta', {
+          text: delta,
+          delta,
+          phase: 'commentary',
+        })
+      }
       break
     }
 
     case 'text-end':
       push('output.completed', {
         text: asString(chunk.content) ?? asString(chunk.text) ?? '',
+        // End-of-step text often still mid-turn; run.completed promotes final.
+        phase: 'commentary',
       })
       break
 

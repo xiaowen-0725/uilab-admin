@@ -26,6 +26,7 @@ import {
   toolKindHint,
 } from './tool-activity-copy'
 import type {
+  AssistantMessageRole,
   ProjectionState,
   TaskReadModel,
   TimelineFollowMode,
@@ -295,34 +296,92 @@ function ensureRunTerminal(
   )
 }
 
+function isProcessBreakingCategory(category: TimelineItemCategory): boolean {
+  return (
+    category === 'tool-group' ||
+    category === 'command-execution' ||
+    category === 'approval-request' ||
+    category === 'file-change' ||
+    category === 'input-request'
+  )
+}
+
+function resolveOutputPhase(
+  envelope: AgentRuntimeEventEnvelope,
+  runStatus: RunStatus | null,
+): AssistantMessageRole {
+  const raw = payloadString(envelope.payload, 'phase')
+  if (raw === 'commentary' || raw === 'final') return raw
+  // Heuristic: mid-run text is commentary; idle/terminal defaults final.
+  if (runStatus === 'running' || runStatus === 'queued' || runStatus === 'cancelling') {
+    return 'commentary'
+  }
+  return 'final'
+}
+
+/**
+ * Append assistant text. Opens a new segment after tools/approvals so
+ * commentary can interleave with tool rows (Codex-style process fold).
+ */
 function appendAssistantDelta(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
   delta: string,
+  role: AssistantMessageRole,
 ): void {
   const runId = envelope.runId as RunId | undefined
   const version = state.readModel.projectionVersion
-  const idx = findIndex(
-    state.readModel.timeline,
-    (item) => item.category === 'assistant-message' && item.runId === runId,
-  )
-  if (idx >= 0) {
-    const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
-    replaceItem(state, idx, {
+  const timeline = state.readModel.timeline
+
+  let openIdx = -1
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const item = timeline[i]!
+    if (runId && item.runId && item.runId !== runId) continue
+    if (item.category !== 'assistant-message') {
+      if (isProcessBreakingCategory(item.category)) break
+      continue
+    }
+    const itemRole = item.meta?.messageRole ?? 'final'
+    if (itemRole !== role) break
+    // Nothing process-breaking after this assistant → keep appending.
+    const brokenAfter = timeline
+      .slice(i + 1)
+      .some(
+        (x) =>
+          (!runId || !x.runId || x.runId === runId) &&
+          isProcessBreakingCategory(x.category),
+      )
+    if (!brokenAfter) openIdx = i
+    break
+  }
+
+  if (openIdx >= 0) {
+    const base = touchItem(timeline[openIdx]!, envelope, version)
+    replaceItem(state, openIdx, {
       ...base,
       body: `${base.body ?? ''}${delta}`,
       status: 'streaming',
+      meta: mergeMeta(base.meta, { messageRole: role }),
     })
     return
   }
+
+  const seg = timeline.filter(
+    (i) =>
+      i.category === 'assistant-message' &&
+      (!runId || i.runId === runId) &&
+      (i.meta?.messageRole ?? 'final') === role,
+  ).length
+
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `assistant:${runId ?? envelope.eventId}`,
+      id: `assistant:${runId ?? envelope.eventId}:${role}:${seg}`,
       category: 'assistant-message',
       body: delta,
       status: 'streaming',
       runId,
+      meta: { messageRole: role },
     }),
   )
 }
@@ -334,16 +393,24 @@ function finalizeAssistant(
 ): void {
   const runId = envelope.runId as RunId | undefined
   const version = state.readModel.projectionVersion
-  const idx = findIndex(
-    state.readModel.timeline,
-    (item) => item.category === 'assistant-message' && item.runId === runId,
-  )
+  // Prefer open commentary/final segment for this run (last assistant).
+  let idx = -1
+  for (let i = state.readModel.timeline.length - 1; i >= 0; i--) {
+    const item = state.readModel.timeline[i]!
+    if (item.category !== 'assistant-message') continue
+    if (runId && item.runId && item.runId !== runId) continue
+    idx = i
+    break
+  }
   if (idx >= 0) {
     const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
     replaceItem(state, idx, {
       ...base,
       body: finalText && finalText.length > 0 ? finalText : base.body,
       status: 'completed',
+      meta: mergeMeta(base.meta, {
+        messageRole: base.meta?.messageRole ?? 'final',
+      }),
     })
     return
   }
@@ -351,13 +418,40 @@ function finalizeAssistant(
     pushItem(
       state,
       baseItem(state, envelope, {
-        id: `assistant:${runId ?? envelope.eventId}`,
+        id: `assistant:${runId ?? envelope.eventId}:final:0`,
         category: 'assistant-message',
         body: finalText,
         status: 'completed',
         runId,
+        meta: { messageRole: 'final' },
       }),
     )
+  }
+}
+
+/** On run complete: last assistant segment → final; earlier ones → commentary. */
+function promoteAssistantRolesOnRunComplete(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const runId = envelope.runId as RunId | undefined
+  const indices: number[] = []
+  state.readModel.timeline.forEach((item, i) => {
+    if (item.category !== 'assistant-message') return
+    if (runId && item.runId && item.runId !== runId) return
+    indices.push(i)
+  })
+  if (indices.length === 0) return
+  const lastIdx = indices[indices.length - 1]!
+  for (const i of indices) {
+    // Do not touch sourceEventIds — role promotion is presentation-only.
+    const base = state.readModel.timeline[i]!
+    const role: AssistantMessageRole = i === lastIdx ? 'final' : 'commentary'
+    replaceItem(state, i, {
+      ...base,
+      status: 'completed',
+      meta: mergeMeta(base.meta, { messageRole: role }),
+    })
   }
 }
 
@@ -498,7 +592,7 @@ function pushUnsupported(state: MutableState, envelope: AgentRuntimeEventEnvelop
 
 /**
  * Duration for completed turn chrome from payload.durationMs or
- * startedAt stamp stored on run-terminal meta.path (`startedAt:ISO`).
+ * run-terminal meta.startedAt (legacy: meta.path `startedAt:ISO`).
  */
 function computeRunDurationMs(
   state: MutableState,
@@ -514,9 +608,13 @@ function computeRunDurationMs(
       item.category === 'run-terminal' &&
       (runId ? item.runId === runId : true),
   )
-  const stamp = terminal?.meta?.path
-  if (stamp?.startsWith('startedAt:') && envelope.occurredAt) {
-    const start = Date.parse(stamp.slice('startedAt:'.length))
+  const startedAt =
+    terminal?.meta?.startedAt ??
+    (terminal?.meta?.path?.startsWith('startedAt:')
+      ? terminal.meta.path.slice('startedAt:'.length)
+      : undefined)
+  if (startedAt && envelope.occurredAt) {
+    const start = Date.parse(startedAt)
     const end = Date.parse(envelope.occurredAt)
     if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
       return end - start
@@ -610,8 +708,9 @@ export function applyRuntimeEvent(
       setRunStatus(next, 'running', envelope)
       const startedAt =
         typeof envelope.occurredAt === 'string' ? envelope.occurredAt : null
-      ensureRunTerminal(next, envelope, 'running', '正在思考', {
-        // Opaque start stamp for duration chips on complete (not a file path).
+      ensureRunTerminal(next, envelope, 'running', '已处理', {
+        startedAt: startedAt ?? undefined,
+        // Legacy stamp for older duration readers.
         path: startedAt ? `startedAt:${startedAt}` : undefined,
       })
       setLiveStatus(next, '正在思考')
@@ -619,9 +718,26 @@ export function applyRuntimeEvent(
     }
     case 'output.delta': {
       const delta = payloadText(envelope.payload, ['text', 'delta']) ?? ''
-      if (delta) appendAssistantDelta(next, envelope, delta)
-      if (next.readModel.runStatus === 'running') {
-        setLiveStatus(next, '正在生成回复…')
+      const phase = resolveOutputPhase(envelope, next.readModel.runStatus)
+      if (delta) appendAssistantDelta(next, envelope, delta, phase)
+      // Only show generic generating when no tool activity is more specific.
+      if (
+        next.readModel.runStatus === 'running' &&
+        phase === 'commentary' &&
+        !next.readModel.liveStatus?.startsWith('正在读') &&
+        !next.readModel.liveStatus?.startsWith('正在列') &&
+        !next.readModel.liveStatus?.startsWith('正在写') &&
+        !next.readModel.liveStatus?.startsWith('正在搜') &&
+        !next.readModel.liveStatus?.startsWith('正在执') &&
+        !next.readModel.liveStatus?.startsWith('正在调')
+      ) {
+        // Keep tool liveStatus if already set; else light generating hint.
+        if (
+          !next.readModel.liveStatus ||
+          next.readModel.liveStatus === '正在思考'
+        ) {
+          setLiveStatus(next, '正在生成回复…')
+        }
       }
       break
     }
@@ -631,6 +747,7 @@ export function applyRuntimeEvent(
       break
     }
     case 'run.completed': {
+      promoteAssistantRolesOnRunComplete(next, envelope)
       setRunStatus(next, 'completed', envelope)
       const durationMs = computeRunDurationMs(next, envelope)
       ensureRunTerminal(next, envelope, 'completed', '已处理', {

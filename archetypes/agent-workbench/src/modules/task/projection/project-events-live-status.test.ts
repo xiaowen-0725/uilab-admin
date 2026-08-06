@@ -219,4 +219,41 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(tool?.title).toBe('正在读取 notes/a.md')
     expect(state.readModel.liveStatus).toBe('正在读取 notes/a.md')
   })
+
+  it('mid-run output is commentary; run.completed promotes last assistant to final', () => {
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = projectEvents(state, [
+      mk(1, 'run.started', {}),
+      mk(2, 'output.delta', { text: '先看目录。', phase: 'commentary' }),
+      mk(3, 'tool.called', {
+        toolId: 'ls1',
+        name: 'ls',
+        args: { path: '/' },
+      }),
+      mk(4, 'tool.completed', {
+        toolId: 'ls1',
+        name: 'ls',
+        args: { path: '/' },
+      }),
+      mk(5, 'output.delta', { text: '目录是空的。', phase: 'commentary' }),
+      mk(6, 'output.delta', { text: '这是成稿。' }),
+      mk(7, 'run.completed', {}),
+    ])
+    const assistants = state.readModel.timeline.filter(
+      (i) => i.category === 'assistant-message',
+    )
+    expect(assistants.length).toBeGreaterThanOrEqual(2)
+    const last = assistants[assistants.length - 1]
+    expect(last?.meta?.messageRole).toBe('final')
+    expect(last?.body).toContain('成稿')
+    const earlier = assistants.slice(0, -1)
+    for (const a of earlier) {
+      expect(a.meta?.messageRole).toBe('commentary')
+    }
+    const terminal = state.readModel.timeline.find(
+      (i) => i.category === 'run-terminal',
+    )
+    expect(terminal?.title).toBe('已处理')
+    expect(terminal?.meta?.startedAt || terminal?.meta?.path).toBeTruthy()
+  })
 })

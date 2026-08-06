@@ -31,6 +31,12 @@ export interface TimelineItemSourceRange {
   to: number
 }
 
+/**
+ * Assistant text role for process fold (Codex commentary vs final).
+ * Optional on envelopes as output.phase; projection may also infer.
+ */
+export type AssistantMessageRole = 'commentary' | 'final'
+
 /** Optional presentation meta (file diffs, tool children, turn duration). */
 export interface TimelineItemMeta {
   /** File-change: line additions / deletions. */
@@ -42,10 +48,17 @@ export interface TimelineItemMeta {
   children?: string[]
   /** File path when distinct from title. */
   path?: string
+  /** ISO start time for live「已处理 Xs」while run is active. */
+  startedAt?: string
   /** Run duration for completed turn chrome (ms). */
   durationMs?: number
   /** Tool kind hint for icon (read / web_search / command / generic). */
   toolKind?: string
+  /**
+   * Assistant segment role: mid-turn narration vs final answer.
+   * Process fold shows commentary; final renders outside the fold.
+   */
+  messageRole?: AssistantMessageRole
 }
 
 export interface TimelineItem {
