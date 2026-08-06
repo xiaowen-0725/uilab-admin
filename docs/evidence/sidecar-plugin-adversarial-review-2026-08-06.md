@@ -1,172 +1,133 @@
 # Adversarial multi-axis review — Sidecar Plugin System (#17–#25)
 
 **Date:** 2026-08-06  
-**Range:** `20d1cec^` / `b173569` … `HEAD` (`f9ba521`)  
-**Package:** `tooling/workbench-runtime-voltagent` (`src/plugin/*`, `create-agent.ts`)  
+**Range:** `b173569` / `20d1cec^` … `HEAD` (through close-out `f9ba521` + later docs)  
+**Package:** `tooling/workbench-runtime-voltagent` (`src/plugin/*`, `create-agent.ts`, operator CLI)
 
-**Sources (parallel):**
+**Sources (all parallel lanes finished):**
 
-| Lane | Focus | Status |
-| --- | --- | --- |
-| Codex adversarial-review A | #18 SecurityPolicy + SecretRef | **Completed** (`review-msh1a6hl-avyptb`) — 3 P1 + 1 P2 |
-| Codex adversarial-review B | #19+#20 Registry MCP + Skills | **Completed** (`review-msh1a6hl-i1gpo0`) — 4 P1 + 1 P2 |
-| Codex adversarial-review C | #21 domain CLI | Intermediate (`pazeax`): env merge + placeholder + partial fail |
-| Codex adversarial-review D | #22–#25 auth/discovery/doctor | Intermediate (`56649f`): CLI secret prop, doctor tokens, auth injection |
-| Local explore (security) | Full stack adversarial | **Completed** — P0/P1/P2 |
-| Local explore (spec) | Ticket acceptance vs Spec | **Completed** — gap table |
+| Lane | Focus | Job | Status |
+| --- | --- | --- | --- |
+| Codex A | #18 SecurityPolicy + SecretRef | `review-msh1a6hl-avyptb` | **Done** — 3 P1 + 1 P2 |
+| Codex B | #19+#20 Registry MCP + Skills | `review-msh1a6hl-i1gpo0` | **Done** — 4 P1 + 1 P2 |
+| Codex C | #21 domain CLI | `review-msh1a6hl-pazeax` | **Done** — **1 P0** + 2 P1 + 1 P2 |
+| Codex D | #22–#25 auth / discovery / doctor / assembly | `review-msh1a6hm-56649f` | **Done** — **1 P0** + 6 P1 + 1 P2 |
+| Local explore | security adversarial | subagent | **Done** — P0 env merge |
+| Local explore | spec compliance | subagent | **Done** — ticket gap table |
 
-Base for Codex: branch review against plugin-era parent (`b173569` / `20d1cec^`).  
-Companion: `codex-companion.mjs adversarial-review --background --base … --scope branch`.
+Invocation: `codex-companion.mjs adversarial-review --background --base <plugin-parent> --scope branch "<ticket focus>"`.
 
 ---
 
-## Verdict: **block** (until child-env isolation fixed)
+## Verdict: **block** (no-ship)
 
 | Scenario | Verdict |
 | --- | --- |
-| Ship office with **only** MCP HTTP + skills, **no** domain CLI enabled | **ship-with-nits** (auth alias / doctor honesty nits) |
-| Ship with **`cli.feishu` / any domain CLI / PLUGIN_PATHS CLI** enabled | **block** until `defaultCliRunner` stops merging full `process.env` |
-| Trust untrusted `PLUGIN_PATHS` writers | **block** until host re-asserts approval (cannot self-certify `needsApproval:false`) |
+| Office + domain CLI / PLUGIN_PATHS CLI | **block** — P0 child-env secret inheritance |
+| Office MCP HTTP + skills only, CLI never enabled | **ship-with-nits** after addressing skills disable fallback + MCP hang isolation |
+| Untrusted `PLUGIN_PATHS` writers | **block** — self-certified free tools + arbitrary command + env leak |
 
-Fake Runtime path unchanged by this review (plugins load only in sidecar office assembly).
+Fake Runtime path is out of plugin load; not implicated by P0.
 
 ---
 
-## Consensus P0 / high (Codex + local)
+## Consensus P0 (Codex C+D + local)
 
-### 1. Domain CLI child env inherits full host secrets (**must-fix**)
+### Filtered child env is nullified — `defaultCliRunner`
 
-**Where:** `tooling/workbench-runtime-voltagent/src/plugin/cli-loader.ts` — `defaultCliRunner`
+**File:** `tooling/workbench-runtime-voltagent/src/plugin/cli-loader.ts`
 
 ```ts
 env: options.env ? { ...process.env, ...options.env } : process.env
 ```
 
-**Contract claimed:** `filterChildEnv` + model-key hard-deny for stdio/CLI children.  
-**Actual:** Filtered map is merged **onto** full `process.env`, so omitted keys (including `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`) still inherit.
+`filterChildEnv` / model-key hard-deny are bypassed because omitted keys still inherit from host.
 
-**Evidence:**
-- Codex #18: synthetic `OPENAI_API_KEY` sentinel **observed in child** when filtered map omitted it.
-- Local security review: same root cause; MCP stdio path does **not** re-merge host env the same way.
-- Codex #18 also notes `secret-store` / auth `cli_session` probes can forward full env into status runners.
+**Probes:**
+- Codex A/C/D + local: synthetic secrets / `OPENAI_API_KEY` / `LEAK_ME` observed in child when not in filtered map.
+- Auth statusCommand runners can forward full env similarly (Codex A/D).
 
-**Impact:** Enabled domain CLI binary (builtin or PLUGIN_PATHS) can dump model credentials via stdout returned to the agent (truncated but large).
+**Impact:** Any ready domain CLI can dump model keys via tool stdout.
 
-**Fix direction:** Pass **only** filtered env (plus intentional `CHILD_ENV_BASE_KEYS` already inside `filterChildEnv`). Regression test: runner sees no `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`.
-
-**Severity:** Local called **P0**; Codex labeled **P1 high** (“No-ship”). Treat as **ship blocker**.
+**Fix:** Pass **only** closed filtered env (base keys already in `filterChildEnv`). Never spread `process.env`. Add regression test on runner `env` argument.
 
 ---
 
-## Codex #18 final findings
+## Codex lane summaries
 
-Job `review-msh1a6hl-avyptb` — **No-ship: 3 P1 + 1 P2**
+### #18 (`avyptb`) — No-ship: 3 P1 + 1 P2
 
-| Sev | Title | Notes |
-| --- | --- | --- |
-| high | Filtered child environment is replaced with the host environment | CLI execFile + auth probe env merge |
-| high | Model-provider hard deny misses common credentials | e.g. `HF_TOKEN`, `AWS_SECRET_ACCESS_KEY`, …; `GOOGLE_APPLICATION_CREDENTIALS` exempt |
-| high | CLI manifests can disable approval for mutating commands | `needsApproval:false` without requiring `readOnly` |
-| medium | Keychain stub reports unsupported as “unconfigured” | `null` resolve / silent clear |
+| Sev | Finding |
+| --- | --- |
+| high | Child env replaced with host env (CLI + auth probe) |
+| high | Model-key hard deny incomplete (`HF_TOKEN`, `AWS_SECRET_*`, …; `GOOGLE_APPLICATION_CREDENTIALS` exempt) |
+| high | CLI `needsApproval:false` without requiring `readOnly` |
+| medium | Keychain stub “unconfigured” vs unsupported |
 
-## Codex #19+#20 final findings
+### #19+#20 (`i1gpo0`) — No-ship: 4 P1 + 1 P2
 
-Job `review-msh1a6hl-i1gpo0` — **No-ship: 4 P1 + 1 P2**
+| Sev | Finding |
+| --- | --- |
+| high | Non-settling MCP blocks all later contributions (serial await, no hard deadline) |
+| high | Local skills path/symlink escape (`bundledRelativeDir` absolute; package-root resolve; symlink follow) |
+| high | One skills failure aborts entire office assembly (`create-agent` throw; may skip disconnect) |
+| high | `PLUGINS_DISABLED=skills.office` still mounts `/skills` + toolkit + hard-coded skill instructions |
+| medium | Empty-tools MCP failed status hidden if sibling MCP connected |
 
-| Sev | Title | Notes |
-| --- | --- | --- |
-| high | Non-settling MCP blocks every later contribution | Serial `getTools` await, no hard deadline; Skills/CLI/auth wait behind MCP aggregate |
-| high | Local Skills can escape plugin root via paths/symlinks | absolute `bundledRelativeDir`; relative resolves to package root not plugin root; symlink follow on template |
-| high | One failed Skills plugin aborts entire Office sidecar | `create-agent` throws on any skills `failed`; skips registry `disconnect` |
-| high | `PLUGINS_DISABLED=skills.office` does not unmount seeded skills | fallback `skillRoots=['/skills']` + autoDiscover + hard-coded instructions |
-| medium | Failed empty-tools MCP hidden if sibling connects | plugin `loadStatus` stays `loaded` when any MCP connected |
+### #21 (`pazeax`) — No-ship: **P0** + 2 P1 + 1 P2
 
----
+| Sev | Finding |
+| --- | --- |
+| **critical** | Same child-env P0 |
+| high | `{{param}}` in any argv position can select subcommands / reconstruct `sh -c` when command is a shell |
+| high | Mutating CLI can self-disable approval |
+| medium | Mid-contribution CLI failure leaves earlier tools mounted while status=failed |
 
-## Additional findings (local + Codex intermediate)
+### #22–#25 (`56649f`) — No-ship: **P0** + 6 P1 + 1 P2
 
-### P1
-
-2. **Local plugin self-certifies free tools** — `discover.ts` accepts `needsApproval: false` / `readOnlyToolNames`; host trusts flags. Writer of `PLUGIN_PATHS` can opt out of HITL.  
-3. **Auth vs MCP bearer alias mismatch** — MCP load accepts `MCP_DOCS_TOKEN` / `MCP_BEARER_TOKEN`; auth `secretRef` only checks `MCP_DOCS_BEARER_TOKEN` → doctor `auth=missing` while MCP may connect.  
-4. **Absolute `defaultCwd` / `bundledRelativeDir`** from declarative plugins (operator `PLUGIN_PATHS` trust boundary).  
-5. **Codex C intermediate:** model-controlled `{{param}}` may expand into argv positions that look like subcommands if templates are poorly written (still allowlisted templates only).  
-6. **Codex D intermediate:** auth bindings used for **status only**, not credential injection into MCP loaders (may be intentional for env_ref MVP).  
-7. **Codex D intermediate:** `create-agent` falls back to `skillRoots=['/skills']` when registry returns none — disabling `skills.office` may not isolate an already-seeded disk tree.
-
-### P2
-
-- `sanitizeHint` pattern-only (no SecretStore known-value pass).  
-- `auth=expired` never produced by resolver.  
-- `AuthBindingStore` ephemeral; no durable `~/.uilab/runtime` (spec product path).  
-- Office assembly hard-throws on any skills `failed` (stricter than per-plugin isolation).  
-- Keychain stub honesty (Codex P2).
-
----
-
-## Spec compliance (local)
-
-| Ticket | Close-out claim | Spec review |
-| --- | --- | --- |
-| #18 | Closed | **partial** — policy + env_ref OK; durable store missing; child-env contract broken for CLI |
-| #19 | Closed | **done** |
-| #20 | Closed | **done** (assembly throws on skills fail is stricter isolation) |
-| #21 | Closed | **partial** — allowlist/execFile OK; **env merge undoes hard-deny** |
-| #22 | Closed | **partial** — enable≠login OK; alias mismatch; expired unused |
-| #23 | Closed | **done** |
-| #24 | Closed | **done** |
-| #25 | Closed | **done** (docs/Fake gates) |
+| Sev | Finding |
+| --- | --- |
+| **critical** | Same child-env P0 |
+| high | `plugin.json` can register “JS” via CLI pointing at node + script + free approval |
+| high | AuthBindingStore status-only; clear does not revoke env-based MCP tokens |
+| high | Doctor can print opaque credential values from raw error strings |
+| high | `PLUGINS_ENABLED` **replaces** default set (docs say override list; office loses skills if only `cli.feishu`) |
+| medium | Production `cli_session` never probed (no runner injected in create-agent/operator) |
+| high | create-agent remounts skills after Registry disables them |
+| medium | Non-canonical IDs (whitespace) bypass conflict / enable matching |
 
 ---
 
-## What looks solid (all lanes)
+## Local security / spec (compressed)
 
-- MCP empty tools → `failed`, not `ok(0)`.  
-- MCP tools default `needsApproval`; empty allowlist fail-closed.  
-- External `plugin.json` **cannot** load arbitrary JS (`contributes.tools` rejected).  
-- CLI uses `execFile` + `shell: false` (no shell string join).  
-- Skills missing-only seed + path helpers refuse symlink escape.  
-- Registry isolates discovery/MCP/CLI failures for other plugins.  
-- Doctor/list designed not to print secret **values** (pattern redaction residual risk).  
-- Office assembly is Registry-only (no dual-connector façade).  
-- Fake / RuntimePort path not loading sidecar plugins in browser.
+- Same CLI env P0; PLUGIN_PATHS trust for free tools; absolute cwd/template paths.
+- Spec: #19/#20/#23/#24 largely done; #18/#21/#22 overstated “done” relative to child-env + auth completeness.
+- Solid: MCP empty→failed, default tool approval, no external `contributes.tools` JS module load, execFile without shell string join, missing-only skills seed helpers, doctor intent.
 
 ---
 
 ## Recommended fix order
 
-1. **P0/P1:** `defaultCliRunner` + auth statusCommand runner — **closed env only** (no `...process.env`).  
-2. **P1:** MCP load timeout / isolation so hung docs cannot block calendar/skills/CLI.  
-3. **P1:** Skills: plugin-relative roots only; no absolute escape; office assembly soft-fail optional local skills; no `/skills` fallback when disabled.  
-4. **P1:** `decideCliCommandNeedsApproval` — `needsApproval:false` only with explicit `readOnly:true`.  
-5. **P1:** Align auth bearer env names with MCP `bearerTokenFromEnv` lists.  
-6. **P1:** Broaden model-secret classifier *or* closed child-key allowlist only.  
-7. **P2:** Plugin status when any MCP server failed; Keychain stub `unsupported`.
+1. **P0** — Closed env for all CLI / statusCommand runners + tests.  
+2. **P1** — MCP load timeout / fail isolation (don’t block skills/CLI forever).  
+3. **P1** — Skills: plugin-relative roots only; no absolute escape; no `/skills` fallback when disabled; soft-fail optional local skills at assembly.  
+4. **P1** — CLI approval: `needsApproval:false` requires `readOnly:true`; reject shell binary + free argv placeholders for action slots if needed.  
+5. **P1** — `PLUGINS_ENABLED` semantics: additive vs replace — pick one and document; default office builtins must stay unless explicitly disabled.  
+6. **P1** — Doctor: redact using known secret values; never raw-pass error strings with tokens.  
+7. **P1** — Auth: either inject SecretRef into MCP loaders or stop reporting `connected` without injection; wire production `cli_session` probe.  
+8. **P2** — Plugin status when any MCP server failed; keychain unsupported; ID normalize/trim.
 
 ---
 
-## Repro commands
+## Repro
 
 ```bash
-# Sidecar suite (still green despite contract hole — no real execFile env assert yet)
-pnpm --filter @uilab/workbench-runtime-voltagent test
-
-# Operator
+pnpm --filter @uilab/workbench-runtime-voltagent test   # green today — missing trust-boundary cases
 pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor -- --json
-
-# Codex (already launched in parallel)
-# node …/codex-companion.mjs adversarial-review --base 20d1cec^ --scope branch "<ticket focus>"
 ```
 
----
+Codex job IDs (this session):  
+`review-msh1a6hl-avyptb`, `review-msh1a6hl-i1gpo0`, `review-msh1a6hl-pazeax`, `review-msh1a6hm-56649f`.
 
-## Job IDs (this session)
-
-| ID | Focus |
-| --- | --- |
-| `review-msh1a6hl-avyptb` | #18 — **completed**, findings above |
-| `review-msh1a6hl-i1gpo0` | #19+#20 |
-| `review-msh1a6hl-pazeax` | #21 |
-| `review-msh1a6hm-56649f` | #22–#25 |
-
-If remaining jobs emit final structured findings later, append under this file’s “Appendix” rather than reopening the verdict unless they contradict the child-env blocker.
+Raw structured dumps archived at session time under companion logs  
+`/var/folders/.../codex-companion/uilab-admin-*/jobs/review-msh1*.log`.
