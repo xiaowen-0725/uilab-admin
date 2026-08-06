@@ -41,9 +41,17 @@ export type {
   PluginContributes,
   PluginKind,
   PluginManifest,
+  SkillsContribution,
 } from './manifest.js'
 
-export { BUILTIN_PLUGINS, BUILTIN_MCP_CALENDAR_PLUGIN, BUILTIN_MCP_DOCS_PLUGIN } from './builtins.js'
+export {
+  BUILTIN_PLUGINS,
+  BUILTIN_MCP_CALENDAR_PLUGIN,
+  BUILTIN_MCP_DOCS_PLUGIN,
+  BUILTIN_SKILLS_OFFICE_PLUGIN,
+  OFFICE_BUILTIN_OUTPUT_DIRS,
+  OFFICE_BUILTIN_SKILL_IDS,
+} from './builtins.js'
 
 export {
   createPluginRegistry,
@@ -51,7 +59,19 @@ export {
   type CreatePluginRegistryOptions,
   type PluginLoadStatus,
   type PluginRegistry,
+  type PluginRegistryLoadOptions,
   type PluginRegistryLoadResult,
   type PluginRuntimeRecord,
 } from './registry.js'
+
+export {
+  listWorkspaceSkillIds,
+  loadSkillsContributions,
+  normalizeVirtualSkillRoot,
+  resolvePluginPackageRoot,
+  resolveSkillsBundledDir,
+  seedSkillsContribution,
+  type SkillsAggregate,
+  type SkillsSeedResult,
+} from './skills-loader.js'
 

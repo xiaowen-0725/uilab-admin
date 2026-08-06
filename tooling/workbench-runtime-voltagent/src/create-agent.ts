@@ -91,7 +91,7 @@ export async function createWorkbenchAgent(
   if (profile === 'office') {
     // O2: create safe default root + first-run README when missing.
     await ensureOfficeWorkspace(workspaceRoot)
-    // O3: seed bundled skills + conventional output dirs.
+    // O3: seed bundled skills via skills.office plugin (missing-only).
     await ensureOfficeSkills(workspaceRoot)
 
     // O5: long-run defaults (maxSteps / summarization / memory).
@@ -101,8 +101,11 @@ export async function createWorkbenchAgent(
     })
 
     // O4: optional docs + calendar MCP (env-gated; degrade on failure).
+    // MCP + skills roots both come from PluginRegistry builtins (#19–#20);
+    // assembly single-registry cutover is #25.
     const mcp = await loadOfficeMcpTools(env)
     const honestyTools = [...tools, ...mcp.toolNames]
+    const skillRoots = [OFFICE_SKILLS_VIRTUAL_ROOT]
 
     const workspace = new Workspace({
       id: 'workbench-office',
@@ -116,7 +119,7 @@ export async function createWorkbenchAgent(
         }),
       },
       skills: {
-        rootPaths: [OFFICE_SKILLS_VIRTUAL_ROOT],
+        rootPaths: skillRoots,
         autoDiscover: true,
       },
       toolConfig: officeFilesystemToolConfig(),

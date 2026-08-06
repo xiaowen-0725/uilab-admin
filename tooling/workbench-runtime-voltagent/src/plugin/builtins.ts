@@ -1,9 +1,22 @@
 /**
- * Builtin plugins (ticket #19).
+ * Builtin plugins (ticket #19 MCP, #20 Skills).
  * docs/calendar MCP env aliases preserved for operator compatibility.
  */
 
 import type { PluginManifest } from './manifest.js'
+
+/** Office O3 skill folder ids (deliverable paths stay under /output/*). */
+export const OFFICE_BUILTIN_SKILL_IDS = [
+  'meeting-notes',
+  'weekly-report',
+  'research-brief',
+] as const
+
+export const OFFICE_BUILTIN_OUTPUT_DIRS = [
+  'output/meeting-notes',
+  'output/weekly-report',
+  'output/research-brief',
+] as const
 
 const FEISHU_DOCS_CHILD_ENV = [
   'FEISHU_APP_ID',
@@ -83,8 +96,32 @@ export const BUILTIN_MCP_CALENDAR_PLUGIN: PluginManifest = {
   },
 }
 
-/** Default builtin set for Registry (MCP cutover). */
+/**
+ * Office workspace skills (meeting-notes / weekly-report / research-brief).
+ * Seed is missing-only; never overwrites user SKILL.md.
+ */
+export const BUILTIN_SKILLS_OFFICE_PLUGIN: PluginManifest = {
+  schemaVersion: 1,
+  id: 'skills.office',
+  name: '办公 Skills',
+  version: '0.1.0',
+  kind: 'builtin',
+  enabledByDefault: true,
+  contributes: {
+    skills: {
+      virtualRoot: '/skills',
+      workspaceDir: 'skills',
+      skillIds: [...OFFICE_BUILTIN_SKILL_IDS],
+      bundledRelativeDir: 'bundled-skills',
+      outputDirs: [...OFFICE_BUILTIN_OUTPUT_DIRS],
+      seedStrategy: 'missing-only',
+    },
+  },
+}
+
+/** Default builtin set for Registry (MCP + office skills). */
 export const BUILTIN_PLUGINS: PluginManifest[] = [
   BUILTIN_MCP_DOCS_PLUGIN,
   BUILTIN_MCP_CALENDAR_PLUGIN,
+  BUILTIN_SKILLS_OFFICE_PLUGIN,
 ]

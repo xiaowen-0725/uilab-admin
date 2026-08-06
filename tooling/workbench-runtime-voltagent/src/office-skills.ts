@@ -1,37 +1,28 @@
 /**
- * Office Profile O3 — bundled workspace skills bootstrap.
- *
- * Seeds three SKILL.md folders under workspace `/skills` (virtual) /
- * `skills/` on disk, plus conventional output directories.
- * Does not overwrite existing SKILL.md (user may customize).
- * Bootstrap refuses symlink escape (Codex P1).
+ * Office Profile O3 — workspace skills bootstrap (compatibility façade).
+ * Implementation: plugin skills-loader + skills.office builtin (#20).
  */
 
-import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import {
-  assertCanonicalWithinRoot,
-  ensureDirWithinRoot,
-  pathExists,
-  writeFileIfAbsentWithinRoot,
-} from './workspace-root.js'
+  BUILTIN_SKILLS_OFFICE_PLUGIN,
+  OFFICE_BUILTIN_OUTPUT_DIRS,
+  OFFICE_BUILTIN_SKILL_IDS,
+} from './plugin/builtins.js'
+import {
+  listWorkspaceSkillIds,
+  resolvePluginPackageRoot,
+  seedSkillsContribution,
+} from './plugin/skills-loader.js'
+import { writeFileIfAbsentWithinRoot } from './workspace-root.js'
 
 /** Skill folder ids (= directory names under skills/). */
-export const OFFICE_SKILL_IDS = [
-  'meeting-notes',
-  'weekly-report',
-  'research-brief',
-] as const
+export const OFFICE_SKILL_IDS = OFFICE_BUILTIN_SKILL_IDS
 
 export type OfficeSkillId = (typeof OFFICE_SKILL_IDS)[number]
 
 /** Deliverable dirs relative to workspace root (spec O3). */
-export const OFFICE_OUTPUT_DIRS = [
-  'output/meeting-notes',
-  'output/weekly-report',
-  'output/research-brief',
-] as const
+export const OFFICE_OUTPUT_DIRS = OFFICE_BUILTIN_OUTPUT_DIRS
 
 /** Virtual skills root for VoltAgent Workspace (default /skills). */
 export const OFFICE_SKILLS_VIRTUAL_ROOT = '/skills'
@@ -68,77 +59,71 @@ export function resolveBundledSkillsDir(
   if (options?.packageRoot) {
     return path.join(options.packageRoot, 'bundled-skills')
   }
-  // src/office-skills.ts → package root
-  const here = path.dirname(fileURLToPath(import.meta.url))
-  return path.resolve(here, '../bundled-skills')
+  const packageRoot = resolvePluginPackageRoot()
+  return path.join(packageRoot, 'bundled-skills')
 }
 
 /**
  * Ensure office skills + output dirs exist under the workspace root.
  * Copies bundled SKILL.md only when the target skill folder has no SKILL.md.
+ * Delegates to skills.office builtin contribution.
  */
 export async function ensureOfficeSkills(
   workspaceRoot: string,
   options?: { packageRoot?: string; bundledSkillsDir?: string },
 ): Promise<EnsureOfficeSkillsResult> {
-  const root = path.resolve(workspaceRoot)
-  const skillsRoot = await ensureDirWithinRoot(root, OFFICE_SKILLS_DIR_NAME)
-  const bundledRoot =
-    options?.bundledSkillsDir ?? resolveBundledSkillsDir(options)
+  const contrib = BUILTIN_SKILLS_OFFICE_PLUGIN.contributes?.skills
+  if (!contrib) {
+    throw new Error('skills.office builtin missing skills contribution')
+  }
 
-  const seededSkillIds: OfficeSkillId[] = []
-  const skippedSkillIds: OfficeSkillId[] = []
+  const result = await seedSkillsContribution(
+    BUILTIN_SKILLS_OFFICE_PLUGIN.id,
+    contrib,
+    workspaceRoot,
+    {
+      packageRoot: options?.packageRoot,
+      bundledSkillsDir: options?.bundledSkillsDir,
+    },
+  )
 
-  for (const id of OFFICE_SKILL_IDS) {
-    await ensureDirWithinRoot(root, path.join(OFFICE_SKILLS_DIR_NAME, id))
-    const relSkill = path.join(OFFICE_SKILLS_DIR_NAME, id, 'SKILL.md')
-
-    const srcSkill = path.join(bundledRoot, id, 'SKILL.md')
-    if (!(await pathExists(srcSkill))) {
+  if (result.status === 'failed') {
+    // Path/symlink confinement errors must surface as-is (workspace safety).
+    if (result.reason && /路径越界|符号链接/.test(result.reason)) {
+      throw new Error(result.reason)
+    }
+    if (result.missingTemplateIds.length > 0) {
+      const bundled =
+        options?.bundledSkillsDir ??
+        resolveBundledSkillsDir({ packageRoot: options?.packageRoot })
       throw new Error(
-        `缺少内置 Skill 模板：${srcSkill}（office profile O3）`,
+        `缺少内置 Skill 模板：${result.missingTemplateIds
+          .map((id) => path.join(bundled, id, 'SKILL.md'))
+          .join(', ')}（office profile O3）`,
       )
     }
-
-    const content = await readFile(srcSkill, 'utf8')
-    // writeFileIfAbsentWithinRoot refuses symlink destinations and never overwrites.
-    const { wrote } = await writeFileIfAbsentWithinRoot(root, relSkill, content)
-    if (wrote) seededSkillIds.push(id)
-    else skippedSkillIds.push(id)
+    throw new Error(result.reason ?? '办公 Skills 初始化失败')
   }
 
-  const outputDirs: string[] = []
-  for (const rel of OFFICE_OUTPUT_DIRS) {
-    const abs = await ensureDirWithinRoot(root, rel)
-    outputDirs.push(abs)
-  }
+  // Preserve OfficeSkillId typing for callers / tests
+  const asOffice = (ids: string[]) =>
+    ids.filter((id): id is OfficeSkillId =>
+      (OFFICE_SKILL_IDS as readonly string[]).includes(id),
+    )
 
-  return { skillsRoot, seededSkillIds, skippedSkillIds, outputDirs }
+  return {
+    skillsRoot: result.skillsRoot,
+    seededSkillIds: asOffice(result.seededSkillIds),
+    skippedSkillIds: asOffice(result.skippedSkillIds),
+    outputDirs: result.outputDirs,
+  }
 }
 
 /** List skill folder names that contain SKILL.md under workspace skills root. */
 export async function listSeededSkillIds(
   workspaceRoot: string,
 ): Promise<string[]> {
-  const root = path.resolve(workspaceRoot)
-  const skillsRoot = path.join(root, OFFICE_SKILLS_DIR_NAME)
-  if (!(await pathExists(skillsRoot))) return []
-  await assertCanonicalWithinRoot(root, skillsRoot)
-  const entries = await readdir(skillsRoot, { withFileTypes: true })
-  const ids: string[] = []
-  for (const entry of entries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
-    const skillMd = path.join(skillsRoot, entry.name, 'SKILL.md')
-    if (await pathExists(skillMd)) {
-      try {
-        await assertCanonicalWithinRoot(root, skillMd)
-        ids.push(entry.name)
-      } catch {
-        // skip escaped entries
-      }
-    }
-  }
-  return ids.sort()
+  return listWorkspaceSkillIds(workspaceRoot, OFFICE_SKILLS_DIR_NAME)
 }
 
 // re-export for callers that only need write helper via skills path

@@ -1,10 +1,10 @@
 /**
- * PluginRegistry — discover / enable / isolate-load / aggregate tools (#19).
+ * PluginRegistry — discover / enable / isolate-load / aggregate tools + skills (#19–#20).
  */
 
 import type { Tool } from '@voltagent/core'
 import { BUILTIN_PLUGINS } from './builtins.js'
-import type { PluginManifest } from './manifest.js'
+import type { PluginManifest, SkillsContribution } from './manifest.js'
 import {
   loadResolvedMcpServers,
   resolveMcpContribution,
@@ -13,6 +13,10 @@ import {
   type ResolvedMcpServer,
 } from './mcp-loader.js'
 import { parseEnvStringList } from './parse-util.js'
+import {
+  loadSkillsContributions,
+  type SkillsSeedResult,
+} from './skills-loader.js'
 import type { ProfileEnv } from './types.js'
 
 export type PluginLoadStatus = 'loaded' | 'failed' | 'disabled'
@@ -26,6 +30,7 @@ export type PluginRuntimeRecord = {
   loadStatus: PluginLoadStatus
   reason?: string
   mcp: McpServerLoadStatus[]
+  skills?: SkillsSeedResult
 }
 
 export type PluginRegistryLoadResult = {
@@ -33,14 +38,24 @@ export type PluginRegistryLoadResult = {
   tools: Tool<any, any>[]
   toolNames: string[]
   mcpStatuses: McpServerLoadStatus[]
+  /** Virtual skill roots for Workspace.skills.rootPaths */
+  skillRoots: string[]
+  skillsResults: SkillsSeedResult[]
   disconnect: () => Promise<void>
+}
+
+export type PluginRegistryLoadOptions = {
+  /** When set, seed skills contributions into this workspace (missing-only). */
+  workspaceRoot?: string
+  packageRoot?: string
+  bundledSkillsDir?: string
 }
 
 export type PluginRegistry = {
   listManifests(): PluginManifest[]
   /** Enabled plugin ids for this env/config */
   resolveEnabledIds(): string[]
-  load(): Promise<PluginRegistryLoadResult>
+  load(options?: PluginRegistryLoadOptions): Promise<PluginRegistryLoadResult>
 }
 
 export type CreatePluginRegistryOptions = {
@@ -83,11 +98,15 @@ export function createPluginRegistry(
   return {
     listManifests: () => [...manifests],
     resolveEnabledIds,
-    async load(): Promise<PluginRegistryLoadResult> {
+    async load(
+      loadOptions: PluginRegistryLoadOptions = {},
+    ): Promise<PluginRegistryLoadResult> {
       const enabled = new Set(resolveEnabledIds())
       const plugins: PluginRuntimeRecord[] = []
       const resolvedServers: ResolvedMcpServer[] = []
       const expected: Array<{ pluginId: string; serverId: string }> = []
+      const skillsItems: Array<{ pluginId: string; contrib: SkillsContribution }> =
+        []
 
       for (const manifest of manifests) {
         const isEnabled = enabled.has(manifest.id)
@@ -127,7 +146,14 @@ export function createPluginRegistry(
           }
         }
 
-        // Placeholder; mcp details filled after loadResolvedMcpServers
+        if (manifest.contributes?.skills) {
+          skillsItems.push({
+            pluginId: manifest.id,
+            contrib: manifest.contributes.skills,
+          })
+        }
+
+        // Placeholder; mcp/skills details filled after loaders
         if (!plugins.some((p) => p.id === manifest.id)) {
           plugins.push({
             id: manifest.id,
@@ -147,20 +173,36 @@ export function createPluginRegistry(
         expected,
       })
 
-      // Attach mcp statuses to plugin records; mark plugin failed if any mcp failed and none connected
+      const skillsAgg = await loadSkillsContributions(skillsItems, {
+        workspaceRoot: loadOptions.workspaceRoot,
+        packageRoot: loadOptions.packageRoot,
+        bundledSkillsDir: loadOptions.bundledSkillsDir,
+      })
+
+      // Attach mcp + skills statuses; mark failed when hard failures only
       for (const rec of plugins) {
         if (!rec.enabled) continue
         const mcp = mcpAgg.statuses.filter((s) => s.pluginId === rec.id)
         rec.mcp = mcp
-        if (mcp.some((s) => s.status === 'failed') && !mcp.some((s) => s.status === 'connected')) {
-          // only failures / disabled
-          if (mcp.every((s) => s.status === 'disabled')) {
-            rec.loadStatus = 'loaded'
-            rec.reason = 'MCP 未配置（disabled）'
-          } else if (mcp.some((s) => s.status === 'failed')) {
-            rec.loadStatus = 'failed'
-            rec.reason = mcp.find((s) => s.status === 'failed')?.reason
-          }
+        const skills = skillsAgg.results.find((s) => s.pluginId === rec.id)
+        if (skills) rec.skills = skills
+
+        const mcpFailedOnly =
+          mcp.length > 0 &&
+          mcp.some((s) => s.status === 'failed') &&
+          !mcp.some((s) => s.status === 'connected') &&
+          !mcp.every((s) => s.status === 'disabled')
+        const skillsFailed = skills?.status === 'failed'
+
+        if (mcpFailedOnly || skillsFailed) {
+          rec.loadStatus = 'failed'
+          rec.reason =
+            skillsFailed && skills?.reason
+              ? skills.reason
+              : mcp.find((s) => s.status === 'failed')?.reason
+        } else if (mcp.every((s) => s.status === 'disabled') && mcp.length > 0) {
+          rec.loadStatus = 'loaded'
+          rec.reason = rec.reason ?? 'MCP 未配置（disabled）'
         } else {
           rec.loadStatus = 'loaded'
         }
@@ -171,6 +213,8 @@ export function createPluginRegistry(
         tools: mcpAgg.tools,
         toolNames: mcpAgg.toolNames,
         mcpStatuses: mcpAgg.statuses,
+        skillRoots: skillsAgg.virtualRoots,
+        skillsResults: skillsAgg.results,
         disconnect: mcpAgg.disconnect,
       }
     },

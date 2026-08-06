@@ -37,9 +37,32 @@ export type McpContribution = {
   readOnlyToolNames?: string[]
 }
 
+/**
+ * Skills contribution: virtual root + optional missing-only seed from bundled templates.
+ * Does not overwrite existing workspace SKILL.md.
+ */
+export type SkillsContribution = {
+  /** VoltAgent Workspace virtual skills root (default `/skills`) */
+  virtualRoot?: string
+  /** On-disk directory under workspace root (default `skills`) */
+  workspaceDir?: string
+  /** Skill folder ids to seed (directory names under bundledDir) */
+  skillIds?: string[]
+  /**
+   * Templates directory relative to package root (e.g. `bundled-skills`),
+   * or absolute path when resolved by caller.
+   */
+  bundledRelativeDir?: string
+  /** Conventional deliverable dirs relative to workspace root */
+  outputDirs?: string[]
+  /** Only `missing-only` is supported (default). */
+  seedStrategy?: 'missing-only'
+}
+
 export type PluginContributes = {
   mcp?: McpContribution[]
-  /** Later tickets: cli, skills, tools, auth */
+  skills?: SkillsContribution
+  /** Later tickets: cli, tools, auth */
 }
 
 export type PluginManifest = {
