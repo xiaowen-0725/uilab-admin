@@ -52,6 +52,7 @@ export function authResourceToBinding(
         statusCmd.command?.trim() ??
         '')
     : ''
+  // ANY of envNames present counts as connected (bearer aliases)
   return {
     pluginId,
     resourceId: resource.resourceId,
@@ -166,6 +167,11 @@ export function formatAuthStatusSummary(
 /** Strip anything that looks like a secret-ish token from hints (defense). */
 export function sanitizeHint(hint: string, secretValues: string[] = []): string {
   let out = redactSecretValues(hint, secretValues)
+  // Opaque token assignments from errors: token=..., access_token=...
+  out = out.replace(
+    /\b([A-Za-z0-9_]*token|authorization|password|secret)\s*[:=]\s*\S+/gi,
+    '$1=***',
+  )
   // Only redact token-shaped values — never rewrite status words like auth bearer=missing
   out = out.replace(
     /\b(ghp_[A-Za-z0-9]+|sk-[A-Za-z0-9._-]+|xox[bap]-[A-Za-z0-9-]+)/gi,

@@ -131,3 +131,27 @@ Codex job IDs (this session):
 
 Raw structured dumps archived at session time under companion logs  
 `/var/folders/.../codex-companion/uilab-admin-*/jobs/review-msh1*.log`.
+
+---
+
+## Fix pass (same day)
+
+**Commit:** security fix batch after this review (see git log).
+
+| Finding | Fix |
+| --- | --- |
+| P0 child env merge | `defaultCliRunner` / `closedChildEnv` — never spreads `process.env` |
+| P1 CLI free-approval self-cert | `needsApproval:false` requires `readOnly:true` |
+| P1 argv / shell | ban placeholder first segment; ban shell binaries as CLI |
+| P1 partial CLI tools | only mount tools after full contrib validates |
+| P1 MCP hang | `Promise.race` with `MCP_TIMEOUT_MS` / server timeout |
+| P1 skills absolute path | reject absolute `bundledRelativeDir`; canonical check on templates |
+| P1 skills disable remount | no `/skills` fallback; skills toolkit only when roots present; soft-fail non-office skills |
+| P1 PLUGINS_ENABLED replace | additive: defaults ∪ ENABLED − DISABLED |
+| P1 bearer auth aliases | `envNames` any-of for docs/calendar |
+| P1 doctor opaque tokens | broader sanitize + env secret value redaction |
+| P1 plugin status | any failed MCP marks plugin failed |
+| P1 cli_session never probed | default to closed-env `defaultCliRunner` when no inject |
+| P2 non-canonical id | reject whitespace/control in plugin id |
+
+**Verify:** `pnpm --filter @uilab/workbench-runtime-voltagent test` → **120 pass** + typecheck.

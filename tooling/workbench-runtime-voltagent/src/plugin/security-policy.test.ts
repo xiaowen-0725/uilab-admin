@@ -52,8 +52,16 @@ describe('decideCliCommandNeedsApproval', () => {
     assert.equal(decideCliCommandNeedsApproval({}), true)
   })
 
-  it('honors explicit flags', () => {
-    assert.equal(decideCliCommandNeedsApproval({ needsApproval: false }), false)
+  it('honors explicit flags fail-closed', () => {
+    // needsApproval:false alone is NOT free
+    assert.equal(decideCliCommandNeedsApproval({ needsApproval: false }), true)
+    assert.equal(
+      decideCliCommandNeedsApproval({
+        needsApproval: false,
+        readOnly: true,
+      }),
+      false,
+    )
     assert.equal(decideCliCommandNeedsApproval({ needsApproval: true }), true)
     assert.equal(decideCliCommandNeedsApproval({ readOnly: true }), false)
     assert.equal(
@@ -68,6 +76,8 @@ describe('isModelProviderSecretKey + filterChildEnv', () => {
     assert.equal(isModelProviderSecretKey('DEEPSEEK_API_KEY'), true)
     assert.equal(isModelProviderSecretKey('GEMINI_API_KEY'), true)
     assert.equal(isModelProviderSecretKey('OPENAI_API_KEY'), true)
+    assert.equal(isModelProviderSecretKey('HF_TOKEN'), true)
+    assert.equal(isModelProviderSecretKey('AWS_SECRET_ACCESS_KEY'), true)
     assert.equal(isModelProviderSecretKey('FEISHU_APP_SECRET'), false)
     assert.equal(isModelProviderSecretKey('GOOGLE_APPLICATION_CREDENTIALS'), false)
   })

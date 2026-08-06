@@ -86,19 +86,53 @@ function expandArgvSegment(
   })
 }
 
+const SHELL_BASENAMES = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'dash',
+  'fish',
+  'cmd.exe',
+  'cmd',
+  'powershell',
+  'powershell.exe',
+  'pwsh',
+  'pwsh.exe',
+])
+
 /** Reject free-form shell invocation patterns (defense in depth on static argv). */
 export function assertSafeArgvTemplate(template: string[]): void {
+  if (template.length === 0) {
+    throw new Error('CLI argv 模板不能为空')
+  }
+  // First segment must be a fixed allowlisted subcommand — not a model-controlled slot
+  if (/^\{\{\w+\}\}$/.test(template[0]!)) {
+    throw new Error(
+      'CLI argv 首段禁止使用占位符（防止模型选择任意子命令）',
+    )
+  }
   for (const part of template) {
     if (/[|;&$`]/.test(part) && !/\{\{\w+\}\}/.test(part)) {
-      // Allow only if the whole token is a placeholder or clean flag/word
       if (!/^[\w./:@%=+-]+$/.test(part) && !part.includes('{{')) {
         throw new Error(`CLI argv 模板含非法片段：${part}`)
       }
     }
-    // Explicit ban on shell wrappers
-    if (part === 'sh' || part === 'bash' || part === '-c' || part === 'cmd.exe') {
+    const base = path.basename(part)
+    if (
+      part === '-c' ||
+      SHELL_BASENAMES.has(part) ||
+      SHELL_BASENAMES.has(base)
+    ) {
       throw new Error(`禁止 shell 包装 argv：${part}`)
     }
+  }
+}
+
+/** Reject shell interpreters as the domain CLI binary. */
+export function assertSafeCliCommand(commandPath: string): void {
+  const base = path.basename(commandPath).toLowerCase()
+  if (SHELL_BASENAMES.has(base)) {
+    throw new Error(`禁止将 shell 解释器注册为领域 CLI：${commandPath}`)
   }
 }
 
@@ -159,11 +193,30 @@ export function resolveCliCwd(
   workspaceRoot: string | undefined,
 ): string | undefined {
   const d = contrib.defaultCwd ?? 'workspace'
-  if (d === 'workspace') return workspaceRoot
-  if (d === 'plugin') return workspaceRoot
-  if (path.isAbsolute(d)) return d
+  if (d === 'workspace' || d === 'plugin') return workspaceRoot
+  // Absolute cwd only allowed when it stays under workspace root
+  if (path.isAbsolute(d)) {
+    if (!workspaceRoot) return undefined
+    const root = path.resolve(workspaceRoot)
+    const abs = path.resolve(d)
+    const rel = path.relative(root, abs)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return undefined
+    return abs
+  }
   if (workspaceRoot) return path.resolve(workspaceRoot, d)
   return undefined
+}
+
+/**
+ * Closed child environment only — never merges process.env.
+ * Callers must pass filterChildEnv() output (or empty → base keys only).
+ */
+export function closedChildEnv(
+  env: Record<string, string> | undefined,
+): Record<string, string> {
+  if (env && Object.keys(env).length > 0) return { ...env }
+  // Minimal base runtime for PATH lookup without host secrets
+  return filterChildEnv(process.env, [], { includeBaseKeys: true })
 }
 
 export async function defaultCliRunner(
@@ -176,9 +229,10 @@ export async function defaultCliRunner(
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
+    const childEnv = closedChildEnv(options.env)
     const { stdout, stderr } = await execFileAsync(command, argv, {
       cwd: options.cwd,
-      env: options.env ? { ...process.env, ...options.env } : process.env,
+      env: childEnv,
       timeout: options.timeoutMs ?? 60_000,
       maxBuffer: 4 * 1024 * 1024,
       // Never use shell
@@ -309,14 +363,29 @@ export async function loadCliContributions(
       continue
     }
 
+    try {
+      assertSafeCliCommand(resolved.resolved)
+    } catch (err) {
+      statuses.push({
+        pluginId,
+        cliId: contrib.cliId,
+        status: 'failed',
+        reason: err instanceof Error ? err.message : String(err),
+        command: resolved.resolved,
+        toolNames: [],
+      })
+      continue
+    }
+
     const childEnv = filterChildEnv(env, contrib.childEnvKeys ?? [], {
       includeBaseKeys: true,
     })
     const cwd = resolveCliCwd(contrib, options.workspaceRoot)
+    // Only commit tools after all commands validate (no partial mount on failure)
+    const pendingTools: Tool<any, any>[] = []
     const names: string[] = []
 
     try {
-      // Deduplicate command names (first wins)
       const seen = new Set<string>()
       for (const cmd of contrib.commands) {
         if (!cmd.name?.trim() || !cmd.argv?.length) {
@@ -330,13 +399,14 @@ export async function loadCliContributions(
           commandPath: resolved.resolved,
           cmd,
           cwd,
-          childEnv: Object.keys(childEnv).length > 0 ? childEnv : undefined,
+          childEnv,
           runner,
         })
-        tools.push(tool)
+        pendingTools.push(tool)
         names.push(tool.name)
-        toolNames.push(tool.name)
       }
+      tools.push(...pendingTools)
+      toolNames.push(...names)
       statuses.push({
         pluginId,
         cliId: contrib.cliId,

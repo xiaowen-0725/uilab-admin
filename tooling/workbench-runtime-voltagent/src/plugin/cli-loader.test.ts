@@ -8,9 +8,12 @@ import {
   assertSafeArgvTemplate,
   buildCliArgv,
   cliToolName,
+  closedChildEnv,
+  defaultCliRunner,
   formatRegistryCliStatusLine,
   loadCliContributions,
 } from './cli-loader.js'
+import { filterChildEnv } from './security-policy.js'
 import type { PluginManifest } from './manifest.js'
 import { createPluginRegistry } from './registry.js'
 
@@ -51,8 +54,58 @@ describe('buildCliArgv', () => {
 })
 
 describe('assertSafeArgvTemplate', () => {
-  it('rejects shell wrappers', () => {
+  it('rejects shell wrappers and placeholder first segment', () => {
     assert.throws(() => assertSafeArgvTemplate(['bash', '-c', 'rm -rf /']), /shell/)
+    assert.throws(
+      () => assertSafeArgvTemplate(['{{mode}}', 'x']),
+      /首段|占位符/,
+    )
+  })
+})
+
+describe('closedChildEnv / defaultCliRunner', () => {
+  it('never merges host process.env secrets into child', async () => {
+    const filtered = filterChildEnv(
+      {
+        PATH: process.env.PATH ?? '/bin',
+        HOME: process.env.HOME ?? '/tmp',
+        OPENAI_API_KEY: 'sk-should-not-leak',
+        DEEPSEEK_API_KEY: 'sk-deep-no',
+        FEISHU_APP_ID: 'app',
+      },
+      ['FEISHU_APP_ID'],
+    )
+    assert.equal(filtered.OPENAI_API_KEY, undefined)
+    assert.equal(filtered.FEISHU_APP_ID, 'app')
+
+    const closed = closedChildEnv(filtered)
+    assert.equal(closed.OPENAI_API_KEY, undefined)
+    assert.equal(closed.DEEPSEEK_API_KEY, undefined)
+
+    // Real exec: print env keys that look like secrets
+    const result = await defaultCliRunner(
+      process.execPath,
+      [
+        '-e',
+        'const e=process.env; console.log(JSON.stringify({openai:e.OPENAI_API_KEY||null,deep:e.DEEPSEEK_API_KEY||null,feishu:e.FEISHU_APP_ID||null}))',
+      ],
+      {
+        env: {
+          ...filtered,
+          // ensure node can run
+          PATH: process.env.PATH ?? '/usr/bin:/bin',
+        },
+      },
+    )
+    assert.equal(result.exitCode, 0)
+    const parsed = JSON.parse(result.stdout.trim()) as {
+      openai: string | null
+      deep: string | null
+      feishu: string | null
+    }
+    assert.equal(parsed.openai, null)
+    assert.equal(parsed.deep, null)
+    assert.equal(parsed.feishu, 'app')
   })
 })
 
@@ -170,7 +223,7 @@ describe('loadCliContributions', () => {
 })
 
 describe('PluginRegistry + domain CLI', () => {
-  it('enables cli.feishu via PLUGINS_ENABLED and injects tools', async () => {
+  it('enables cli.feishu via PLUGINS_ENABLED additively (skills stay on)', async () => {
     const bin = await makeFakeCli()
     const reg = createPluginRegistry({
       env: {
@@ -185,6 +238,8 @@ describe('PluginRegistry + domain CLI', () => {
       }),
     })
     assert.ok(reg.resolveEnabledIds().includes('cli.feishu'))
+    assert.ok(reg.resolveEnabledIds().includes('skills.office'))
+    assert.ok(reg.resolveEnabledIds().includes('mcp.docs'))
     const result = await reg.load()
     assert.ok(result.toolNames.includes(cliToolName('feishu', 'docs_get')))
     assert.ok(result.toolNames.includes(cliToolName('feishu', 'docs_write')))

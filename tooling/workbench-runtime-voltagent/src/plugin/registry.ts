@@ -139,13 +139,15 @@ export function createPluginRegistry(
     const disabled = new Set(
       (parseEnvStringList(env.PLUGINS_DISABLED) ?? []).map((s) => s.trim()),
     )
-    const forced = parseEnvStringList(env.PLUGINS_ENABLED)
-    if (forced && forced.length > 0) {
-      return forced.filter((id) => byId.has(id) && !disabled.has(id))
-    }
-    return manifests
-      .filter((m) => m.enabledByDefault !== false && !disabled.has(m.id))
+    // Additive: defaults (enabledByDefault) ∪ PLUGINS_ENABLED − PLUGINS_DISABLED
+    const base = manifests
+      .filter((m) => m.enabledByDefault !== false)
       .map((m) => m.id)
+    const forced = (parseEnvStringList(env.PLUGINS_ENABLED) ?? []).map((s) =>
+      s.trim(),
+    )
+    const ids = new Set<string>([...base, ...forced])
+    return [...ids].filter((id) => byId.has(id) && !disabled.has(id))
   }
 
   return {
@@ -277,16 +279,12 @@ export function createPluginRegistry(
         const cli = cliAgg.statuses.filter((s) => s.pluginId === rec.id)
         rec.cli = cli
 
-        const mcpFailedOnly =
-          mcp.length > 0 &&
-          mcp.some((s) => s.status === 'failed') &&
-          !mcp.some((s) => s.status === 'connected') &&
-          !mcp.every((s) => s.status === 'disabled')
+        // Any failed MCP/CLI contribution marks plugin failed (not hidden by siblings)
+        const mcpAnyFailed = mcp.some((s) => s.status === 'failed')
         const skillsFailed = skills?.status === 'failed'
-        // missing binary is observable but not fatal to other plugins
         const cliHardFailed = cli.some((s) => s.status === 'failed')
 
-        if (mcpFailedOnly || skillsFailed || cliHardFailed) {
+        if (mcpAnyFailed || skillsFailed || cliHardFailed) {
           rec.loadStatus = 'failed'
           rec.reason =
             skillsFailed && skills?.reason

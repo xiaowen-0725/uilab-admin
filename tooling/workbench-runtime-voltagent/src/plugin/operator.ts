@@ -12,6 +12,8 @@ import {
 } from './registry.js'
 import type { ProfileEnv } from './types.js'
 
+export type { ProfileEnv }
+
 export type PluginListRow = {
   id: string
   name: string
@@ -104,15 +106,17 @@ export function buildListReport(
  */
 export function collectDoctorFindings(
   result: PluginRegistryLoadResult,
+  options?: { secretValues?: string[] },
 ): DoctorFinding[] {
   const findings: DoctorFinding[] = []
+  const secrets = options?.secretValues ?? []
 
   for (const f of result.discoveryFailures) {
     findings.push({
       severity: 'error',
       pluginId: f.id,
       code: 'discovery_failed',
-      message: sanitizeHint(`${f.reason}（${f.sourcePath}）`),
+      message: sanitizeHint(`${f.reason}（${f.sourcePath}）`, secrets),
     })
   }
 
@@ -134,6 +138,7 @@ export function collectDoctorFindings(
           code: 'mcp_failed',
           message: sanitizeHint(
             `MCP ${m.serverId} 连接失败：${m.reason ?? 'unknown'}`,
+            secrets,
           ),
         })
       } else if (m.status === 'disabled' && p.enabled) {
@@ -161,6 +166,7 @@ export function collectDoctorFindings(
           code: 'cli_missing',
           message: sanitizeHint(
             c.reason ?? `领域 CLI ${c.cliId} 可执行文件未找到`,
+            secrets,
           ),
         })
       } else if (c.status === 'failed') {
@@ -168,7 +174,10 @@ export function collectDoctorFindings(
           severity: 'error',
           pluginId: p.id,
           code: 'cli_failed',
-          message: sanitizeHint(c.reason ?? `领域 CLI ${c.cliId} 失败`),
+          message: sanitizeHint(
+            c.reason ?? `领域 CLI ${c.cliId} 失败`,
+            secrets,
+          ),
         })
       } else if (c.status === 'ready') {
         findings.push({
@@ -185,7 +194,7 @@ export function collectDoctorFindings(
         severity: 'error',
         pluginId: p.id,
         code: 'skills_failed',
-        message: sanitizeHint(p.skills.reason ?? 'Skills seed 失败'),
+        message: sanitizeHint(p.skills.reason ?? 'Skills seed 失败', secrets),
       })
     } else if (p.skills?.status === 'seeded' && p.skills.seededSkillIds.length > 0) {
       findings.push({
@@ -204,6 +213,7 @@ export function collectDoctorFindings(
           code: 'auth_missing',
           message: sanitizeHint(
             `auth ${a.resourceId}=missing${a.hint ? ` · ${a.hint}` : ''}`,
+            secrets,
           ),
         })
       } else if (a.status === 'error') {
@@ -213,6 +223,7 @@ export function collectDoctorFindings(
           code: 'auth_error',
           message: sanitizeHint(
             `auth ${a.resourceId}=error${a.hint ? ` · ${a.hint}` : ''}`,
+            secrets,
           ),
         })
       } else if (a.status === 'connected') {
@@ -236,6 +247,7 @@ export function collectDoctorFindings(
           code: 'auth_expired',
           message: sanitizeHint(
             `auth ${a.resourceId}=expired${a.hint ? ` · ${a.hint}` : ''}`,
+            secrets,
           ),
         })
       }
@@ -262,10 +274,29 @@ export function formatDoctorText(findings: DoctorFinding[]): string {
   return `${lines.join('\n')}\n`
 }
 
+/** Collect non-empty env values that look like secrets for doctor redaction. */
+export function collectEnvSecretValues(
+  env: ProfileEnv = process.env,
+): string[] {
+  const out: string[] = []
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v !== 'string' || v.length < 8) continue
+    if (
+      /KEY|TOKEN|SECRET|PASSWORD|BEARER|CREDENTIAL/i.test(k) ||
+      /^(sk-|ghp_|xox)/i.test(v)
+    ) {
+      out.push(v)
+    }
+  }
+  return out
+}
+
 export function buildDoctorReport(
   result: PluginRegistryLoadResult,
+  options?: { env?: ProfileEnv },
 ): PluginDoctorReport {
-  const findings = collectDoctorFindings(result)
+  const secretValues = collectEnvSecretValues(options?.env)
+  const findings = collectDoctorFindings(result, { secretValues })
   const ok = !findings.some(
     (f) => f.severity === 'error' || f.severity === 'warn',
   )
@@ -307,6 +338,6 @@ export async function runPluginDoctor(
   const result = await registry.load({
     workspaceRoot: options.workspaceRoot,
   })
-  const report = buildDoctorReport(result)
+  const report = buildDoctorReport(result, { env: options.env })
   return { ...report, disconnect: result.disconnect }
 }

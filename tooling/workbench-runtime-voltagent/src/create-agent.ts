@@ -117,17 +117,19 @@ export async function createWorkbenchAgent(
     })
     const plugins = await registry.load({ workspaceRoot })
 
-    // Skills seed is required for office; path/symlink failures must not soft-pass.
-    for (const skill of plugins.skillsResults) {
-      if (skill.status === 'failed') {
-        throw new Error(
-          skill.reason ?? `插件 Skills 加载失败：${skill.pluginId}`,
-        )
-      }
+    // Soft-fail optional skills plugins; only hard-fail when skills.office itself fails.
+    const officeSkillsFailed = plugins.skillsResults.find(
+      (s) => s.pluginId === 'skills.office' && s.status === 'failed',
+    )
+    if (officeSkillsFailed) {
+      throw new Error(
+        officeSkillsFailed.reason ?? '插件 Skills 加载失败：skills.office',
+      )
     }
 
-    const skillRoots =
-      plugins.skillRoots.length > 0 ? plugins.skillRoots : ['/skills']
+    // No silent remount of /skills when Registry disabled skills contributions
+    const skillRoots = plugins.skillRoots
+    const skillsEnabled = skillRoots.length > 0
     const honestyTools = [...tools, ...plugins.toolNames]
 
     const workspace = new Workspace({
@@ -141,10 +143,14 @@ export async function createWorkbenchAgent(
           contained: true,
         }),
       },
-      skills: {
-        rootPaths: skillRoots,
-        autoDiscover: true,
-      },
+      ...(skillsEnabled
+        ? {
+            skills: {
+              rootPaths: skillRoots,
+              autoDiscover: true,
+            },
+          }
+        : {}),
       toolConfig: officeFilesystemToolConfig(),
     })
 
@@ -157,6 +163,14 @@ export async function createWorkbenchAgent(
           ].join(' ')
         : 'MCP docs/calendar connectors are not connected in this session; use local Workspace FS and skills only.'
 
+    const skillInstruction = skillsEnabled
+      ? [
+          'Office skills live under /skills (meeting-notes, weekly-report, research-brief).',
+          'When a request matches a skill: workspace_list_skills or workspace_search_skills → workspace_activate_skill → workspace_read_skill → follow SKILL.md → write deliverable under the skill output path.',
+          'Deliverable paths: /output/meeting-notes/, /output/weekly-report/, /output/research-brief/.',
+        ].join(' ')
+      : 'Office skills plugins are not enabled in this session; do not invent skill toolkits.'
+
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
@@ -166,9 +180,7 @@ export async function createWorkbenchAgent(
         'You are the local Office Agent Runtime for UI Lab Agent Workbench.',
         'Respond in Chinese unless the user writes in another language.',
         'Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root.',
-        'Office skills live under /skills (meeting-notes, weekly-report, research-brief).',
-        'When a request matches a skill: workspace_list_skills or workspace_search_skills → workspace_activate_skill → workspace_read_skill → follow SKILL.md → write deliverable under the skill output path.',
-        'Deliverable paths: /output/meeting-notes/, /output/weekly-report/, /output/research-brief/.',
+        skillInstruction,
         mcpInstruction,
         'All file paths must be virtual workspace paths starting with / (e.g. /notes/a.md, /output/meeting-notes/notes.md).',
         'Never use host absolute paths (/Users/..., /home/..., drive letters). Never paste operator host paths into tools.',
@@ -181,14 +193,18 @@ export async function createWorkbenchAgent(
         filesystem: {},
         sandbox: false,
         search: false,
-        skills: {},
+        ...(skillsEnabled ? { skills: {} } : { skills: false as const }),
       },
-      workspaceSkillsPrompt: {
-        includeAvailable: true,
-        includeActivated: true,
-        maxAvailable: 10,
-        maxActivated: 5,
-      },
+      ...(skillsEnabled
+        ? {
+            workspaceSkillsPrompt: {
+              includeAvailable: true,
+              includeActivated: true,
+              maxAvailable: 10,
+              maxActivated: 5,
+            },
+          }
+        : {}),
       ...(plugins.tools.length > 0
         ? { tools: plugins.tools as (Tool<any, any> | Toolkit)[] }
         : {}),

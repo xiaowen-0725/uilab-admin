@@ -232,12 +232,28 @@ export async function loadResolvedMcpServers(
 
   const resolvedIds = new Set(resolved.map((r) => `${r.pluginId}::${r.serverId}`))
 
+  // Default 20s hard deadline so a hung MCP cannot block calendar/skills/CLI forever
+  const hostTimeoutMs = Number(env.MCP_TIMEOUT_MS ?? 20_000) || 20_000
+
   for (const conf of resolved) {
     const allow = mergeReadOnlyAllowlist(env, conf.readOnlyToolNames)
+    const confTimeout =
+      typeof conf.server.timeout === 'number' && conf.server.timeout > 0
+        ? conf.server.timeout
+        : hostTimeoutMs
     try {
-      const { tools, disconnect } = await host.getTools({
-        [conf.serverId]: conf.server,
-      })
+      const { tools, disconnect } = await Promise.race([
+        host.getTools({ [conf.serverId]: conf.server }),
+        new Promise<never>((_resolve, reject) => {
+          setTimeout(() => {
+            reject(
+              new Error(
+                `MCP ${conf.serverId} 连接超时（${confTimeout}ms）`,
+              ),
+            )
+          }, confTimeout)
+        }),
+      ])
       if (tools.length === 0) {
         try {
           await disconnect()
@@ -269,11 +285,18 @@ export async function loadResolvedMcpServers(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : String(err ?? 'unknown error')
+      // Never embed raw secrets from transport errors into status
+      const safe = message
+        .replace(
+          /\b(ghp_[A-Za-z0-9]+|sk-[A-Za-z0-9._-]+|Bearer\s+\S+)/gi,
+          '***',
+        )
+        .replace(/\btoken\s*=\s*\S+/gi, 'token=***')
       statuses.push({
         pluginId: conf.pluginId,
         serverId: conf.serverId,
         status: 'failed',
-        reason: `MCP ${conf.serverId} 连接失败：${message}`,
+        reason: `MCP ${conf.serverId} 连接失败：${safe}`,
         toolNames: [],
         transport: conf.transport,
       })

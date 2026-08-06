@@ -67,7 +67,23 @@ export function parsePluginManifestJson(
     return { ok: false, id: fallbackId, reason: 'plugin.json 根必须是对象' }
   }
 
-  const id = asString(raw.id) ?? fallbackId
+  const rawId = asString(raw.id)
+  const id = rawId ?? fallbackId
+  // Canonical id: no leading/trailing whitespace or control chars
+  if (rawId && rawId !== String(raw.id).trim()) {
+    return {
+      ok: false,
+      id,
+      reason: 'id 不得含首尾空白',
+    }
+  }
+  if (rawId && /[\s\u0000-\u001f]/.test(rawId)) {
+    return {
+      ok: false,
+      id,
+      reason: 'id 不得含空白或控制字符',
+    }
+  }
   const schemaVersion = raw.schemaVersion
   if (schemaVersion !== 1) {
     return {
@@ -79,7 +95,7 @@ export function parsePluginManifestJson(
 
   const name = asString(raw.name)
   const version = asString(raw.version)
-  if (!asString(raw.id)) {
+  if (!rawId) {
     return { ok: false, id, reason: '缺少 id' }
   }
   if (!name) return { ok: false, id, reason: '缺少 name' }
@@ -107,7 +123,7 @@ export function parsePluginManifestJson(
 
   const manifest: PluginManifest = {
     schemaVersion: 1,
-    id: raw.id as string,
+    id: rawId,
     name,
     version,
     kind: 'local',

@@ -114,7 +114,7 @@ office 装配**只经** `createPluginRegistry().load()` 聚合：
 | `mcp.docs` | 文档/知识库 MCP | `MCP_DOCS_URL` / `FEISHU_DOCS_MCP_URL` 或 `MCP_DOCS_COMMAND` + `MCP_DOCS_ARGS` |
 | `mcp.calendar` | 日历 MCP | `MCP_CALENDAR_URL` / `FEISHU_CALENDAR_MCP_URL` 或 `MCP_CALENDAR_COMMAND` + `MCP_CALENDAR_ARGS` |
 | `skills.office` | `/skills` 下三 skill + output 目录 | 默认启用；`PLUGINS_DISABLED=skills.office` 可关 |
-| `cli.feishu` | 领域 CLI（allowlist 子命令 → `cli.feishu.*` tools） | **默认关闭**；`PLUGINS_ENABLED=cli.feishu` + `FEISHU_CLI_PATH` 或 PATH 上的 `feishu-cli` |
+| `cli.feishu` | 领域 CLI（allowlist 子命令 → `cli.feishu.*` tools） | **默认关闭**；`PLUGINS_ENABLED=cli.feishu` **叠加**默认集（不关掉 skills/mcp）+ `FEISHU_CLI_PATH` |
 
 可选：`MCP_*_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`；`PLUGINS_ENABLED` / `PLUGINS_DISABLED`；**`PLUGIN_PATHS`**（逗号分隔目录，扫描 `plugin.json` 或子目录包；**不**加载任意外部 JS，禁止 `contributes.tools`）。  
 MCP **默认全部 tools `needsApproval`**；仅 `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 精确免批。  

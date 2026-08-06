@@ -155,6 +155,23 @@ export async function resolveAuthStatus(
     return { status: 'none_required' }
   }
 
+  // Any one of envNames (or secretRef) is enough for bearer-style aliases
+  if (names.length > 0) {
+    for (const name of names) {
+      const ref: SecretRef = { backend: 'env', envName: name }
+      const v = await store.resolve(ref, env)
+      if (v) return { status: 'connected' }
+    }
+    if (!binding.secretRef) {
+      return {
+        status: 'missing',
+        hint:
+          binding.loginHint ??
+          `缺少环境变量：${names.join(' / ')}（请写入侧车 .env，勿提交仓库）`,
+      }
+    }
+  }
+
   if (binding.secretRef) {
     const v = await store.resolve(binding.secretRef, env)
     if (v) return { status: 'connected' }
@@ -164,18 +181,11 @@ export async function resolveAuthStatus(
     }
   }
 
-  const missing: string[] = []
-  for (const name of names) {
-    const ref: SecretRef = { backend: 'env', envName: name }
-    const v = await store.resolve(ref, env)
-    if (!v) missing.push(name)
-  }
-  if (missing.length === 0) return { status: 'connected' }
   return {
     status: 'missing',
     hint:
       binding.loginHint ??
-      `缺少环境变量：${missing.join(', ')}（请写入侧车 .env，勿提交仓库）`,
+      `缺少环境变量：${names.join(' / ')}（请写入侧车 .env，勿提交仓库）`,
   }
 }
 
@@ -188,22 +198,31 @@ async function resolveCliSessionStatus(
     binding.loginHint ??
     '需先完成领域 CLI 登录（cli_session），例如：feishu-cli auth login'
   const cmd = binding.statusCommand?.command?.trim()
-  if (!cmd || !probe?.runner) {
+  if (!cmd) {
     return { status: 'missing', hint }
   }
 
+  // Prefer injected runner; fall back to default closed-env CLI runner
+  let runner = probe?.runner
+  if (!runner) {
+    try {
+      const { defaultCliRunner } = await import('./cli-loader.js')
+      runner = defaultCliRunner
+    } catch {
+      return { status: 'missing', hint }
+    }
+  }
+
   try {
-    const result = await probe.runner(cmd, binding.statusCommand?.argv ?? [], {
-      env: env
-        ? Object.fromEntries(
-            Object.entries(env).filter(
-              (e): e is [string, string] => typeof e[1] === 'string',
-            ),
-          )
-        : undefined,
+    const { filterChildEnv } = await import('./security-policy.js')
+    const closed = filterChildEnv(env ?? process.env, [], {
+      includeBaseKeys: true,
+    })
+    const result = await runner(cmd, binding.statusCommand?.argv ?? [], {
+      env: closed,
       timeoutMs: 15_000,
     })
-    const expect = probe.expectExitCode ?? 0
+    const expect = probe?.expectExitCode ?? 0
     if (result.exitCode === expect) {
       return { status: 'connected' }
     }

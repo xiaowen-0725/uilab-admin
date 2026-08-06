@@ -65,9 +65,13 @@ export const BUILTIN_MCP_DOCS_PLUGIN: PluginManifest = {
       {
         resourceId: 'bearer',
         kind: 'static_bearer',
-        secretRef: { backend: 'env', envName: 'MCP_DOCS_BEARER_TOKEN' },
+        envNames: [
+          'MCP_DOCS_BEARER_TOKEN',
+          'MCP_DOCS_TOKEN',
+          'MCP_BEARER_TOKEN',
+        ],
         loginHint:
-          '配置 MCP_DOCS_BEARER_TOKEN（或 MCP_DOCS_TOKEN）到侧车 .env；勿提交仓库',
+          '配置 MCP_DOCS_BEARER_TOKEN（或 MCP_DOCS_TOKEN / MCP_BEARER_TOKEN）到侧车 .env；勿提交仓库',
       },
     ],
   },
@@ -106,9 +110,13 @@ export const BUILTIN_MCP_CALENDAR_PLUGIN: PluginManifest = {
       {
         resourceId: 'bearer',
         kind: 'static_bearer',
-        secretRef: { backend: 'env', envName: 'MCP_CALENDAR_BEARER_TOKEN' },
+        envNames: [
+          'MCP_CALENDAR_BEARER_TOKEN',
+          'MCP_CALENDAR_TOKEN',
+          'MCP_BEARER_TOKEN',
+        ],
         loginHint:
-          '配置 MCP_CALENDAR_BEARER_TOKEN 到侧车 .env；勿提交仓库',
+          '配置 MCP_CALENDAR_BEARER_TOKEN（或 MCP_CALENDAR_TOKEN / MCP_BEARER_TOKEN）到侧车 .env；勿提交仓库',
       },
     ],
   },

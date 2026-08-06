@@ -142,18 +142,30 @@ describe('PluginRegistry auth merge', () => {
       },
       builtins: BUILTIN_PLUGINS,
       cliRunner: async (cmd, argv) => {
-        assert.equal(cmd, '/fake/feishu-cli')
+        // status probe and tool exec both use runner
         if (argv[0] === 'auth' && argv[1] === 'status') {
           return { stdout: 'logged in', stderr: '', exitCode: 0 }
         }
         return { stdout: '', stderr: '', exitCode: 0 }
       },
     })
+    assert.ok(reg.resolveEnabledIds().includes('skills.office'))
     const result = await reg.load()
     const auth = result.authStatuses.find(
       (a) => a.pluginId === 'cli.feishu' && a.resourceId === 'cli:feishu',
     )
     assert.equal(auth?.pluginEnabled, true)
+    assert.equal(auth?.status, 'connected')
+    await result.disconnect()
+  })
+
+  it('bearer auth accepts MCP token aliases', async () => {
+    const reg = createPluginRegistry({
+      env: { MCP_DOCS_TOKEN: 'tok-alias' },
+      builtins: [BUILTIN_MCP_DOCS_PLUGIN],
+    })
+    const result = await reg.load()
+    const auth = result.authStatuses.find((a) => a.pluginId === 'mcp.docs')
     assert.equal(auth?.status, 'connected')
     await result.disconnect()
   })

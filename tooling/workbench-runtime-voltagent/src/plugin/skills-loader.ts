@@ -53,15 +53,26 @@ export function resolveSkillsBundledDir(
   contrib: SkillsContribution,
   options?: { packageRoot?: string; bundledSkillsDir?: string },
 ): string | null {
-  if (options?.bundledSkillsDir) return path.resolve(options.bundledSkillsDir)
-  if (!contrib.bundledRelativeDir) return null
-  if (path.isAbsolute(contrib.bundledRelativeDir)) {
-    return contrib.bundledRelativeDir
+  // Test/host override only (trusted)
+  if (options?.bundledSkillsDir) {
+    return path.resolve(options.bundledSkillsDir)
   }
-  return path.join(
-    resolvePluginPackageRoot(options),
-    contrib.bundledRelativeDir,
-  )
+  if (!contrib.bundledRelativeDir) return null
+  // Deny absolute paths from declarative manifests (escape vector)
+  if (path.isAbsolute(contrib.bundledRelativeDir)) {
+    return null
+  }
+  if (
+    contrib.bundledRelativeDir.includes('..') ||
+    contrib.bundledRelativeDir.includes('\\')
+  ) {
+    return null
+  }
+  const packageRoot = resolvePluginPackageRoot(options)
+  const joined = path.resolve(packageRoot, contrib.bundledRelativeDir)
+  const rel = path.relative(packageRoot, joined)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return null
+  return joined
 }
 
 export function normalizeVirtualSkillRoot(raw?: string): string {
@@ -111,6 +122,13 @@ export async function seedSkillsContribution(
 
       const srcSkill = path.join(bundledRoot, id, 'SKILL.md')
       if (!(await pathExists(srcSkill))) {
+        missingTemplateIds.push(id)
+        continue
+      }
+      // Refuse symlink escape outside bundled root
+      try {
+        await assertCanonicalWithinRoot(bundledRoot, srcSkill)
+      } catch {
         missingTemplateIds.push(id)
         continue
       }

@@ -33,23 +33,35 @@ export function normalizeToolName(name: string): string {
 }
 
 /**
- * True for LLM / model-provider secrets that must never reach plugin children.
+ * True for LLM / model-provider / cloud secrets that must never reach plugin children.
+ * Closed-deny for common credential shapes (not just *_API_KEY).
  */
 export function isModelProviderSecretKey(key: string): boolean {
   const k = key.trim().toUpperCase()
   if (!k) return false
   // Connector app credentials (Feishu/Lark) are not LLM keys.
   if (/^(FEISHU|LARK)_/.test(k)) return false
-  if (k === 'GOOGLE_APPLICATION_CREDENTIALS' || k === 'GOOGLE_CALENDAR_ID') {
-    return false
-  }
+  // Calendar id is non-secret; GOOGLE_APPLICATION_CREDENTIALS is allowed only when
+  // explicitly listed in childEnvKeys (hard-deny still applies if not listed — see filter).
+  if (k === 'GOOGLE_CALENDAR_ID') return false
+  if (k === 'GOOGLE_APPLICATION_CREDENTIALS') return false
   if (/_API_KEY$|_APIKEY$/.test(k)) return true
+  if (/^(HF|HUGGINGFACE|REPLICATE|COHERE|TOGETHER|FIREWORKS)_TOKEN$/.test(k)) {
+    return true
+  }
+  if (/^AWS_(SECRET_ACCESS_KEY|SESSION_TOKEN|SECURITY_TOKEN)$/.test(k)) {
+    return true
+  }
   if (
-    /(OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GROQ|MISTRAL|COHERE|TOGETHER|FIREWORKS|XAI|VOLTAGENT|AZURE_OPENAI|GOOGLE_AI|VERTEX|CLAUDE)/.test(
+    /(OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GROQ|MISTRAL|COHERE|TOGETHER|FIREWORKS|XAI|VOLTAGENT|AZURE_OPENAI|GOOGLE_AI|VERTEX|CLAUDE|MISTRAL)/.test(
       k,
     ) &&
     /(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/.test(k)
   ) {
+    return true
+  }
+  // Generic high-risk credential suffixes when not connector-scoped
+  if (/_(SECRET|PASSWORD|PRIVATE_KEY)$/.test(k) && !/^(FEISHU|LARK)_/.test(k)) {
     return true
   }
   return false
@@ -65,11 +77,16 @@ export function decideToolNeedsApproval(input: ToolApprovalInput): boolean {
 }
 
 /**
- * CLI command approval: default true; readOnly false only when explicitly declared.
+ * CLI command approval: fail-closed.
+ * - default true
+ * - free of approval only when readOnly:true (needsApproval:false alone is insufficient)
  */
 export function decideCliCommandNeedsApproval(input: CliApprovalInput): boolean {
   if (input.needsApproval === true) return true
-  if (input.needsApproval === false) return false
+  // Explicit free only when both declared free AND readOnly
+  if (input.needsApproval === false) {
+    return input.readOnly !== true
+  }
   if (input.readOnly === true) return false
   return true
 }
