@@ -9,7 +9,14 @@
  */
 
 import { MCPConfiguration, createTool, type Tool } from '@voltagent/core'
+import {
+  decideToolNeedsApproval,
+  filterChildEnv,
+  isModelProviderSecretKey,
+} from './plugin/security-policy.js'
 import type { ProfileEnv } from './profile.js'
+
+export { isModelProviderSecretKey } from './plugin/security-policy.js'
 
 export type McpConnectorId = 'docs' | 'calendar'
 
@@ -90,7 +97,10 @@ export function isReadOnlyMcpToolName(
   name: string,
   allowlist: ReadonlySet<string> = DEFAULT_MCP_READ_ONLY_ALLOWLIST,
 ): boolean {
-  return allowlist.has(normalizeMcpToolName(name))
+  return !decideToolNeedsApproval({
+    toolName: name,
+    readOnlyAllowlist: allowlist,
+  })
 }
 
 /** True when tool must request HITL (default yes). */
@@ -98,7 +108,10 @@ export function isSideEffectMcpToolName(
   name: string,
   allowlist: ReadonlySet<string> = DEFAULT_MCP_READ_ONLY_ALLOWLIST,
 ): boolean {
-  return !isReadOnlyMcpToolName(name, allowlist)
+  return decideToolNeedsApproval({
+    toolName: name,
+    readOnlyAllowlist: allowlist,
+  })
 }
 
 /**
@@ -276,38 +289,7 @@ const MCP_CONNECTOR_DEFAULT_SECRET_KEYS: Record<McpConnectorId, readonly string[
   }
 
 /**
- * True for LLM / model-provider secrets that must never reach stdio MCP children,
- * even when listed in MCP_*_CHILD_ENV_KEYS.
- */
-export function isModelProviderSecretKey(key: string): boolean {
-  const k = key.trim().toUpperCase()
-  if (!k) return false
-  // Connector app credentials (Feishu/Lark) are not LLM keys.
-  if (/^(FEISHU|LARK)_/.test(k)) return false
-  // Calendar path credential — connector-scoped, not an LLM API key string.
-  if (k === 'GOOGLE_APPLICATION_CREDENTIALS' || k === 'GOOGLE_CALENDAR_ID') {
-    return false
-  }
-  if (/_API_KEY$|_APIKEY$/.test(k)) return true
-  if (
-    /(OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GROQ|MISTRAL|COHERE|TOGETHER|FIREWORKS|XAI|VOLTAGENT|AZURE_OPENAI|GOOGLE_AI|VERTEX|CLAUDE)/.test(
-      k,
-    ) &&
-    /(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/.test(k)
-  ) {
-    return true
-  }
-  return false
-}
-
-/**
- * Build env for a stdio MCP child.
- * - Base: PATH/HOME/…
- * - Connector defaults (docs vs calendar secrets separated)
- * - Explicit: `MCP_DOCS_CHILD_ENV_KEYS` / `MCP_CALENDAR_CHILD_ENV_KEYS`
- * - Shared extras: `MCP_CHILD_ENV_KEYS`
- *
- * Model provider secrets are hard-denied even if explicitly listed.
+ * Build env for a stdio MCP child (delegates model-key deny to SecurityPolicy).
  */
 export function filterProcessEnvForChild(
   env: ProfileEnv,
@@ -326,12 +308,11 @@ export function filterProcessEnvForChild(
     allow.add(key)
   }
 
-  const out: Record<string, string> = {}
-  for (const key of allow) {
-    if (isModelProviderSecretKey(key)) continue
-    const v = env[key]
-    if (typeof v === 'string' && v.length > 0) out[key] = v
-  }
+  // Base keys already included via filterChildEnv includeBaseKeys default.
+  const pluginKeys = [...allow].filter(
+    (k) => !(MCP_CHILD_BASE_ENV_KEYS as readonly string[]).includes(k),
+  )
+  const out = filterChildEnv(env, pluginKeys, { includeBaseKeys: true })
   return Object.keys(out).length > 0 ? out : undefined
 }
 
