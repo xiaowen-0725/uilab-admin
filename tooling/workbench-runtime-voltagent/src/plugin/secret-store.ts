@@ -155,8 +155,26 @@ export async function resolveAuthStatus(
     return { status: 'none_required' }
   }
 
-  // Any one of envNames (or secretRef) is enough for bearer-style aliases
+  // static_bearer / env_ref with multiple names: ANY alias is enough
+  // app_client: ALL listed env names required
+  const requireAll = binding.kind === 'app_client'
+
   if (names.length > 0) {
+    if (requireAll) {
+      const missing: string[] = []
+      for (const name of names) {
+        const ref: SecretRef = { backend: 'env', envName: name }
+        const v = await store.resolve(ref, env)
+        if (!v) missing.push(name)
+      }
+      if (missing.length === 0) return { status: 'connected' }
+      return {
+        status: 'missing',
+        hint:
+          binding.loginHint ??
+          `缺少环境变量：${missing.join(', ')}（请写入侧车 .env，勿提交仓库）`,
+      }
+    }
     for (const name of names) {
       const ref: SecretRef = { backend: 'env', envName: name }
       const v = await store.resolve(ref, env)
@@ -214,11 +232,19 @@ async function resolveCliSessionStatus(
   }
 
   try {
+    const {
+      assertSafeArgvTemplate,
+      assertSafeCliCommand,
+    } = await import('./cli-loader.js')
     const { filterChildEnv } = await import('./security-policy.js')
+    // Same guards as domain CLI tools — no arbitrary statusCommand
+    assertSafeCliCommand(cmd)
+    const argv = binding.statusCommand?.argv ?? []
+    if (argv.length > 0) assertSafeArgvTemplate(argv)
     const closed = filterChildEnv(env ?? process.env, [], {
       includeBaseKeys: true,
     })
-    const result = await runner(cmd, binding.statusCommand?.argv ?? [], {
+    const result = await runner(cmd, argv, {
       env: closed,
       timeoutMs: 15_000,
     })
@@ -228,9 +254,14 @@ async function resolveCliSessionStatus(
     }
     return { status: 'missing', hint }
   } catch (err) {
+    // Safety rejection → missing (do not execute unsafe probes)
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/禁止|shell|占位符/.test(msg)) {
+      return { status: 'missing', hint: `${hint}（statusCommand 未通过安全校验）` }
+    }
     return {
       status: 'error',
-      hint: `${hint}（探测失败：${err instanceof Error ? err.message : 'unknown'}）`,
+      hint: `${hint}（探测失败：${msg}）`,
     }
   }
 }

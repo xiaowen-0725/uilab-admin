@@ -78,6 +78,8 @@ describe('isModelProviderSecretKey + filterChildEnv', () => {
     assert.equal(isModelProviderSecretKey('OPENAI_API_KEY'), true)
     assert.equal(isModelProviderSecretKey('HF_TOKEN'), true)
     assert.equal(isModelProviderSecretKey('AWS_SECRET_ACCESS_KEY'), true)
+    assert.equal(isModelProviderSecretKey('GITHUB_PAT'), true)
+    assert.equal(isModelProviderSecretKey('GH_TOKEN'), true)
     assert.equal(isModelProviderSecretKey('FEISHU_APP_SECRET'), false)
     assert.equal(isModelProviderSecretKey('GOOGLE_APPLICATION_CREDENTIALS'), false)
   })

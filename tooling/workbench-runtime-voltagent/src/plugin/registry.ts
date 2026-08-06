@@ -255,10 +255,15 @@ export function createPluginRegistry(
         bundledSkillsDir: loadOptions.bundledSkillsDir,
       })
 
+      // Only builtin plugins may self-declare free CLI tools; local PLUGIN_PATHS force approval
+      const trustedPluginIds = new Set(
+        manifests.filter((m) => m.kind === 'builtin').map((m) => m.id),
+      )
       const cliAgg = await loadCliContributions(cliItems, {
         env,
         workspaceRoot: loadOptions.workspaceRoot,
         runner: options.cliRunner,
+        trustedPluginIds,
       })
 
       const authOpts: ResolvePluginAuthOptions = {

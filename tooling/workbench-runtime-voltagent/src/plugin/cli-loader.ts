@@ -53,6 +53,11 @@ export type LoadCliOptions = {
   env?: ProfileEnv
   workspaceRoot?: string
   runner?: CliRunner
+  /**
+   * Plugin ids that may self-declare readOnly free tools (builtins).
+   * Local PLUGIN_PATHS plugins always force needsApproval.
+   */
+  trustedPluginIds?: ReadonlySet<string>
 }
 
 export function cliToolName(cliId: string, commandName: string): string {
@@ -106,7 +111,7 @@ export function assertSafeArgvTemplate(template: string[]): void {
     throw new Error('CLI argv 模板不能为空')
   }
   // First segment must be a fixed allowlisted subcommand — not a model-controlled slot
-  if (/^\{\{\w+\}\}$/.test(template[0]!)) {
+  if (/\{\{/.test(template[0]!)) {
     throw new Error(
       'CLI argv 首段禁止使用占位符（防止模型选择任意子命令）',
     )
@@ -273,14 +278,18 @@ function createCliTool(input: {
   cwd: string | undefined
   childEnv: Record<string, string> | undefined
   runner: CliRunner
+  /** Local/discovered plugins cannot self-certify free tools */
+  forceApproval?: boolean
 }): Tool<any, any> {
   const toolName = cliToolName(input.cliId, input.cmd.name)
   assertSafeArgvTemplate(input.cmd.argv)
   const schema = parametersToZodSchema(input.cmd.parameters)
-  const needsApproval = decideCliCommandNeedsApproval({
-    needsApproval: input.cmd.needsApproval,
-    readOnly: input.cmd.readOnly,
-  })
+  const needsApproval = input.forceApproval
+    ? true
+    : decideCliCommandNeedsApproval({
+        needsApproval: input.cmd.needsApproval,
+        readOnly: input.cmd.readOnly,
+      })
 
   return createTool({
     name: toolName,
@@ -323,11 +332,13 @@ export async function loadCliContributions(
 ): Promise<CliLoadAggregate> {
   const env = options.env ?? process.env
   const runner = options.runner ?? defaultCliRunner
+  const trusted = options.trustedPluginIds
   const tools: Tool<any, any>[] = []
   const toolNames: string[] = []
   const statuses: CliLoadStatus[] = []
 
   for (const { pluginId, contrib } of items) {
+    const forceApproval = trusted ? !trusted.has(pluginId) : false
     if (!contrib.cliId?.trim()) {
       statuses.push({
         pluginId,
@@ -401,6 +412,7 @@ export async function loadCliContributions(
           cwd,
           childEnv,
           runner,
+          forceApproval,
         })
         pendingTools.push(tool)
         names.push(tool.name)

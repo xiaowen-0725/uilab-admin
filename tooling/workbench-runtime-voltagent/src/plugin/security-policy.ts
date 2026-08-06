@@ -49,6 +49,10 @@ export function isModelProviderSecretKey(key: string): boolean {
   if (/^(HF|HUGGINGFACE|REPLICATE|COHERE|TOGETHER|FIREWORKS)_TOKEN$/.test(k)) {
     return true
   }
+  if (/^(GITHUB|GH|GITLAB|NPM|DOCKER)_?(TOKEN|PAT|PASSWORD|SECRET)$/.test(k)) {
+    return true
+  }
+  if (/_PAT$|_PASSWORD$/.test(k)) return true
   if (/^AWS_(SECRET_ACCESS_KEY|SESSION_TOKEN|SECURITY_TOKEN)$/.test(k)) {
     return true
   }

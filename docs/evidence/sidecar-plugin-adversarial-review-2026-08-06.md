@@ -155,3 +155,27 @@ Raw structured dumps archived at session time under companion logs
 | P2 non-canonical id | reject whitespace/control in plugin id |
 
 **Verify:** `pnpm --filter @uilab/workbench-runtime-voltagent test` → **120 pass** + typecheck.
+
+---
+
+## Verification adversarial (post-fix)
+
+**Jobs:** `review-msh21g4f-jdvr7b` (+ companion residual pass)
+
+| Prior finding | Verify result |
+| --- | --- |
+| P0 host env inheritance | **Fixed** (explicitly: default CLI + auth-probe runners no longer spread `process.env`) |
+| Remaining | New residual criticals on PLUGIN_PATHS trust (see fix pass 2) |
+
+### Residual findings (verify) → fix pass 2
+
+| Sev | Finding | Fix pass 2 |
+| --- | --- | --- |
+| critical | `cli_session` statusCommand runs arbitrary binary without CLI guards; also for disabled plugins | Guard with `assertSafeCliCommand` + argv template; **skip probe when plugin disabled** |
+| critical | PLUGIN_PATHS can self-declare free tools + pull `GITHUB_PAT` via childEnvKeys | Local plugins **force needsApproval**; expand hard-deny for `GITHUB_PAT`/`GH_TOKEN`/… |
+| high | Auth binding status-only | Documented residual (injection is product follow-up; not silent ship of OAuth) |
+| high | doctor `load_failed` without secret redaction | Pass `secrets` into sanitizeHint |
+| medium | Composite first-argv placeholders | Reject any `{{` in first argv segment |
+| medium | any-of envNames for app_client | **any-of only for static_bearer/env_ref; app_client requires all** |
+
+**Verify after fix pass 2:** typecheck + **120 tests pass**.

@@ -98,6 +98,18 @@ export async function resolveAuthResourceStatus(
       }
     : authResourceToBinding(pluginId, resource, env)
 
+  // Disabled plugins: never execute statusCommand (surface only)
+  if (!pluginEnabled && binding.kind === 'cli_session') {
+    return {
+      pluginId,
+      resourceId: resource.resourceId,
+      kind: binding.kind,
+      pluginEnabled,
+      status: 'missing',
+      hint: binding.loginHint ?? '插件未启用；登录状态未探测',
+    }
+  }
+
   const result = await resolveAuthStatus(binding, store, env, {
     runner: options.runner,
     expectExitCode: resource.statusCommand?.expectExitCode,

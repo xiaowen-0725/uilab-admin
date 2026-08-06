@@ -126,7 +126,7 @@ export function collectDoctorFindings(
         severity: 'error',
         pluginId: p.id,
         code: 'load_failed',
-        message: sanitizeHint(p.reason ?? '插件加载失败'),
+        message: sanitizeHint(p.reason ?? '插件加载失败', secrets),
       })
     }
 
