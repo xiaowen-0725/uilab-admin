@@ -119,6 +119,23 @@ export function normalizeWorkspaceToolInput(input: unknown): unknown {
   return rec
 }
 
+/** Parse one SSE text line; null = ignore, 'done' = stream end marker. */
+export function parseSseDataLine(
+  line: string,
+): FullStreamChunk | 'done' | null {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.startsWith(':')) return null
+  if (trimmed === 'data: [DONE]') return 'done'
+  if (!trimmed.startsWith('data:')) return null
+  const data = trimmed.slice(5).trim()
+  if (!data) return null
+  try {
+    return JSON.parse(data) as FullStreamChunk
+  } catch {
+    return null
+  }
+}
+
 /**
  * When sidecar metadata cannot be loaded, return **no** tools rather than
  * inventing DIY/minimal names (honesty: do not claim run_command on office).
@@ -303,6 +320,37 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.emit(taskId, { kind: 'event', envelope })
   }
 
+  /**
+   * Allocate sequence + emit one envelope. eventId = `${idPrefix}-${runId}-${seq}`.
+   * `freshReceivedAt` matches cancel-path historical dual nowIso() calls.
+   */
+  private pushTaskEnvelope(
+    taskId: string,
+    ids: { turnId?: string; runId: string },
+    idPrefix: string,
+    eventType: string,
+    payload: unknown,
+    opts?: { freshReceivedAt?: boolean },
+  ): void {
+    const state = this.ensureTask(taskId)
+    const occurredAt = this.nowIso()
+    const receivedAt = opts?.freshReceivedAt ? this.nowIso() : occurredAt
+    this.emitEnvelope(taskId, {
+      eventId: `${idPrefix}-${ids.runId}-${state.nextSequence}`,
+      eventType,
+      schemaVersion: this.schemaVersion,
+      projectId: this.projectId,
+      taskId,
+      turnId: ids.turnId,
+      runId: ids.runId,
+      taskSequence: state.nextSequence,
+      occurredAt,
+      receivedAt,
+      payload,
+    })
+    state.nextSequence += 1
+  }
+
   private allocateIds(taskId: string, command: SubmitTurnCommand) {
     this.seq += 1
     const turnId =
@@ -318,29 +366,35 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     runId: string,
     inputText: string,
   ): void {
-    const state = this.ensureTask(taskId)
-    const push = (eventType: string, payload: unknown) => {
-      const occurredAt = this.nowIso()
-      const envelope: AgentRuntimeEventEnvelope = {
-        eventId: `va-book-${runId}-${state.nextSequence}`,
-        eventType,
-        schemaVersion: this.schemaVersion,
-        projectId: this.projectId,
-        taskId,
-        turnId,
-        runId,
-        taskSequence: state.nextSequence,
-        occurredAt,
-        receivedAt: occurredAt,
-        payload,
-      }
-      state.nextSequence += 1
-      this.emitEnvelope(taskId, envelope)
-    }
-    push('turn.created', { turnId })
-    push('message.accepted', { text: inputText, role: 'user' })
-    push('run.queued', {})
-    push('run.started', { source: 'voltagent-adapter' })
+    const ids = { turnId, runId }
+    this.pushTaskEnvelope(taskId, ids, 'va-book', 'turn.created', { turnId })
+    this.pushTaskEnvelope(taskId, ids, 'va-book', 'message.accepted', {
+      text: inputText,
+      role: 'user',
+    })
+    this.pushTaskEnvelope(taskId, ids, 'va-book', 'run.queued', {})
+    this.pushTaskEnvelope(taskId, ids, 'va-book', 'run.started', {
+      source: 'voltagent-adapter',
+    })
+  }
+
+  /** Start stream with AbortController lifecycle (submit + approval resume). */
+  private launchStream(args: {
+    taskId: string
+    turnId: string
+    runId: string
+    input: StreamInput
+    completeIfNoTerminal?: boolean
+  }): void {
+    const state = this.ensureTask(args.taskId)
+    const abort = new AbortController()
+    state.activeAbort = abort
+    void this.streamAgent({
+      ...args,
+      signal: abort.signal,
+    }).finally(() => {
+      if (state.activeAbort === abort) state.activeAbort = null
+    })
   }
 
   private async handleSubmitTurn(
@@ -357,25 +411,17 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     state.lastTurnId = turnId
     state.lastUserText = command.inputText
     state.pendingApprovals.clear()
-    state.activeAbort = new AbortController()
-    const abort = state.activeAbort
 
     this.pushBookkeeping(taskId, turnId, runId, command.inputText)
-
-    const ack = accepted(command.commandId, this.nowIso())
-
-    void this.streamAgent({
+    this.launchStream({
       taskId,
       turnId,
       runId,
       input: command.inputText,
-      signal: abort.signal,
       completeIfNoTerminal: true,
-    }).finally(() => {
-      if (state.activeAbort === abort) state.activeAbort = null
     })
 
-    return ack
+    return accepted(command.commandId, this.nowIso())
   }
 
   private async handleCancel(
@@ -397,35 +443,18 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     }
     state.pendingApprovals.clear()
 
-    const occurredAt = this.nowIso()
-    this.emitEnvelope(taskId, {
-      eventId: `va-cancel-${runId}-${state.nextSequence}`,
-      eventType: 'run.cancel_requested',
-      schemaVersion: this.schemaVersion,
-      projectId: this.projectId,
-      taskId,
-      turnId,
-      runId,
-      taskSequence: state.nextSequence,
-      occurredAt,
-      receivedAt: occurredAt,
-      payload: { reason: 'user_cancel' },
+    const ids = { turnId, runId }
+    this.pushTaskEnvelope(taskId, ids, 'va-cancel', 'run.cancel_requested', {
+      reason: 'user_cancel',
     })
-    state.nextSequence += 1
-    this.emitEnvelope(taskId, {
-      eventId: `va-cancelled-${runId}-${state.nextSequence}`,
-      eventType: 'run.cancelled',
-      schemaVersion: this.schemaVersion,
-      projectId: this.projectId,
+    this.pushTaskEnvelope(
       taskId,
-      turnId,
-      runId,
-      taskSequence: state.nextSequence,
-      occurredAt: this.nowIso(),
-      receivedAt: this.nowIso(),
-      payload: { reason: 'user_cancel' },
-    })
-    state.nextSequence += 1
+      ids,
+      'va-cancelled',
+      'run.cancelled',
+      { reason: 'user_cancel' },
+      { freshReceivedAt: true },
+    )
     return accepted(commandId, this.nowIso())
   }
 
@@ -460,25 +489,17 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     state.pendingApprovals.delete(approvalId)
 
-    const occurredAt = this.nowIso()
-    this.emitEnvelope(taskId, {
-      eventId: `va-apr-${runId}-${state.nextSequence}`,
-      eventType: 'approval.resolved',
-      schemaVersion: this.schemaVersion,
-      projectId: this.projectId,
+    this.pushTaskEnvelope(
       taskId,
-      turnId,
-      runId,
-      taskSequence: state.nextSequence,
-      occurredAt,
-      receivedAt: occurredAt,
-      payload: {
+      { turnId, runId },
+      'va-apr',
+      'approval.resolved',
+      {
         requestId: approvalId,
         decision: command.payload.decision,
         reason: command.payload.reason,
       },
-    })
-    state.nextSequence += 1
+    )
 
     // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
     const userText = pending.userText || state.lastUserText || ''
@@ -507,17 +528,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       },
     ]
 
-    state.activeAbort = new AbortController()
-    const abort = state.activeAbort
-    void this.streamAgent({
+    this.launchStream({
       taskId,
       turnId,
       runId,
       input: resumeInput,
-      signal: abort.signal,
       completeIfNoTerminal: true,
-    }).finally(() => {
-      if (state.activeAbort === abort) state.activeAbort = null
     })
 
     return accepted(command.commandId, this.nowIso())
@@ -612,8 +628,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      // Terminal stream markers (finish/abort/error or [DONE]); used for stream_ended compensation.
       let sawFinish = false
-      let sawTerminalMapped = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -622,21 +638,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         const parts = buffer.split('\n')
         buffer = parts.pop() ?? ''
         for (const line of parts) {
-          const trimmed = line.trim()
-          if (!trimmed || trimmed.startsWith(':')) continue
-          if (trimmed === 'data: [DONE]') {
+          const parsed = parseSseDataLine(line)
+          if (parsed === null) continue
+          if (parsed === 'done') {
             sawFinish = true
             continue
           }
-          if (!trimmed.startsWith('data:')) continue
-          const data = trimmed.slice(5).trim()
-          if (!data) continue
-          let chunk: FullStreamChunk
-          try {
-            chunk = JSON.parse(data) as FullStreamChunk
-          } catch {
-            continue
-          }
+          const chunk = parsed
           if (
             chunk.type === 'finish' ||
             chunk.type === 'abort' ||
@@ -669,13 +677,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
             ) {
               continue
             }
-            if (
-              env.eventType === 'run.completed' ||
-              env.eventType === 'run.failed' ||
-              env.eventType === 'run.cancelled'
-            ) {
-              sawTerminalMapped = true
-            }
             this.emitEnvelope(taskId, {
               ...env,
               taskSequence: state.nextSequence,
@@ -691,25 +692,16 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       if (
         completeIfNoTerminal &&
         !sawFinish &&
-        !sawTerminalMapped &&
         !signal.aborted &&
         !pausedForApproval
       ) {
-        const occurredAt = this.nowIso()
-        this.emitEnvelope(taskId, {
-          eventId: `va-complete-${runId}-${state.nextSequence}`,
-          eventType: 'run.completed',
-          schemaVersion: this.schemaVersion,
-          projectId: this.projectId,
+        this.pushTaskEnvelope(
           taskId,
-          turnId,
-          runId,
-          taskSequence: state.nextSequence,
-          occurredAt,
-          receivedAt: occurredAt,
-          payload: { reason: 'stream_ended' },
-        })
-        state.nextSequence += 1
+          { turnId, runId },
+          'va-complete',
+          'run.completed',
+          { reason: 'stream_ended' },
+        )
       }
     } catch (err) {
       if (signal.aborted) {
@@ -732,22 +724,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     runId: string,
     message: string,
   ): void {
-    const state = this.ensureTask(taskId)
-    const occurredAt = this.nowIso()
-    this.emitEnvelope(taskId, {
-      eventId: `va-fail-${runId}-${state.nextSequence}`,
-      eventType: 'run.failed',
-      schemaVersion: this.schemaVersion,
-      projectId: this.projectId,
+    this.pushTaskEnvelope(
       taskId,
-      turnId,
-      runId,
-      taskSequence: state.nextSequence,
-      occurredAt,
-      receivedAt: occurredAt,
-      payload: { message },
-    })
-    state.nextSequence += 1
+      { turnId, runId },
+      'va-fail',
+      'run.failed',
+      { message },
+    )
   }
 }
 

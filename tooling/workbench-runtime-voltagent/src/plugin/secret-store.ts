@@ -119,7 +119,6 @@ export type ResolveAuthStatusProbe = {
     },
   ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
   expectExitCode?: number
-  statusCommandFromEnv?: string[]
 }
 
 /**

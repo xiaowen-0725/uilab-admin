@@ -270,8 +270,11 @@ export async function defaultCliRunner(
   }
 }
 
+function truncateOutput(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}\n…(truncated)` : text
+}
+
 function createCliTool(input: {
-  pluginId: string
   cliId: string
   commandPath: string
   cmd: CliCommandContribution
@@ -310,14 +313,8 @@ function createCliTool(input: {
         command: input.cmd.name,
         argv,
         exitCode: result.exitCode,
-        stdout:
-          result.stdout.length > 50_000
-            ? `${result.stdout.slice(0, 50_000)}\n…(truncated)`
-            : result.stdout,
-        stderr:
-          result.stderr.length > 20_000
-            ? `${result.stderr.slice(0, 20_000)}\n…(truncated)`
-            : result.stderr,
+        stdout: truncateOutput(result.stdout, 50_000),
+        stderr: truncateOutput(result.stderr, 20_000),
       }
     },
   }) as Tool<any, any>
@@ -405,7 +402,6 @@ export async function loadCliContributions(
         if (seen.has(cmd.name)) continue
         seen.add(cmd.name)
         const tool = createCliTool({
-          pluginId,
           cliId: contrib.cliId,
           commandPath: resolved.resolved,
           cmd,

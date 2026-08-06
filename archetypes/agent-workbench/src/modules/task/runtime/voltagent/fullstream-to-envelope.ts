@@ -92,11 +92,7 @@ export function mapFullStreamChunk(
   const prefix = ctx.eventIdPrefix ?? 'va'
   let idCounter = 0
 
-  const push = (
-    eventType: string,
-    payload: unknown,
-    opts?: { parentRunId?: string },
-  ): void => {
+  const push = (eventType: string, payload: unknown): void => {
     const occurredAt = nowIso()
     envelopes.push({
       eventId: `${prefix}-${ctx.runId}-${seq}-${idCounter++}`,
@@ -106,7 +102,6 @@ export function mapFullStreamChunk(
       taskId: ctx.taskId,
       turnId: ctx.turnId,
       runId: ctx.runId,
-      parentRunId: opts?.parentRunId,
       taskSequence: seq,
       occurredAt,
       receivedAt: occurredAt,
@@ -119,15 +114,8 @@ export function mapFullStreamChunk(
 
   switch (type) {
     case 'start':
-    case 'start-step':
-      // Lifecycle is usually emitted by Adapter at submit; ignore noisy starts if needed.
-      // Still allow start → run.started when Adapter asks for it via type alias.
-      if (type === 'start') {
-        push('run.started', { source: 'voltagent', chunkType: type })
-      }
-      break
-
-    case 'text-start':
+      // Adapter also emits run.started at submit; stream start is optional.
+      push('run.started', { source: 'voltagent', chunkType: type })
       break
 
     case 'text-delta': {
@@ -154,11 +142,6 @@ export function mapFullStreamChunk(
 
     case 'reasoning-end':
       push('reasoning.completed', { id: asString(chunk.id) })
-      break
-
-    case 'tool-input-start':
-    case 'tool-input-delta':
-    case 'tool-input-end':
       break
 
     case 'tool-call': {

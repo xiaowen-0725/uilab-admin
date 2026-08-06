@@ -314,30 +314,26 @@ export type RunOperatorOptions = CreatePluginRegistryOptions & {
   pluginPaths?: string[]
 }
 
-/**
- * Load registry once and build list report (operator entry).
- */
+async function loadRegistryOnce(options: RunOperatorOptions) {
+  const registry = await createPluginRegistryFromEnv(options)
+  return registry.load({ workspaceRoot: options.workspaceRoot })
+}
+
+/** Load registry once and build list report (operator entry). */
 export async function runPluginList(
   options: RunOperatorOptions = {},
 ): Promise<PluginListReport & { disconnect: () => Promise<void> }> {
-  const registry = await createPluginRegistryFromEnv(options)
-  const result = await registry.load({
-    workspaceRoot: options.workspaceRoot,
-  })
-  const report = buildListReport(result)
-  return { ...report, disconnect: result.disconnect }
+  const result = await loadRegistryOnce(options)
+  return { ...buildListReport(result), disconnect: result.disconnect }
 }
 
-/**
- * Load registry once and build doctor report (operator entry).
- */
+/** Load registry once and build doctor report (operator entry). */
 export async function runPluginDoctor(
   options: RunOperatorOptions = {},
 ): Promise<PluginDoctorReport & { disconnect: () => Promise<void> }> {
-  const registry = await createPluginRegistryFromEnv(options)
-  const result = await registry.load({
-    workspaceRoot: options.workspaceRoot,
-  })
-  const report = buildDoctorReport(result, { env: options.env })
-  return { ...report, disconnect: result.disconnect }
+  const result = await loadRegistryOnce(options)
+  return {
+    ...buildDoctorReport(result, { env: options.env }),
+    disconnect: result.disconnect,
+  }
 }
