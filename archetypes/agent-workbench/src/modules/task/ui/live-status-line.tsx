@@ -14,9 +14,9 @@ export interface LiveStatusLineProps {
 }
 
 /**
- * Codex-like live status: bootstrap thinking only.
- * Prefer muted/static inside process fold; shimmer optional for empty chrome.
- * reduced-motion: always static muted.
+ * Codex-like live status (bootstrap「正在思考」).
+ * Default: shimmer sweep; pass muted for static text.
+ * reduced-motion: CSS forces static muted (see .wb-live-status-shimmer).
  */
 export function LiveStatusLine({
   status,
@@ -28,7 +28,8 @@ export function LiveStatusLine({
   return (
     <div
       className={cn(
-        'flex min-h-6 items-center px-0.5 py-1 text-[13px] leading-5 text-muted-foreground',
+        'flex min-h-6 items-center px-0.5 py-1 text-[13px] leading-5',
+        muted ? 'text-muted-foreground' : null,
         className,
       )}
       data-testid={testId}

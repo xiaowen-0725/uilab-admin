@@ -450,7 +450,8 @@ function TimelineTurnBlock({
             />
           ))}
           {liveForBar ? (
-            <LiveStatusLine status={liveForBar} className='mt-1' muted />
+            // Shimmer only for bootstrap「正在思考」(no open tool row).
+            <LiveStatusLine status={liveForBar} className='mt-1' />
           ) : null}
         </ProcessFold>
       ) : null}
