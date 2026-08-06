@@ -3,6 +3,13 @@
  */
 
 import type { Tool } from '@voltagent/core'
+import {
+  formatAuthDoctorLine,
+  formatAuthStatusSummary,
+  resolvePluginAuthStatuses,
+  type PluginAuthStatus,
+  type ResolvePluginAuthOptions,
+} from './auth-status.js'
 import { BUILTIN_PLUGINS } from './builtins.js'
 import {
   loadCliContributions,
@@ -10,10 +17,12 @@ import {
   type CliRunner,
 } from './cli-loader.js'
 import type {
+  AuthResourceContribution,
   CliContribution,
   PluginManifest,
   SkillsContribution,
 } from './manifest.js'
+import type { AuthBindingStore, SecretStore } from './secret-store.js'
 import {
   loadResolvedMcpServers,
   resolveMcpContribution,
@@ -41,6 +50,7 @@ export type PluginRuntimeRecord = {
   mcp: McpServerLoadStatus[]
   skills?: SkillsSeedResult
   cli: CliLoadStatus[]
+  auth: PluginAuthStatus[]
 }
 
 export type PluginRegistryLoadResult = {
@@ -49,6 +59,10 @@ export type PluginRegistryLoadResult = {
   toolNames: string[]
   mcpStatuses: McpServerLoadStatus[]
   cliStatuses: CliLoadStatus[]
+  authStatuses: PluginAuthStatus[]
+  /** Compact doctor line (no secrets) */
+  authDoctorLine: string
+  authStatusLine: string
   /** Virtual skill roots for Workspace.skills.rootPaths */
   skillRoots: string[]
   skillsResults: SkillsSeedResult[]
@@ -77,6 +91,8 @@ export type CreatePluginRegistryOptions = {
   host?: McpHost
   /** Inject domain CLI runner (tests / fake binary). */
   cliRunner?: CliRunner
+  secretStore?: SecretStore
+  authBindingStore?: AuthBindingStore
   /**
    * Explicit enable list. Default: all enabledByDefault builtins
    * minus PLUGINS_DISABLED, plus PLUGINS_ENABLED overrides.
@@ -121,9 +137,21 @@ export function createPluginRegistry(
       const skillsItems: Array<{ pluginId: string; contrib: SkillsContribution }> =
         []
       const cliItems: Array<{ pluginId: string; contrib: CliContribution }> = []
+      const authItems: Array<{
+        pluginId: string
+        enabled: boolean
+        resources: AuthResourceContribution[]
+      }> = []
 
       for (const manifest of manifests) {
         const isEnabled = enabled.has(manifest.id)
+        const authResources = manifest.contributes?.auth ?? []
+        authItems.push({
+          pluginId: manifest.id,
+          enabled: isEnabled,
+          resources: authResources,
+        })
+
         if (!isEnabled) {
           plugins.push({
             id: manifest.id,
@@ -135,6 +163,7 @@ export function createPluginRegistry(
             reason: '未启用',
             mcp: [],
             cli: [],
+            auth: [],
           })
           continue
         }
@@ -157,6 +186,7 @@ export function createPluginRegistry(
                 err instanceof Error ? err.message : 'MCP 配置解析失败',
               mcp: [],
               cli: [],
+              auth: [],
             })
           }
         }
@@ -182,6 +212,7 @@ export function createPluginRegistry(
             loadStatus: 'loaded',
             mcp: [],
             cli: [],
+            auth: [],
           })
         }
       }
@@ -204,7 +235,16 @@ export function createPluginRegistry(
         runner: options.cliRunner,
       })
 
+      const authOpts: ResolvePluginAuthOptions = {
+        env,
+        store: options.secretStore,
+        bindingStore: options.authBindingStore,
+        runner: options.cliRunner,
+      }
+      const authStatuses = await resolvePluginAuthStatuses(authItems, authOpts)
+
       for (const rec of plugins) {
+        rec.auth = authStatuses.filter((a) => a.pluginId === rec.id)
         if (!rec.enabled) continue
         const mcp = mcpAgg.statuses.filter((s) => s.pluginId === rec.id)
         rec.mcp = mcp
@@ -243,6 +283,9 @@ export function createPluginRegistry(
         toolNames: [...mcpAgg.toolNames, ...cliAgg.toolNames],
         mcpStatuses: mcpAgg.statuses,
         cliStatuses: cliAgg.statuses,
+        authStatuses,
+        authDoctorLine: formatAuthDoctorLine(authStatuses),
+        authStatusLine: formatAuthStatusSummary(authStatuses),
         skillRoots: skillsAgg.virtualRoots,
         skillsResults: skillsAgg.results,
         disconnect: mcpAgg.disconnect,

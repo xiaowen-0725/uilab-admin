@@ -3,6 +3,8 @@
  * Declarative only — no I/O.
  */
 
+import type { CredentialKind, SecretRef } from './types.js'
+
 export type PluginKind = 'builtin' | 'local'
 
 export type McpServerConfigShape =
@@ -97,11 +99,37 @@ export type CliContribution = {
   commands: CliCommandContribution[]
 }
 
+/**
+ * Auth resource declaration (enable ≠ login).
+ * Config stores refs / hints only — never secret values.
+ */
+export type AuthResourceContribution = {
+  /** e.g. mcp:docs, cli:feishu, bearer */
+  resourceId: string
+  kind: CredentialKind
+  /** All listed env names must be non-empty for env_ref / app_client */
+  envNames?: string[]
+  /** Single SecretRef (env name or memory key); no secret value in manifest */
+  secretRef?: SecretRef
+  loginHint?: string
+  /**
+   * cli_session: optional probe. exitCode === expectExitCode → connected.
+   * commandFromEnv overrides bare command when set.
+   */
+  statusCommand?: {
+    command?: string
+    commandFromEnv?: string[]
+    argv?: string[]
+    expectExitCode?: number
+  }
+}
+
 export type PluginContributes = {
   mcp?: McpContribution[]
   skills?: SkillsContribution
   cli?: CliContribution[]
-  /** Later tickets: tools, auth */
+  auth?: AuthResourceContribution[]
+  /** Later tickets: tools */
 }
 
 export type PluginManifest = {

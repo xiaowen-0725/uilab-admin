@@ -37,6 +37,7 @@ export {
 } from './secret-store.js'
 
 export type {
+  AuthResourceContribution,
   CliArgParam,
   CliCommandContribution,
   CliContribution,
@@ -104,4 +105,15 @@ export {
   type CliLoadStatus,
   type CliRunner,
 } from './cli-loader.js'
+
+export {
+  authResourceToBinding,
+  formatAuthDoctorLine,
+  formatAuthStatusSummary,
+  resolveAuthResourceStatus,
+  resolvePluginAuthStatuses,
+  sanitizeHint,
+  type PluginAuthStatus,
+  type ResolvePluginAuthOptions,
+} from './auth-status.js'
 

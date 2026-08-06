@@ -71,6 +71,8 @@ const {
   mcpStatuses,
   cliStatusLine,
   cliStatuses,
+  authStatusLine,
+  authDoctorLine,
   disconnectMcp,
 } = await createWorkbenchAgent({
   profile,
@@ -120,12 +122,17 @@ logger.info(
     `memory=${memoryKind}`,
     `mcp=${mcpStatusLine}`,
     `cli=${cliStatusLine}`,
+    `auth=${authStatusLine}`,
     `tools=${tools.join(',')}`,
     resolvedProfile === 'office'
       ? 'note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills+optional MCP/CLI); not remote production cluster'
       : 'note=local minimal Runtime (DIY tools); not remote production cluster',
   ].join(' '),
 )
+
+if (resolvedProfile === 'office' && authDoctorLine !== 'auth=none') {
+  logger.info(`plugin auth doctor: ${authDoctorLine}`)
+}
 
 const shutdown = async () => {
   try {

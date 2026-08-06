@@ -107,23 +107,34 @@ export function createCompositeSecretStore(stores: SecretStore[]): SecretStore {
   }
 }
 
+export type ResolveAuthStatusProbe = {
+  /** Domain CLI runner used for cli_session statusCommand (injectable in tests) */
+  runner?: (
+    command: string,
+    argv: string[],
+    options: {
+      cwd?: string
+      env?: Record<string, string>
+      timeoutMs?: number
+    },
+  ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
+  expectExitCode?: number
+  statusCommandFromEnv?: string[]
+}
+
 /**
  * Resolve auth status for a binding without exposing secret values.
+ * enable(plugin) is orthogonal — callers attach pluginEnabled separately.
  */
 export async function resolveAuthStatus(
   binding: AuthBinding,
   store: SecretStore,
   /** Optional env overlay; omit so env-backed stores use their configured map */
   env?: ProfileEnv,
+  probe?: ResolveAuthStatusProbe,
 ): Promise<AuthStatusResult> {
   if (binding.kind === 'cli_session') {
-    // MVP: host does not probe CLI binary here (ticket #22 may extend).
-    return {
-      status: 'missing',
-      hint:
-        binding.loginHint ??
-        '需先完成领域 CLI 登录（cli_session）；宿主将在后续 ticket 探测 statusCommand',
-    }
+    return resolveCliSessionStatus(binding, env, probe)
   }
 
   if (binding.kind === 'oauth2') {
@@ -165,6 +176,43 @@ export async function resolveAuthStatus(
     hint:
       binding.loginHint ??
       `缺少环境变量：${missing.join(', ')}（请写入侧车 .env，勿提交仓库）`,
+  }
+}
+
+async function resolveCliSessionStatus(
+  binding: AuthBinding,
+  env: ProfileEnv | undefined,
+  probe?: ResolveAuthStatusProbe,
+): Promise<AuthStatusResult> {
+  const hint =
+    binding.loginHint ??
+    '需先完成领域 CLI 登录（cli_session），例如：feishu-cli auth login'
+  const cmd = binding.statusCommand?.command?.trim()
+  if (!cmd || !probe?.runner) {
+    return { status: 'missing', hint }
+  }
+
+  try {
+    const result = await probe.runner(cmd, binding.statusCommand?.argv ?? [], {
+      env: env
+        ? Object.fromEntries(
+            Object.entries(env).filter(
+              (e): e is [string, string] => typeof e[1] === 'string',
+            ),
+          )
+        : undefined,
+      timeoutMs: 15_000,
+    })
+    const expect = probe.expectExitCode ?? 0
+    if (result.exitCode === expect) {
+      return { status: 'connected' }
+    }
+    return { status: 'missing', hint }
+  } catch (err) {
+    return {
+      status: 'error',
+      hint: `${hint}（探测失败：${err instanceof Error ? err.message : 'unknown'}）`,
+    }
   }
 }
 

@@ -122,7 +122,9 @@ MCP **默认全部 tools `needsApproval`**；仅 `MCP_READ_ONLY_TOOL_NAMES=exact
 stdio/CLI child env 按 `childEnvKeys` 隔离；**模型密钥永不转发**。  
 MCP 连接失败不崩溃；Skills seed 路径越界 fail-closed。密钥只放侧车 `.env`。Renderer 无 MCP SDK。
 
-启动日志：`mcp=docs=ok(N),calendar=off`；`cli=feishu=ready(2)` 或 `cli=none`。
+启动日志：`mcp=docs=ok(N),calendar=off`；`cli=feishu=ready(2)` 或 `cli=none`；`auth=mcp.docs/bearer=missing,...`。
+
+**Auth（启用 ≠ 登录）：** 插件可声明 `contributes.auth`（`env_ref` / `static_bearer` / `cli_session`；`oauth2` 预留）。缺 env → `auth=missing`；配齐 → `connected`；`cli_session` 可用 `statusCommand` 探测。doctor 摘要**永不**打印 secret。
 
 ### 长任务默认（O5）
 

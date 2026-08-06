@@ -60,6 +60,16 @@ export const BUILTIN_MCP_DOCS_PLUGIN: PluginManifest = {
         childEnvKeys: FEISHU_DOCS_CHILD_ENV,
       },
     ],
+    // enable ≠ login: plugin may load without bearer; doctor shows auth=missing until set
+    auth: [
+      {
+        resourceId: 'bearer',
+        kind: 'static_bearer',
+        secretRef: { backend: 'env', envName: 'MCP_DOCS_BEARER_TOKEN' },
+        loginHint:
+          '配置 MCP_DOCS_BEARER_TOKEN（或 MCP_DOCS_TOKEN）到侧车 .env；勿提交仓库',
+      },
+    ],
   },
 }
 
@@ -90,6 +100,15 @@ export const BUILTIN_MCP_CALENDAR_PLUGIN: PluginManifest = {
           'MCP_BEARER_TOKEN',
         ],
         childEnvKeys: FEISHU_CALENDAR_CHILD_ENV,
+      },
+    ],
+    auth: [
+      {
+        resourceId: 'bearer',
+        kind: 'static_bearer',
+        secretRef: { backend: 'env', envName: 'MCP_CALENDAR_BEARER_TOKEN' },
+        loginHint:
+          '配置 MCP_CALENDAR_BEARER_TOKEN 到侧车 .env；勿提交仓库',
       },
     ],
   },
@@ -185,6 +204,19 @@ export const BUILTIN_CLI_FEISHU_PLUGIN: PluginManifest = {
             needsApproval: true,
           },
         ],
+      },
+    ],
+    auth: [
+      {
+        resourceId: 'cli:feishu',
+        kind: 'cli_session',
+        loginHint: '请先运行 feishu-cli auth login（领域 CLI 自有登录，非宿主 OAuth）',
+        statusCommand: {
+          command: 'feishu-cli',
+          commandFromEnv: ['FEISHU_CLI_PATH'],
+          argv: ['auth', 'status'],
+          expectExitCode: 0,
+        },
       },
     ],
   },

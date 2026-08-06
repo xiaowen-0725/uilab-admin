@@ -25,6 +25,7 @@ import {
   type CliLoadStatus,
   type CreatePluginRegistryOptions,
   type McpServerLoadStatus,
+  type PluginAuthStatus,
 } from './plugin/index.js'
 import {
   type AgentProfile,
@@ -63,6 +64,9 @@ export type WorkbenchAgentBundle = {
   mcpStatusLine: string
   cliStatuses: CliLoadStatus[]
   cliStatusLine: string
+  authStatuses: PluginAuthStatus[]
+  authStatusLine: string
+  authDoctorLine: string
   /** Virtual skill roots mounted on Workspace (office). */
   skillRoots: string[]
   disconnectMcp: () => Promise<void>
@@ -204,6 +208,9 @@ export async function createWorkbenchAgent(
       mcpStatusLine: formatRegistryMcpStatusLine(plugins.mcpStatuses),
       cliStatuses: plugins.cliStatuses,
       cliStatusLine: formatRegistryCliStatusLine(plugins.cliStatuses),
+      authStatuses: plugins.authStatuses,
+      authStatusLine: plugins.authStatusLine,
+      authDoctorLine: plugins.authDoctorLine,
       skillRoots,
       disconnectMcp: plugins.disconnect,
     }
@@ -242,6 +249,9 @@ export async function createWorkbenchAgent(
     mcpStatusLine: 'mcp=none',
     cliStatuses: [],
     cliStatusLine: 'cli=none',
+    authStatuses: [],
+    authStatusLine: 'auth=none',
+    authDoctorLine: 'auth=none',
     skillRoots: [],
     disconnectMcp: async () => {},
   }
