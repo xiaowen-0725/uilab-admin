@@ -154,37 +154,21 @@ export async function resolveAuthStatus(
     return { status: 'none_required' }
   }
 
-  // static_bearer / env_ref with multiple names: ANY alias is enough
-  // app_client: ALL listed env names required
-  const requireAll = binding.kind === 'app_client'
-
+  // static_bearer / env_ref: any alias; app_client: all listed env names
   if (names.length > 0) {
-    if (requireAll) {
-      const missing: string[] = []
-      for (const name of names) {
-        const ref: SecretRef = { backend: 'env', envName: name }
-        const v = await store.resolve(ref, env)
-        if (!v) missing.push(name)
-      }
-      if (missing.length === 0) return { status: 'connected' }
-      return {
-        status: 'missing',
-        hint:
-          binding.loginHint ??
-          `缺少环境变量：${missing.join(', ')}（请写入侧车 .env，勿提交仓库）`,
-      }
-    }
-    for (const name of names) {
-      const ref: SecretRef = { backend: 'env', envName: name }
-      const v = await store.resolve(ref, env)
-      if (v) return { status: 'connected' }
-    }
+    const envResult = await resolveEnvNamePresence(
+      store,
+      names,
+      env,
+      binding.kind === 'app_client',
+    )
+    if (envResult.status === 'connected') return { status: 'connected' }
     if (!binding.secretRef) {
       return {
         status: 'missing',
         hint:
           binding.loginHint ??
-          `缺少环境变量：${names.join(' / ')}（请写入侧车 .env，勿提交仓库）`,
+          missingEnvNamesHint(envResult.missing, binding.kind === 'app_client'),
       }
     }
   }
@@ -202,8 +186,36 @@ export async function resolveAuthStatus(
     status: 'missing',
     hint:
       binding.loginHint ??
-      `缺少环境变量：${names.join(' / ')}（请写入侧车 .env，勿提交仓库）`,
+      missingEnvNamesHint(names, false),
   }
+}
+
+async function resolveEnvNamePresence(
+  store: SecretStore,
+  names: string[],
+  env: ProfileEnv | undefined,
+  requireAll: boolean,
+): Promise<{ status: 'connected' } | { status: 'missing'; missing: string[] }> {
+  if (requireAll) {
+    const missing: string[] = []
+    for (const name of names) {
+      const v = await store.resolve({ backend: 'env', envName: name }, env)
+      if (!v) missing.push(name)
+    }
+    return missing.length === 0
+      ? { status: 'connected' }
+      : { status: 'missing', missing }
+  }
+  for (const name of names) {
+    const v = await store.resolve({ backend: 'env', envName: name }, env)
+    if (v) return { status: 'connected' }
+  }
+  return { status: 'missing', missing: names }
+}
+
+function missingEnvNamesHint(names: string[], requireAll: boolean): string {
+  const joined = requireAll ? names.join(', ') : names.join(' / ')
+  return `缺少环境变量：${joined}（请写入侧车 .env，勿提交仓库）`
 }
 
 async function resolveCliSessionStatus(

@@ -133,6 +133,210 @@ export function parsePluginManifestJson(
   return { ok: true, manifest }
 }
 
+type ParseResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; reason: string }
+
+function parseMcpContributions(raw: unknown): ParseResult<McpContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'contributes.mcp 必须是数组' }
+  }
+  const mcp: McpContribution[] = []
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'mcp 项必须是对象' }
+    }
+    const serverId = asString(item.serverId)
+    if (!serverId) {
+      return { ok: false, reason: 'mcp.serverId 必填' }
+    }
+    mcp.push({
+      serverId,
+      urlFromEnv: asStringArray(item.urlFromEnv),
+      commandFromEnv: asStringArray(item.commandFromEnv),
+      argsFromEnv: asStringArray(item.argsFromEnv),
+      bearerTokenFromEnv: asStringArray(item.bearerTokenFromEnv),
+      childEnvKeys: asStringArray(item.childEnvKeys),
+      timeoutMs: typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
+      readOnlyToolNames: asStringArray(item.readOnlyToolNames),
+    })
+  }
+  return { ok: true, value: mcp }
+}
+
+function parseSkillsContribution(raw: unknown): ParseResult<SkillsContribution> {
+  if (!isRecord(raw)) {
+    return { ok: false, reason: 'contributes.skills 必须是对象' }
+  }
+  return {
+    ok: true,
+    value: {
+      virtualRoot: asString(raw.virtualRoot),
+      workspaceDir: asString(raw.workspaceDir),
+      skillIds: asStringArray(raw.skillIds),
+      bundledRelativeDir: asString(raw.bundledRelativeDir),
+      outputDirs: asStringArray(raw.outputDirs),
+      seedStrategy:
+        raw.seedStrategy === 'missing-only' ? 'missing-only' : undefined,
+    },
+  }
+}
+
+function parseCliCommand(
+  cmd: unknown,
+  cliId: string,
+): ParseResult<CliCommandContribution> {
+  if (!isRecord(cmd)) {
+    return { ok: false, reason: `cli ${cliId} command 必须是对象` }
+  }
+  const name = asString(cmd.name)
+  const argv = asStringArray(cmd.argv)
+  if (!name || !argv?.length) {
+    return {
+      ok: false,
+      reason: `cli ${cliId} 命令需要 name 与非空 argv`,
+    }
+  }
+  let parameters: CliArgParam[] | undefined
+  if (Array.isArray(cmd.parameters)) {
+    parameters = []
+    for (const p of cmd.parameters) {
+      if (!isRecord(p)) continue
+      const pname = asString(p.name)
+      if (!pname) continue
+      const ptype: CliArgParam['type'] =
+        p.type === 'number' || p.type === 'boolean' ? p.type : 'string'
+      parameters.push({
+        name: pname,
+        type: ptype,
+        description: asString(p.description),
+        required: typeof p.required === 'boolean' ? p.required : undefined,
+      })
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      name,
+      argv,
+      description: asString(cmd.description),
+      needsApproval:
+        typeof cmd.needsApproval === 'boolean' ? cmd.needsApproval : undefined,
+      readOnly: typeof cmd.readOnly === 'boolean' ? cmd.readOnly : undefined,
+      timeoutMs: typeof cmd.timeoutMs === 'number' ? cmd.timeoutMs : undefined,
+      parameters,
+    },
+  }
+}
+
+function parseCliContributions(raw: unknown): ParseResult<CliContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'contributes.cli 必须是数组' }
+  }
+  const cli: CliContribution[] = []
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'cli 项必须是对象' }
+    }
+    const cliId = asString(item.cliId)
+    if (!cliId) return { ok: false, reason: 'cli.cliId 必填' }
+    if (!Array.isArray(item.commands)) {
+      return { ok: false, reason: `cli ${cliId} 缺少 commands 数组` }
+    }
+    const commands: CliCommandContribution[] = []
+    for (const cmd of item.commands) {
+      const parsed = parseCliCommand(cmd, cliId)
+      if (!parsed.ok) return parsed
+      commands.push(parsed.value)
+    }
+    cli.push({
+      cliId,
+      command: asString(item.command),
+      commandFromEnv: asStringArray(item.commandFromEnv),
+      packageHint: asString(item.packageHint),
+      childEnvKeys: asStringArray(item.childEnvKeys),
+      defaultCwd:
+        item.defaultCwd === 'workspace' ||
+        item.defaultCwd === 'plugin' ||
+        typeof item.defaultCwd === 'string'
+          ? (item.defaultCwd as CliContribution['defaultCwd'])
+          : undefined,
+      commands,
+    })
+  }
+  return { ok: true, value: cli }
+}
+
+function parseSecretRef(
+  raw: unknown,
+): ParseResult<AuthResourceContribution['secretRef']> {
+  if (raw == null) return { ok: true, value: undefined }
+  if (!isRecord(raw)) {
+    return { ok: false, reason: 'auth.secretRef 必须是对象' }
+  }
+  const backend = asString(raw.backend)
+  if (backend === 'env' && asString(raw.envName)) {
+    return {
+      ok: true,
+      value: { backend: 'env', envName: raw.envName as string },
+    }
+  }
+  if (backend === 'memory' && asString(raw.key)) {
+    return { ok: true, value: { backend: 'memory', key: raw.key as string } }
+  }
+  if (backend === 'keychain' && asString(raw.account)) {
+    return {
+      ok: true,
+      value: { backend: 'keychain', account: raw.account as string },
+    }
+  }
+  return { ok: false, reason: 'auth.secretRef 格式无效' }
+}
+
+function parseAuthContributions(
+  raw: unknown,
+  pluginId: string,
+): ParseResult<AuthResourceContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'contributes.auth 必须是数组' }
+  }
+  const auth: AuthResourceContribution[] = []
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'auth 项必须是对象' }
+    }
+    const resourceId = asString(item.resourceId)
+    const kind = asString(item.kind)
+    if (!resourceId || !kind || !CREDENTIAL_KINDS.has(kind)) {
+      return {
+        ok: false,
+        reason: `auth 需要 resourceId 与合法 kind（插件 ${pluginId}）`,
+      }
+    }
+    const secretRef = parseSecretRef(item.secretRef)
+    if (!secretRef.ok) return secretRef
+    auth.push({
+      resourceId,
+      kind: kind as AuthResourceContribution['kind'],
+      envNames: asStringArray(item.envNames),
+      secretRef: secretRef.value,
+      loginHint: asString(item.loginHint),
+      statusCommand: isRecord(item.statusCommand)
+        ? {
+            command: asString(item.statusCommand.command),
+            commandFromEnv: asStringArray(item.statusCommand.commandFromEnv),
+            argv: asStringArray(item.statusCommand.argv),
+            expectExitCode:
+              typeof item.statusCommand.expectExitCode === 'number'
+                ? item.statusCommand.expectExitCode
+                : undefined,
+          }
+        : undefined,
+    })
+  }
+  return { ok: true, value: auth }
+}
+
 function parseContributes(
   raw: unknown,
   pluginId: string,
@@ -146,184 +350,27 @@ function parseContributes(
   const contributes: PluginContributes = {}
 
   if (raw.mcp != null) {
-    if (!Array.isArray(raw.mcp)) {
-      return { ok: false, reason: 'contributes.mcp 必须是数组' }
-    }
-    const mcp: McpContribution[] = []
-    for (const item of raw.mcp) {
-      if (!isRecord(item)) {
-        return { ok: false, reason: 'mcp 项必须是对象' }
-      }
-      const serverId = asString(item.serverId)
-      if (!serverId) {
-        return { ok: false, reason: 'mcp.serverId 必填' }
-      }
-      mcp.push({
-        serverId,
-        urlFromEnv: asStringArray(item.urlFromEnv),
-        commandFromEnv: asStringArray(item.commandFromEnv),
-        argsFromEnv: asStringArray(item.argsFromEnv),
-        bearerTokenFromEnv: asStringArray(item.bearerTokenFromEnv),
-        childEnvKeys: asStringArray(item.childEnvKeys),
-        timeoutMs:
-          typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
-        readOnlyToolNames: asStringArray(item.readOnlyToolNames),
-      })
-    }
-    contributes.mcp = mcp
+    const mcp = parseMcpContributions(raw.mcp)
+    if (!mcp.ok) return mcp
+    contributes.mcp = mcp.value
   }
 
   if (raw.skills != null) {
-    if (!isRecord(raw.skills)) {
-      return { ok: false, reason: 'contributes.skills 必须是对象' }
-    }
-    const skills: SkillsContribution = {
-      virtualRoot: asString(raw.skills.virtualRoot),
-      workspaceDir: asString(raw.skills.workspaceDir),
-      skillIds: asStringArray(raw.skills.skillIds),
-      bundledRelativeDir: asString(raw.skills.bundledRelativeDir),
-      outputDirs: asStringArray(raw.skills.outputDirs),
-      seedStrategy:
-        raw.skills.seedStrategy === 'missing-only' ? 'missing-only' : undefined,
-    }
-    contributes.skills = skills
+    const skills = parseSkillsContribution(raw.skills)
+    if (!skills.ok) return skills
+    contributes.skills = skills.value
   }
 
   if (raw.cli != null) {
-    if (!Array.isArray(raw.cli)) {
-      return { ok: false, reason: 'contributes.cli 必须是数组' }
-    }
-    const cli: CliContribution[] = []
-    for (const item of raw.cli) {
-      if (!isRecord(item)) {
-        return { ok: false, reason: 'cli 项必须是对象' }
-      }
-      const cliId = asString(item.cliId)
-      if (!cliId) return { ok: false, reason: 'cli.cliId 必填' }
-      if (!Array.isArray(item.commands)) {
-        return { ok: false, reason: `cli ${cliId} 缺少 commands 数组` }
-      }
-      const commands: CliCommandContribution[] = []
-      for (const cmd of item.commands) {
-        if (!isRecord(cmd)) {
-          return { ok: false, reason: `cli ${cliId} command 必须是对象` }
-        }
-        const name = asString(cmd.name)
-        const argv = asStringArray(cmd.argv)
-        if (!name || !argv?.length) {
-          return {
-            ok: false,
-            reason: `cli ${cliId} 命令需要 name 与非空 argv`,
-          }
-        }
-        let parameters: CliArgParam[] | undefined
-        if (Array.isArray(cmd.parameters)) {
-          parameters = []
-          for (const p of cmd.parameters) {
-            if (!isRecord(p)) continue
-            const pname = asString(p.name)
-            if (!pname) continue
-            const ptype: CliArgParam['type'] =
-              p.type === 'number' || p.type === 'boolean' ? p.type : 'string'
-            parameters.push({
-              name: pname,
-              type: ptype,
-              description: asString(p.description),
-              required:
-                typeof p.required === 'boolean' ? p.required : undefined,
-            })
-          }
-        }
-        commands.push({
-          name,
-          argv,
-          description: asString(cmd.description),
-          needsApproval:
-            typeof cmd.needsApproval === 'boolean'
-              ? cmd.needsApproval
-              : undefined,
-          readOnly: typeof cmd.readOnly === 'boolean' ? cmd.readOnly : undefined,
-          timeoutMs: typeof cmd.timeoutMs === 'number' ? cmd.timeoutMs : undefined,
-          parameters,
-        })
-      }
-      cli.push({
-        cliId,
-        command: asString(item.command),
-        commandFromEnv: asStringArray(item.commandFromEnv),
-        packageHint: asString(item.packageHint),
-        childEnvKeys: asStringArray(item.childEnvKeys),
-        defaultCwd:
-          item.defaultCwd === 'workspace' ||
-          item.defaultCwd === 'plugin' ||
-          typeof item.defaultCwd === 'string'
-            ? (item.defaultCwd as CliContribution['defaultCwd'])
-            : undefined,
-        commands,
-      })
-    }
-    contributes.cli = cli
+    const cli = parseCliContributions(raw.cli)
+    if (!cli.ok) return cli
+    contributes.cli = cli.value
   }
 
   if (raw.auth != null) {
-    if (!Array.isArray(raw.auth)) {
-      return { ok: false, reason: 'contributes.auth 必须是数组' }
-    }
-    const auth: AuthResourceContribution[] = []
-    for (const item of raw.auth) {
-      if (!isRecord(item)) {
-        return { ok: false, reason: 'auth 项必须是对象' }
-      }
-      const resourceId = asString(item.resourceId)
-      const kind = asString(item.kind)
-      if (!resourceId || !kind || !CREDENTIAL_KINDS.has(kind)) {
-        return {
-          ok: false,
-          reason: `auth 需要 resourceId 与合法 kind（插件 ${pluginId}）`,
-        }
-      }
-      let secretRef: AuthResourceContribution['secretRef']
-      if (item.secretRef != null) {
-        if (!isRecord(item.secretRef)) {
-          return { ok: false, reason: 'auth.secretRef 必须是对象' }
-        }
-        const backend = asString(item.secretRef.backend)
-        if (backend === 'env' && asString(item.secretRef.envName)) {
-          secretRef = {
-            backend: 'env',
-            envName: item.secretRef.envName as string,
-          }
-        } else if (backend === 'memory' && asString(item.secretRef.key)) {
-          secretRef = { backend: 'memory', key: item.secretRef.key as string }
-        } else if (backend === 'keychain' && asString(item.secretRef.account)) {
-          secretRef = {
-            backend: 'keychain',
-            account: item.secretRef.account as string,
-          }
-        } else {
-          return { ok: false, reason: 'auth.secretRef 格式无效' }
-        }
-      }
-      auth.push({
-        resourceId,
-        kind: kind as AuthResourceContribution['kind'],
-        envNames: asStringArray(item.envNames),
-        secretRef,
-        loginHint: asString(item.loginHint),
-        statusCommand: isRecord(item.statusCommand)
-          ? {
-              command: asString(item.statusCommand.command),
-              commandFromEnv: asStringArray(item.statusCommand.commandFromEnv),
-              argv: asStringArray(item.statusCommand.argv),
-              expectExitCode:
-                typeof item.statusCommand.expectExitCode === 'number'
-                  ? item.statusCommand.expectExitCode
-                  : undefined,
-            }
-          : undefined,
-      })
-    }
-    contributes.auth = auth
+    const auth = parseAuthContributions(raw.auth, pluginId)
+    if (!auth.ok) return auth
+    contributes.auth = auth.value
   }
 
   return { ok: true, contributes }

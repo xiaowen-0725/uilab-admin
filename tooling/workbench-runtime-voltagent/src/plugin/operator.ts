@@ -100,6 +100,28 @@ export function buildListReport(
   }
 }
 
+function pushFinding(
+  findings: DoctorFinding[],
+  secrets: string[],
+  severity: DoctorFinding['severity'],
+  pluginId: string,
+  code: string,
+  message: string,
+  /** When true, redact secret-shaped substrings (default false for static ok copy). */
+  scrub = false,
+): void {
+  findings.push({
+    severity,
+    pluginId,
+    code,
+    message: scrub ? sanitizeHint(message, secrets) : message,
+  })
+}
+
+function authHintSuffix(hint: string | undefined): string {
+  return hint ? ` · ${hint}` : ''
+}
+
 /**
  * Collect doctor findings from a loaded registry result.
  * Never includes secret material.
@@ -110,157 +132,129 @@ export function collectDoctorFindings(
 ): DoctorFinding[] {
   const findings: DoctorFinding[] = []
   const secrets = options?.secretValues ?? []
+  const add = (
+    severity: DoctorFinding['severity'],
+    pluginId: string,
+    code: string,
+    message: string,
+    scrub = false,
+  ) => pushFinding(findings, secrets, severity, pluginId, code, message, scrub)
 
   for (const f of result.discoveryFailures) {
-    findings.push({
-      severity: 'error',
-      pluginId: f.id,
-      code: 'discovery_failed',
-      message: sanitizeHint(`${f.reason}（${f.sourcePath}）`, secrets),
-    })
+    add(
+      'error',
+      f.id,
+      'discovery_failed',
+      `${f.reason}（${f.sourcePath}）`,
+      true,
+    )
   }
 
   for (const p of result.plugins) {
     if (p.loadStatus === 'failed' && p.enabled) {
-      findings.push({
-        severity: 'error',
-        pluginId: p.id,
-        code: 'load_failed',
-        message: sanitizeHint(p.reason ?? '插件加载失败', secrets),
-      })
+      add('error', p.id, 'load_failed', p.reason ?? '插件加载失败', true)
     }
 
     for (const m of p.mcp) {
       if (m.status === 'failed') {
-        findings.push({
-          severity: 'error',
-          pluginId: p.id,
-          code: 'mcp_failed',
-          message: sanitizeHint(
-            `MCP ${m.serverId} 连接失败：${m.reason ?? 'unknown'}`,
-            secrets,
-          ),
-        })
+        add(
+          'error',
+          p.id,
+          'mcp_failed',
+          `MCP ${m.serverId} 连接失败：${m.reason ?? 'unknown'}`,
+          true,
+        )
       } else if (m.status === 'disabled' && p.enabled) {
-        findings.push({
-          severity: 'info',
-          pluginId: p.id,
-          code: 'mcp_disabled',
-          message: `MCP ${m.serverId} 未配置（需 MCP_*_URL 或 MCP_*_COMMAND）`,
-        })
+        add(
+          'info',
+          p.id,
+          'mcp_disabled',
+          `MCP ${m.serverId} 未配置（需 MCP_*_URL 或 MCP_*_COMMAND）`,
+        )
       } else if (m.status === 'connected') {
-        findings.push({
-          severity: 'ok',
-          pluginId: p.id,
-          code: 'mcp_connected',
-          message: `MCP ${m.serverId} 已连接（${m.toolNames.length} tools）`,
-        })
+        add(
+          'ok',
+          p.id,
+          'mcp_connected',
+          `MCP ${m.serverId} 已连接（${m.toolNames.length} tools）`,
+        )
       }
     }
 
     for (const c of p.cli) {
       if (c.status === 'missing') {
-        findings.push({
-          severity: 'warn',
-          pluginId: p.id,
-          code: 'cli_missing',
-          message: sanitizeHint(
-            c.reason ?? `领域 CLI ${c.cliId} 可执行文件未找到`,
-            secrets,
-          ),
-        })
+        add(
+          'warn',
+          p.id,
+          'cli_missing',
+          c.reason ?? `领域 CLI ${c.cliId} 可执行文件未找到`,
+          true,
+        )
       } else if (c.status === 'failed') {
-        findings.push({
-          severity: 'error',
-          pluginId: p.id,
-          code: 'cli_failed',
-          message: sanitizeHint(
-            c.reason ?? `领域 CLI ${c.cliId} 失败`,
-            secrets,
-          ),
-        })
+        add(
+          'error',
+          p.id,
+          'cli_failed',
+          c.reason ?? `领域 CLI ${c.cliId} 失败`,
+          true,
+        )
       } else if (c.status === 'ready') {
-        findings.push({
-          severity: 'ok',
-          pluginId: p.id,
-          code: 'cli_ready',
-          message: `领域 CLI ${c.cliId} 就绪（${c.toolNames.length} tools）`,
-        })
+        add(
+          'ok',
+          p.id,
+          'cli_ready',
+          `领域 CLI ${c.cliId} 就绪（${c.toolNames.length} tools）`,
+        )
       }
     }
 
     if (p.skills?.status === 'failed') {
-      findings.push({
-        severity: 'error',
-        pluginId: p.id,
-        code: 'skills_failed',
-        message: sanitizeHint(p.skills.reason ?? 'Skills seed 失败', secrets),
-      })
+      add('error', p.id, 'skills_failed', p.skills.reason ?? 'Skills seed 失败', true)
     } else if (p.skills?.status === 'seeded' && p.skills.seededSkillIds.length > 0) {
-      findings.push({
-        severity: 'ok',
-        pluginId: p.id,
-        code: 'skills_seeded',
-        message: `Skills 已 seed：${p.skills.seededSkillIds.join(',')}`,
-      })
+      add(
+        'ok',
+        p.id,
+        'skills_seeded',
+        `Skills 已 seed：${p.skills.seededSkillIds.join(',')}`,
+      )
     }
 
     for (const a of p.auth) {
+      const label = `auth ${a.resourceId}`
       if (a.status === 'missing') {
-        findings.push({
-          severity: a.pluginEnabled ? 'warn' : 'info',
-          pluginId: p.id,
-          code: 'auth_missing',
-          message: sanitizeHint(
-            `auth ${a.resourceId}=missing${a.hint ? ` · ${a.hint}` : ''}`,
-            secrets,
-          ),
-        })
+        add(
+          a.pluginEnabled ? 'warn' : 'info',
+          p.id,
+          'auth_missing',
+          `${label}=missing${authHintSuffix(a.hint)}`,
+          true,
+        )
       } else if (a.status === 'error') {
-        findings.push({
-          severity: 'error',
-          pluginId: p.id,
-          code: 'auth_error',
-          message: sanitizeHint(
-            `auth ${a.resourceId}=error${a.hint ? ` · ${a.hint}` : ''}`,
-            secrets,
-          ),
-        })
+        add(
+          'error',
+          p.id,
+          'auth_error',
+          `${label}=error${authHintSuffix(a.hint)}`,
+          true,
+        )
       } else if (a.status === 'connected') {
-        findings.push({
-          severity: 'ok',
-          pluginId: p.id,
-          code: 'auth_connected',
-          message: `auth ${a.resourceId}=connected`,
-        })
+        add('ok', p.id, 'auth_connected', `${label}=connected`)
       } else if (a.status === 'none_required') {
-        findings.push({
-          severity: 'ok',
-          pluginId: p.id,
-          code: 'auth_none_required',
-          message: `auth ${a.resourceId}=none_required`,
-        })
+        add('ok', p.id, 'auth_none_required', `${label}=none_required`)
       } else if (a.status === 'expired') {
-        findings.push({
-          severity: 'warn',
-          pluginId: p.id,
-          code: 'auth_expired',
-          message: sanitizeHint(
-            `auth ${a.resourceId}=expired${a.hint ? ` · ${a.hint}` : ''}`,
-            secrets,
-          ),
-        })
+        add(
+          'warn',
+          p.id,
+          'auth_expired',
+          `${label}=expired${authHintSuffix(a.hint)}`,
+          true,
+        )
       }
     }
   }
 
   if (findings.length === 0) {
-    findings.push({
-      severity: 'ok',
-      pluginId: '*',
-      code: 'healthy',
-      message: '未发现插件问题',
-    })
+    add('ok', '*', 'healthy', '未发现插件问题')
   }
 
   return findings
