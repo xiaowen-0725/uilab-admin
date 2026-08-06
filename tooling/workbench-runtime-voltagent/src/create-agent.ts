@@ -19,13 +19,14 @@ import {
   resolveOfficeRuntimeDefaults,
 } from './office-runtime-defaults.js'
 import {
-  createPluginRegistry,
+  createPluginRegistryFromEnv,
   formatRegistryCliStatusLine,
   formatRegistryMcpStatusLine,
   type CliLoadStatus,
   type CreatePluginRegistryOptions,
   type McpServerLoadStatus,
   type PluginAuthStatus,
+  type PluginDiscoveryFailure,
 } from './plugin/index.js'
 import {
   type AgentProfile,
@@ -67,6 +68,7 @@ export type WorkbenchAgentBundle = {
   authStatuses: PluginAuthStatus[]
   authStatusLine: string
   authDoctorLine: string
+  discoveryFailures: PluginDiscoveryFailure[]
   /** Virtual skill roots mounted on Workspace (office). */
   skillRoots: string[]
   disconnectMcp: () => Promise<void>
@@ -107,8 +109,8 @@ export async function createWorkbenchAgent(
       maxStepsOverride: options.maxSteps,
     })
 
-    // Single PluginRegistry load: skills + MCP + domain CLI.
-    const registry = createPluginRegistry({
+    // Registry: builtins + PLUGIN_PATHS plugin.json + skills/MCP/CLI/auth.
+    const registry = await createPluginRegistryFromEnv({
       env,
       host: options.mcpHost,
       cliRunner: options.cliRunner,
@@ -211,6 +213,7 @@ export async function createWorkbenchAgent(
       authStatuses: plugins.authStatuses,
       authStatusLine: plugins.authStatusLine,
       authDoctorLine: plugins.authDoctorLine,
+      discoveryFailures: plugins.discoveryFailures,
       skillRoots,
       disconnectMcp: plugins.disconnect,
     }
@@ -252,6 +255,7 @@ export async function createWorkbenchAgent(
     authStatuses: [],
     authStatusLine: 'auth=none',
     authDoctorLine: 'auth=none',
+    discoveryFailures: [],
     skillRoots: [],
     disconnectMcp: async () => {},
   }

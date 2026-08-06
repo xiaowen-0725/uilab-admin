@@ -116,7 +116,7 @@ office 装配**只经** `createPluginRegistry().load()` 聚合：
 | `skills.office` | `/skills` 下三 skill + output 目录 | 默认启用；`PLUGINS_DISABLED=skills.office` 可关 |
 | `cli.feishu` | 领域 CLI（allowlist 子命令 → `cli.feishu.*` tools） | **默认关闭**；`PLUGINS_ENABLED=cli.feishu` + `FEISHU_CLI_PATH` 或 PATH 上的 `feishu-cli` |
 
-可选：`MCP_*_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`；`PLUGINS_ENABLED` / `PLUGINS_DISABLED`。  
+可选：`MCP_*_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`；`PLUGINS_ENABLED` / `PLUGINS_DISABLED`；**`PLUGIN_PATHS`**（逗号分隔目录，扫描 `plugin.json` 或子目录包；**不**加载任意外部 JS，禁止 `contributes.tools`）。  
 MCP **默认全部 tools `needsApproval`**；仅 `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 精确免批。  
 **领域 CLI** 用 `execFile(command, argv[])`，禁止 shell 拼接；写操作默认 `needsApproval`；二进制缺失状态 `missing`。  
 stdio/CLI child env 按 `childEnvKeys` 隔离；**模型密钥永不转发**。  

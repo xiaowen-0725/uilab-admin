@@ -1,5 +1,5 @@
 /**
- * PluginRegistry — discover / enable / isolate-load / aggregate tools + skills + CLI (#19–#21).
+ * PluginRegistry — discover / enable / isolate-load / aggregate (#19–#23).
  */
 
 import type { Tool } from '@voltagent/core'
@@ -11,6 +11,10 @@ import {
   type ResolvePluginAuthOptions,
 } from './auth-status.js'
 import { BUILTIN_PLUGINS } from './builtins.js'
+import {
+  discoverLocalPlugins,
+  type PluginDiscoveryFailure,
+} from './discover.js'
 import {
   loadCliContributions,
   type CliLoadStatus,
@@ -63,6 +67,8 @@ export type PluginRegistryLoadResult = {
   /** Compact doctor line (no secrets) */
   authDoctorLine: string
   authStatusLine: string
+  /** Local plugin.json discovery failures (isolated; builtins still load) */
+  discoveryFailures: PluginDiscoveryFailure[]
   /** Virtual skill roots for Workspace.skills.rootPaths */
   skillRoots: string[]
   skillsResults: SkillsSeedResult[]
@@ -86,8 +92,10 @@ export type PluginRegistry = {
 export type CreatePluginRegistryOptions = {
   env?: ProfileEnv
   builtins?: PluginManifest[]
-  /** Additional manifests (local discovery later) */
+  /** Additional manifests (from PLUGIN_PATHS discovery or tests) */
   extra?: PluginManifest[]
+  /** Isolated discovery failures (invalid plugin.json, conflicts, missing paths) */
+  discoveryFailures?: PluginDiscoveryFailure[]
   host?: McpHost
   /** Inject domain CLI runner (tests / fake binary). */
   cliRunner?: CliRunner
@@ -100,15 +108,31 @@ export type CreatePluginRegistryOptions = {
   enabledIds?: string[]
 }
 
+/** Deduplicate by id — first wins (builtins before local). */
+function mergeManifests(
+  builtins: PluginManifest[],
+  extra: PluginManifest[],
+): PluginManifest[] {
+  const byId = new Map<string, PluginManifest>()
+  for (const m of builtins) {
+    if (!byId.has(m.id)) byId.set(m.id, m)
+  }
+  for (const m of extra) {
+    if (!byId.has(m.id)) byId.set(m.id, m)
+  }
+  return [...byId.values()]
+}
+
 export function createPluginRegistry(
   options: CreatePluginRegistryOptions = {},
 ): PluginRegistry {
   const env = options.env ?? process.env
-  const manifests = [
-    ...(options.builtins ?? BUILTIN_PLUGINS),
-    ...(options.extra ?? []),
-  ]
+  const manifests = mergeManifests(
+    options.builtins ?? BUILTIN_PLUGINS,
+    options.extra ?? [],
+  )
   const byId = new Map(manifests.map((m) => [m.id, m]))
+  const discoveryFailures = options.discoveryFailures ?? []
 
   function resolveEnabledIds(): string[] {
     if (options.enabledIds) return [...options.enabledIds]
@@ -277,6 +301,23 @@ export function createPluginRegistry(
         }
       }
 
+      // Surface discovery failures as synthetic failed plugin rows (not in enable set)
+      for (const f of discoveryFailures) {
+        if (plugins.some((p) => p.id === f.id)) continue
+        plugins.push({
+          id: f.id,
+          name: f.id,
+          version: '0.0.0',
+          kind: 'local',
+          enabled: false,
+          loadStatus: 'failed',
+          reason: `${f.reason}（${f.sourcePath}）`,
+          mcp: [],
+          cli: [],
+          auth: [],
+        })
+      }
+
       return {
         plugins,
         tools: [...mcpAgg.tools, ...cliAgg.tools],
@@ -286,12 +327,45 @@ export function createPluginRegistry(
         authStatuses,
         authDoctorLine: formatAuthDoctorLine(authStatuses),
         authStatusLine: formatAuthStatusSummary(authStatuses),
+        discoveryFailures: [...discoveryFailures],
         skillRoots: skillsAgg.virtualRoots,
         skillsResults: skillsAgg.results,
         disconnect: mcpAgg.disconnect,
       }
     },
   }
+}
+
+/**
+ * Build registry with PLUGIN_PATHS local discovery (declarative plugin.json only).
+ */
+export async function createPluginRegistryFromEnv(
+  options: CreatePluginRegistryOptions & {
+    /** Override search paths (else env.PLUGIN_PATHS) */
+    pluginPaths?: string[]
+  } = {},
+): Promise<PluginRegistry> {
+  const env = options.env ?? process.env
+  const builtins = options.builtins ?? BUILTIN_PLUGINS
+  const reservedIds = new Set(builtins.map((m) => m.id))
+  for (const m of options.extra ?? []) reservedIds.add(m.id)
+
+  const discovery = await discoverLocalPlugins({
+    env,
+    paths: options.pluginPaths,
+    reservedIds,
+  })
+
+  return createPluginRegistry({
+    ...options,
+    env,
+    builtins,
+    extra: [...(options.extra ?? []), ...discovery.manifests],
+    discoveryFailures: [
+      ...(options.discoveryFailures ?? []),
+      ...discovery.failures,
+    ],
+  })
 }
 
 /** Compact line for sidecar logs: docs=ok(2),calendar=off */

@@ -73,6 +73,7 @@ const {
   cliStatuses,
   authStatusLine,
   authDoctorLine,
+  discoveryFailures,
   disconnectMcp,
 } = await createWorkbenchAgent({
   profile,
@@ -132,6 +133,10 @@ logger.info(
 
 if (resolvedProfile === 'office' && authDoctorLine !== 'auth=none') {
   logger.info(`plugin auth doctor: ${authDoctorLine}`)
+}
+
+for (const f of discoveryFailures) {
+  logger.warn(`plugin discovery failed id=${f.id}: ${f.reason} (${f.sourcePath})`)
 }
 
 const shutdown = async () => {

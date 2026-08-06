@@ -61,6 +61,7 @@ export {
 
 export {
   createPluginRegistry,
+  createPluginRegistryFromEnv,
   formatRegistryMcpStatusLine,
   type CreatePluginRegistryOptions,
   type PluginLoadStatus,
@@ -69,6 +70,15 @@ export {
   type PluginRegistryLoadResult,
   type PluginRuntimeRecord,
 } from './registry.js'
+
+export {
+  discoverLocalPlugins,
+  loadPluginJsonFile,
+  parsePluginManifestJson,
+  resolvePluginSearchPaths,
+  type PluginDiscoveryFailure,
+  type PluginDiscoveryResult,
+} from './discover.js'
 
 export {
   listWorkspaceSkillIds,
