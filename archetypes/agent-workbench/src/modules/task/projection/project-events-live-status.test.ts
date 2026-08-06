@@ -44,21 +44,30 @@ describe('projectEvents liveStatus + file meta', () => {
         toolId: 'r1',
         label: '读取 plan.txt',
         name: 'read_file',
+        args: { path: 'fixture/notes/plan.txt' },
         items: ['fixture/notes/plan.txt'],
       }),
     )
-    expect(state.readModel.liveStatus).toBe('正在读取文件…')
+    expect(state.readModel.liveStatus).toBe('正在读取 fixture/notes/plan.txt')
+    const runningTool = state.readModel.timeline.find(
+      (t) => t.category === 'tool-group',
+    )
+    expect(runningTool?.title).toBe('正在读取 fixture/notes/plan.txt')
 
     state = applyRuntimeEvent(
       state,
       mk(3, 'tool.completed', {
         toolId: 'r1',
         label: '已读取 plan.txt',
+        name: 'read_file',
+        args: { path: 'fixture/notes/plan.txt' },
         items: ['fixture/notes/plan.txt'],
       }),
     )
     // liveStatus stays until next event updates it
-    expect(state.readModel.liveStatus).toBe('正在读取文件…')
+    expect(state.readModel.liveStatus).toBe('正在读取 fixture/notes/plan.txt')
+    const doneTool = state.readModel.timeline.find((t) => t.category === 'tool-group')
+    expect(doneTool?.title).toBe('已读取 plan.txt')
 
     state = applyRuntimeEvent(
       state,
@@ -166,6 +175,7 @@ describe('projectEvents liveStatus + file meta', () => {
           type: 'tool-result',
           toolCallId: 'ls-e2e',
           toolName: 'ls',
+          args: { path: '/' },
           output: '/notes/ (directory)\n/output/ (directory)',
         },
       ],
@@ -184,6 +194,7 @@ describe('projectEvents liveStatus + file meta', () => {
     state = projectEvents(state, envelopes)
     const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
     expect(tool?.status).toBe('completed')
+    expect(tool?.title).toBe('已列出 /')
     expect(tool?.meta?.children).toEqual([
       '/notes/ (directory)',
       '/output/ (directory)',
@@ -192,5 +203,20 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(
       (tool?.meta?.children?.length ?? 0) > 0 || Boolean(tool?.body?.trim()),
     ).toBe(true)
+  })
+
+  it('tool.called without args uses items path for natural title', () => {
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = projectEvents(state, [
+      mk(1, 'run.started', {}),
+      mk(2, 'tool.called', {
+        toolId: 'r1',
+        name: 'read_file',
+        items: ['notes/a.md'],
+      }),
+    ])
+    const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
+    expect(tool?.title).toBe('正在读取 notes/a.md')
+    expect(state.readModel.liveStatus).toBe('正在读取 notes/a.md')
   })
 })

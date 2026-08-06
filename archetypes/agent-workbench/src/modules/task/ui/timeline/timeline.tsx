@@ -363,10 +363,13 @@ function TimelineTurnBlock({
   }, [runActive, completed, latestTerminal?.id])
 
   const showTools = runActive || toolsExpanded
+  // P0 (Kun/Codex): while run is active, only LiveStatusLine shows phase copy —
+  // do not also paint TurnHeader "正在思考" (double status).
+  const showTurnHeader = Boolean(latestTerminal) && !runActive
 
   return (
     <>
-      {latestTerminal ? (
+      {showTurnHeader && latestTerminal ? (
         <>
           <TurnHeader
             item={latestTerminal}

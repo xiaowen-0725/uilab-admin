@@ -178,15 +178,18 @@ export function mapFullStreamChunk(
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
       const output = chunk.output ?? chunk.result ?? chunk.content
+      const args = chunk.args ?? chunk.input ?? chunk.arguments
       const isError = chunk.isError === true || chunk.error != null
       const normalized = normalizeToolOutput(output)
       // Path extraction uses raw `output`; envelope residual is size-bound + redacted.
+      // Keep args so projection can format natural-language tool titles (P2).
       const completedBase = {
         toolId: callId,
         toolCallId: callId,
         toolName: name,
         name,
         label: name,
+        args,
         output: sanitizeToolOutputForEnvelope(output),
         summary: normalized.summary,
         items: normalized.items,
@@ -194,7 +197,15 @@ export function mapFullStreamChunk(
       }
 
       if (isShellTool(name)) {
-        push('command.completed', completedBase)
+        push('command.completed', {
+          ...completedBase,
+          command:
+            typeof args === 'object' &&
+            args &&
+            'command' in (args as object)
+              ? String((args as { command: unknown }).command)
+              : undefined,
+        })
       } else {
         push('tool.completed', {
           ...completedBase,
@@ -204,7 +215,6 @@ export function mapFullStreamChunk(
 
       // Synthesize file.changed for write/edit/delete tools when path is known.
       if (!isError && isWriteTool(name)) {
-        const args = chunk.args ?? chunk.input ?? chunk.arguments
         const filePath = extractToolPath(args, output)
         if (filePath) {
           const additions =

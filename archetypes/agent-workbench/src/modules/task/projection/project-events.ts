@@ -19,6 +19,12 @@ import {
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
+import {
+  classifyToolActivity,
+  formatToolActivityCopy,
+  liveStatusForToolActivity,
+  toolKindHint,
+} from './tool-activity-copy'
 import type {
   ProjectionState,
   TaskReadModel,
@@ -148,18 +154,6 @@ function setRunStatus(
       liveStatus: null,
     }
   }
-}
-
-/** Infer Chinese live-status from tool label / name / kind. */
-function liveStatusForTool(label: string | null, name: string | null): string {
-  const hay = `${label ?? ''} ${name ?? ''}`.toLowerCase()
-  if (/搜索|search|web/.test(hay)) return '正在搜索网页…'
-  if (/读取|read|文件|file|plan\.txt|alpha/.test(hay)) return '正在读取文件…'
-  if (/写入|write|结果|result/.test(hay)) return '正在写入结果…'
-  if (/计划|plan/.test(hay)) return '正在更新计划…'
-  if (/子任务|subagent|等待/.test(hay)) return '等待子任务完成'
-  if (/命令|command|shell|ls|pnpm|npm/.test(hay)) return '正在执行命令…'
-  return label && /[\u4e00-\u9fff]/.test(label) ? label : '正在思考'
 }
 
 function parseDiffLines(raw: unknown): TimelineItemMeta['diffLines'] | undefined {
@@ -752,40 +746,53 @@ export function applyRuntimeEvent(
       const toolId = payloadString(envelope.payload, 'toolId') ?? envelope.eventId
       const label =
         payloadString(envelope.payload, 'label') ??
-        payloadString(envelope.payload, 'name') ??
-        toolId
+        payloadString(envelope.payload, 'name')
       const name = payloadString(envelope.payload, 'name')
+      const args = rec.args ?? rec.input ?? rec.arguments
       const children = parseChildren(rec.items ?? rec.children)
+      const activity = {
+        name,
+        label,
+        args,
+        items: children,
+      }
+      const title = formatToolActivityCopy({ ...activity, status: 'running' })
+      const kind = classifyToolActivity(name, label)
       upsertByKey(next, envelope, 'tool-group', toolId, {
-        title: label,
+        title,
         status: 'running',
         meta: {
-          toolKind: name ?? undefined,
+          toolKind: toolKindHint(kind),
           children,
         },
       })
-      setLiveStatus(next, liveStatusForTool(label, name))
+      setLiveStatus(next, liveStatusForToolActivity(activity))
       break
     }
     case 'tool.progress': {
       const toolId = payloadString(envelope.payload, 'toolId') ?? envelope.eventId
       const label = payloadString(envelope.payload, 'label')
+      const name = payloadString(envelope.payload, 'name')
       const progress = rec.progress
       const body =
         typeof progress === 'number' ? `进度 ${Math.round(progress * 100)}%\n` : null
       const children = parseChildren(rec.items ?? rec.children)
+      const args = rec.args ?? rec.input ?? rec.arguments
+      const activity = { name, label, args, items: children }
+      const title = formatToolActivityCopy({ ...activity, status: 'running' })
       upsertByKey(next, envelope, 'tool-group', toolId, {
-        title: label ?? undefined,
+        title,
         body: body ?? undefined,
         status: 'running',
         meta: children ? { children } : undefined,
       })
-      if (label) setLiveStatus(next, liveStatusForTool(label, null))
+      setLiveStatus(next, liveStatusForToolActivity(activity))
       break
     }
     case 'tool.completed': {
       const toolId = payloadString(envelope.payload, 'toolId') ?? envelope.eventId
       const label = payloadString(envelope.payload, 'label')
+      const name = payloadString(envelope.payload, 'name')
       // Prefer mapper summary/items; fall back to raw output for older streams.
       const fallback =
         rec.output !== undefined ? normalizeToolOutput(rec.output) : undefined
@@ -793,11 +800,26 @@ export function applyRuntimeEvent(
         payloadString(envelope.payload, 'summary') ?? fallback?.summary
       const children =
         parseChildren(rec.items ?? rec.children) ?? fallback?.items
+      const args = rec.args ?? rec.input ?? rec.arguments
+      const isError =
+        rec.isError === true ||
+        payloadString(envelope.payload, 'status') === 'error'
+      const title = formatToolActivityCopy({
+        name,
+        label,
+        args,
+        items: children,
+        status: isError ? 'error' : 'completed',
+      })
+      const kind = classifyToolActivity(name, label)
       upsertByKey(next, envelope, 'tool-group', toolId, {
-        title: label ?? undefined,
+        title,
         body: summary ? `${summary}\n` : undefined,
-        status: 'completed',
-        meta: children ? { children } : undefined,
+        status: isError ? 'error' : 'completed',
+        meta: {
+          toolKind: toolKindHint(kind),
+          children,
+        },
       })
       break
     }
@@ -807,12 +829,24 @@ export function applyRuntimeEvent(
         payloadString(envelope.payload, 'command') ??
         payloadString(envelope.payload, 'text') ??
         commandId
+      const title = formatToolActivityCopy({
+        name: 'run_command',
+        label: commandLine,
+        args: { command: commandLine },
+        status: 'running',
+      })
       upsertByKey(next, envelope, 'command-execution', commandId, {
-        title: commandLine,
+        title,
         status: 'running',
         meta: { toolKind: 'command' },
       })
-      setLiveStatus(next, liveStatusForTool(commandLine, 'command'))
+      setLiveStatus(
+        next,
+        liveStatusForToolActivity({
+          name: 'run_command',
+          args: { command: commandLine },
+        }),
+      )
       break
     }
     case 'command.output': {
@@ -827,10 +861,27 @@ export function applyRuntimeEvent(
     case 'command.completed': {
       const commandId = payloadString(envelope.payload, 'commandId') ?? envelope.eventId
       const exitCode = rec.exitCode
+      const commandLine =
+        payloadString(envelope.payload, 'command') ??
+        payloadString(envelope.payload, 'text')
+      const title = commandLine
+        ? formatToolActivityCopy({
+            name: 'run_command',
+            args: { command: commandLine },
+            status: rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
+              ? 'error'
+              : 'completed',
+          })
+        : undefined
       upsertByKey(next, envelope, 'command-execution', commandId, {
+        title,
         body:
           typeof exitCode === 'number' ? `\nexit ${exitCode}` : undefined,
-        status: 'completed',
+        status:
+          rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
+            ? 'error'
+            : 'completed',
+        meta: { toolKind: 'command' },
       })
       break
     }
