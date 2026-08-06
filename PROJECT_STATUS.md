@@ -1,6 +1,6 @@
 # uilab-admin 项目状态快照
 
-> 更新时间：2026-08-02
+> 更新时间：2026-08-04
 > 分支：`main`
 > 架构基线提交：`81731f8`
 > Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C `c84be8d`
@@ -34,15 +34,20 @@
 | Agent Workbench Shell | **Phase 3 Done** | 静态 Shell / task-scoped layout / placeholder Host；`check:workbench`；Playwright 证据；**无** Runtime / 具体 Surface |
 | Workbench inset layout polish | **Phase 3A Done** | sidebar 平面 + 272px Navigator + 8px inset Workspace + 合并顶栏 + pointer/keyboard 分源动效；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
 | Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Codex 语义图标；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
-| Workbench Composer fidelity | **Phase 3C Done** | UI Lab `agent-composer` 源码消费；context rail 三色层级；项目 picker（搜索/新建 Dialog/打开本地目录）；全宽 + 菜单；`/` 命令与技能 palette；技能内嵌标签（#7eb8f0）；场景级 `show*` 开关；**本地交互完整、远程诚实**；Vitest 26 绿 |
+| Workbench Composer fidelity | **Phase 3C Done** | UI Lab `agent-composer`；context rail；项目 picker；`/` palette；本地交互完整、远程诚实 |
+| Phase 4A Codex observation | **Approve 12/12** | controlled observation sealed; readiness Approve; raw external-only |
+| Phase 4B Runtime Kernel + Fake | **Done (scaffold)** | domain/protocol/ports + VirtualClock + DeterministicFakeRuntime s01/s03; evidence `docs/evidence/phase-4b-runtime-kernel-fake.md` |
+| Phase 4C Task Pane vertical slice | **Done (dual-path)** | TaskReadModel projection + Timeline + Composer runtime seam; Fake only on empty/new-chat; default seed capture local-sim; evidence `docs/evidence/phase-4c-task-pane-vertical-slice.md` |
+| Phase 4D–4F Fake path close | **Done (template)** | 4D reasoning/tool/approval/input; 4E MemoryEventStore + queue/steer/reconcile; 4F fold + smart scroll; evidence `docs/evidence/phase-4-fake-complete.md`; **no** production Runtime |
+| Sidecar Plugin System (#17–#25) | **Done (local MVP)** | PluginRegistry + MCP/Skills/CLI/auth/discovery/doctor；office 装配仅经 Registry；证据 `docs/evidence/sidecar-plugin-system-closeout-2026-08-06.md`；**非**远程生产 Runtime / OAuth 产品化 |
 | Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | Workbench integration **26** tests（本批）；Foundation/Admin 基线见既有证据 |
+| Browser test suite | **Green** | Workbench **83** tests（含 4B–4F unit + integration）；Foundation/Admin 基线见既有证据 |
 | 模板“产品打磨/去 demo 化” | **In progress** | Workbench Composer 本地产品体验已推进；Admin 去 demo 仍 planned |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**
-Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B Shell** 已完成。**Phase 3C** 完成 Workbench Composer 对 Codex 的产品保真（本地 Runtime 交互 + UI Lab 复合块回流），**仍无**真实 Agent Runtime 后端 / Surface 实现。完整 Phase 2、Phase 4 Fake Runtime、CLI Workbench 生成均未开始；Phase 4 明确暂停。`agent-desktop` 仅作 Admin 兼容基线。
+Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B / 3C Shell** 已完成。**Phase 4A–4F Fake path** 已 template-complete：dual-path 保留；4D 投影深度 + 4E Memory 队列/恢复 + 4F 折叠/滚动。**本机 VoltAgent 侧车 Plugin 体系 (#17–#25)** 已 MVP 收口（Registry 装配 MCP/Skills/领域 CLI/auth；Fake 路径不回归）。**仍无** production Agent Runtime / IndexedDB / Surface / OAuth 产品化。完整 Phase 2、CLI Workbench 生成仍未开始。`agent-desktop` 仅作 Admin 兼容基线。
 
 ## 3. 已锁定决策（勿回退）
 
