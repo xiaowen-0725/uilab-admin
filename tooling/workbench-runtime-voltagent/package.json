@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test 'src/**/*.test.ts'",
     "plugin:list": "tsx --env-file-if-exists=.env src/operator-cli.ts list",
-    "plugin:doctor": "tsx --env-file-if-exists=.env src/operator-cli.ts doctor"
+    "plugin:doctor": "tsx --env-file-if-exists=.env src/operator-cli.ts doctor",
+    "plugin:auth": "tsx --env-file-if-exists=.env src/operator-cli.ts auth"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",

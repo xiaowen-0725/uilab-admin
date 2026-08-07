@@ -54,7 +54,7 @@ describe('createKeychainSecretStoreStub', () => {
     )
     await assert.rejects(
       () => store.set!({ backend: 'keychain', account: 'gh' }, 'x'),
-      /尚未实现|Keychain/,
+      /尚未实现|Keychain|不支持/,
     )
   })
 })
@@ -140,7 +140,7 @@ describe('resolveAuthStatus', () => {
     assert.match(r.hint ?? '', /feishu-cli/)
   })
 
-  it('oauth2 reports missing reserved', async () => {
+  it('oauth2 reports missing when no tokens', async () => {
     const r = await resolveAuthStatus(
       {
         pluginId: 'p',
@@ -150,7 +150,7 @@ describe('resolveAuthStatus', () => {
       createEnvSecretStore({}),
     )
     assert.equal(r.status, 'missing')
-    assert.match(r.hint ?? '', /OAuth|预留/)
+    assert.match(r.hint ?? '', /OAuth|login|未登录/i)
   })
 })
 

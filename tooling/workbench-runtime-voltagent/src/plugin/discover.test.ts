@@ -185,6 +185,7 @@ describe('createPluginRegistryFromEnv', () => {
         MCP_EXTRA_URL: 'https://mcp.example/extra',
       },
       builtins: BUILTIN_PLUGINS,
+      persistAuthBindings: false,
       host: {
         getTools: async (servers) => {
           if (servers.extra) {
@@ -222,6 +223,7 @@ describe('createPluginRegistryFromEnv', () => {
     const reg = await createPluginRegistryFromEnv({
       env: { PLUGIN_PATHS: dir },
       builtins: BUILTIN_PLUGINS,
+      persistAuthBindings: false,
     })
     const loaded = await reg.load()
     assert.ok(loaded.discoveryFailures.length >= 1)

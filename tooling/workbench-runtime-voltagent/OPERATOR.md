@@ -88,12 +88,20 @@ pnpm --filter @uilab/workbench-runtime-voltagent plugin:list
 # 医生检查：缺 env、MCP off、CLI missing、auth=missing 等（中文可读，无 secret）
 pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor
 
+# 鉴权运维（#32；与 inject 同一 AuthStore，永不打印 secret）
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:auth status
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:auth login mcp.docs --from-env MCP_DOCS_BEARER_TOKEN
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:auth logout mcp.docs
+
 # 机器可读（可脚本断言）
 pnpm --filter @uilab/workbench-runtime-voltagent plugin:list -- --json
 pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor -- --json
+pnpm --filter @uilab/workbench-runtime-voltagent plugin:auth status -- --json
 ```
 
-退出码：`doctor` 有 warn/error 时为 `1`；实现失败为 `2`。
+**login 规则：** 只从环境变量读 secret（`--from-env`），**禁止**在 argv 贴 token。默认写入 Keychain 并持久化 `~/.uilab/runtime/auth-bindings.json`；`--env-only` 仅绑 env_ref。logout 走 #28 revoke（env 残留不再注入）。
+
+退出码：`doctor` / `auth status` 有问题为 `1`；实现失败为 `2`。
 
 ### 1.6 Fake / capture 回归
 

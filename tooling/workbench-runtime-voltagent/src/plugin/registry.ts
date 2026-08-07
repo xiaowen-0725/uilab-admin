@@ -6,6 +6,9 @@ import type { Tool } from '@voltagent/core'
 import {
   formatAuthDoctorLine,
   formatAuthStatusSummary,
+  pickAuthResourceForCli,
+  pickAuthResourceForMcp,
+  resolveAuthResourceMaterial,
   resolvePluginAuthStatuses,
   type PluginAuthStatus,
   type ResolvePluginAuthOptions,
@@ -26,7 +29,12 @@ import type {
   PluginManifest,
   SkillsContribution,
 } from './manifest.js'
-import type { AuthBindingStore, SecretStore } from './secret-store.js'
+import { createPersistedAuthBindingStore } from './auth-binding-persist.js'
+import {
+  createDefaultSecretStore,
+  type AuthBindingStore,
+  type SecretStore,
+} from './secret-store.js'
 import {
   loadResolvedMcpServers,
   resolveMcpContribution,
@@ -34,6 +42,7 @@ import {
   type McpServerLoadStatus,
   type ResolvedMcpServer,
 } from './mcp-loader.js'
+import type { CredentialMaterial } from './types.js'
 import { parseEnvStringList } from './parse-util.js'
 import {
   loadSkillsContributions,
@@ -106,6 +115,16 @@ export type CreatePluginRegistryOptions = {
    * minus PLUGINS_DISABLED, plus PLUGINS_ENABLED overrides.
    */
   enabledIds?: string[]
+  /**
+   * User-level runtime config dir for persisted AuthBindings (#29).
+   * Default: $UILAB_RUNTIME_DIR or ~/.uilab/runtime.
+   */
+  runtimeConfigDir?: string
+  /**
+   * When true (default for createPluginRegistryFromEnv), load/save AuthBindings.
+   * Tests may set false or inject authBindingStore / runtimeConfigDir temp.
+   */
+  persistAuthBindings?: boolean
 }
 
 /** Deduplicate by id — first wins (builtins before local). */
@@ -162,12 +181,24 @@ export function createPluginRegistry(
       const expected: Array<{ pluginId: string; serverId: string }> = []
       const skillsItems: Array<{ pluginId: string; contrib: SkillsContribution }> =
         []
-      const cliItems: Array<{ pluginId: string; contrib: CliContribution }> = []
+      const cliItems: Array<{
+        pluginId: string
+        contrib: CliContribution
+        authMaterial?: CredentialMaterial
+        authEnforced?: boolean
+      }> = []
       const authItems: Array<{
         pluginId: string
         enabled: boolean
         resources: AuthResourceContribution[]
       }> = []
+
+      const authOpts: ResolvePluginAuthOptions = {
+        env,
+        store: options.secretStore,
+        bindingStore: options.authBindingStore,
+        runner: options.cliRunner,
+      }
 
       for (const manifest of manifests) {
         const isEnabled = enabled.has(manifest.id)
@@ -194,11 +225,28 @@ export function createPluginRegistry(
           continue
         }
 
+        const authEnforced = authResources.length > 0
+
         const mcpContribs = manifest.contributes?.mcp ?? []
         for (const c of mcpContribs) {
           expected.push({ pluginId: manifest.id, serverId: c.serverId })
           try {
-            const resolved = resolveMcpContribution(manifest.id, c, env)
+            let material: CredentialMaterial | undefined
+            if (authEnforced) {
+              const resource = pickAuthResourceForMcp(authResources, c.serverId)
+              if (resource) {
+                material = await resolveAuthResourceMaterial(
+                  manifest.id,
+                  resource,
+                  true,
+                  authOpts,
+                )
+              }
+            }
+            const resolved = resolveMcpContribution(manifest.id, c, env, {
+              authEnforced,
+              authMaterial: material,
+            })
             if (resolved) resolvedServers.push(resolved)
           } catch (err) {
             plugins.push({
@@ -225,7 +273,24 @@ export function createPluginRegistry(
         }
 
         for (const c of manifest.contributes?.cli ?? []) {
-          cliItems.push({ pluginId: manifest.id, contrib: c })
+          let material: CredentialMaterial | undefined
+          if (authEnforced) {
+            const resource = pickAuthResourceForCli(authResources, c.cliId)
+            if (resource) {
+              material = await resolveAuthResourceMaterial(
+                manifest.id,
+                resource,
+                true,
+                authOpts,
+              )
+            }
+          }
+          cliItems.push({
+            pluginId: manifest.id,
+            contrib: c,
+            authEnforced,
+            authMaterial: material,
+          })
         }
 
         if (!plugins.some((p) => p.id === manifest.id)) {
@@ -266,12 +331,6 @@ export function createPluginRegistry(
         trustedPluginIds,
       })
 
-      const authOpts: ResolvePluginAuthOptions = {
-        env,
-        store: options.secretStore,
-        bindingStore: options.authBindingStore,
-        runner: options.cliRunner,
-      }
       const authStatuses = await resolvePluginAuthStatuses(authItems, authOpts)
 
       for (const rec of plugins) {
@@ -341,6 +400,7 @@ export function createPluginRegistry(
 
 /**
  * Build registry with PLUGIN_PATHS local discovery (declarative plugin.json only).
+ * Also wires default SecretStore (env+keychain) and persisted AuthBindings (#29/#30).
  */
 export async function createPluginRegistryFromEnv(
   options: CreatePluginRegistryOptions & {
@@ -359,10 +419,26 @@ export async function createPluginRegistryFromEnv(
     reservedIds,
   })
 
+  let authBindingStore = options.authBindingStore
+  const persist =
+    options.persistAuthBindings !== false &&
+    env.UILAB_PERSIST_AUTH !== '0'
+  if (!authBindingStore && persist) {
+    authBindingStore = await createPersistedAuthBindingStore({
+      env,
+      rootDir: options.runtimeConfigDir,
+    })
+  }
+
+  const secretStore =
+    options.secretStore ?? createDefaultSecretStore(env)
+
   return createPluginRegistry({
     ...options,
     env,
     builtins,
+    secretStore,
+    authBindingStore,
     extra: [...(options.extra ?? []), ...discovery.manifests],
     discoveryFailures: [
       ...(options.discoveryFailures ?? []),

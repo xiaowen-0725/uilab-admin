@@ -86,6 +86,7 @@ describe('runPluginList / runPluginDoctor', () => {
     const list = await runPluginList({
       env: {},
       builtins: BUILTIN_PLUGINS,
+      persistAuthBindings: false,
     })
     assert.ok(list.rows.length >= 3)
     await list.disconnect()
@@ -93,6 +94,7 @@ describe('runPluginList / runPluginDoctor', () => {
     const doctor = await runPluginDoctor({
       env: {},
       builtins: BUILTIN_PLUGINS,
+      persistAuthBindings: false,
     })
     assert.ok(doctor.findings.length > 0)
     assert.doesNotMatch(doctor.text, /sk-|password=/i)

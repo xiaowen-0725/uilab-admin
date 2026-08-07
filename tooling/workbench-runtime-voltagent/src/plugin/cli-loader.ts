@@ -19,8 +19,11 @@ import { firstEnv } from './parse-util.js'
 import {
   decideCliCommandNeedsApproval,
   filterChildEnv,
+  isAllowedAuthEnvName,
+  isModelProviderSecretKey,
+  stripModelProviderSecrets,
 } from './security-policy.js'
-import type { ProfileEnv } from './types.js'
+import type { CredentialMaterial, ProfileEnv } from './types.js'
 
 const execFileAsync = promisify(execFileCb)
 
@@ -321,10 +324,42 @@ function createCliTool(input: {
 }
 
 /**
+ * Build closed CLI child env; when authEnforced, controlled secrets follow material (#28).
+ */
+export function buildCliChildEnv(
+  contrib: CliContribution,
+  env: ProfileEnv,
+  auth?: { authEnforced?: boolean; authMaterial?: CredentialMaterial },
+): Record<string, string> {
+  const keys = contrib.childEnvKeys ?? []
+  const filtered = filterChildEnv(env, keys, { includeBaseKeys: true })
+  if (!auth?.authEnforced) return filtered
+
+  const material = auth.authMaterial
+  const controlled = new Set(material?.controlledEnvNames ?? [])
+  for (const name of controlled) {
+    delete filtered[name]
+  }
+  if (material?.status === 'connected') {
+    for (const [k, v] of Object.entries(material.envValues)) {
+      // Never re-inject model provider secrets after filterChildEnv (P0)
+      if (isModelProviderSecretKey(k) || !isAllowedAuthEnvName(k)) continue
+      if (keys.includes(k) || controlled.has(k)) filtered[k] = v
+    }
+  }
+  return stripModelProviderSecrets(filtered)
+}
+
+/**
  * Load CLI contributions for enabled plugins. Isolates per-cli failures.
  */
 export async function loadCliContributions(
-  items: Array<{ pluginId: string; contrib: CliContribution }>,
+  items: Array<{
+    pluginId: string
+    contrib: CliContribution
+    authEnforced?: boolean
+    authMaterial?: CredentialMaterial
+  }>,
   options: LoadCliOptions = {},
 ): Promise<CliLoadAggregate> {
   const env = options.env ?? process.env
@@ -334,7 +369,7 @@ export async function loadCliContributions(
   const toolNames: string[] = []
   const statuses: CliLoadStatus[] = []
 
-  for (const { pluginId, contrib } of items) {
+  for (const { pluginId, contrib, authEnforced, authMaterial } of items) {
     const forceApproval = trusted ? !trusted.has(pluginId) : false
     if (!contrib.cliId?.trim()) {
       statuses.push({
@@ -385,8 +420,9 @@ export async function loadCliContributions(
       continue
     }
 
-    const childEnv = filterChildEnv(env, contrib.childEnvKeys ?? [], {
-      includeBaseKeys: true,
+    const childEnv = buildCliChildEnv(contrib, env, {
+      authEnforced,
+      authMaterial,
     })
     const cwd = resolveCliCwd(contrib, options.workspaceRoot)
     // Only commit tools after all commands validate (no partial mount on failure)

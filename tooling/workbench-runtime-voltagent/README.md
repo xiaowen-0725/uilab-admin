@@ -124,7 +124,13 @@ MCP 连接失败不崩溃；Skills seed 路径越界 fail-closed。密钥只放�
 
 启动日志：`mcp=docs=ok(N),calendar=off`；`cli=feishu=ready(2)` 或 `cli=none`；`auth=mcp.docs/bearer=missing,...`。
 
-**Auth（启用 ≠ 登录）：** 插件可声明 `contributes.auth`（`env_ref` / `static_bearer` / `cli_session`；`oauth2` 预留）。缺 env → `auth=missing`；配齐 → `connected`；`cli_session` 可用 `statusCommand` 探测。doctor 摘要**永不**打印 secret。
+**Auth（启用 ≠ 登录）：** 插件可声明 `contributes.auth`（`env_ref` / `static_bearer` / `cli_session`；`oauth2` 预留）。缺 env → `auth=missing`；配齐 → `connected`；`cli_session` 可用 `statusCommand` 探测。
+
+- **#28 inject/revoke：** doctor 状态与 MCP HTTP Bearer / 子进程 secret env **同一 resolve 路径**；`AuthBindingStore.clear` 会 revoke；`expiresAt` → `auth=expired`。
+- **#29 持久绑定：** 非密 AuthBinding 默认落盘 `$UILAB_RUNTIME_DIR` 或 `~/.uilab/runtime/auth-bindings.json`（**不**进 workspace / git）。`UILAB_PERSIST_AUTH=0` 可关。
+- **#30 Keychain：** `SecretRef.backend=keychain` 在 macOS 走 `security`；CI 用 `UILAB_KEYCHAIN_MODE=fake`；`migrateEnvSecretsToKeychain` 可从 `.env` 迁入。
+- **#32 Operator auth：** `pnpm plugin:auth status|login|logout`；login 仅 `--from-env`；logout 与 inject revoke 一致。
+- **#31 OAuth PKCE：** `auth login --oauth-begin` / `--oauth-complete`；token 进 Keychain；过期自动 refresh，失败 → `auth=expired`。doctor 摘要**永不**打印 secret。
 
 **运维 list/doctor（非 Agent 终端）：**
 

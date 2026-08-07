@@ -4,11 +4,27 @@
  */
 
 import { MCPConfiguration, createTool, type Tool } from '@voltagent/core'
-import { decideToolNeedsApproval, filterChildEnv } from './security-policy.js'
+import {
+  decideToolNeedsApproval,
+  filterChildEnv,
+  isAllowedAuthEnvName,
+  isModelProviderSecretKey,
+  stripModelProviderSecrets,
+} from './security-policy.js'
 import type { McpContribution, McpServerConfigShape } from './manifest.js'
 import { firstEnv, parseEnvStringList } from './parse-util.js'
-import type { ProfileEnv } from './types.js'
+import type { CredentialMaterial, ProfileEnv } from './types.js'
 import { normalizeToolName } from './security-policy.js'
+
+/** Options for MCP resolve/inject path (#28). */
+export type McpResolveAuthOptions = {
+  /**
+   * When true, bearer + controlled secret env keys come only from authMaterial.
+   * Env leftovers are not injected when status !== connected.
+   */
+  authEnforced?: boolean
+  authMaterial?: CredentialMaterial
+}
 
 export type { McpServerConfigShape } from './manifest.js'
 
@@ -62,16 +78,58 @@ export function resolveMcpChildEnvKeys(
 export function buildMcpChildEnv(
   contrib: McpContribution,
   env: ProfileEnv,
+  auth?: McpResolveAuthOptions,
 ): Record<string, string> {
-  return filterChildEnv(env, resolveMcpChildEnvKeys(contrib, env), {
+  const keys = resolveMcpChildEnvKeys(contrib, env)
+  const filtered = filterChildEnv(env, keys, {
     includeBaseKeys: true,
   })
+  if (!auth?.authEnforced) return filtered
+
+  const material = auth.authMaterial
+  const controlled = new Set([
+    ...(material?.controlledEnvNames ?? []),
+    ...(contrib.bearerTokenFromEnv ?? []),
+  ])
+
+  // Strip controlled secrets when not connected; overlay material values when connected
+  for (const name of controlled) {
+    delete filtered[name]
+  }
+  if (material?.status === 'connected') {
+    for (const [k, v] of Object.entries(material.envValues)) {
+      // Never re-inject model provider secrets after filterChildEnv (P0)
+      if (isModelProviderSecretKey(k) || !isAllowedAuthEnvName(k)) continue
+      if (keys.includes(k) || controlled.has(k)) {
+        filtered[k] = v
+      }
+    }
+  }
+  return stripModelProviderSecrets(filtered)
+}
+
+/**
+ * Resolve bearer for HTTP MCP: auth-enforced path uses material only (#28).
+ */
+export function resolveMcpBearerToken(
+  contrib: McpContribution,
+  env: ProfileEnv,
+  auth?: McpResolveAuthOptions,
+): string | undefined {
+  if (auth?.authEnforced) {
+    if (auth.authMaterial?.status !== 'connected') return undefined
+    const token = auth.authMaterial.bearerToken
+    // Defense: never inject empty bearer
+    return token && token.length > 0 ? token : undefined
+  }
+  return firstEnv(env, contrib.bearerTokenFromEnv)
 }
 
 export function resolveMcpContribution(
   pluginId: string,
   contrib: McpContribution,
   env: ProfileEnv,
+  auth?: McpResolveAuthOptions,
 ): ResolvedMcpServer | null {
   const timeout =
     contrib.timeoutMs ??
@@ -79,7 +137,7 @@ export function resolveMcpContribution(
 
   const url = firstEnv(env, contrib.urlFromEnv)
   if (url) {
-    const token = firstEnv(env, contrib.bearerTokenFromEnv)
+    const token = resolveMcpBearerToken(contrib, env, auth)
     const requestInit = token
       ? { headers: { Authorization: `Bearer ${token}` } }
       : undefined
@@ -101,7 +159,7 @@ export function resolveMcpContribution(
   if (command) {
     const argsKey = contrib.argsFromEnv?.[0]
     const args = argsKey ? parseEnvStringList(env[argsKey]) ?? [] : []
-    const childEnv = buildMcpChildEnv(contrib, env)
+    const childEnv = buildMcpChildEnv(contrib, env, auth)
     return {
       pluginId,
       serverId: contrib.serverId,

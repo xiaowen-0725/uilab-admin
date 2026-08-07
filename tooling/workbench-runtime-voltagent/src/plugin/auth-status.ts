@@ -9,7 +9,7 @@ import type { AuthResourceContribution } from './manifest.js'
 import { firstEnv } from './parse-util.js'
 import {
   createEnvSecretStore,
-  resolveAuthStatus,
+  resolveCredentialMaterial,
   type AuthBindingStore,
   type SecretStore,
 } from './secret-store.js'
@@ -18,6 +18,7 @@ import type {
   AuthBinding,
   AuthStatus,
   AuthStatusResult,
+  CredentialMaterial,
   ProfileEnv,
 } from './types.js'
 
@@ -69,6 +70,78 @@ export function authResourceToBinding(
   }
 }
 
+/** Build effective AuthBinding: store override wins, else manifest; revoked is caller-checked. */
+export function resolveEffectiveBinding(
+  pluginId: string,
+  resource: AuthResourceContribution,
+  options: ResolvePluginAuthOptions = {},
+): AuthBinding {
+  const env = options.env ?? process.env
+  const override = options.bindingStore?.get(pluginId, resource.resourceId)
+  if (!override) return authResourceToBinding(pluginId, resource, env)
+  return {
+    ...override,
+    pluginId,
+    resourceId: resource.resourceId,
+    statusCommand: override.statusCommand
+      ? {
+          command:
+            firstEnv(env, resource.statusCommand?.commandFromEnv) ??
+            override.statusCommand.command,
+          argv: override.statusCommand.argv,
+        }
+      : authResourceToBinding(pluginId, resource, env).statusCommand,
+  }
+}
+
+/**
+ * Resolve injectable material for one resource (#28).
+ * Same binding/revoked rules as status — inject path must call this, not raw env.
+ */
+export async function resolveAuthResourceMaterial(
+  pluginId: string,
+  resource: AuthResourceContribution,
+  pluginEnabled: boolean,
+  options: ResolvePluginAuthOptions = {},
+): Promise<CredentialMaterial> {
+  const env = options.env ?? process.env
+  const store = options.store ?? createEnvSecretStore(env)
+  const controlled = [
+    ...(resource.envNames ?? []),
+    ...(resource.secretRef?.backend === 'env'
+      ? [resource.secretRef.envName]
+      : []),
+  ]
+
+  if (options.bindingStore?.isRevoked(pluginId, resource.resourceId)) {
+    return {
+      status: 'missing',
+      hint:
+        resource.loginHint ??
+        '授权已撤销；请重新配置凭据或 login（process env 残留不再生效）',
+      envValues: {},
+      controlledEnvNames: controlled,
+    }
+  }
+
+  const binding = resolveEffectiveBinding(pluginId, resource, options)
+
+  if (!pluginEnabled && binding.kind === 'cli_session') {
+    return {
+      status: 'missing',
+      hint: binding.loginHint ?? '插件未启用；登录状态未探测',
+      envValues: {},
+      controlledEnvNames: controlled,
+    }
+  }
+
+  return resolveCredentialMaterial(binding, store, env, {
+    runner: options.runner,
+    expectExitCode: resource.statusCommand?.expectExitCode,
+    bindingStore: options.bindingStore,
+  })
+}
+
 /**
  * Resolve one resource: binding store override wins, else manifest contribution.
  */
@@ -78,51 +151,58 @@ export async function resolveAuthResourceStatus(
   pluginEnabled: boolean,
   options: ResolvePluginAuthOptions = {},
 ): Promise<PluginAuthStatus> {
-  const env = options.env ?? process.env
-  const store = options.store ?? createEnvSecretStore(env)
-  const override = options.bindingStore?.get(pluginId, resource.resourceId)
-  const binding: AuthBinding = override
-    ? {
-        ...override,
-        pluginId,
-        resourceId: resource.resourceId,
-        // Fill statusCommand command from env when override omits absolute path
-        statusCommand: override.statusCommand
-          ? {
-              command:
-                firstEnv(env, resource.statusCommand?.commandFromEnv) ??
-                override.statusCommand.command,
-              argv: override.statusCommand.argv,
-            }
-          : authResourceToBinding(pluginId, resource, env).statusCommand,
-      }
-    : authResourceToBinding(pluginId, resource, env)
-
-  // Disabled plugins: never execute statusCommand (surface only)
-  if (!pluginEnabled && binding.kind === 'cli_session') {
-    return {
-      pluginId,
-      resourceId: resource.resourceId,
-      kind: binding.kind,
-      pluginEnabled,
-      status: 'missing',
-      hint: binding.loginHint ?? '插件未启用；登录状态未探测',
-    }
-  }
-
-  const result = await resolveAuthStatus(binding, store, env, {
-    runner: options.runner,
-    expectExitCode: resource.statusCommand?.expectExitCode,
-  })
-
+  const material = await resolveAuthResourceMaterial(
+    pluginId,
+    resource,
+    pluginEnabled,
+    options,
+  )
   return {
     pluginId,
     resourceId: resource.resourceId,
-    kind: binding.kind,
+    kind: resource.kind,
     pluginEnabled,
-    status: result.status,
-    hint: result.hint,
+    status: material.status,
+    hint: material.hint,
   }
+}
+
+/**
+ * Pick auth resource for an MCP server on the same plugin (#28).
+ * Prefer mcp:<serverId>, then bearer, then static/env/oauth kinds.
+ */
+export function pickAuthResourceForMcp(
+  resources: AuthResourceContribution[],
+  serverId: string,
+): AuthResourceContribution | undefined {
+  return (
+    resources.find((r) => r.resourceId === `mcp:${serverId}`) ??
+    resources.find((r) => r.resourceId === 'bearer') ??
+    resources.find(
+      (r) =>
+        r.kind === 'static_bearer' ||
+        r.kind === 'env_ref' ||
+        r.kind === 'oauth2' ||
+        r.kind === 'app_client',
+    )
+  )
+}
+
+/** Pick auth resource for a domain CLI contribution. */
+export function pickAuthResourceForCli(
+  resources: AuthResourceContribution[],
+  cliId: string,
+): AuthResourceContribution | undefined {
+  return (
+    resources.find((r) => r.resourceId === `cli:${cliId}`) ??
+    resources.find((r) => r.kind === 'cli_session') ??
+    resources.find(
+      (r) =>
+        r.kind === 'app_client' ||
+        r.kind === 'env_ref' ||
+        r.kind === 'static_bearer',
+    )
+  )
 }
 
 export async function resolvePluginAuthStatuses(

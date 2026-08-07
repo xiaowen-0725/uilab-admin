@@ -8,9 +8,30 @@ export type {
   AuthStatus,
   AuthStatusResult,
   CredentialKind,
+  CredentialMaterial,
+  OAuthBindingMeta,
   ProfileEnv,
   SecretRef,
 } from './types.js'
+
+export {
+  beginOAuthAuthorization,
+  buildAuthorizationUrl,
+  completeOAuthAuthorization,
+  createFakeAuthorizationServer,
+  createOAuthPendingStore,
+  createPkcePair,
+  exchangeAuthorizationCode,
+  oauthAccessAccount,
+  oauthRefreshAccount,
+  refreshAccessToken,
+  refreshOAuthBinding,
+  type FetchLike,
+  type OAuthPending,
+  type OAuthPendingStore,
+  type OAuthTokenResponse,
+  type PkcePair,
+} from './oauth.js'
 
 export {
   CHILD_ENV_BASE_KEYS,
@@ -28,13 +49,34 @@ export {
 export {
   createAuthBindingStore,
   createCompositeSecretStore,
+  createDefaultSecretStore,
   createEnvSecretStore,
+  createKeychainSecretStore,
   createKeychainSecretStoreStub,
   createMemorySecretStore,
+  migrateEnvSecretsToKeychain,
   resolveAuthStatus,
+  resolveCredentialMaterial,
+  resolveKeychainCapability,
+  snapshotAuthBindingStore,
   type AuthBindingStore,
+  type AuthBindingStoreSnapshot,
+  type CreateKeychainSecretStoreOptions,
+  type KeychainCapability,
   type SecretStore,
 } from './secret-store.js'
+
+export {
+  AUTH_BINDINGS_FILENAME,
+  createPersistedAuthBindingStore,
+  defaultRuntimeConfigDir,
+  flushAuthBindingStore,
+  loadAuthBindingSnapshot,
+  parseAuthBindingSnapshot,
+  resolveAuthBindingsFilePath,
+  saveAuthBindingSnapshot,
+  type CreatePersistedAuthBindingStoreOptions,
+} from './auth-binding-persist.js'
 
 export type {
   AuthResourceContribution,
@@ -96,10 +138,12 @@ export {
   buildMcpChildEnv,
   forceToolNeedsApproval,
   mergeReadOnlyAllowlist,
+  resolveMcpBearerToken,
   resolveMcpChildEnvKeys,
   resolveMcpContribution,
   type McpHost,
   type McpLoadAggregate,
+  type McpResolveAuthOptions,
   type McpServerLoadStatus,
   type ResolvedMcpServer,
 } from './mcp-loader.js'
@@ -107,6 +151,7 @@ export {
 export {
   assertSafeArgvTemplate,
   buildCliArgv,
+  buildCliChildEnv,
   cliToolName,
   formatRegistryCliStatusLine,
   loadCliContributions,
@@ -120,7 +165,11 @@ export {
   authResourceToBinding,
   formatAuthDoctorLine,
   formatAuthStatusSummary,
+  pickAuthResourceForCli,
+  pickAuthResourceForMcp,
+  resolveAuthResourceMaterial,
   resolveAuthResourceStatus,
+  resolveEffectiveBinding,
   resolvePluginAuthStatuses,
   sanitizeHint,
   type PluginAuthStatus,
@@ -141,4 +190,14 @@ export {
   type PluginListRow,
   type RunOperatorOptions,
 } from './operator.js'
+
+export {
+  runAuthLogin,
+  runAuthLogout,
+  runAuthStatus,
+  type AuthMutateReport,
+  type AuthStatusReport,
+  type AuthStatusRow,
+  type RunAuthOptions,
+} from './operator-auth.js'
 

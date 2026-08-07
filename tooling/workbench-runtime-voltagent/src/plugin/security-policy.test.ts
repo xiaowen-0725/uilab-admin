@@ -5,8 +5,10 @@ import {
   decideToolNeedsApproval,
   filterChildEnv,
   formatSafeStatusLine,
+  isAllowedAuthEnvName,
   isModelProviderSecretKey,
   redactSecretValues,
+  stripModelProviderSecrets,
 } from './security-policy.js'
 
 describe('decideToolNeedsApproval', () => {
@@ -112,6 +114,29 @@ describe('isModelProviderSecretKey + filterChildEnv', () => {
     )
     assert.equal(out.FOO, '1')
     assert.equal(out.PATH, undefined)
+  })
+
+  it('stripModelProviderSecrets removes re-injected model keys (P0)', () => {
+    const stripped = stripModelProviderSecrets({
+      PATH: '/bin',
+      FEISHU_APP_SECRET: 'ok',
+      OPENAI_API_KEY: 'sk-should-go',
+      GITHUB_PAT: 'ghp-should-go',
+    })
+    assert.equal(stripped.PATH, '/bin')
+    assert.equal(stripped.FEISHU_APP_SECRET, 'ok')
+    assert.equal(stripped.OPENAI_API_KEY, undefined)
+    assert.equal(stripped.GITHUB_PAT, undefined)
+  })
+
+  it('isAllowedAuthEnvName blocks LLM keys but allows connector tokens', () => {
+    assert.equal(isAllowedAuthEnvName('OPENAI_API_KEY'), false)
+    assert.equal(isAllowedAuthEnvName('ANTHROPIC_API_KEY'), false)
+    assert.equal(isAllowedAuthEnvName('DEEPSEEK_API_KEY'), false)
+    assert.equal(isAllowedAuthEnvName('HF_TOKEN'), false)
+    assert.equal(isAllowedAuthEnvName('GITHUB_PAT'), true)
+    assert.equal(isAllowedAuthEnvName('FEISHU_APP_SECRET'), true)
+    assert.equal(isAllowedAuthEnvName('MCP_DOCS_BEARER_TOKEN'), true)
   })
 })
 

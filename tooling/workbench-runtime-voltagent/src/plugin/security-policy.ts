@@ -120,6 +120,54 @@ export function filterChildEnv(
 }
 
 /**
+ * Strip model-provider secret keys from an env map (post-overlay hard deny).
+ * Auth material must never reintroduce these after filterChildEnv.
+ */
+export function stripModelProviderSecrets(
+  env: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (isModelProviderSecretKey(key)) continue
+    out[key] = value
+  }
+  return out
+}
+
+/**
+ * Auth envNames / SecretRef.env allowlist.
+ * Blocks LLM / inference-provider keys (P0) so plugins cannot declare
+ * OPENAI_API_KEY etc. as injectable auth material.
+ * Connector tokens (GITHUB_PAT, FEISHU_*, MCP_*_TOKEN) remain allowed for
+ * declared auth / HTTP bearer; child-env hard-deny still uses
+ * isModelProviderSecretKey + stripModelProviderSecrets after overlay.
+ */
+export function isAllowedAuthEnvName(name: string): boolean {
+  if (typeof name !== 'string' || name.length === 0) return false
+  const k = name.trim().toUpperCase()
+  if (!k) return false
+  // Connector app credentials always OK for declared auth
+  if (/^(FEISHU|LARK)_/.test(k)) return true
+  // Pure LLM / inference API keys never as auth env (P0)
+  if (/_API_KEY$|_APIKEY$/.test(k)) return false
+  if (/^(HF|HUGGINGFACE|REPLICATE|COHERE|TOGETHER|FIREWORKS)_TOKEN$/.test(k)) {
+    return false
+  }
+  if (/^AWS_(SECRET_ACCESS_KEY|SESSION_TOKEN|SECURITY_TOKEN)$/.test(k)) {
+    return false
+  }
+  if (
+    /(OPENAI|ANTHROPIC|DEEPSEEK|GEMINI|GROQ|MISTRAL|COHERE|TOGETHER|FIREWORKS|XAI|VOLTAGENT|AZURE_OPENAI|GOOGLE_AI|VERTEX|CLAUDE)/.test(
+      k,
+    ) &&
+    /(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/.test(k)
+  ) {
+    return false
+  }
+  return true
+}
+
+/**
  * Build a log-safe summary that never embeds known secret values.
  * Used by doctor/list surfaces.
  */
