@@ -201,3 +201,7 @@ Residual: MCP wire session restart only.
 | MCP wrap drops needsApproval fn | **in-place execute wrap** preserves metadata |
 
 Tests: 191 pass.
+
+### Residual → ticket
+
+- **MCP wire-session after logout** (accepted ship-with-nits residual) → **#33** https://github.com/xiaowen-0725/uilab-admin/issues/33
