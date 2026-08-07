@@ -5,6 +5,7 @@ import {
   workbenchSessionReducer,
 } from './reducer'
 import type {
+  ProjectId,
   TaskId,
   WorkbenchSessionCommand,
   WorkbenchSessionCommands,
@@ -14,16 +15,15 @@ import type {
 } from '../model/types'
 
 /**
- * Controller hook — owns session state for the Composition Root.
- * Reducer and seed initialization stay Module Implementation (not public Interface).
+ * Controller hook — selection pointers + layout chrome for Composition Root.
  */
 export function useWorkbenchSession(
-  seed: WorkbenchSessionSeed
+  seed: WorkbenchSessionSeed,
 ): WorkbenchSessionController {
   const [state, dispatch] = useReducer(
     workbenchSessionReducer,
     seed,
-    createInitialSessionState
+    createInitialSessionState,
   )
 
   const run = useCallback((command: WorkbenchSessionCommand) => {
@@ -32,7 +32,14 @@ export function useWorkbenchSession(
 
   const commands: WorkbenchSessionCommands = useMemo(
     () => ({
-      selectTask: (taskId: TaskId) => run({ type: 'selectTask', taskId }),
+      selectProject: (projectId: ProjectId, taskId?: TaskId | null) =>
+        run({ type: 'selectProject', projectId, taskId }),
+      selectTask: (taskId: TaskId | null) =>
+        run({ type: 'selectTask', taskId }),
+      ensureTaskLayout: (taskId: TaskId) =>
+        run({ type: 'ensureTaskLayout', taskId }),
+      removeTaskLayout: (taskId: TaskId) =>
+        run({ type: 'removeTaskLayout', taskId }),
       toggleNavigator: () => run({ type: 'toggleNavigator' }),
       setNavigatorOpen: (open: boolean) =>
         run({ type: 'setNavigatorOpen', open }),
@@ -46,9 +53,17 @@ export function useWorkbenchSession(
         run({ type: 'resizeWorkSurface', width }),
       toggleMaximize: () => run({ type: 'toggleMaximize' }),
       exitMaximize: () => run({ type: 'exitMaximize' }),
+      hydratePointers: (input) =>
+        run({
+          type: 'hydratePointers',
+          selectedProjectId: input.selectedProjectId,
+          selectedTaskId: input.selectedTaskId,
+          lastTaskByProject: input.lastTaskByProject,
+          navigatorOpen: input.navigatorOpen,
+        }),
       dispatch: run,
     }),
-    [run]
+    [run],
   )
 
   const view = useMemo(() => selectSessionView(state), [state])

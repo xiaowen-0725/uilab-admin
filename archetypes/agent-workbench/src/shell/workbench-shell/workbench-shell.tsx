@@ -6,12 +6,9 @@ import {
   PanelLeftIcon,
   SlidersHorizontal,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
-import type {
-  NavigatorUtility,
-  ProjectFolder,
-  TaskNavMeta,
-} from '@/config/fixtures'
+import type { ProjectSummary, TaskSummary } from '@/modules/project'
 import type {
   LaunchAction,
   TaskSurfaceComposerRuntime,
@@ -86,14 +83,18 @@ function workDrawerWidth(
 export interface WorkbenchShellProps {
   view: WorkbenchSessionView
   commands: WorkbenchSessionCommands
-  /** Assembled Task view from Composition Root (Shell does not load fixtures). */
-  taskView: TaskSurfaceView
-  navigatorUtilities: NavigatorUtility[]
-  projectFolders: ProjectFolder[]
-  taskNavMeta: Record<string, TaskNavMeta>
+  /** Assembled Task view from Composition Root; null when no selected task. */
+  taskView: TaskSurfaceView | null
+  /** Catalog projection from Project Module. */
+  project: ProjectSummary | null
+  projects: ProjectSummary[]
+  tasks: TaskSummary[]
+  busyTaskIds?: ReadonlySet<string>
   onLaunchAction?: (action: LaunchAction) => void
   onNewChat?: () => void
-  /** Phase 4C dual-path: runtime composer props for empty/new-chat Fake path. */
+  onDeleteTask?: (taskId: string) => void
+  onSelectProject?: (projectId: string) => void
+  /** Runtime composer props for product Runtime path. */
   composerRuntime?: TaskSurfaceComposerRuntime
 }
 
@@ -106,11 +107,14 @@ export function WorkbenchShell({
   view,
   commands,
   taskView,
-  navigatorUtilities,
-  projectFolders,
-  taskNavMeta,
+  project,
+  projects,
+  tasks,
+  busyTaskIds,
   onLaunchAction,
   onNewChat,
+  onDeleteTask,
+  onSelectProject,
   composerRuntime,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
@@ -281,14 +285,15 @@ export function WorkbenchShell({
   const widthAnimating = paneMotionSource === 'animated'
 
   const navigatorShared = {
-    project: view.project,
-    tasks: view.tasks,
+    project,
+    projects,
+    tasks,
     selectedTaskId: view.selectedTaskId,
+    busyTaskIds,
     open: view.navigatorOpen,
-    utilities: navigatorUtilities,
-    projectFolders,
-    taskNavMeta,
     onNewChat,
+    onDeleteTask,
+    onSelectProject,
     onOpenSettings: openSettings,
   }
 
@@ -366,7 +371,7 @@ export function WorkbenchShell({
 
               <div className='min-w-0 flex-1'>
                 <h1 className='truncate text-sm leading-none font-semibold'>
-                  {taskView.title}
+                  {taskView?.title ?? '还没有对话'}
                 </h1>
               </div>
 
@@ -391,19 +396,36 @@ export function WorkbenchShell({
             </header>
 
             <div className='flex min-h-0 min-w-0 flex-1'>
-              <TaskSurface
-                view={taskView}
-                onLaunchAction={onLaunchAction}
-                composerRuntime={composerRuntime}
-                onCloseContextPanel={
-                  taskView.contextPanelOpen
-                    ? () => {
-                        setContextMotion('instant')
-                        commands.toggleContextPanel()
-                      }
-                    : undefined
-                }
-              />
+              {taskView ? (
+                <TaskSurface
+                  view={taskView}
+                  onLaunchAction={onLaunchAction}
+                  composerRuntime={composerRuntime}
+                  onCloseContextPanel={
+                    taskView.contextPanelOpen
+                      ? () => {
+                          setContextMotion('instant')
+                          commands.toggleContextPanel()
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <div
+                  className='flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
+                  data-testid='workspace-empty-shell'
+                >
+                  <p className='text-sm text-muted-foreground'>还没有对话</p>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    data-testid='workspace-empty-new-chat'
+                    onClick={() => onNewChat?.()}
+                  >
+                    新对话
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 

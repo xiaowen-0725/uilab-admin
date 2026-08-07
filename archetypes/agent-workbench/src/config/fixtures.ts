@@ -181,22 +181,20 @@ export const taskFixtures: Record<string, TaskFixture> = Object.fromEntries(
 )
 
 /**
- * Default seed selects a capture stream task so the common shell path stays
- * local-sim / capture (non-regression for Composer「不会调用 Agent Runtime」).
- * Empty hub + Fake Runtime vertical slice: select `task-empty` or 新对话.
+ * @deprecated Product path no longer seeds phase3 capture tasks.
+ * Kept only for capture-harness / fidelity tests that explicitly import it.
  */
 export const phase3SessionSeed: WorkbenchSessionSeed = {
-  project: {
-    id: 'proj-lot-sentry',
-    name: 'lot-sentry-ai-agent',
-  },
-  tasks: TASK_SEEDS.map(({ id, title, subtitle }) => ({ id, title, subtitle })),
-  selectedTaskId: 'task-a',
+  selectedProjectId: 'project-default',
+  selectedTaskId: null,
   workSurfaceTabs: [
     { id: 'tab-layout', label: '布局规格.md' },
     { id: 'tab-browser', label: '浏览器预览' },
   ],
 }
+
+/** Capture fixture seeds for test harness only (not product default boot). */
+export const captureHarnessTaskSeeds = TASK_SEEDS
 
 export function getTaskFixture(taskId: string): TaskFixture {
   return taskFixtures[taskId] ?? taskFixtures['task-empty']

@@ -1,13 +1,16 @@
 /**
- * In-memory EventStorePort (Phase 4E).
- * Pure enough for tests + demo; not IndexedDB / production persistence.
+ * In-memory EventStorePort (tests + optional non-durable harness).
+ * Implements D2 checkpoint, D4 conflict, D5 task snapshot, D7 delete.
  */
 
 import type {
   EventStoreAppendResult,
+  EventStoreCheckpointInput,
+  EventStoreCheckpointResult,
   EventStorePort,
   EventStoreReadOptions,
 } from '../ports/event-store-port'
+import { EventStorePortError } from '../ports/event-store-port'
 import type { CommandAcknowledgement } from '../protocol/commands'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import type { RuntimeSnapshot } from '../ports/runtime-port'
@@ -15,28 +18,29 @@ import type { RuntimeSnapshot } from '../ports/runtime-port'
 export class MemoryEventStore implements EventStorePort {
   private readonly byTask = new Map<string, AgentRuntimeEventEnvelope[]>()
   private readonly byEventId = new Map<string, AgentRuntimeEventEnvelope>()
+  private readonly sequenceIndex = new Map<string, AgentRuntimeEventEnvelope>()
   private readonly snapshots = new Map<string, RuntimeSnapshot>()
   private readonly acks = new Map<string, CommandAcknowledgement>()
 
   async append(envelope: AgentRuntimeEventEnvelope): Promise<EventStoreAppendResult> {
-    if (this.byEventId.has(envelope.eventId)) {
-      return {
-        status: 'duplicate',
-        eventId: envelope.eventId,
-        taskSequence: envelope.taskSequence,
-      }
+    return this.appendInternal(envelope)
+  }
+
+  async appendWithCheckpoint(
+    input: EventStoreCheckpointInput,
+  ): Promise<EventStoreCheckpointResult> {
+    const append = this.appendInternal(input.envelope)
+    if (append.status === 'conflict') {
+      throw new EventStorePortError({
+        code: 'conflict',
+        message: append.message ?? '事件序号冲突',
+        retriable: false,
+      })
     }
-    this.byEventId.set(envelope.eventId, envelope)
-    const list = this.byTask.get(envelope.taskId) ?? []
-    list.push(envelope)
-    // Keep sequence order stable.
-    list.sort((a, b) => a.taskSequence - b.taskSequence)
-    this.byTask.set(envelope.taskId, list)
-    return {
-      status: 'appended',
-      eventId: envelope.eventId,
-      taskSequence: envelope.taskSequence,
+    if (append.status === 'appended') {
+      this.snapshots.set(input.snapshot.taskId, { ...input.snapshot })
     }
+    return { append }
   }
 
   async read(
@@ -56,18 +60,13 @@ export class MemoryEventStore implements EventStorePort {
     return filtered
   }
 
-  async getSnapshot(taskId: string, runId?: string): Promise<RuntimeSnapshot | null> {
-    if (runId) {
-      return this.snapshots.get(`${taskId}:${runId}`) ?? null
-    }
+  async getSnapshot(taskId: string, _runId?: string): Promise<RuntimeSnapshot | null> {
+    // D5: one row per taskId (ignore runId for primary key)
     return this.snapshots.get(taskId) ?? null
   }
 
   async putSnapshot(snapshot: RuntimeSnapshot): Promise<void> {
-    this.snapshots.set(snapshot.taskId, snapshot)
-    if (snapshot.runId) {
-      this.snapshots.set(`${snapshot.taskId}:${snapshot.runId}`, snapshot)
-    }
+    this.snapshots.set(snapshot.taskId, { ...snapshot })
   }
 
   async getCommandAcknowledgement(
@@ -83,13 +82,71 @@ export class MemoryEventStore implements EventStorePort {
     this.acks.set(commandId, acknowledgement)
   }
 
+  async deleteTaskData(taskId: string): Promise<void> {
+    const list = this.byTask.get(taskId) ?? []
+    for (const env of list) {
+      this.byEventId.delete(env.eventId)
+      this.sequenceIndex.delete(seqKey(taskId, env.taskSequence))
+    }
+    this.byTask.delete(taskId)
+    this.snapshots.delete(taskId)
+  }
+
   /** Test helper: wipe all state. */
   clear(): void {
     this.byTask.clear()
     this.byEventId.clear()
+    this.sequenceIndex.clear()
     this.snapshots.clear()
     this.acks.clear()
   }
+
+  private appendInternal(
+    envelope: AgentRuntimeEventEnvelope,
+  ): EventStoreAppendResult {
+    const existingById = this.byEventId.get(envelope.eventId)
+    if (existingById) {
+      return {
+        status: 'duplicate',
+        eventId: envelope.eventId,
+        taskSequence: existingById.taskSequence,
+      }
+    }
+
+    const key = seqKey(envelope.taskId, envelope.taskSequence)
+    const existingAtSeq = this.sequenceIndex.get(key)
+    if (existingAtSeq) {
+      if (existingAtSeq.eventId === envelope.eventId) {
+        return {
+          status: 'duplicate',
+          eventId: envelope.eventId,
+          taskSequence: envelope.taskSequence,
+        }
+      }
+      return {
+        status: 'conflict',
+        eventId: envelope.eventId,
+        taskSequence: envelope.taskSequence,
+        message: `taskSequence ${envelope.taskSequence} already holds ${existingAtSeq.eventId}`,
+      }
+    }
+
+    this.byEventId.set(envelope.eventId, envelope)
+    this.sequenceIndex.set(key, envelope)
+    const list = this.byTask.get(envelope.taskId) ?? []
+    list.push(envelope)
+    list.sort((a, b) => a.taskSequence - b.taskSequence)
+    this.byTask.set(envelope.taskId, list)
+    return {
+      status: 'appended',
+      eventId: envelope.eventId,
+      taskSequence: envelope.taskSequence,
+    }
+  }
+}
+
+function seqKey(taskId: string, taskSequence: number): string {
+  return `${taskId}|${taskSequence}`
 }
 
 export function createMemoryEventStore(): MemoryEventStore {

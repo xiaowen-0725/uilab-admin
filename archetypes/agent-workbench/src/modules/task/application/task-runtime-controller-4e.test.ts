@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { EventStorePort } from '../ports/event-store-port'
 import { createDeterministicFakeRuntime } from '../runtime/fake-runtime'
 import { createMemoryEventStore } from '../runtime/memory-event-store'
 import { VirtualClock } from '../runtime/virtual-clock'
@@ -126,6 +127,61 @@ describe('TaskRuntimeController Phase 4E', () => {
       controller.readModel.timeline.find((t) => t.category === 'assistant-message')
         ?.body,
     ).toBe(xBody)
+  })
+
+  it('keeps the newest task attached when an older attach resolves late', async () => {
+    const runtime = createDeterministicFakeRuntime({
+      seed: 'attach-race',
+      stepMs: 0,
+      keywordScenarios: false,
+    })
+    const baseStore = createMemoryEventStore()
+    let releaseOldRead!: () => void
+    let oldReadStarted!: () => void
+    const oldReadGate = new Promise<void>((resolve) => {
+      releaseOldRead = resolve
+    })
+    const oldReadObserved = new Promise<void>((resolve) => {
+      oldReadStarted = resolve
+    })
+    const store: EventStorePort = {
+      append: (event) => baseStore.append(event),
+      appendWithCheckpoint: (input) => baseStore.appendWithCheckpoint(input),
+      read: async (options) => {
+        if (options.taskId === 'task-old') {
+          oldReadStarted()
+          await oldReadGate
+        }
+        return baseStore.read(options)
+      },
+      getSnapshot: (taskId, runId) => baseStore.getSnapshot(taskId, runId),
+      putSnapshot: (snapshot) => baseStore.putSnapshot(snapshot),
+      getCommandAcknowledgement: (commandId) =>
+        baseStore.getCommandAcknowledgement(commandId),
+      putCommandAcknowledgement: (commandId, acknowledgement) =>
+        baseStore.putCommandAcknowledgement(commandId, acknowledgement),
+      deleteTaskData: (taskId) => baseStore.deleteTaskData(taskId),
+    }
+    const controller = new TaskRuntimeController({
+      runtime,
+      projectId: 'proj-1',
+      eventStore: store,
+      autoFlush: true,
+    })
+
+    const oldAttach = controller.attach('task-old')
+    await oldReadObserved
+    await controller.attach('task-new')
+    releaseOldRead()
+    await oldAttach
+
+    expect(controller.readModel.taskId).toBe('task-new')
+    await controller.submitText('new-task-message')
+    expect(
+      controller.readModel.timeline.some(
+        (item) => item.category === 'user-message' && item.body === 'new-task-message',
+      ),
+    ).toBe(true)
   })
 
   it('respondToApproval approve path via controller', async () => {

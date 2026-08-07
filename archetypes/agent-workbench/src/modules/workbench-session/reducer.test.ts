@@ -11,12 +11,7 @@ import {
 import type { WorkbenchSessionSeed } from './model/types'
 
 const seed: WorkbenchSessionSeed = {
-  project: { id: 'proj-demo', name: '演示项目' },
-  tasks: [
-    { id: 'task-a', title: '任务 A · 布局规格' },
-    { id: 'task-b', title: '任务 B · 浏览器预览' },
-    { id: 'task-c', title: '任务 C · 静态 fixture' },
-  ],
+  selectedProjectId: 'project-default',
   selectedTaskId: 'task-a',
   workSurfaceTabs: [
     { id: 'tab-layout', label: '布局规格.md' },
@@ -25,6 +20,34 @@ const seed: WorkbenchSessionSeed = {
 }
 
 describe('workbenchSessionReducer (Module Implementation)', () => {
+  it('allows null selectedTaskId on cold start', () => {
+    const emptySeed: WorkbenchSessionSeed = {
+      selectedProjectId: 'project-default',
+      selectedTaskId: null,
+      workSurfaceTabs: seed.workSurfaceTabs,
+    }
+    const state = createInitialSessionState(emptySeed)
+    const view = selectSessionView(state)
+    expect(view.selectedTaskId).toBeNull()
+    expect(view.selectedProjectId).toBe('project-default')
+    expect(view.isTaskOnly).toBe(true)
+    expect(view.navigatorOpen).toBe(true)
+  })
+
+  it('selects a task and ensures layout', () => {
+    const initial = createInitialSessionState({
+      ...seed,
+      selectedTaskId: null,
+    })
+    const next = workbenchSessionReducer(initial, {
+      type: 'selectTask',
+      taskId: 'task-new-1',
+    })
+    expect(next.selectedTaskId).toBe('task-new-1')
+    expect(next.taskLayouts['task-new-1']).toBeDefined()
+    expect(next.lastTaskByProject['project-default']).toBe('task-new-1')
+  })
+
   it('starts Task-only with Context closed and Navigator open', () => {
     const state = createInitialSessionState(seed)
     const view = selectSessionView(state)
@@ -35,11 +58,14 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     expect(view.layout.contextPanelOpen).toBe(false)
     expect(view.layout.workSurfaceMaximized).toBe(false)
     expect(view.navigatorOpen).toBe(true)
-    expect(view.tasks).toHaveLength(3)
   })
 
   it('restores independent per-Task layout when switching A → B → A', () => {
     let state = createInitialSessionState(seed)
+    state = workbenchSessionReducer(state, {
+      type: 'ensureTaskLayout',
+      taskId: 'task-b',
+    })
 
     state = workbenchSessionReducer(state, { type: 'openWorkSurface' })
     state = workbenchSessionReducer(state, {
@@ -60,7 +86,6 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     expect(layoutA.activeTabId).toBe('tab-browser')
     expect(layoutA.workSurfaceMaximized).toBe(true)
 
-    // Task B stays at defaults
     state = workbenchSessionReducer(state, {
       type: 'selectTask',
       taskId: 'task-b',
@@ -71,7 +96,6 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     expect(layoutB.workSurfaceMaximized).toBe(false)
     expect(layoutB.activeTabId).toBe('tab-layout')
 
-    // Return to A restores previous layout
     state = workbenchSessionReducer(state, {
       type: 'selectTask',
       taskId: 'task-a',
@@ -92,7 +116,7 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
       width: 10,
     })
     expect(selectSessionView(state).layout.workSurfaceWidth).toBe(
-      WORK_SURFACE_MIN_WIDTH
+      WORK_SURFACE_MIN_WIDTH,
     )
 
     state = workbenchSessionReducer(state, {
@@ -100,7 +124,7 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
       width: 9999,
     })
     expect(selectSessionView(state).layout.workSurfaceWidth).toBe(
-      WORK_SURFACE_MAX_WIDTH
+      WORK_SURFACE_MAX_WIDTH,
     )
 
     state = workbenchSessionReducer(state, {
@@ -120,7 +144,6 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     state = workbenchSessionReducer(state, { type: 'exitMaximize' })
     expect(selectSessionView(state).layout.workSurfaceMaximized).toBe(false)
 
-    // exitMaximize is a no-op when not maximized
     state = workbenchSessionReducer(state, { type: 'exitMaximize' })
     expect(selectSessionView(state).layout.workSurfaceMaximized).toBe(false)
   })
@@ -137,7 +160,6 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     expect(view.layout.activeTabId).toBe('tab-browser')
     expect(view.layout.workSurfaceVisible).toBe(true)
 
-    // Unknown tab is ignored
     state = workbenchSessionReducer(state, {
       type: 'activateTab',
       tabId: 'missing',
@@ -159,5 +181,35 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     const closed = selectSessionView(state).layout
     expect(closed.workSurfaceVisible).toBe(false)
     expect(closed.workSurfaceMaximized).toBe(false)
+  })
+
+  it('switches project and restores lastTaskByProject', () => {
+    let state = createInitialSessionState(seed)
+    state = workbenchSessionReducer(state, {
+      type: 'selectTask',
+      taskId: 'task-a',
+    })
+    state = workbenchSessionReducer(state, {
+      type: 'selectProject',
+      projectId: 'project-b',
+      taskId: 'task-x',
+    })
+    expect(state.selectedProjectId).toBe('project-b')
+    expect(state.selectedTaskId).toBe('task-x')
+
+    state = workbenchSessionReducer(state, {
+      type: 'selectProject',
+      projectId: 'project-default',
+    })
+    expect(state.selectedTaskId).toBe('task-a')
+  })
+
+  it('removes task layout on delete cleanup', () => {
+    let state = createInitialSessionState(seed)
+    state = workbenchSessionReducer(state, {
+      type: 'removeTaskLayout',
+      taskId: 'task-a',
+    })
+    expect(state.taskLayouts['task-a']).toBeUndefined()
   })
 })

@@ -1,35 +1,79 @@
 /**
- * Phase 4C — Task Pane vertical slice (Fake Runtime dual-path).
- * Empty / new-chat path only; default capture seed stays local-sim.
+ * Real Task Lifecycle — Runtime vertical slice (product default path).
+ * Cold start: empty shell; new chat → Runtime empty hub → submit → Timeline.
  */
 import { WorkbenchApp } from '@/app/composition/workbench-app'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
-describe('Workbench Phase 4C Fake Runtime vertical slice', () => {
-  it('empty task: submit shows timeline, honesty banner, completed status', async () => {
-    await render(<WorkbenchApp />)
+async function waitBooted() {
+  await expect
+    .element(page.getByTestId('workbench-shell'))
+    .toBeInTheDocument()
+}
 
-    // Default seed is capture — leave local-sim path.
+async function openNewChat() {
+  await userEvent.click(page.getByTestId('navigator-new-chat'))
+  await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
+  await expect
+    .element(page.getByTestId('composer'))
+    .toHaveAttribute('data-composer-mode', 'runtime')
+}
+
+describe('Workbench Real Task Lifecycle — Runtime path', () => {
+  it('cold start: default project, zero tasks, no capture seed (A8/A10)', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+
     await expect
-      .element(page.getByTestId('execution-stream'))
+      .element(page.getByTestId('project-name'))
+      .toHaveTextContent('默认项目')
+    await expect
+      .element(page.getByTestId('workspace-empty-shell'))
       .toBeInTheDocument()
-    expect(document.querySelector('[data-runtime-run]')).toBeNull()
+    await expect
+      .element(page.getByTestId('navigator-tasks-empty'))
+      .toBeInTheDocument()
+    expect(document.querySelector('[data-testid="execution-stream"]')).toBeNull()
+    expect(document.querySelector('[data-testid="navigator-utilities"]')).toBeNull()
+  })
 
-    // Enter empty / Fake Runtime path.
-    await userEvent.click(page.getByTestId('task-task-empty'))
-    await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
+  it('new chat → 新对话 catalog + Runtime empty hub (A2)', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+    await openNewChat()
+
+    await expect
+      .element(page.getByTestId('task-surface'))
+      .toHaveAttribute('data-content-mode', 'empty')
     await expect
       .element(page.getByTestId('composer'))
       .toHaveAttribute('data-composer-mode', 'runtime')
+    await expect
+      .element(page.getByTestId('composer-model'))
+      .toHaveTextContent('Fake Runtime')
+
+    // Catalog row titled 新对话
+    const taskButtons = document.querySelectorAll(
+      '[data-testid^="task-task-"]',
+    )
+    expect(taskButtons.length).toBeGreaterThanOrEqual(1)
+    expect(
+      [...taskButtons].some((el) => el.textContent?.includes('新对话')),
+    ).toBe(true)
+  })
+
+  it('empty task: submit shows timeline, honesty banner, completed status', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+    await openNewChat()
 
     const input = page.getByTestId('composer-input')
     const submit = page.getByTestId('composer-submit')
     await userEvent.fill(input, 'hello fake runtime')
     await userEvent.click(submit)
 
-    // Auto-flush Fake clock after submit → completed timeline.
     await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
     await expect
       .element(page.getByTestId('runtime-honesty-banner'))
@@ -46,7 +90,6 @@ describe('Workbench Phase 4C Fake Runtime vertical slice', () => {
     expect(timeline.getAttribute('data-runtime-run')).toBe('completed')
     expect(timeline.getAttribute('data-run-status')).toBe('completed')
 
-    // User + assistant projected.
     expect(
       document.querySelectorAll('[data-category="user-message"]').length,
     ).toBeGreaterThanOrEqual(1)
@@ -58,63 +101,74 @@ describe('Workbench Phase 4C Fake Runtime vertical slice', () => {
       .element(page.getByTestId('composer-notice'))
       .toHaveTextContent(/非生产|不会调用远程/)
 
-    // Toolbar title follows local title policy from first message.
     const titles = document.querySelectorAll(
       '[data-testid="workspace-top-bar"] h1',
     )
     expect(titles[0]?.textContent).toMatch(/hello fake runtime/)
   })
 
-  it('new chat navigates to empty runtime path', async () => {
-    await render(<WorkbenchApp />)
+  it('new chat creates distinct tasks', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+    await openNewChat()
+    const firstTaskId = page.getByTestId('task-surface').element().dataset.taskId
     await userEvent.click(page.getByTestId('navigator-new-chat'))
-    await expect
-      .element(page.getByTestId('task-surface'))
-      .toHaveAttribute('data-task-id', 'task-empty')
     await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
-    await expect
-      .element(page.getByTestId('composer'))
-      .toHaveAttribute('data-composer-mode', 'runtime')
+    const secondTaskId = page.getByTestId('task-surface').element().dataset.taskId
+    expect(secondTaskId).not.toBe(firstTaskId)
   })
 
-  it('waiting_for_input: Composer Send submits clarification (not cancel)', async () => {
-    await render(<WorkbenchApp />)
-    await userEvent.click(page.getByTestId('task-task-empty'))
+  it('shows bottom approval dock and hides Composer while waiting_for_approval', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+    await openNewChat()
 
     const input = page.getByTestId('composer-input')
     const submit = page.getByTestId('composer-submit')
-
-    // Keyword routes Fake scenario → waiting-input.
-    await userEvent.fill(input, '请澄清一下需求')
+    await userEvent.fill(input, '需要审批后再执行')
     await userEvent.click(submit)
-
-    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
     await expect
       .element(page.getByTestId('task-timeline'))
-      .toHaveAttribute('data-run-status', 'waiting_for_input')
+      .toHaveAttribute('data-run-status', 'waiting_for_approval')
+
     await expect
-      .element(page.getByTestId('runtime-input-notice'))
+      .element(page.getByTestId('approval-dock'))
       .toBeInTheDocument()
+    expect(document.querySelector('[data-testid="composer"]')).toBeNull()
+  })
 
-    // Send must stay in send mode (not Stop) while waiting for input.
-    await expect
-      .element(page.getByTestId('composer-submit'))
-      .toHaveAttribute('data-send-mode', 'send')
-    await expect
-      .element(page.getByTestId('composer-submit'))
-      .toHaveAttribute('aria-label', '发送')
+  it('hard-deletes a task with confirm dialog (A4)', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+    await openNewChat()
+    const taskId = page.getByTestId('task-surface').element().dataset.taskId
+    expect(taskId).toBeTruthy()
 
-    await userEvent.fill(input, '补充：用中文单文件')
-    await userEvent.click(submit)
+    await userEvent.click(page.getByTestId(`task-delete-${taskId}`))
+    await expect
+      .element(page.getByTestId('delete-task-dialog'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('delete-task-dialog'))
+      .toHaveTextContent(/无法恢复|永久删除/)
+    await userEvent.click(page.getByTestId('delete-task-confirm'))
 
-    // Clarification resumes Fake run → completed (cancel would leave cancelled).
     await expect
-      .element(page.getByTestId('timeline-run-status-label'))
-      .toHaveTextContent('已处理')
-    const timeline = page.getByTestId('task-timeline').element()
-    expect(timeline.getAttribute('data-run-status')).toBe('completed')
+      .element(page.getByTestId('workspace-empty-shell'))
+      .toBeInTheDocument()
+    expect(document.querySelector(`[data-testid="task-${taskId}"]`)).toBeNull()
+  })
+
+  it('launch card submits Runtime prompt (not capture stream)', async () => {
+    await render(<WorkbenchApp persistence='memory' />)
+    await waitBooted()
+    await openNewChat()
+
+    await userEvent.click(page.getByTestId('empty-hub-action-explore'))
+    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
+    expect(document.querySelector('[data-testid="execution-stream"]')).toBeNull()
     await expect
-      .element(page.getByTestId('composer-notice'))
-      .toHaveTextContent(/澄清|非生产/)
+      .element(page.getByTestId('task-surface'))
+      .toHaveAttribute('data-content-mode', 'runtime')
   })
 })

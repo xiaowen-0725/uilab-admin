@@ -1,94 +1,55 @@
 import { useMemo, useState } from 'react'
-import {
-  Clock,
-  Folder,
-  GitPullRequest,
-  Globe,
-  MessageSquarePlus,
-  Puzzle,
-  Search,
-} from 'lucide-react'
+import { Loader2, MessageSquarePlus, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type {
-  NavigatorUtility,
-  ProjectFolder,
-  TaskNavMeta,
-} from '@/config/fixtures'
-import type { ProjectSummary, TaskSummary } from '@/modules/workbench-session'
+import type { ProjectSummary, TaskSummary } from '@/modules/project'
 import { cn } from '@/lib/utils'
 import { NavigatorUserMenu } from './navigator-user-menu'
 
 export interface NavigatorProps {
-  project: ProjectSummary
+  project: ProjectSummary | null
+  projects?: ProjectSummary[]
   tasks: TaskSummary[]
-  selectedTaskId: string
+  selectedTaskId: string | null
+  /** taskId → busy (queued|running|cancelling) */
+  busyTaskIds?: ReadonlySet<string>
   open: boolean
   mode: 'reserved' | 'overlay'
-  utilities: NavigatorUtility[]
-  projectFolders: ProjectFolder[]
-  taskNavMeta: Record<string, TaskNavMeta>
   onSelectTask: (taskId: string) => void
   onNewChat?: () => void
+  onDeleteTask?: (taskId: string) => void
+  onSelectProject?: (projectId: string) => void
+  onRenameProject?: (projectId: string, name: string) => void
   onClose?: () => void
   onOpenSettings?: () => void
 }
 
-const UTILITY_ICONS = {
-  'git-pull-request': GitPullRequest,
-  globe: Globe,
-  clock: Clock,
-  puzzle: Puzzle,
-} as const
-
-/** Left rail: 新对话, utility rows, 置顶 sessions, 项目 folders. */
+/** Left rail: 新对话 + real Task catalog (no mock utilities). */
 export function Navigator({
   project,
+  projects,
   tasks,
   selectedTaskId,
+  busyTaskIds,
   open,
   mode,
-  utilities,
-  projectFolders,
-  taskNavMeta,
   onSelectTask,
   onNewChat,
+  onDeleteTask,
+  onSelectProject,
   onClose,
   onOpenSettings,
 }: NavigatorProps) {
   const [filter, setFilter] = useState('')
 
-  const { pinned, byFolder, ungrouped } = useMemo(() => {
+  const filteredTasks = useMemo(() => {
     const normalized = filter.trim().toLowerCase()
-    const match = (task: TaskSummary) => {
-      if (!normalized) return true
-      return (
-        task.title.toLowerCase().includes(normalized) ||
-        (task.subtitle?.toLowerCase().includes(normalized) ?? false)
-      )
-    }
-    const pinnedList: TaskSummary[] = []
-    const ungroupedList: TaskSummary[] = []
-    const folderMap = new Map<string, TaskSummary[]>()
-    for (const folder of projectFolders) folderMap.set(folder.id, [])
-
-    for (const task of tasks) {
-      if (!match(task)) continue
-      const meta = taskNavMeta[task.id]
-      if (meta?.pinned) {
-        pinnedList.push(task)
-        continue
-      }
-      const folderId = meta?.projectFolderId
-      if (folderId && folderMap.has(folderId)) {
-        folderMap.get(folderId)!.push(task)
-      } else {
-        ungroupedList.push(task)
-      }
-    }
-    return { pinned: pinnedList, byFolder: folderMap, ungrouped: ungroupedList }
-  }, [tasks, taskNavMeta, projectFolders, filter])
+    if (!normalized) return tasks
+    return tasks.filter((task) =>
+      task.title.toLowerCase().includes(normalized),
+    )
+  }, [tasks, filter])
 
   const tabIndex = open ? 0 : -1
 
@@ -98,7 +59,6 @@ export function Navigator({
       style={{
         width: 'var(--navigator-width)',
         maxWidth: 'none',
-        /* Codex full-width title bar sits above rail content (46px). */
         paddingTop: 46,
       }}
       data-slot='navigator'
@@ -116,7 +76,7 @@ export function Navigator({
             className='truncate text-sm font-semibold tracking-tight'
             data-testid='project-name'
           >
-            {project.name}
+            {project?.name ?? '…'}
           </h2>
         </div>
         {mode === 'overlay' && onClose ? (
@@ -133,6 +93,28 @@ export function Navigator({
           </Button>
         ) : null}
       </div>
+
+      {projects && projects.length > 1 && onSelectProject ? (
+        <div className='px-2 pb-2' data-testid='navigator-project-list'>
+          <label className='sr-only' htmlFor='navigator-project-select'>
+            切换项目
+          </label>
+          <select
+            id='navigator-project-select'
+            data-testid='navigator-project-select'
+            className='h-8 w-full rounded-md border border-border/80 bg-sidebar-accent/30 px-2 text-xs'
+            value={project?.id ?? ''}
+            tabIndex={tabIndex}
+            onChange={(e) => onSelectProject(e.target.value)}
+          >
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className='px-2 pb-2'>
         <Button
@@ -162,84 +144,32 @@ export function Navigator({
       </div>
 
       <ScrollArea className='min-h-0 flex-1 px-2 pb-2'>
-        <ul className='mb-3 flex flex-col gap-0.5' data-testid='navigator-utilities'>
-          {utilities.map((item) => {
-            const Icon = UTILITY_ICONS[item.icon]
-            return (
-              <li key={item.id}>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  data-testid={`navigator-utility-${item.id}`}
-                  tabIndex={tabIndex}
-                  className='h-auto w-full justify-start gap-2 rounded-lg px-2.5 py-1.5 text-sm font-normal text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'
-                >
-                  <Icon aria-hidden />
-                  <span className='truncate'>{item.label}</span>
-                </Button>
-              </li>
-            )
-          })}
-        </ul>
-
-        {pinned.length > 0 ? (
-          <section className='mb-3' data-testid='navigator-pinned'>
-            <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
-              置顶
+        <section data-testid='navigator-tasks'>
+          <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
+            对话
+          </p>
+          {filteredTasks.length === 0 ? (
+            <p
+              className='px-2.5 py-3 text-xs text-muted-foreground'
+              data-testid='navigator-tasks-empty'
+            >
+              还没有对话
             </p>
+          ) : (
             <ul className='flex flex-col gap-0.5'>
-              {pinned.map((task) => (
+              {filteredTasks.map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}
                   selected={task.id === selectedTaskId}
+                  busy={busyTaskIds?.has(task.id) ?? false}
                   tabIndex={tabIndex}
                   onSelect={onSelectTask}
+                  onDelete={onDeleteTask}
                 />
               ))}
             </ul>
-          </section>
-        ) : null}
-
-        <section data-testid='navigator-projects'>
-          <p className='px-2 py-1 text-[11px] font-medium text-muted-foreground'>
-            项目
-          </p>
-          <ul className='flex flex-col gap-1'>
-            {projectFolders.map((folder) => {
-              const folderTasks = byFolder.get(folder.id) ?? []
-              return (
-                <li key={folder.id} data-testid={`navigator-folder-${folder.id}`}>
-                  <div className='flex items-center gap-2 px-2.5 py-1 text-sm text-muted-foreground'>
-                    <Folder className='size-4 shrink-0' aria-hidden />
-                    <span className='truncate'>{folder.name}</span>
-                  </div>
-                  {folderTasks.length > 0 ? (
-                    <ul className='ms-2 flex flex-col gap-0.5 border-l border-sidebar-border ps-1'>
-                      {folderTasks.map((task) => (
-                        <TaskRow
-                          key={task.id}
-                          task={task}
-                          selected={task.id === selectedTaskId}
-                          tabIndex={tabIndex}
-                          onSelect={onSelectTask}
-                        />
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
-              )
-            })}
-            {ungrouped.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                selected={task.id === selectedTaskId}
-                tabIndex={tabIndex}
-                onSelect={onSelectTask}
-              />
-            ))}
-          </ul>
+          )}
         </section>
       </ScrollArea>
 
@@ -276,32 +206,62 @@ export function Navigator({
 function TaskRow({
   task,
   selected,
+  busy,
   tabIndex,
   onSelect,
+  onDelete,
 }: {
   task: TaskSummary
   selected: boolean
+  busy: boolean
   tabIndex: number
   onSelect: (id: string) => void
+  onDelete?: (id: string) => void
 }) {
   return (
-    <li>
+    <li className='group relative'>
       <Button
         type='button'
         variant='ghost'
         data-testid={`task-${task.id}`}
         aria-current={selected ? 'true' : undefined}
+        aria-busy={busy || undefined}
+        aria-label={busy ? `${task.title}，进行中` : task.title}
         tabIndex={tabIndex}
         className={cn(
-          'h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal',
+          'h-auto w-full justify-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-normal',
           selected
             ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent'
-            : 'hover:bg-sidebar-accent/70'
+            : 'hover:bg-sidebar-accent/70',
         )}
         onClick={() => onSelect(task.id)}
       >
+        {busy ? (
+          <Loader2
+            className='size-3.5 shrink-0 animate-spin text-muted-foreground'
+            aria-hidden
+            data-testid={`task-busy-${task.id}`}
+          />
+        ) : null}
         <span className='block min-w-0 flex-1 truncate'>{task.title}</span>
       </Button>
+      {onDelete ? (
+        <Button
+          type='button'
+          variant='ghost'
+          size='sm'
+          data-testid={`task-delete-${task.id}`}
+          className='absolute end-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+          tabIndex={tabIndex}
+          aria-label={`删除 ${task.title}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(task.id)
+          }}
+        >
+          <Trash2 className='size-3.5' aria-hidden />
+        </Button>
+      ) : null}
     </li>
   )
 }

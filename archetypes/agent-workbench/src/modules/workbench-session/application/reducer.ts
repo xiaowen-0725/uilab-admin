@@ -20,7 +20,7 @@ function clampWidth(width: number, min: number, max: number): number {
 
 function createDefaultLayout(
   tabs: { id: WorkSurfaceTabId }[],
-  defaultWidth: number
+  defaultWidth: number,
 ): TaskLayoutState {
   const firstTab = tabs[0]?.id ?? 'tab-1'
   return {
@@ -33,61 +33,69 @@ function createDefaultLayout(
 }
 
 /**
- * Build initial session state from static fixture seed.
- * New tasks start Task-only (Work Surface closed, Context closed).
+ * Build initial session state. selectedTaskId may be null (empty shell).
  */
 export function createInitialSessionState(
-  seed: WorkbenchSessionSeed
+  seed: WorkbenchSessionSeed,
 ): WorkbenchSessionState {
   const min = seed.workSurfaceMinWidth ?? WORK_SURFACE_MIN_WIDTH
   const max = seed.workSurfaceMaxWidth ?? WORK_SURFACE_MAX_WIDTH
   const defaultWidth = clampWidth(
     seed.defaultWorkSurfaceWidth ?? WORK_SURFACE_DEFAULT_WIDTH,
     min,
-    max
+    max,
   )
 
-  if (seed.tasks.length === 0) {
-    throw new Error('Workbench Session seed requires at least one Task')
+  const emptyLayout = createDefaultLayout(seed.workSurfaceTabs, defaultWidth)
+  const taskLayouts: Record<TaskId, TaskLayoutState> = {}
+  const selectedTaskId = seed.selectedTaskId ?? null
+  if (selectedTaskId) {
+    taskLayouts[selectedTaskId] = createDefaultLayout(
+      seed.workSurfaceTabs,
+      defaultWidth,
+    )
   }
 
-  const selected =
-    seed.tasks.find((t) => t.id === seed.selectedTaskId) ?? seed.tasks[0]
-
-  const taskLayouts: Record<TaskId, TaskLayoutState> = {}
-  for (const task of seed.tasks) {
-    taskLayouts[task.id] = createDefaultLayout(seed.workSurfaceTabs, defaultWidth)
+  const lastTaskByProject: Record<string, string | null> = {
+    ...(seed.lastTaskByProject ?? {}),
+  }
+  if (!(seed.selectedProjectId in lastTaskByProject)) {
+    lastTaskByProject[seed.selectedProjectId] = selectedTaskId
   }
 
   return {
-    project: seed.project,
-    tasks: seed.tasks,
-    selectedTaskId: selected.id,
-    navigatorOpen: true,
+    selectedProjectId: seed.selectedProjectId,
+    selectedTaskId,
+    lastTaskByProject,
+    navigatorOpen: seed.navigatorOpen ?? true,
     taskLayouts,
     workSurfaceTabs: seed.workSurfaceTabs,
     workSurfaceMinWidth: min,
     workSurfaceMaxWidth: max,
+    emptyLayout,
   }
 }
 
-function requireLayout(
+function requireSelectedLayout(
   state: WorkbenchSessionState,
-  taskId: TaskId
 ): TaskLayoutState {
-  const layout = state.taskLayouts[taskId]
-  if (!layout) {
-    throw new Error(`Missing layout for task ${taskId}`)
-  }
-  return layout
+  const taskId = state.selectedTaskId
+  if (!taskId) return state.emptyLayout
+  return state.taskLayouts[taskId] ?? state.emptyLayout
 }
 
 function updateSelectedLayout(
   state: WorkbenchSessionState,
-  patch: Partial<TaskLayoutState>
+  patch: Partial<TaskLayoutState>,
 ): WorkbenchSessionState {
   const taskId = state.selectedTaskId
-  const current = requireLayout(state, taskId)
+  if (!taskId) {
+    return {
+      ...state,
+      emptyLayout: { ...state.emptyLayout, ...patch },
+    }
+  }
+  const current = state.taskLayouts[taskId] ?? state.emptyLayout
   return {
     ...state,
     taskLayouts: {
@@ -97,26 +105,96 @@ function updateSelectedLayout(
   }
 }
 
+function ensureLayout(
+  state: WorkbenchSessionState,
+  taskId: TaskId,
+): WorkbenchSessionState {
+  if (state.taskLayouts[taskId]) return state
+  const defaultWidth = clampWidth(
+    WORK_SURFACE_DEFAULT_WIDTH,
+    state.workSurfaceMinWidth,
+    state.workSurfaceMaxWidth,
+  )
+  return {
+    ...state,
+    taskLayouts: {
+      ...state.taskLayouts,
+      [taskId]: createDefaultLayout(state.workSurfaceTabs, defaultWidth),
+    },
+  }
+}
+
 /**
- * Pure session reducer — primary unit-test surface for layout commands.
+ * Pure session reducer — layout + selection pointers only.
  */
 export function workbenchSessionReducer(
   state: WorkbenchSessionState,
-  command: WorkbenchSessionCommand
+  command: WorkbenchSessionCommand,
 ): WorkbenchSessionState {
   switch (command.type) {
-    case 'selectTask': {
-      if (!state.tasks.some((t) => t.id === command.taskId)) {
+    case 'hydratePointers': {
+      let next = { ...state }
+      next.selectedProjectId = command.selectedProjectId
+      next.selectedTaskId = command.selectedTaskId
+      if (command.lastTaskByProject) {
+        next.lastTaskByProject = { ...command.lastTaskByProject }
+      }
+      if (command.navigatorOpen != null) {
+        next.navigatorOpen = command.navigatorOpen
+      }
+      if (command.selectedTaskId) {
+        next = ensureLayout(next, command.selectedTaskId)
+      }
+      return next
+    }
+
+    case 'selectProject': {
+      const projectId = command.projectId
+      if (
+        projectId === state.selectedProjectId &&
+        command.taskId === undefined
+      ) {
         return state
       }
-      if (command.taskId === state.selectedTaskId) {
-        return state
-      }
-      // Leaving a maximized task should not leave global UI stuck; layout is per-task.
-      return {
+      const taskId =
+        command.taskId !== undefined
+          ? command.taskId
+          : (state.lastTaskByProject[projectId] ?? null)
+      let next: WorkbenchSessionState = {
         ...state,
-        selectedTaskId: command.taskId,
+        selectedProjectId: projectId,
+        selectedTaskId: taskId,
+        lastTaskByProject: {
+          ...state.lastTaskByProject,
+          [projectId]: taskId,
+        },
       }
+      if (taskId) next = ensureLayout(next, taskId)
+      return next
+    }
+
+    case 'selectTask': {
+      const taskId = command.taskId
+      if (taskId === state.selectedTaskId) return state
+      let next: WorkbenchSessionState = {
+        ...state,
+        selectedTaskId: taskId,
+        lastTaskByProject: {
+          ...state.lastTaskByProject,
+          [state.selectedProjectId]: taskId,
+        },
+      }
+      if (taskId) next = ensureLayout(next, taskId)
+      return next
+    }
+
+    case 'ensureTaskLayout':
+      return ensureLayout(state, command.taskId)
+
+    case 'removeTaskLayout': {
+      if (!state.taskLayouts[command.taskId]) return state
+      const { [command.taskId]: _, ...rest } = state.taskLayouts
+      return { ...state, taskLayouts: rest }
     }
 
     case 'toggleNavigator':
@@ -126,14 +204,14 @@ export function workbenchSessionReducer(
       return { ...state, navigatorOpen: command.open }
 
     case 'toggleContextPanel': {
-      const layout = requireLayout(state, state.selectedTaskId)
+      const layout = requireSelectedLayout(state)
       return updateSelectedLayout(state, {
         contextPanelOpen: !layout.contextPanelOpen,
       })
     }
 
     case 'openWorkSurface': {
-      const layout = requireLayout(state, state.selectedTaskId)
+      const layout = requireSelectedLayout(state)
       if (layout.workSurfaceVisible) return state
       return updateSelectedLayout(state, {
         workSurfaceVisible: true,
@@ -142,7 +220,7 @@ export function workbenchSessionReducer(
     }
 
     case 'closeWorkSurface': {
-      const layout = requireLayout(state, state.selectedTaskId)
+      const layout = requireSelectedLayout(state)
       if (!layout.workSurfaceVisible) return state
       return updateSelectedLayout(state, {
         workSurfaceVisible: false,
@@ -151,7 +229,7 @@ export function workbenchSessionReducer(
     }
 
     case 'toggleWorkSurface': {
-      const layout = requireLayout(state, state.selectedTaskId)
+      const layout = requireSelectedLayout(state)
       if (layout.workSurfaceVisible) {
         return updateSelectedLayout(state, {
           workSurfaceVisible: false,
@@ -168,7 +246,6 @@ export function workbenchSessionReducer(
       if (!state.workSurfaceTabs.some((t) => t.id === command.tabId)) {
         return state
       }
-      // Activating a tab implies Work Surface is open.
       return updateSelectedLayout(state, {
         activeTabId: command.tabId,
         workSurfaceVisible: true,
@@ -179,15 +256,14 @@ export function workbenchSessionReducer(
       const width = clampWidth(
         command.width,
         state.workSurfaceMinWidth,
-        state.workSurfaceMaxWidth
+        state.workSurfaceMaxWidth,
       )
       return updateSelectedLayout(state, { workSurfaceWidth: width })
     }
 
     case 'toggleMaximize': {
-      const layout = requireLayout(state, state.selectedTaskId)
+      const layout = requireSelectedLayout(state)
       if (!layout.workSurfaceVisible) {
-        // Maximize only applies when host is visible.
         return updateSelectedLayout(state, {
           workSurfaceVisible: true,
           workSurfaceMaximized: true,
@@ -199,7 +275,7 @@ export function workbenchSessionReducer(
     }
 
     case 'exitMaximize': {
-      const layout = requireLayout(state, state.selectedTaskId)
+      const layout = requireSelectedLayout(state)
       if (!layout.workSurfaceMaximized) return state
       return updateSelectedLayout(state, { workSurfaceMaximized: false })
     }
@@ -212,22 +288,18 @@ export function workbenchSessionReducer(
 }
 
 export function selectSessionView(
-  state: WorkbenchSessionState
+  state: WorkbenchSessionState,
 ): WorkbenchSessionView {
-  const selectedTask =
-    state.tasks.find((t) => t.id === state.selectedTaskId) ?? state.tasks[0]
-  const layout = requireLayout(state, selectedTask.id)
-
+  const layout = requireSelectedLayout(state)
   return {
-    project: state.project,
-    tasks: state.tasks,
-    selectedTaskId: selectedTask.id,
-    selectedTask,
+    selectedProjectId: state.selectedProjectId,
+    selectedTaskId: state.selectedTaskId,
     navigatorOpen: state.navigatorOpen,
     layout,
     workSurfaceTabs: state.workSurfaceTabs,
     workSurfaceMinWidth: state.workSurfaceMinWidth,
     workSurfaceMaxWidth: state.workSurfaceMaxWidth,
     isTaskOnly: !layout.workSurfaceVisible,
+    lastTaskByProject: state.lastTaskByProject,
   }
 }

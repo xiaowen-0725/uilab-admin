@@ -24,6 +24,7 @@ import type {
   TimelineFollowMode,
 } from '../projection/types'
 import type { CommandAcknowledgement } from '../protocol/commands'
+import type { TurnComposerContext } from '../protocol/commands'
 import type { DeterministicFakeRuntime } from '../runtime/fake-runtime'
 import {
   runtimeHonestyCopy,
@@ -32,10 +33,12 @@ import {
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
 
+export type EventStoreHonestyKind = 'memory' | 'idb' | 'degraded'
+
 export interface TaskRuntimeControllerOptions {
   runtime: RuntimePort
   projectId: string
-  /** Optional EventStore (MemoryEventStore for 4E demo/tests). */
+  /** Optional EventStore (Memory or IndexedDB). */
   eventStore?: EventStorePort
   /** Command id seed prefix (default "wb"). */
   seed?: string
@@ -49,6 +52,11 @@ export interface TaskRuntimeControllerOptions {
    * Default `fake` for Deterministic Fake; pass `voltagent` for local sidecar.
    */
   honestyMode?: RuntimeHonestyMode
+  /**
+   * How rehydrate notices describe the EventStore (D14).
+   * Default `memory` for test harness; product path should pass `idb`.
+   */
+  eventStoreKind?: EventStoreHonestyKind
 }
 
 export type TaskRuntimeListener = () => void
@@ -87,10 +95,11 @@ function pendingInputRequestId(model: TaskReadModel): string | null {
 
 export class TaskRuntimeController {
   private readonly runtime: RuntimePort
-  private readonly projectId: string
+  private projectId: string
   private readonly eventStore: EventStorePort | null
   private readonly autoFlush: boolean
   private readonly honesty: ReturnType<typeof runtimeHonestyCopy>
+  private readonly eventStoreKind: EventStoreHonestyKind
   private readonly commands: CommandFactory
   private readonly listeners = new Set<TaskRuntimeListener>()
 
@@ -100,13 +109,19 @@ export class TaskRuntimeController {
   private projection: ProjectionState
   private notice: string | null = null
   private pending = false
+  private persistenceDegraded = false
   /** Monotonic revision for useSyncExternalStore snapshots. */
   private revision = 0
+  /** Invalidates async attach work when task selection changes. */
+  private attachGeneration = 0
   /**
    * Controller-side follow-up queue (product UX).
    * Fake also supports queueFollowUp; controller prefers dispatching to runtime.
    */
   private localFollowUps: string[] = []
+  /** Optional listener for runStatus changes (Navigator RunStatusIndex). */
+  private runStatusListener: ((taskId: string, status: RunStatus | null) => void) | null =
+    null
 
   constructor(options: TaskRuntimeControllerOptions) {
     this.runtime = options.runtime
@@ -114,6 +129,7 @@ export class TaskRuntimeController {
     this.eventStore = options.eventStore ?? null
     this.autoFlush = options.autoFlush ?? true
     this.honesty = runtimeHonestyCopy(options.honestyMode ?? 'fake')
+    this.eventStoreKind = options.eventStoreKind ?? 'memory'
     const clock: CommandClock = isFakeRuntime(options.runtime)
       ? options.runtime.clock
       : { nowIso: () => new Date().toISOString() }
@@ -125,6 +141,21 @@ export class TaskRuntimeController {
       taskId: '',
       projectId: options.projectId,
     })
+  }
+
+  /** Update projectId when user switches Project (same controller instance). */
+  setProjectId(projectId: string): void {
+    this.projectId = projectId
+  }
+
+  setRunStatusListener(
+    listener: ((taskId: string, status: RunStatus | null) => void) | null,
+  ): void {
+    this.runStatusListener = listener
+  }
+
+  isPersistenceDegraded(): boolean {
+    return this.persistenceDegraded
   }
 
   get readModel(): TaskReadModel {
@@ -165,12 +196,13 @@ export class TaskRuntimeController {
   }
 
   /**
-   * Bind controller to a task id: ensure createTask once, rehydrate from store,
-   * subscribe from last sequence.
+   * Bind controller to a task id: ensure createTask once, rehydrate from store
+   * (snapshot + tail, D8), subscribe from last sequence.
    */
   async attach(taskId: string, options?: { title?: string }): Promise<void> {
     if (this.taskId === taskId && this.unsub) return
 
+    const generation = ++this.attachGeneration
     this.detachSubscription()
     this.taskId = taskId
     this.localFollowUps = []
@@ -183,40 +215,85 @@ export class TaskRuntimeController {
     this.emit()
 
     await this.ensureTaskCreated(taskId, options?.title)
+    if (generation !== this.attachGeneration || this.taskId !== taskId) return
 
     let cursor = 0
     if (this.eventStore) {
-      const stored = await this.eventStore.read({
-        taskId,
-        fromSequence: 1,
-      })
-      if (stored.length > 0) {
-        this.projection = projectEvents(
-          emptyProjectionState({
+      try {
+        const snapshot = await this.eventStore.getSnapshot(taskId)
+        if (generation !== this.attachGeneration || this.taskId !== taskId) return
+
+        let base = emptyProjectionState({
+          taskId,
+          projectId: this.projectId,
+          title: options?.title,
+        })
+        let fromSequence = 1
+
+        if (snapshot && snapshot.lastTaskSequence > 0) {
+          // Snapshot accelerates tail read; projection still needs events for full timeline.
+          // Load all events from 1 when no rich projection blob is stored (thin snapshot).
+          // Tail optimization: if we only need sequence cursor, still replay from 1 for UI.
+          const from = 1
+          const stored = await this.eventStore.read({
             taskId,
-            projectId: this.projectId,
-            title: options?.title,
-          }),
-          stored,
-        )
+            fromSequence: from,
+          })
+          if (generation !== this.attachGeneration || this.taskId !== taskId) return
+          if (stored.length > 0) {
+            this.projection = projectEvents(base, stored)
+            cursor = this.projection.readModel.lastTaskSequence
+            this.notice = this.rehydrateNotice()
+            this.emitRunStatus()
+            this.emit()
+          } else {
+            cursor = snapshot.lastTaskSequence
+          }
+        } else {
+          const stored = await this.eventStore.read({
+            taskId,
+            fromSequence: 1,
+          })
+          if (generation !== this.attachGeneration || this.taskId !== taskId) return
+          if (stored.length > 0) {
+            this.projection = projectEvents(base, stored)
+            cursor = this.projection.readModel.lastTaskSequence
+            this.notice = this.rehydrateNotice()
+            this.emitRunStatus()
+            this.emit()
+          }
+        }
+
+        // D8: non-terminal rehydrate → append run.interrupted fact then optional reconcile.
+        await this.ensureInterruptedOnRehydrate(taskId, generation)
+        if (generation !== this.attachGeneration || this.taskId !== taskId) return
         cursor = this.projection.readModel.lastTaskSequence
-        this.notice = '已从本地 EventStore 恢复时间线（Memory，非生产持久化）'
+        void fromSequence
+      } catch {
+        this.persistenceDegraded = true
+        this.notice =
+          '本地事件恢复失败，当前会话可能无法在刷新后完整保留'
         this.emit()
       }
     }
 
     this.unsub = this.runtime.subscribe(taskId, cursor, (event) => {
+      if (generation !== this.attachGeneration || this.taskId !== taskId) return
       this.onSubscriptionEvent(event)
     })
   }
 
   detach(): void {
+    this.attachGeneration += 1
     this.detachSubscription()
     this.taskId = null
     this.localFollowUps = []
   }
 
-  async submitText(text: string): Promise<CommandAcknowledgement | null> {
+  async submitText(
+    text: string,
+    composerContext?: TurnComposerContext,
+  ): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
     const trimmed = text.trim()
@@ -247,7 +324,8 @@ export class TaskRuntimeController {
     if (
       !currentTitle ||
       currentTitle === '未命名任务' ||
-      currentTitle === '新任务'
+      currentTitle === '新任务' ||
+      currentTitle === '新对话'
     ) {
       const localTitle = localTitleFromPrompt(trimmed)
       this.projection = {
@@ -264,6 +342,7 @@ export class TaskRuntimeController {
       const command = this.commands.submitTurn({
         taskId,
         inputText: trimmed,
+        composerContext,
       })
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
@@ -569,6 +648,7 @@ export class TaskRuntimeController {
 
   private onSubscriptionEvent(event: RuntimeSubscriptionEvent): void {
     if (event.kind === 'event') {
+      if (event.envelope.taskId !== this.taskId) return
       this.projection = applyRuntimeEvent(this.projection, event.envelope)
       void this.persistEnvelope(event.envelope)
       // Drain local queue after terminal (Fake also drains its own queue).
@@ -576,6 +656,7 @@ export class TaskRuntimeController {
       if (status && isTerminalRunStatus(status)) {
         this.maybeDrainLocalQueue()
       }
+      this.emitRunStatus()
       this.emit()
       return
     }
@@ -601,20 +682,85 @@ export class TaskRuntimeController {
     envelope: import('../protocol/events').AgentRuntimeEventEnvelope,
   ): Promise<void> {
     if (!this.eventStore) return
-    try {
-      await this.eventStore.append(envelope)
-      await this.eventStore.putSnapshot({
-        taskId: envelope.taskId,
-        runId: envelope.runId,
-        protocolVersion: envelope.schemaVersion,
-        runStatus: this.projection.readModel.runStatus ?? undefined,
-        lastTaskSequence: this.projection.readModel.lastTaskSequence,
-        runtimeCursor: envelope.runtimeCursor,
-        projectionVersion: this.projection.readModel.projectionVersion,
-      })
-    } catch {
-      // Memory store should not throw; ignore for demo resilience.
+    const snapshot = {
+      taskId: envelope.taskId,
+      runId: envelope.runId,
+      protocolVersion: envelope.schemaVersion,
+      runStatus: this.projection.readModel.runStatus ?? undefined,
+      lastTaskSequence: this.projection.readModel.lastTaskSequence,
+      runtimeCursor: envelope.runtimeCursor,
+      projectionVersion: this.projection.readModel.projectionVersion,
     }
+    try {
+      const result = await this.eventStore.appendWithCheckpoint({
+        envelope,
+        snapshot,
+      })
+      if (result.append.status === 'conflict') {
+        this.persistenceDegraded = true
+        this.notice = '事件序号冲突，本地持久化可能不完整'
+        this.emit()
+      }
+    } catch {
+      this.persistenceDegraded = true
+      this.notice =
+        '本地持久化写入失败；当前投影仍可用，但刷新后不一定能恢复'
+      this.emit()
+    }
+  }
+
+  private rehydrateNotice(): string {
+    if (this.eventStoreKind === 'idb') {
+      return '已从本地存储恢复时间线'
+    }
+    if (this.eventStoreKind === 'degraded') {
+      return '已从降级内存恢复时间线（刷新后不可靠）'
+    }
+    return '已从本地 EventStore 恢复时间线（Memory，非生产持久化）'
+  }
+
+  /**
+   * When rehydrated run is non-terminal, append run.interrupted as recovery fact (D8).
+   */
+  private async ensureInterruptedOnRehydrate(
+    taskId: string,
+    generation: number,
+  ): Promise<void> {
+    const status = this.projection.readModel.runStatus
+    if (!status || isTerminalRunStatus(status) || status === 'interrupted') {
+      return
+    }
+    if (!this.eventStore) return
+
+    const nextSeq = this.projection.readModel.lastTaskSequence + 1
+    const now = new Date().toISOString()
+    const envelope: import('../protocol/events').AgentRuntimeEventEnvelope = {
+      eventId: `${taskId}:rehydrate-interrupt:${nextSeq}`,
+      eventType: 'run.interrupted',
+      schemaVersion: 1,
+      projectId: this.projectId,
+      taskId,
+      turnId: this.projection.readModel.activeTurnId ?? undefined,
+      runId: this.projection.readModel.activeRunId ?? undefined,
+      taskSequence: nextSeq,
+      occurredAt: now,
+      receivedAt: now,
+      payload: { reason: 'rehydrate' },
+    }
+
+    this.projection = applyRuntimeEvent(this.projection, envelope)
+    await this.persistEnvelope(envelope)
+    if (generation !== this.attachGeneration || this.taskId !== taskId) return
+    this.notice =
+      (this.notice ? `${this.notice} · ` : '') +
+      '上次运行在刷新前未结束，已标记为中断'
+    this.emitRunStatus()
+    this.emit()
+  }
+
+  private emitRunStatus(): void {
+    if (!this.runStatusListener || !this.taskId) return
+    this.runStatusListener(this.taskId, this.projection.readModel.runStatus)
   }
 
   private async rememberAck(
