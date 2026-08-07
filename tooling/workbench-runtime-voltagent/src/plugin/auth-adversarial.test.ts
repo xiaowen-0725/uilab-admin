@@ -623,6 +623,33 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
   })
 })
 
+describe('adversarial re-review #4: logout target / oauth race / MCP gate', () => {
+  it('logout unknown --resource returns ok:false', async () => {
+    const report = await runAuthLogout({
+      pluginId: 'mcp.docs',
+      resourceId: 'typo-resource',
+      env: { UILAB_KEYCHAIN_MODE: 'fake' },
+      builtins: [BUILTIN_MCP_DOCS_PLUGIN],
+      authBindingStore: createAuthBindingStore([
+        {
+          pluginId: 'mcp.docs',
+          resourceId: 'bearer',
+          kind: 'static_bearer',
+          envNames: ['MCP_DOCS_BEARER_TOKEN'],
+        },
+      ]),
+      secretStore: createKeychainSecretStore({ mode: 'fake' }),
+      persistAuthBindings: false,
+    })
+    try {
+      assert.equal(report.ok, false)
+      assert.equal(report.json.error, 'resource_not_found')
+    } finally {
+      await report.disconnect()
+    }
+  })
+})
+
 describe('adversarial re-review #3: CLI gate / app_client / logout cleanup', () => {
   it('authEnforced without resolveAuthMaterial still refuses runner', async () => {
     let runnerCalls = 0
@@ -772,6 +799,15 @@ describe('adversarial re-review #2: host-owned keychain isolation', () => {
     )
     assert.equal(m.status, 'connected')
     assert.equal(m.bearerToken, SENTINEL)
+  })
+
+  it('length-prefixed accounts do not collide across plugin/resource splits', () => {
+    const a = pluginAuthKeychainAccount('a', 'b:c', 'env')
+    const b = pluginAuthKeychainAccount('a:b', 'c', 'env')
+    assert.notEqual(a, b)
+    assert.equal(isHostOwnedKeychainAccount('a', 'b:c', a), true)
+    assert.equal(isHostOwnedKeychainAccount('a:b', 'c', a), false)
+    assert.equal(isHostOwnedKeychainAccount('a:b', 'c', b), true)
   })
 })
 

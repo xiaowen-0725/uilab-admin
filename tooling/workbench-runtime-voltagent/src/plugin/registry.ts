@@ -243,6 +243,14 @@ export function createPluginRegistry(
                 true,
                 authOpts,
               )
+            } else if (authEnforced) {
+              // Match CLI fail-closed: no matched auth resource → always missing
+              material = {
+                status: 'missing',
+                envValues: {},
+                controlledEnvNames: [],
+                hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
+              }
             }
             const resolved = resolveMcpContribution(manifest.id, c, env, {
               authEnforced,
@@ -257,6 +265,13 @@ export function createPluginRegistry(
                     true,
                     authOpts,
                   )
+              } else if (authEnforced) {
+                resolved.resolveAuthMaterial = async () => ({
+                  status: 'missing' as const,
+                  envValues: {},
+                  controlledEnvNames: [],
+                  hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
+                })
               }
               resolvedServers.push(resolved)
             }

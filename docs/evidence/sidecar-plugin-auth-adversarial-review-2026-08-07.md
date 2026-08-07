@@ -153,3 +153,17 @@ Residual: MCP wire session still needs restart.
 | logout ok:true despite keychain clear failure | **fixed** — phase clear keychain then revoke; ok:false + pendingKeychainAccounts |
 
 Tests: 183 pass.
+
+### Fourth re-review (thread 019fdbe7-e2d4-7361-9830-f88175ccabc6)
+
+**Verdict on 8f65288:** needs-attention / no-ship (5 P1)
+
+| Finding | Follow-up |
+| --- | --- |
+| OAuth refresh undoes logout | **fixed** — isRevoked check + wipe tokens before upsert |
+| Unknown --resource logout ok:true | **fixed** — resource_not_found |
+| Multi-field app_client keychain login | **fixed** — reject with app_client_multi_field_keychain |
+| Keychain account colon collision | **fixed** — length-prefixed `uilab:v1` / `oauth:v1` exact match |
+| Unmatched MCP live gate | **fixed** — missing resolver like CLI |
+
+Tests: 185 pass.

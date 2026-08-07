@@ -492,9 +492,29 @@ export async function runAuthLogin(
               ? 'os'
               : 'auto',
     })
-    const preferKeychain =
+    const declaredCount = (resource.envNames ?? []).length
+    const wantKeychain =
       options.toKeychain !== false &&
       (cap === 'available' || cap === 'fake')
+    // Multi-field app_client cannot be stored as one Keychain value (re-review #4)
+    if (wantKeychain && resource.kind === 'app_client' && declaredCount > 1) {
+      return {
+        ok: false,
+        text: [
+          `app_client 资源 ${resource.resourceId} 声明了多个 envNames，不能用单一 --from-env 写入 Keychain。`,
+          '请暂用 env_ref（--to-keychain=false），或分别为每个字段提供独立凭据。',
+          '',
+        ].join('\n'),
+        json: {
+          ok: false,
+          error: 'app_client_multi_field_keychain',
+          envNames: resource.envNames,
+        },
+        disconnect: ctx.disconnect,
+      }
+    }
+
+    const preferKeychain = wantKeychain
 
     let binding: AuthBinding
     if (preferKeychain) {
@@ -610,6 +630,38 @@ export async function runAuthLogout(
   const ctx = await openAuthContext(options)
   try {
     const scoped = options.resourceId?.trim()
+    const manifest = ctx.manifests.find((m) => m.id === pluginId)
+    const pluginBindings = ctx.bindingStore
+      .list()
+      .filter((b) => b.pluginId === pluginId)
+    if (!manifest && pluginBindings.length === 0) {
+      return {
+        ok: false,
+        text: `未找到插件：${pluginId}\n`,
+        json: { ok: false, error: 'plugin_not_found', pluginId },
+        disconnect: ctx.disconnect,
+      }
+    }
+    if (scoped) {
+      const declared = (manifest?.contributes?.auth ?? []).some(
+        (r) => r.resourceId === scoped,
+      )
+      const bound = ctx.bindingStore.get(pluginId, scoped)
+      if (!declared && !bound) {
+        return {
+          ok: false,
+          text: `未找到 auth 资源：${pluginId}/${scoped}（检查 --resource 拼写）\n`,
+          json: {
+            ok: false,
+            error: 'resource_not_found',
+            pluginId,
+            resourceId: scoped,
+          },
+          disconnect: ctx.disconnect,
+        }
+      }
+    }
+
     const bindings = scoped
       ? (() => {
           const b = ctx.bindingStore.get(pluginId, scoped)
@@ -664,14 +716,12 @@ export async function runAuthLogout(
     } else {
       for (const b of bindings) clearedResourceIds.add(b.resourceId)
       ctx.bindingStore.clear(pluginId)
-      const manifest = ctx.manifests.find((m) => m.id === pluginId)
       for (const r of manifest?.contributes?.auth ?? []) {
         clearedResourceIds.add(r.resourceId)
       }
     }
 
     const statusParts: string[] = []
-    const manifest = ctx.manifests.find((m) => m.id === pluginId)
     const resources = scoped
       ? (manifest?.contributes?.auth ?? []).filter(
           (r) => r.resourceId === scoped,

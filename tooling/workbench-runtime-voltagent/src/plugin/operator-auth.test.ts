@@ -81,7 +81,7 @@ describe('#32 runAuthLogin / logout', () => {
         assert.equal(
           await keychain.resolve({
             backend: 'keychain',
-            account: 'uilab:mcp.docs:bearer:env',
+            account: 'uilab:v1:8.mcp.docs:6.bearer:env',
           }),
           SENTINEL,
         )

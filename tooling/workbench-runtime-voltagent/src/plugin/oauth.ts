@@ -9,7 +9,11 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { atomicWriteFileSync } from './auth-binding-persist.js'
 import type { AuthBinding, OAuthBindingMeta, SecretRef } from './types.js'
-import type { AuthBindingStore, SecretStore } from './secret-store.js'
+import {
+  oauthKeychainAccount,
+  type AuthBindingStore,
+  type SecretStore,
+} from './secret-store.js'
 
 export type PkcePair = {
   codeVerifier: string
@@ -72,11 +76,11 @@ export function createOAuthState(): string {
 }
 
 export function oauthAccessAccount(pluginId: string, resourceId: string): string {
-  return `oauth:${pluginId}:${resourceId}:access`
+  return oauthKeychainAccount(pluginId, resourceId, 'access')
 }
 
 export function oauthRefreshAccount(pluginId: string, resourceId: string): string {
-  return `oauth:${pluginId}:${resourceId}:refresh`
+  return oauthKeychainAccount(pluginId, resourceId, 'refresh')
 }
 
 export function buildAuthorizationUrl(params: {
@@ -501,6 +505,31 @@ export async function refreshOAuthBinding(params: {
     const now = params.now?.() ?? Date.now()
     const expiresIn = tokens.expires_in ?? 3600
     const expiresAt = now + Math.max(30, expiresIn - 30) * 1000
+    // If logout revoked this resource while refresh was in flight, do not
+    // resurrect secrets/binding (adversarial re-review #4).
+    if (
+      params.bindingStore?.isRevoked(
+        params.binding.pluginId,
+        params.binding.resourceId,
+      )
+    ) {
+      // Best-effort: wipe tokens we just wrote so orphan material is not left
+      try {
+        await params.secretStore.clear?.({
+          backend: 'keychain',
+          account: accessAccount,
+        })
+        if (tokens.refresh_token && meta.refreshAccount) {
+          await params.secretStore.clear?.({
+            backend: 'keychain',
+            account: meta.refreshAccount,
+          })
+        }
+      } catch {
+        // ignore
+      }
+      return null
+    }
     if (params.bindingStore) {
       params.bindingStore.upsert({
         ...params.binding,
