@@ -5,6 +5,7 @@
  */
 
 import {
+  assertRuntimeConfigOutsideWorkspace,
   createPersistedAuthBindingStore,
   defaultRuntimeConfigDir,
 } from './auth-binding-persist.js'
@@ -40,8 +41,15 @@ function resolvePendingStore(
   if (options.pendingStore) return options.pendingStore
   // Durable by default so oauth-begin / oauth-complete work across CLI processes
   try {
+    const rootDir =
+      options.runtimeConfigDir ?? defaultRuntimeConfigDir(options.env)
+    if (!options.skipWorkspaceGuard) {
+      assertRuntimeConfigOutsideWorkspace(rootDir, options.env)
+    }
     return createDurableOAuthPendingStore({
-      rootDir: options.runtimeConfigDir ?? defaultRuntimeConfigDir(options.env),
+      rootDir,
+      env: options.env,
+      skipWorkspaceGuard: options.skipWorkspaceGuard,
     })
   } catch {
     return createOAuthPendingStore()
@@ -55,6 +63,11 @@ export type RunAuthOptions = CreatePluginRegistryOptions & {
   secretStore?: SecretStore
   authBindingStore?: AuthBindingStore
   runtimeConfigDir?: string
+  /**
+   * Test-only: allow auth config under WORKSPACE_ROOT.
+   * Production operator CLI must never set this.
+   */
+  skipWorkspaceGuard?: boolean
 }
 
 export type AuthStatusRow = {
@@ -155,7 +168,9 @@ async function openAuthContext(options: RunAuthOptions): Promise<{
       bindingStore = await createPersistedAuthBindingStore({
         env,
         rootDir: options.runtimeConfigDir,
-        skipWorkspaceGuard: options.runtimeConfigDir != null,
+        // Never auto-skip when runtimeConfigDir is set — that allowed PKCE
+        // pending under agent-writable WORKSPACE_ROOT (acceptance P1).
+        skipWorkspaceGuard: options.skipWorkspaceGuard === true,
       })
     } else {
       bindingStore = createAuthBindingStore()

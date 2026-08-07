@@ -190,3 +190,14 @@ Tests: 187 pass.
 
 Local: typecheck pass, 188 tests pass.
 Residual: MCP wire session restart only.
+
+### Pure-review P1 fix (after 1df4838)
+
+| Finding | Fix |
+| --- | --- |
+| Stale-lock auto-reclaim dual owner | **fail-closed** — never unlink foreign locks; timeout throws |
+| runtimeConfigDir skipWorkspaceGuard | **removed** — only explicit test-only `skipWorkspaceGuard` |
+| PKCE durable root under workspace | **assertRuntimeConfigOutsideWorkspace** + RMW file lock |
+| MCP wrap drops needsApproval fn | **in-place execute wrap** preserves metadata |
+
+Tests: 191 pass.

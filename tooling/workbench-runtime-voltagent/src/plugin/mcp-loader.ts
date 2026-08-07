@@ -189,8 +189,7 @@ export function resolveMcpContribution(
 /**
  * Gate MCP tool execute on live auth status so revoke/logout blocks further
  * calls even when HTTP Authorization was snapshotted at load (adversarial).
- * Does not drop an already-open MCP TCP session's wire credential — that still
- * needs disconnect/restart — but host-side tool dispatch refuses revoked auth.
+ * Prefer in-place execute wrap so needsApproval functions / hooks stay intact.
  */
 export function wrapMcpToolsWithLiveAuthGate(
   tools: Tool<any, any>[],
@@ -202,29 +201,49 @@ export function wrapMcpToolsWithLiveAuthGate(
       execute?: (...args: any[]) => any
       description?: string
       needsApproval?: unknown
+      hooks?: unknown
+      outputSchema?: unknown
+      providerOptions?: unknown
+      tags?: unknown
     }
-    if (typeof anyTool.execute !== 'function' || anyTool.parameters == null) {
+    if (typeof anyTool.execute !== 'function') {
       return tool
     }
     const original = anyTool.execute.bind(tool)
+    const gated = async (...args: any[]) => {
+      const material = await resolveMaterial()
+      if (!material || material.status !== 'connected') {
+        return {
+          ok: false,
+          error: 'auth_revoked',
+          hint:
+            material?.hint ??
+            '授权已撤销或未连接；请 auth login 后重启 sidecar（MCP 会话）',
+        }
+      }
+      return original(...args)
+    }
+
+    // Prefer mutating execute in place — preserves dynamic needsApproval / hooks
+    try {
+      const desc = Object.getOwnPropertyDescriptor(tool, 'execute')
+      if (!desc || desc.writable || desc.set) {
+        ;(anyTool as { execute: typeof gated }).execute = gated
+        return tool
+      }
+    } catch {
+      // fall through to reconstruct
+    }
+
+    if (anyTool.parameters == null) return tool
     return createTool({
       name: tool.name,
       description: anyTool.description ?? tool.name,
       parameters: anyTool.parameters as any,
-      needsApproval: anyTool.needsApproval === true,
-      execute: async (...args: any[]) => {
-        const material = await resolveMaterial()
-        if (!material || material.status !== 'connected') {
-          return {
-            ok: false,
-            error: 'auth_revoked',
-            hint:
-              material?.hint ??
-              '授权已撤销或未连接；请 auth login 后重启 sidecar（MCP 会话）',
-          }
-        }
-        return original(...args)
-      },
+      // Preserve boolean OR function approval policy (do not collapse to === true)
+      needsApproval: anyTool.needsApproval as any,
+      ...(anyTool.hooks != null ? { hooks: anyTool.hooks as any } : {}),
+      execute: gated,
     }) as Tool<any, any>
   })
 }

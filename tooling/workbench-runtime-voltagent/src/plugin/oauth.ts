@@ -7,8 +7,12 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { atomicWriteFileSync } from './auth-binding-persist.js'
-import type { AuthBinding, OAuthBindingMeta, SecretRef } from './types.js'
+import {
+  assertRuntimeConfigOutsideWorkspace,
+  atomicWriteFileSync,
+  withAuthBindingFileLock,
+} from './auth-binding-persist.js'
+import type { AuthBinding, OAuthBindingMeta, ProfileEnv, SecretRef } from './types.js'
 import {
   oauthKeychainAccount,
   type AuthBindingStore,
@@ -248,12 +252,21 @@ export function createOAuthPendingStore(): OAuthPendingStore {
 
 /**
  * Durable PKCE pending store under runtime config dir (cross-CLI-process).
- * File mode 0600; one-shot consume; TTL 15m.
+ * File mode 0600; one-shot consume; TTL 15m; exclusive lock on every RMW.
  */
 export function createDurableOAuthPendingStore(options: {
   rootDir: string
   filename?: string
+  env?: ProfileEnv
+  /** Test-only: allow under WORKSPACE_ROOT */
+  skipWorkspaceGuard?: boolean
 }): OAuthPendingStore {
+  if (!options.skipWorkspaceGuard) {
+    assertRuntimeConfigOutsideWorkspace(
+      options.rootDir,
+      options.env ?? process.env,
+    )
+  }
   const filePath = path.join(
     options.rootDir,
     options.filename ?? 'oauth-pending.json',
@@ -266,7 +279,9 @@ export function createDurableOAuthPendingStore(options: {
       if (!existsSync(filePath)) return []
       const raw = readFileSync(filePath, 'utf8')
       const data = JSON.parse(raw) as FileShape
-      if (data?.schemaVersion !== 1 || !Array.isArray(data.items)) return []
+      if (data?.schemaVersion !== 1 || !Array.isArray(data.items)) {
+        throw new Error('oauth-pending schema 无效')
+      }
       const now = Date.now()
       return data.items.filter(
         (p) =>
@@ -275,8 +290,12 @@ export function createDurableOAuthPendingStore(options: {
           typeof p.codeVerifier === 'string' &&
           now - (p.createdAt ?? 0) <= PENDING_TTL_MS,
       )
-    } catch {
-      return []
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code
+      if (code === 'ENOENT') return []
+      throw err instanceof Error
+        ? err
+        : new Error(`读取 oauth-pending 失败：${String(err)}`)
     }
   }
 
@@ -290,30 +309,46 @@ export function createDurableOAuthPendingStore(options: {
     atomicWriteFileSync(filePath, body)
   }
 
+  function withLock<T>(fn: () => T): T {
+    let result!: T
+    withAuthBindingFileLock(filePath, () => {
+      result = fn()
+    })
+    return result
+  }
+
   return {
     put(pending) {
-      const items = readAll().filter(
-        (p) => p.pendingId !== pending.pendingId && p.state !== pending.state,
-      )
-      items.push(pending)
-      writeAll(items)
+      withLock(() => {
+        const items = readAll().filter(
+          (p) => p.pendingId !== pending.pendingId && p.state !== pending.state,
+        )
+        items.push(pending)
+        writeAll(items)
+      })
     },
     take(pendingId) {
-      const items = readAll()
-      const idx = items.findIndex((p) => p.pendingId === pendingId)
-      if (idx < 0) return undefined
-      const [p] = items.splice(idx, 1)
-      writeAll(items)
-      return p
+      return withLock(() => {
+        const items = readAll()
+        const idx = items.findIndex((p) => p.pendingId === pendingId)
+        if (idx < 0) return undefined
+        const [p] = items.splice(idx, 1)
+        writeAll(items)
+        return p
+      })
     },
     takeByState(state) {
-      const items = readAll()
-      const idx = items.findIndex((p) => p.state === state)
-      if (idx < 0) return undefined
-      const [p] = items.splice(idx, 1)
-      writeAll(items)
-      if (!p || Date.now() - (p.createdAt ?? 0) > PENDING_TTL_MS) return undefined
-      return p
+      return withLock(() => {
+        const items = readAll()
+        const idx = items.findIndex((p) => p.state === state)
+        if (idx < 0) return undefined
+        const [p] = items.splice(idx, 1)
+        writeAll(items)
+        if (!p || Date.now() - (p.createdAt ?? 0) > PENDING_TTL_MS) {
+          return undefined
+        }
+        return p
+      })
     },
   }
 }

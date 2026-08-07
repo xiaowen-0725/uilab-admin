@@ -30,7 +30,6 @@ import {
 } from './secret-store.js'
 
 /** Exclusive lock wait budget for concurrent operator processes. */
-const AUTH_BIND_LOCK_STALE_MS = 8_000
 const AUTH_BIND_LOCK_WAIT_MS = 5_000
 
 export const AUTH_BINDINGS_FILENAME = 'auth-bindings.json'
@@ -305,9 +304,10 @@ export function loadAuthBindingSnapshotSync(
 }
 
 /**
- * Exclusive lock around auth-bindings RMW (adversarial: concurrent login/logout).
- * Uses O_EXCL lock file. Only steals locks older than AUTH_BIND_LOCK_STALE_MS;
- * never unlinks a live (non-stale) lock on wait timeout.
+ * Exclusive lock around auth-bindings / oauth-pending RMW.
+ * Uses O_EXCL lock file. Fail-closed: never auto-reclaim "stale" locks
+ * (paused owner ≠ dead; reclaim races can discard a live writer's lock).
+ * On timeout, throw — operator can remove an abandoned `.lock` file explicitly.
  */
 export function withAuthBindingFileLock(
   filePath: string,
@@ -340,33 +340,10 @@ export function withAuthBindingFileLock(
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code
       if (code !== 'EEXIST') throw err
-      // Observe lock identity (content + mtime) before any reclaim decision.
-      let observedBody = ''
-      let stale = false
-      try {
-        observedBody = readFileSync(lockPath, 'utf8')
-        const st = statSync(lockPath)
-        stale = Date.now() - st.mtimeMs > AUTH_BIND_LOCK_STALE_MS
-      } catch {
-        // lock disappeared or unreadable — retry acquire
-        continue
-      }
-      if (stale) {
-        // Reclaim only if the lock content is still the same instance we observed.
-        // Prevents two waiters from both unlinking after one has already acquired.
-        try {
-          const current = readFileSync(lockPath, 'utf8')
-          if (current === observedBody) unlinkSync(lockPath)
-        } catch {
-          // ignore race
-        }
-        continue
-      }
+      // Never unlink another process's lock (even if mtime looks old).
       if (Date.now() >= deadline) {
-        // Never steal a non-stale lock — fail closed so concurrent writers
-        // cannot overwrite each other's revoke.
         throw new Error(
-          `auth-bindings 文件锁超时（${AUTH_BIND_LOCK_WAIT_MS}ms）：${lockPath}`,
+          `auth 文件锁超时（${AUTH_BIND_LOCK_WAIT_MS}ms）：${lockPath}（若进程已死可手动删除 .lock）`,
         )
       }
       // brief backoff

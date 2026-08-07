@@ -625,6 +625,50 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
   })
 })
 
+describe('adversarial pure-review P1 fixes', () => {
+  it('durable PKCE root under WORKSPACE_ROOT is rejected', () => {
+    assert.throws(
+      () =>
+        createDurableOAuthPendingStore({
+          rootDir: '/tmp/ws/agent/.uilab',
+          env: { WORKSPACE_ROOT: '/tmp/ws/agent' },
+        }),
+      /WORKSPACE_ROOT|不得/,
+    )
+  })
+
+  it('MCP live-auth wrap preserves dynamic needsApproval function', () => {
+    const approvalFn = async () => true
+    const base = createTool({
+      name: 'docs_read',
+      description: 'r',
+      parameters: z.object({}),
+      needsApproval: approvalFn,
+      execute: async () => ({ ok: true }),
+    }) as any
+    const [gated] = wrapMcpToolsWithLiveAuthGate([base], async () => ({
+      status: 'connected',
+      envValues: {},
+      controlledEnvNames: [],
+      bearerToken: 't',
+    }))
+    assert.equal(typeof (gated as any).needsApproval, 'function')
+    // In-place wrap keeps the original approval policy callable
+    assert.equal((gated as any).needsApproval, approvalFn)
+  })
+
+  it('persisted store rejects explicit rootDir under WORKSPACE_ROOT', async () => {
+    await assert.rejects(
+      () =>
+        createPersistedAuthBindingStore({
+          rootDir: '/tmp/agent-ws/.uilab/runtime',
+          env: { WORKSPACE_ROOT: '/tmp/agent-ws' },
+        }),
+      /WORKSPACE_ROOT|不得/,
+    )
+  })
+})
+
 describe('adversarial acceptance: MCP bearer deny + logout revoke-first', () => {
   it('HTTP MCP without authEnforced still denies OPENAI_API_KEY bearer', () => {
     const contrib: McpContribution = {
