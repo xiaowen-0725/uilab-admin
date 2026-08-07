@@ -465,6 +465,18 @@ export async function loadCliContributions(
       continue
     }
 
+    // authEnforced tools must always have a live resolver (fail-closed)
+    const liveResolve =
+      authEnforced
+        ? resolveAuthMaterial ??
+          (async () => ({
+            status: 'missing' as const,
+            envValues: {} as Record<string, string>,
+            controlledEnvNames: [] as string[],
+            hint: 'auth-enforced CLI 缺少 resolveAuthMaterial',
+          }))
+        : undefined
+
     const childEnv = buildCliChildEnv(contrib, env, {
       authEnforced,
       authMaterial,
@@ -490,10 +502,7 @@ export async function loadCliContributions(
           childEnv,
           runner,
           forceApproval,
-          resolveAuthMaterial:
-            authEnforced && resolveAuthMaterial
-              ? resolveAuthMaterial
-              : undefined,
+          resolveAuthMaterial: liveResolve,
           contrib,
           env,
           authEnforced,

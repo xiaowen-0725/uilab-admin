@@ -623,6 +623,110 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
   })
 })
 
+describe('adversarial re-review #3: CLI gate / app_client / logout cleanup', () => {
+  it('authEnforced without resolveAuthMaterial still refuses runner', async () => {
+    let runnerCalls = 0
+    const agg = await loadCliContributions(
+      [
+        {
+          pluginId: 'p',
+          contrib: {
+            cliId: 'x',
+            command: process.execPath,
+            childEnvKeys: ['FEISHU_APP_SECRET'],
+            commands: [{ name: 'status', argv: ['-e', 'process.exit(0)'] }],
+          },
+          authEnforced: true,
+          // deliberately omit resolveAuthMaterial
+        },
+      ],
+      {
+        env: {
+          PATH: process.env.PATH ?? '/usr/bin',
+          FEISHU_APP_SECRET: SENTINEL,
+        },
+        runner: async () => {
+          runnerCalls += 1
+          return { stdout: '', stderr: '', exitCode: 0 }
+        },
+      },
+    )
+    assert.equal(agg.tools.length, 1)
+    const out = await (
+      agg.tools[0] as {
+        execute: (a: object) => Promise<Record<string, unknown>>
+      }
+    ).execute({})
+    assert.equal(out.error, 'auth_revoked')
+    assert.equal(runnerCalls, 0)
+  })
+
+  it('app_client does not fan one keychain value across all envNames', async () => {
+    const account = pluginAuthKeychainAccount('app.x', 'client', 'env')
+    const keychain = createKeychainSecretStore({ mode: 'fake' })
+    await keychain.set!({ backend: 'keychain', account }, SENTINEL)
+    const m = await resolveCredentialMaterial(
+      {
+        pluginId: 'app.x',
+        resourceId: 'client',
+        kind: 'app_client',
+        envNames: ['FEISHU_APP_ID', 'FEISHU_APP_SECRET'],
+        secretRef: { backend: 'keychain', account },
+      },
+      keychain,
+    )
+    assert.equal(m.status, 'missing')
+    assert.equal(m.envValues.FEISHU_APP_ID, undefined)
+    assert.equal(m.envValues.FEISHU_APP_SECRET, undefined)
+    assert.match(m.hint ?? '', /app_client|独立|字段/)
+  })
+
+  it('logout returns ok:false when keychain clear fails', async () => {
+    const root = await tempDir('uilab-adv-logout-fail-')
+    try {
+      const secretStore = {
+        async resolve() {
+          return null
+        },
+        async set() {},
+        async clear() {
+          throw new Error('keychain locked')
+        },
+      }
+      const bindings = createAuthBindingStore()
+      bindings.upsert({
+        pluginId: 'mcp.docs',
+        resourceId: 'bearer',
+        kind: 'static_bearer',
+        secretRef: {
+          backend: 'keychain',
+          account: pluginAuthKeychainAccount('mcp.docs', 'bearer'),
+        },
+      })
+      const logout = await runAuthLogout({
+        pluginId: 'mcp.docs',
+        env: { UILAB_KEYCHAIN_MODE: 'fake' },
+        builtins: [BUILTIN_MCP_DOCS_PLUGIN],
+        secretStore: secretStore as any,
+        authBindingStore: bindings,
+        runtimeConfigDir: root,
+        persistAuthBindings: false,
+      })
+      try {
+        assert.equal(logout.ok, false)
+        assert.equal(logout.json.error, 'keychain_clear_failed')
+        assert.equal(logout.json.bindingRevoked, true)
+        assert.ok(Array.isArray(logout.json.pendingKeychainAccounts))
+        assert.equal(bindings.isRevoked('mcp.docs', 'bearer'), true)
+      } finally {
+        await logout.disconnect()
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('adversarial re-review #2: host-owned keychain isolation', () => {
   it('rejects foreign keychain account in credential material', async () => {
     const keychain = createKeychainSecretStore({ mode: 'fake' })

@@ -665,18 +665,45 @@ export async function resolveCredentialMaterial(
     }
     const v = await store.resolve(binding.secretRef, env)
     if (v) {
-      // Map single keychain/memory secret onto declared envNames for child inject
+      // Map secret onto declared envNames for child inject
       const mapped: Record<string, string> = { ...envValues }
       if (binding.secretRef.backend === 'env') {
         Object.assign(mapped, secretRefEnvValues(binding.secretRef, v))
       } else if (names.length > 0) {
-        for (const name of names) {
-          if (isAllowedAuthEnvName(name)) mapped[name] = v
+        // app_client: never fan one Keychain value across client_id + secret
+        // (adversarial re-review #3). Only single-field keychain maps.
+        if (binding.kind === 'app_client') {
+          if (names.length !== 1) {
+            return empty(
+              'missing',
+              binding.loginHint ??
+                'app_client 需要每个 envName 独立凭据；禁止用单一 Keychain 值填充全部字段',
+            )
+          }
+          if (isAllowedAuthEnvName(names[0]!)) mapped[names[0]!] = v
+        } else {
+          // static_bearer / env_ref: one token may alias onto multiple env names
+          for (const name of names) {
+            if (isAllowedAuthEnvName(name)) mapped[name] = v
+          }
+        }
+      }
+      // app_client still requires every declared envName present after mapping
+      if (binding.kind === 'app_client') {
+        const missing = names.filter((n) => !mapped[n])
+        if (missing.length > 0) {
+          return empty(
+            'missing',
+            binding.loginHint ?? missingEnvNamesHint(missing, true),
+          )
         }
       }
       return {
         status: 'connected',
-        bearerToken: v,
+        bearerToken:
+          binding.kind === 'static_bearer' || binding.kind === 'env_ref'
+            ? v
+            : undefined,
         envValues: mapped,
         controlledEnvNames,
       }

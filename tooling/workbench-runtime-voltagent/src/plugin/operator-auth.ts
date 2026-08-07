@@ -617,20 +617,18 @@ export async function runAuthLogout(
         })()
       : ctx.bindingStore.list().filter((b) => b.pluginId === pluginId)
 
-    const clearedResourceIds = new Set<string>()
-    if (scoped) {
-      ctx.bindingStore.clear(pluginId, scoped)
-      clearedResourceIds.add(scoped)
-    } else {
-      // Plugin-wide: revoke all bindings + wildcard for undeclared/future resources
-      for (const b of bindings) clearedResourceIds.add(b.resourceId)
-      ctx.bindingStore.clear(pluginId)
-      const manifest = ctx.manifests.find((m) => m.id === pluginId)
-      for (const r of manifest?.contributes?.auth ?? []) {
-        clearedResourceIds.add(r.resourceId)
+    // Snapshot non-secret cleanup refs before revoke (accounts are not secrets)
+    const pendingKeychainAccounts: string[] = []
+    for (const b of bindings) {
+      if (b.secretRef?.backend === 'keychain') {
+        pendingKeychainAccounts.push(b.secretRef.account)
+      }
+      if (b.oauth?.refreshAccount) {
+        pendingKeychainAccounts.push(b.oauth.refreshAccount)
       }
     }
 
+    // Phase 1: Keychain cleanup while refs still known
     const keychainClearErrors: string[] = []
     if (options.clearKeychain !== false && ctx.secretStore.clear) {
       for (const b of bindings) {
@@ -639,7 +637,7 @@ export async function runAuthLogout(
             await ctx.secretStore.clear(b.secretRef)
           } catch (err) {
             keychainClearErrors.push(
-              `access:${b.resourceId}:${err instanceof Error ? err.message : String(err)}`,
+              `access:${b.resourceId}:${b.secretRef.backend === 'keychain' ? b.secretRef.account : '?'}:${err instanceof Error ? err.message : String(err)}`,
             )
           }
         }
@@ -651,10 +649,24 @@ export async function runAuthLogout(
             })
           } catch (err) {
             keychainClearErrors.push(
-              `refresh:${b.resourceId}:${err instanceof Error ? err.message : String(err)}`,
+              `refresh:${b.resourceId}:${b.oauth.refreshAccount}:${err instanceof Error ? err.message : String(err)}`,
             )
           }
         }
+      }
+    }
+
+    // Phase 2: always revoke bindings so host dispatch stops (even if cleanup failed)
+    const clearedResourceIds = new Set<string>()
+    if (scoped) {
+      ctx.bindingStore.clear(pluginId, scoped)
+      clearedResourceIds.add(scoped)
+    } else {
+      for (const b of bindings) clearedResourceIds.add(b.resourceId)
+      ctx.bindingStore.clear(pluginId)
+      const manifest = ctx.manifests.find((m) => m.id === pluginId)
+      for (const r of manifest?.contributes?.auth ?? []) {
+        clearedResourceIds.add(r.resourceId)
       }
     }
 
@@ -684,24 +696,30 @@ export async function runAuthLogout(
       ? `${pluginId}/${scoped}`
       : `${pluginId}（全部资源）`
 
+    const cleanupFailed = keychainClearErrors.length > 0
     // Live semantics (honest):
-    // - AuthBinding revoke is durable (file RMW + lock); process env leftovers ignored.
-    // - Domain CLI tools re-resolve child env per invoke → logout effective without restart.
-    // - MCP host gates tool execute on live status → host-side calls stop after revoke.
-    // - MCP wire session (HTTP Authorization / stdio env at spawn) may still hold tokens
-    //   until sidecar disconnect/restart — report needsSidecarRestart for that residual.
+    // - Binding revoke always applied (dispatch gated).
+    // - Keychain cleanup failure → ok:false so operator can retry with listed accounts.
+    // - MCP wire session may still hold tokens until sidecar restart.
     return {
-      ok: true,
+      ok: !cleanupFailed,
       text: [
-        `已登出：${scopeLabel}`,
+        cleanupFailed
+          ? `登出部分失败：${scopeLabel}（binding 已撤销，但 Keychain 清理失败）`
+          : `已登出：${scopeLabel}`,
         statusLine,
         'binding 已撤销：CLI 下次调用与 MCP 工具分发会拒绝已撤销凭据。',
+        cleanupFailed
+          ? `Keychain 清理失败（可手动 security delete-generic-password）：\n  ${keychainClearErrors.join('\n  ')}`
+          : undefined,
         '提示：MCP 传输层会话（HTTP Authorization / stdio 子进程 env）可能仍持有旧 token，',
         '完整吊销请重启 sidecar（needsSidecarRestart）。',
         '',
-      ].join('\n'),
+      ]
+        .filter((line): line is string => line != null)
+        .join('\n'),
       json: {
-        ok: true,
+        ok: !cleanupFailed,
         pluginId,
         resourceId: scoped ?? null,
         clearedResources: [...clearedResourceIds],
@@ -709,8 +727,12 @@ export async function runAuthLogout(
         bindingRevoked: true,
         liveHostGate: true,
         needsSidecarRestart: true,
-        keychainClearErrors:
-          keychainClearErrors.length > 0 ? keychainClearErrors : undefined,
+        keychainClearErrors: cleanupFailed ? keychainClearErrors : undefined,
+        pendingKeychainAccounts:
+          cleanupFailed && pendingKeychainAccounts.length > 0
+            ? pendingKeychainAccounts
+            : undefined,
+        error: cleanupFailed ? 'keychain_clear_failed' : undefined,
       },
       disconnect: ctx.disconnect,
     }

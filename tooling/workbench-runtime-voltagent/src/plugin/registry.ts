@@ -307,6 +307,16 @@ export function createPluginRegistry(
                   true,
                   authOpts,
                 )
+            } else {
+              // No matching auth resource for this CLI — still gate execute
+              // (never fail-open with process env after plugin-wide logout).
+              resolveAuthMaterial = async () => ({
+                status: 'missing' as const,
+                envValues: {},
+                controlledEnvNames: [],
+                hint: '未匹配 auth 资源；领域 CLI 在 auth-enforced 插件上不可用',
+              })
+              material = await resolveAuthMaterial()
             }
           }
           cliItems.push({

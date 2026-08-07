@@ -141,3 +141,15 @@ Tests: 178 pass.
 | high | lock timeout steals live lock | **fixed** — never unlink non-stale; owner-token unlink |
 
 Residual: MCP wire session still needs restart.
+
+### Third re-review (thread 019fdbd7-0f51-7f42-a69b-f64ddc638bb5)
+
+**Verdict on f6601ac:** needs-attention / no-ship (3 P1)
+
+| Finding | Follow-up |
+| --- | --- |
+| CLI authEnforced without matched resource fail-open | **fixed** — always install missing resolver |
+| app_client fans one keychain value to all envNames | **fixed** — multi-field remains missing |
+| logout ok:true despite keychain clear failure | **fixed** — phase clear keychain then revoke; ok:false + pendingKeychainAccounts |
+
+Tests: 183 pass.
