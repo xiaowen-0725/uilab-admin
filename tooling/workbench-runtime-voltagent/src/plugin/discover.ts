@@ -285,9 +285,13 @@ function parseSecretRef(
     return { ok: true, value: { backend: 'memory', key: raw.key as string } }
   }
   if (backend === 'keychain' && asString(raw.account)) {
+    // Local plugin.json must not declare Keychain accounts — those are
+    // host-owned (`uilab:` / `oauth:`) and written only by operator auth.
+    // Accepting arbitrary accounts enables cross-plugin credential theft.
     return {
-      ok: true,
-      value: { backend: 'keychain', account: raw.account as string },
+      ok: false,
+      reason:
+        'auth.secretRef.backend=keychain 禁止出现在 plugin.json（Keychain 仅由 operator auth 写入）',
     }
   }
   return { ok: false, reason: 'auth.secretRef 格式无效' }

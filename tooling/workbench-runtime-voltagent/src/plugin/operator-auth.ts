@@ -25,6 +25,7 @@ import {
 import {
   createAuthBindingStore,
   createDefaultSecretStore,
+  pluginAuthKeychainAccount,
   resolveKeychainCapability,
   type AuthBindingStore,
   type SecretStore,
@@ -505,9 +506,16 @@ export async function runAuthLogin(
           disconnect: ctx.disconnect,
         }
       }
+      // Host-owned account scoped to plugin/resource — never the raw env name
+      // (prevents local plugins from stealing another plugin's Keychain entry).
+      const keychainAccount = pluginAuthKeychainAccount(
+        pluginId,
+        resource.resourceId,
+        'env',
+      )
       try {
         await ctx.secretStore.set(
-          { backend: 'keychain', account: fromEnv },
+          { backend: 'keychain', account: keychainAccount },
           value,
         )
       } catch (err) {
@@ -524,7 +532,7 @@ export async function runAuthLogin(
         kind: resource.kind === 'app_client' ? 'app_client' : 'static_bearer',
         // Preserve envNames so child-env inject can map keychain value onto keys
         envNames: resource.envNames ?? [fromEnv],
-        secretRef: { backend: 'keychain', account: fromEnv },
+        secretRef: { backend: 'keychain', account: keychainAccount },
         loginHint: resource.loginHint,
       }
     } else {
@@ -545,11 +553,16 @@ export async function runAuthLogin(
       bindingStore: ctx.bindingStore,
     })
 
+    const keychainAccount =
+      binding.secretRef?.backend === 'keychain'
+        ? binding.secretRef.account
+        : undefined
+
     return {
       ok: status.status === 'connected',
       text: [
         `已登录绑定：${pluginId}/${resource.resourceId}`,
-        `存储：${preferKeychain ? `keychain account=${fromEnv}` : `env_ref ${fromEnv}`}`,
+        `存储：${preferKeychain ? `keychain account=${keychainAccount}` : `env_ref ${fromEnv}`}`,
         `auth=${status.status}${status.hint ? ` · ${status.hint}` : ''}`,
         preferKeychain
           ? '提示：Keychain 已写入后可从 .env 删除明文 token（请先 auth status 确认 connected）。'
@@ -561,7 +574,7 @@ export async function runAuthLogin(
         pluginId,
         resourceId: resource.resourceId,
         storage: preferKeychain ? 'keychain' : 'env_ref',
-        accountOrEnv: fromEnv,
+        accountOrEnv: preferKeychain ? keychainAccount : fromEnv,
         status: status.status,
       },
       disconnect: ctx.disconnect,

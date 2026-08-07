@@ -32,6 +32,8 @@ import {
   createAuthBindingStore,
   createEnvSecretStore,
   createKeychainSecretStore,
+  isHostOwnedKeychainAccount,
+  pluginAuthKeychainAccount,
   resolveCredentialMaterial,
   snapshotAuthBindingStore,
 } from './secret-store.js'
@@ -530,6 +532,7 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
       },
     }
     let lastEnv: Record<string, string> | undefined
+    let runnerCalls = 0
     const agg = await loadCliContributions(
       [
         {
@@ -568,6 +571,7 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
       {
         env: { PATH: process.env.PATH ?? '/usr/bin' },
         runner: async (_cmd, _argv, opts) => {
+          runnerCalls += 1
           lastEnv = opts.env
           return { stdout: '', stderr: '', exitCode: 0 }
         },
@@ -577,16 +581,20 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
     await (agg.tools[0] as { execute: (a: object) => Promise<unknown> }).execute(
       {},
     )
+    assert.equal(runnerCalls, 1)
     assert.equal(lastEnv?.FEISHU_APP_SECRET, SENTINEL)
 
     bindings.clear('cli.feishu', 'app')
-    await (agg.tools[0] as { execute: (a: object) => Promise<unknown> }).execute(
-      {},
-    )
+    const denied = await (
+      agg.tools[0] as {
+        execute: (a: object) => Promise<Record<string, unknown>>
+      }
+    ).execute({})
+    assert.equal(denied.error, 'auth_revoked')
     assert.equal(
-      lastEnv?.FEISHU_APP_SECRET,
-      undefined,
-      'after revoke, live CLI env must drop secret',
+      runnerCalls,
+      1,
+      'after revoke, runner must not be dispatched',
     )
   })
 
@@ -612,6 +620,54 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
     ).execute({})
     assert.equal(out.error, 'auth_revoked')
     assert.equal(calls, 0)
+  })
+})
+
+describe('adversarial re-review #2: host-owned keychain isolation', () => {
+  it('rejects foreign keychain account in credential material', async () => {
+    const keychain = createKeychainSecretStore({ mode: 'fake' })
+    await keychain.set!(
+      { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+      SENTINEL,
+    )
+    const m = await resolveCredentialMaterial(
+      {
+        pluginId: 'evil.local',
+        resourceId: 'steal',
+        kind: 'static_bearer',
+        secretRef: {
+          backend: 'keychain',
+          account: 'MCP_DOCS_BEARER_TOKEN',
+        },
+      },
+      keychain,
+    )
+    assert.equal(m.status, 'error')
+    assert.equal(m.bearerToken, undefined)
+    assert.match(m.hint ?? '', /跨插件|Keychain/)
+  })
+
+  it('accepts host-owned uilab: account for same plugin/resource', async () => {
+    const account = pluginAuthKeychainAccount('mcp.docs', 'bearer', 'env')
+    assert.equal(isHostOwnedKeychainAccount('mcp.docs', 'bearer', account), true)
+    assert.equal(
+      isHostOwnedKeychainAccount('evil.local', 'steal', account),
+      false,
+    )
+    const keychain = createKeychainSecretStore({ mode: 'fake' })
+    await keychain.set!({ backend: 'keychain', account }, SENTINEL)
+    const m = await resolveCredentialMaterial(
+      {
+        pluginId: 'mcp.docs',
+        resourceId: 'bearer',
+        kind: 'static_bearer',
+        envNames: ['MCP_DOCS_BEARER_TOKEN'],
+        secretRef: { backend: 'keychain', account },
+      },
+      keychain,
+    )
+    assert.equal(m.status, 'connected')
+    assert.equal(m.bearerToken, SENTINEL)
   })
 })
 
@@ -644,16 +700,14 @@ describe('adversarial residual: keychain set avoids secret in argv', () => {
 describe('adversarial P1: keychain login keeps envNames mapping', () => {
   it('keychain binding with envNames maps secret onto child env keys', async () => {
     const keychain = createKeychainSecretStore({ mode: 'fake' })
-    await keychain.set!(
-      { backend: 'keychain', account: 'FEISHU_APP_SECRET' },
-      SENTINEL,
-    )
+    const account = pluginAuthKeychainAccount('cli.feishu', 'app', 'env')
+    await keychain.set!({ backend: 'keychain', account }, SENTINEL)
     const binding: AuthBinding = {
       pluginId: 'cli.feishu',
       resourceId: 'app',
       kind: 'app_client',
       envNames: ['FEISHU_APP_SECRET', 'FEISHU_APP_ID'],
-      secretRef: { backend: 'keychain', account: 'FEISHU_APP_SECRET' },
+      secretRef: { backend: 'keychain', account },
     }
     // app_client requires all envNames — only secret maps; FEISHU_APP_ID missing → missing
     // For static_bearer style mapping of single secret onto first envNames:

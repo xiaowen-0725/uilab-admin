@@ -59,7 +59,7 @@ describe('#29 parseAuthBindingSnapshot safety', () => {
             pluginId: 'mcp.docs',
             resourceId: 'bearer',
             kind: 'static_bearer',
-            secretRef: { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+            secretRef: { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
             loginHint: 'ok',
           },
         ],
@@ -106,7 +106,7 @@ describe('#29 createPersistedAuthBindingStore round-trip', () => {
         pluginId: 'mcp.docs',
         resourceId: 'bearer',
         kind: 'static_bearer',
-        secretRef: { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+        secretRef: { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
         loginHint: 'Keychain PAT',
       })
       store1.clear('github', 'api')
@@ -115,7 +115,7 @@ describe('#29 createPersistedAuthBindingStore round-trip', () => {
       const raw = await readFile(filePath, 'utf8')
       assert.doesNotMatch(raw, /ghp_|sk-|Bearer /i)
       assert.match(raw, /keychain/)
-      assert.match(raw, /MCP_DOCS_BEARER_TOKEN/)
+      assert.match(raw, /uilab:mcp\.docs:bearer:env/)
 
       const store2 = await createPersistedAuthBindingStore({ rootDir: root })
       const b = store2.get('mcp.docs', 'bearer')
@@ -124,14 +124,14 @@ describe('#29 createPersistedAuthBindingStore round-trip', () => {
         b?.secretRef && b.secretRef.backend === 'keychain'
           ? b.secretRef.account
           : null,
-        'MCP_DOCS_BEARER_TOKEN',
+        'uilab:mcp.docs:bearer:env',
       )
       assert.equal(store2.isRevoked('github', 'api'), true)
 
       // status path uses reloaded binding + keychain material
       const keychain = createKeychainSecretStore({ mode: 'fake' })
       await keychain.set!(
-        { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+        { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
         SENTINEL,
       )
       const st = await resolveAuthResourceStatus(
@@ -214,7 +214,7 @@ describe('#30 createKeychainSecretStore', () => {
   it('credential material from fake keychain is injectable as bearer', async () => {
     const keychain = createKeychainSecretStore({ mode: 'fake' })
     await keychain.set!(
-      { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+      { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
       SENTINEL,
     )
     const material = await resolveCredentialMaterial(
@@ -222,7 +222,7 @@ describe('#30 createKeychainSecretStore', () => {
         pluginId: 'mcp.docs',
         resourceId: 'bearer',
         kind: 'static_bearer',
-        secretRef: { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+        secretRef: { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
       },
       keychain,
     )
@@ -284,7 +284,7 @@ describe('#29+#30 registry inject with keychain binding', () => {
     let seenAuth: string | undefined
     const keychain = createKeychainSecretStore({ mode: 'fake' })
     await keychain.set!(
-      { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+      { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
       SENTINEL,
     )
     const root = await tempRuntimeDir()
@@ -294,7 +294,7 @@ describe('#29+#30 registry inject with keychain binding', () => {
         pluginId: 'mcp.docs',
         resourceId: 'bearer',
         kind: 'static_bearer',
-        secretRef: { backend: 'keychain', account: 'MCP_DOCS_BEARER_TOKEN' },
+        secretRef: { backend: 'keychain', account: 'uilab:mcp.docs:bearer:env' },
       })
 
       const reg = createPluginRegistry({

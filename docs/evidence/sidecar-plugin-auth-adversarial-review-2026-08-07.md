@@ -128,3 +128,16 @@ Adversarial regression suite: `src/plugin/auth-adversarial.test.ts`.
 | Keychain argv exposure | **mitigated** — `security -i` + hex `-X` via stdin (secret not in argv) |
 
 Tests: 178 pass.
+
+### Second re-review (thread 019fdbc8-41bf-7c80-a694-9c0202db1238)
+
+**Verdict:** needs-attention / no-ship
+
+| Severity | Finding | Follow-up |
+| --- | --- | --- |
+| critical | Local plugin.json Keychain account theft | **fixed** — reject keychain in discover; host-owned `uilab:plugin:resource:role`; resolve denies foreign accounts |
+| high | CLI still dispatches after revoke | **fixed** — refuse runner unless material connected |
+| high | sync load existsSync fail-open | **fixed** — readFileSync only ENOENT→null |
+| high | lock timeout steals live lock | **fixed** — never unlink non-stale; owner-token unlink |
+
+Residual: MCP wire session still needs restart.

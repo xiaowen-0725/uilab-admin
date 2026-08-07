@@ -13,6 +13,34 @@ import type {
   ProfileEnv,
   SecretRef,
 } from './types.js'
+/**
+ * Host-owned Keychain account for operator-stored plugin secrets.
+ * Local plugin.json must never invent arbitrary accounts (cross-plugin theft).
+ */
+export function pluginAuthKeychainAccount(
+  pluginId: string,
+  resourceId: string,
+  role: 'env' | 'access' = 'env',
+): string {
+  return `uilab:${pluginId}:${resourceId}:${role}`
+}
+
+/**
+ * True when account is scoped to this plugin resource.
+ * Accepts `uilab:` operator accounts and `oauth:` PKCE accounts only.
+ */
+export function isHostOwnedKeychainAccount(
+  pluginId: string,
+  resourceId: string,
+  account: string,
+): boolean {
+  if (!account || !pluginId || !resourceId) return false
+  const prefixes = [
+    `uilab:${pluginId}:${resourceId}:`,
+    `oauth:${pluginId}:${resourceId}:`,
+  ]
+  return prefixes.some((p) => account.startsWith(p))
+}
 
 export type SecretStore = {
   /** Resolve secret value; never logs the value. */
@@ -480,6 +508,19 @@ async function resolveOAuth2Material(
   }
 
   if (binding.secretRef) {
+    if (
+      binding.secretRef.backend === 'keychain' &&
+      !isHostOwnedKeychainAccount(
+        binding.pluginId,
+        binding.resourceId,
+        binding.secretRef.account,
+      )
+    ) {
+      return empty(
+        'error',
+        `禁止跨插件引用 Keychain account=${binding.secretRef.account}`,
+      )
+    }
     const v = await store.resolve(binding.secretRef)
     if (v) {
       return {
@@ -606,6 +647,20 @@ export async function resolveCredentialMaterial(
       return empty(
         'error',
         `禁止将模型密钥用于插件 auth：${binding.secretRef.envName}`,
+      )
+    }
+    // Keychain accounts are host-owned and plugin-scoped (adversarial re-review #2)
+    if (
+      binding.secretRef.backend === 'keychain' &&
+      !isHostOwnedKeychainAccount(
+        binding.pluginId,
+        binding.resourceId,
+        binding.secretRef.account,
+      )
+    ) {
+      return empty(
+        'error',
+        `禁止跨插件引用 Keychain account=${binding.secretRef.account}`,
       )
     }
     const v = await store.resolve(binding.secretRef, env)

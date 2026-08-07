@@ -292,7 +292,8 @@ export function loadAuthBindingSnapshotSync(
   filePath: string,
 ): AuthBindingStoreSnapshot | null {
   try {
-    if (!existsSync(filePath)) return null
+    // Do not pre-check existsSync — EACCES and other lookup failures must
+    // fail closed (not look like "missing file" → empty revoke set).
     const raw = readFileSync(filePath, 'utf8')
     return parseAuthBindingSnapshot(raw)
   } catch (err: unknown) {
@@ -305,7 +306,8 @@ export function loadAuthBindingSnapshotSync(
 
 /**
  * Exclusive lock around auth-bindings RMW (adversarial: concurrent login/logout).
- * Uses O_EXCL lock file; steals after AUTH_BIND_LOCK_STALE_MS.
+ * Uses O_EXCL lock file. Only steals locks older than AUTH_BIND_LOCK_STALE_MS;
+ * never unlinks a live (non-stale) lock on wait timeout.
  */
 export function withAuthBindingFileLock(
   filePath: string,
@@ -317,16 +319,19 @@ export function withAuthBindingFileLock(
     mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
   const deadline = Date.now() + AUTH_BIND_LOCK_WAIT_MS
+  const ownerToken = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`
   while (true) {
     try {
       const fd = openSync(lockPath, 'wx', 0o600)
       try {
-        writeFileSync(fd, `${process.pid}\n${Date.now()}\n`, 'utf8')
+        writeFileSync(fd, `${ownerToken}\n`, 'utf8')
         fn()
       } finally {
         closeSync(fd)
+        // Only unlink if we still own the lock file
         try {
-          unlinkSync(lockPath)
+          const body = readFileSync(lockPath, 'utf8')
+          if (body.startsWith(ownerToken)) unlinkSync(lockPath)
         } catch {
           // ignore
         }
@@ -340,35 +345,24 @@ export function withAuthBindingFileLock(
         const st = statSync(lockPath)
         stale = Date.now() - st.mtimeMs > AUTH_BIND_LOCK_STALE_MS
       } catch {
-        stale = true
+        // lock disappeared or unreadable — retry acquire
+        stale = false
       }
-      if (stale || Date.now() >= deadline) {
+      if (stale) {
+        // Only reclaim clearly stale locks (holder crashed / hung)
         try {
           unlinkSync(lockPath)
         } catch {
-          // ignore
-        }
-        if (Date.now() >= deadline && !stale) {
-          // one last steal attempt after wait budget
-          try {
-            unlinkSync(lockPath)
-          } catch {
-            // ignore
-          }
-        }
-        if (Date.now() >= deadline) {
-          // final attempt: if still locked, throw
-          try {
-            const fd = openSync(lockPath, 'wx', 0o600)
-            closeSync(fd)
-            unlinkSync(lockPath)
-          } catch {
-            throw new Error(
-              `auth-bindings 文件锁超时（${AUTH_BIND_LOCK_WAIT_MS}ms）：${lockPath}`,
-            )
-          }
+          // ignore race
         }
         continue
+      }
+      if (Date.now() >= deadline) {
+        // Never steal a non-stale lock — fail closed so concurrent writers
+        // cannot overwrite each other's revoke.
+        throw new Error(
+          `auth-bindings 文件锁超时（${AUTH_BIND_LOCK_WAIT_MS}ms）：${lockPath}`,
+        )
       }
       // brief backoff
       const waitUntil = Date.now() + 15
