@@ -231,14 +231,26 @@ export function createKeychainSecretStore(
     },
     async clear(ref) {
       if (ref.backend !== 'keychain') return
-      await run([
+      const r = await run([
         'delete-generic-password',
         '-a',
         ref.account,
         '-s',
         service,
       ])
-      // ignore exit — missing is fine
+      if (r.exitCode === 0) return
+      // security(1): item not found is success for logout idempotency
+      const detail = `${r.stderr} ${r.stdout}`.toLowerCase()
+      if (
+        /could not be found|not be found|item not found|unable to find|errsecitemnotfound|-25300/.test(
+          detail,
+        )
+      ) {
+        return
+      }
+      throw new Error(
+        `删除 Keychain 失败（account=${ref.account}）：${r.stderr || r.stdout || `exit ${r.exitCode}`}`,
+      )
     },
   }
 }

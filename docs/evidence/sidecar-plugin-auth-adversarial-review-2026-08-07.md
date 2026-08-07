@@ -99,3 +99,20 @@ pnpm test        # 171 pass / 0 fail
 ```
 
 Adversarial regression suite: `src/plugin/auth-adversarial.test.ts`.
+---
+
+## Re-review (post-fix, 2026-08-07)
+
+**Invocation:** `codex-companion.mjs adversarial-review --background --scope commit --base 7fab5d8^`  
+**Thread:** `019fdb98-de9e-75b2-aa03-e21b3f6065ac`  
+**Commit reviewed:** `7fab5d8` (pushed to `origin/main`)  
+**Verdict:** **needs-attention / no-ship**
+
+| Severity | Finding | Disposition |
+| --- | --- | --- |
+| **critical** | `--from-env OPENAI_API_KEY` remaps model secret onto benign envNames | **fixed follow-up** — reject `isAllowedAuthEnvName` + declare-list match |
+| **high** | Logout ok while live sidecar keeps inject snapshot | residual — `needsSidecarRestart` only |
+| **high** | Concurrent load-once full rewrite can overwrite revoke | residual — needs lock/CAS ticket |
+| **high** | Keychain `security -w` argv | residual (known) |
+| **high** | Non-ENOENT bind-file read → empty store | **fixed follow-up** — fail closed |
+| **medium** | Keychain delete ignores all nonzero exits | **fixed follow-up** — only not-found ignored |

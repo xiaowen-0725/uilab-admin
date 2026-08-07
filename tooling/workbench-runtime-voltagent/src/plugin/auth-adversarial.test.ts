@@ -21,7 +21,8 @@ import {
   createFakeAuthorizationServer,
   completeOAuthAuthorization,
 } from './oauth.js'
-import { runAuthLogout } from './operator-auth.js'
+import { runAuthLogin, runAuthLogout } from './operator-auth.js'
+import { BUILTIN_MCP_DOCS_PLUGIN } from './builtins.js'
 import {
   createAuthBindingStore,
   createEnvSecretStore,
@@ -30,6 +31,7 @@ import {
   snapshotAuthBindingStore,
 } from './secret-store.js'
 import type { AuthBinding } from './types.js'
+import { loadAuthBindingSnapshot } from './auth-binding-persist.js'
 
 const SENTINEL = 'sentinel-adversarial-token-xyz'
 const MODEL_KEY = 'sk-openai-should-never-inject-xyz'
@@ -392,6 +394,72 @@ describe('adversarial P1: persist path safety + strict SecretRef', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('adversarial re-review: operator --from-env model-key bypass', () => {
+  it('rejects --from-env OPENAI_API_KEY even when resource envNames look benign', async () => {
+    const report = await runAuthLogin({
+      env: {
+        OPENAI_API_KEY: MODEL_KEY,
+        UILAB_KEYCHAIN_MODE: 'fake',
+      },
+      builtins: [BUILTIN_MCP_DOCS_PLUGIN],
+      pluginId: 'mcp.docs',
+      fromEnv: 'OPENAI_API_KEY',
+      authBindingStore: createAuthBindingStore(),
+      secretStore: createKeychainSecretStore({ mode: 'fake' }),
+      persistAuthBindings: false,
+    })
+    try {
+      assert.equal(report.ok, false)
+      assert.equal(report.json.error, 'model_secret_denied')
+      assert.match(report.text, /模型|禁止/)
+      assert.doesNotMatch(report.text, new RegExp(MODEL_KEY))
+    } finally {
+      await report.disconnect()
+    }
+  })
+
+  it('rejects --from-env not declared on the auth resource', async () => {
+    const report = await runAuthLogin({
+      env: {
+        RANDOM_CONNECTOR_TOKEN: SENTINEL,
+        UILAB_KEYCHAIN_MODE: 'fake',
+      },
+      builtins: [BUILTIN_MCP_DOCS_PLUGIN],
+      pluginId: 'mcp.docs',
+      fromEnv: 'RANDOM_CONNECTOR_TOKEN',
+      authBindingStore: createAuthBindingStore(),
+      secretStore: createKeychainSecretStore({ mode: 'fake' }),
+      persistAuthBindings: false,
+    })
+    try {
+      assert.equal(report.ok, false)
+      assert.equal(report.json.error, 'from_env_not_declared')
+    } finally {
+      await report.disconnect()
+    }
+  })
+})
+
+describe('adversarial re-review: persist read fail-closed', () => {
+  it('loadAuthBindingSnapshot propagates non-ENOENT I/O errors', async () => {
+    await assert.rejects(
+      () =>
+        loadAuthBindingSnapshot('/tmp/does-not-matter.json', {
+          readFile: async () => {
+            const err = new Error('EACCES permission denied') as Error & {
+              code?: string
+            }
+            err.code = 'EACCES'
+            throw err
+          },
+          writeFile: async () => {},
+          mkdir: async () => undefined,
+        }),
+      /EACCES|permission|读取/,
+    )
   })
 })
 

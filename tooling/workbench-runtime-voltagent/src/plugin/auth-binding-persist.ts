@@ -273,11 +273,11 @@ export async function loadAuthBindingSnapshot(
     return parseAuthBindingSnapshot(raw)
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code
+    // Only missing file means empty store. Any other I/O failure must fail closed
+    // so revoked bindings are not silently discarded (adversarial re-review).
     if (code === 'ENOENT') return null
-    if (err instanceof Error && err.message.includes('auth-bindings')) {
-      throw err
-    }
-    return null
+    if (err instanceof Error) throw err
+    throw new Error(`读取 auth-bindings 失败：${String(err)}`)
   }
 }
 

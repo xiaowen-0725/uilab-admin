@@ -29,6 +29,7 @@ import {
   type AuthBindingStore,
   type SecretStore,
 } from './secret-store.js'
+import { isAllowedAuthEnvName } from './security-policy.js'
 import type { AuthBinding, ProfileEnv } from './types.js'
 
 function resolvePendingStore(
@@ -424,6 +425,48 @@ export async function runAuthLogin(
         ok: false,
         text: `请指定 --from-env <ENV_NAME>（例如 MCP_DOCS_BEARER_TOKEN）\n`,
         json: { ok: false, error: 'missing_from_env' },
+        disconnect: ctx.disconnect,
+      }
+    }
+
+    // P0 re-review: never copy model-provider secrets into Keychain / inject path
+    // via --from-env OPENAI_API_KEY remapped onto benign envNames.
+    if (!isAllowedAuthEnvName(fromEnv)) {
+      return {
+        ok: false,
+        text: `禁止将模型/LLM 密钥用于插件 auth：${fromEnv}\n`,
+        json: {
+          ok: false,
+          error: 'model_secret_denied',
+          envName: fromEnv,
+        },
+        disconnect: ctx.disconnect,
+      }
+    }
+
+    const declaredEnvNames = [
+      ...(resource.envNames ?? []),
+      ...(resource.secretRef?.backend === 'env'
+        ? [resource.secretRef.envName]
+        : []),
+    ].filter((n) => typeof n === 'string' && n.length > 0)
+    if (
+      declaredEnvNames.length > 0 &&
+      !declaredEnvNames.includes(fromEnv)
+    ) {
+      return {
+        ok: false,
+        text: [
+          `--from-env ${fromEnv} 不在资源声明的 envNames 内。`,
+          `允许：${declaredEnvNames.join(', ')}`,
+          '',
+        ].join('\n'),
+        json: {
+          ok: false,
+          error: 'from_env_not_declared',
+          envName: fromEnv,
+          allowed: declaredEnvNames,
+        },
         disconnect: ctx.disconnect,
       }
     }
