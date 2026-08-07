@@ -596,6 +596,14 @@ export async function createPersistedAuthBindingStore(
         inner.upsert(binding)
       })
     },
+    upsertIfNotRevoked: (binding) => {
+      let committed = false
+      mutate(() => {
+        // Under lock after rehydrate: logout concurrent with refresh cannot lose
+        committed = inner.upsertIfNotRevoked(binding)
+      })
+      return committed
+    },
     clear: (pluginId, resourceId) => {
       mutate(() => {
         inner.clear(pluginId, resourceId)

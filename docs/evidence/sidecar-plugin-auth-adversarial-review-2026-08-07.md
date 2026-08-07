@@ -167,3 +167,13 @@ Tests: 183 pass.
 | Unmatched MCP live gate | **fixed** — missing resolver like CLI |
 
 Tests: 185 pass.
+
+### Fifth re-review (thread 019fdbfb-8948-7972-ab12-303c16b02b00)
+
+**Verdict on 148199e:** needs-attention / no-ship (1 P1)
+
+| Finding | Follow-up |
+| --- | --- |
+| OAuth refresh TOCTOU: isRevoked then upsert reauthorizes | **fixed** — `upsertIfNotRevoked` under lock; refresh never clears revoke |
+
+Tests: 187 pass.

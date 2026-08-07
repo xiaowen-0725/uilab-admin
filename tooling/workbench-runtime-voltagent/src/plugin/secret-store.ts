@@ -873,6 +873,12 @@ export type AuthBindingStore = {
   get(pluginId: string, resourceId: string): AuthBinding | undefined
   upsert(binding: AuthBinding): void
   /**
+   * Atomic refresh commit: upsert only if resource is not currently revoked.
+   * Returns false when revoked (logout wins over in-flight OAuth refresh).
+   * Explicit login should use upsert() which re-authorizes.
+   */
+  upsertIfNotRevoked(binding: AuthBinding): boolean
+  /**
    * Remove override and mark resource revoked (#28).
    * After clear, status/inject ignore process-env leftovers until upsert again.
    */
@@ -918,6 +924,13 @@ export function createAuthBindingStore(
   const reauthorized = new Set<string>(options.reauthorized ?? [])
   const keyOf = (p: string, r: string) => `${p}::${r}`
   for (const b of initial) map.set(keyOf(b.pluginId, b.resourceId), b)
+  const isRevoked = (pluginId: string, resourceId: string) => {
+    const k = keyOf(pluginId, resourceId)
+    if (revoked.has(k)) return true
+    if (revoked.has(`${pluginId}::*`) && !reauthorized.has(k)) return true
+    return false
+  }
+
   return {
     list: () => [...map.values()],
     get: (pluginId, resourceId) => map.get(keyOf(pluginId, resourceId)),
@@ -927,6 +940,12 @@ export function createAuthBindingStore(
       // Clear only this resource's revoke; never drop plugin-wide wildcard
       revoked.delete(k)
       reauthorized.add(k)
+    },
+    upsertIfNotRevoked: (binding) => {
+      // Refresh must not clear revoke markers (logout wins concurrent races).
+      if (isRevoked(binding.pluginId, binding.resourceId)) return false
+      map.set(keyOf(binding.pluginId, binding.resourceId), binding)
+      return true
     },
     clear: (pluginId, resourceId) => {
       if (resourceId) {
@@ -946,12 +965,8 @@ export function createAuthBindingStore(
       // Wildcard: future/unknown resources stay revoked until each is re-upserted
       revoked.add(`${pluginId}::*`)
     },
-    isRevoked: (pluginId, resourceId) => {
-      const k = keyOf(pluginId, resourceId)
-      if (revoked.has(k)) return true
-      if (revoked.has(`${pluginId}::*`) && !reauthorized.has(k)) return true
-      return false
-    },
+    isRevoked,
+
     listRevoked: () => {
       // Persist wildcard + per-resource + reauth markers as revoked list;
       // reauthorized entries are encoded as `!pluginId::resourceId` for restore.

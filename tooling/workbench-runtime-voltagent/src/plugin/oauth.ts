@@ -505,38 +505,35 @@ export async function refreshOAuthBinding(params: {
     const now = params.now?.() ?? Date.now()
     const expiresIn = tokens.expires_in ?? 3600
     const expiresAt = now + Math.max(30, expiresIn - 30) * 1000
-    // If logout revoked this resource while refresh was in flight, do not
-    // resurrect secrets/binding (adversarial re-review #4).
-    if (
-      params.bindingStore?.isRevoked(
-        params.binding.pluginId,
-        params.binding.resourceId,
-      )
-    ) {
-      // Best-effort: wipe tokens we just wrote so orphan material is not left
-      try {
-        await params.secretStore.clear?.({
-          backend: 'keychain',
-          account: accessAccount,
-        })
-        if (tokens.refresh_token && meta.refreshAccount) {
+
+    const nextBinding: AuthBinding = {
+      ...params.binding,
+      secretRef: { backend: 'keychain', account: accessAccount },
+      expiresAt,
+      oauth: meta,
+    }
+
+    // Atomic vs logout: only commit if still not revoked (under lock for
+    // persisted stores). Never use upsert() here — it would reauthorize.
+    if (params.bindingStore) {
+      const committed = params.bindingStore.upsertIfNotRevoked(nextBinding)
+      if (!committed) {
+        try {
           await params.secretStore.clear?.({
             backend: 'keychain',
-            account: meta.refreshAccount,
+            account: accessAccount,
           })
+          if (tokens.refresh_token && meta.refreshAccount) {
+            await params.secretStore.clear?.({
+              backend: 'keychain',
+              account: meta.refreshAccount,
+            })
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+        return null
       }
-      return null
-    }
-    if (params.bindingStore) {
-      params.bindingStore.upsert({
-        ...params.binding,
-        secretRef: { backend: 'keychain', account: accessAccount },
-        expiresAt,
-        oauth: meta,
-      })
     }
     return tokens.access_token
   } catch {

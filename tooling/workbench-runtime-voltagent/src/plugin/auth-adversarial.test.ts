@@ -623,6 +623,70 @@ describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
   })
 })
 
+describe('adversarial re-review #5: atomic refresh vs logout', () => {
+  it('upsertIfNotRevoked refuses after clear (refresh cannot reauthorize)', () => {
+    const store = createAuthBindingStore([
+      {
+        pluginId: 'p',
+        resourceId: 'r',
+        kind: 'oauth2',
+        secretRef: {
+          backend: 'keychain',
+          account: pluginAuthKeychainAccount('p', 'r', 'access'),
+        },
+      },
+    ])
+    store.clear('p', 'r')
+    const ok = store.upsertIfNotRevoked({
+      pluginId: 'p',
+      resourceId: 'r',
+      kind: 'oauth2',
+      expiresAt: Date.now() + 60_000,
+      secretRef: {
+        backend: 'keychain',
+        account: pluginAuthKeychainAccount('p', 'r', 'access'),
+      },
+    })
+    assert.equal(ok, false)
+    assert.equal(store.isRevoked('p', 'r'), true)
+    assert.equal(store.get('p', 'r'), undefined)
+  })
+
+  it('persisted upsertIfNotRevoked loses to concurrent logout', async () => {
+    const root = await tempDir('uilab-adv-refresh-race-')
+    try {
+      const s1 = await createPersistedAuthBindingStore({ rootDir: root })
+      s1.upsert({
+        pluginId: 'p',
+        resourceId: 'r',
+        kind: 'oauth2',
+        secretRef: {
+          backend: 'keychain',
+          account: pluginAuthKeychainAccount('p', 'r', 'access'),
+        },
+      })
+      const s2 = await createPersistedAuthBindingStore({ rootDir: root })
+      s1.clear('p', 'r') // logout wins
+      const committed = s2.upsertIfNotRevoked({
+        pluginId: 'p',
+        resourceId: 'r',
+        kind: 'oauth2',
+        expiresAt: Date.now() + 60_000,
+        secretRef: {
+          backend: 'keychain',
+          account: pluginAuthKeychainAccount('p', 'r', 'access'),
+        },
+      })
+      assert.equal(committed, false)
+      const s3 = await createPersistedAuthBindingStore({ rootDir: root })
+      assert.equal(s3.isRevoked('p', 'r'), true)
+      assert.equal(s3.get('p', 'r'), undefined)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('adversarial re-review #4: logout target / oauth race / MCP gate', () => {
   it('logout unknown --resource returns ok:false', async () => {
     const report = await runAuthLogout({
