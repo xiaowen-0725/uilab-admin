@@ -177,3 +177,16 @@ Tests: 185 pass.
 | OAuth refresh TOCTOU: isRevoked then upsert reauthorizes | **fixed** — `upsertIfNotRevoked` under lock; refresh never clears revoke |
 
 Tests: 187 pass.
+
+### Acceptance re-review (thread 019fdc95-1ada-7ab2-90d7-a4e3dab95bda)
+
+**Verdict on 03172be:** needs-attention / NO-SHIP (1 P0 + 2 P1)
+
+| Finding | Follow-up |
+| --- | --- |
+| P0 HTTP MCP omits auth → OPENAI_API_KEY as bearer | **fixed** — always deny model keys in resolveMcpBearerToken + discover parse |
+| P1 stale-lock dual reclaim | **fixed** — reclaim only if lock body still matches observed instance |
+| P1 logout leaves concurrent refresh tokens | **fixed** — revoke first, then clear snapshotted + deterministic oauth accounts |
+
+Local: typecheck pass, 188 tests pass.
+Residual: MCP wire session restart only.

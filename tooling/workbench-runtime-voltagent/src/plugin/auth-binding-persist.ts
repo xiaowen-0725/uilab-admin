@@ -340,18 +340,23 @@ export function withAuthBindingFileLock(
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code
       if (code !== 'EEXIST') throw err
+      // Observe lock identity (content + mtime) before any reclaim decision.
+      let observedBody = ''
       let stale = false
       try {
+        observedBody = readFileSync(lockPath, 'utf8')
         const st = statSync(lockPath)
         stale = Date.now() - st.mtimeMs > AUTH_BIND_LOCK_STALE_MS
       } catch {
         // lock disappeared or unreadable — retry acquire
-        stale = false
+        continue
       }
       if (stale) {
-        // Only reclaim clearly stale locks (holder crashed / hung)
+        // Reclaim only if the lock content is still the same instance we observed.
+        // Prevents two waiters from both unlinking after one has already acquired.
         try {
-          unlinkSync(lockPath)
+          const current = readFileSync(lockPath, 'utf8')
+          if (current === observedBody) unlinkSync(lockPath)
         } catch {
           // ignore race
         }

@@ -124,7 +124,13 @@ export function resolveMcpBearerToken(
     // Defense: never inject empty bearer
     return token && token.length > 0 ? token : undefined
   }
-  return firstEnv(env, contrib.bearerTokenFromEnv)
+  // Even without authEnforced, never use model-provider env as MCP bearer
+  // (local plugin can omit contributes.auth and name OPENAI_API_KEY).
+  const names = (contrib.bearerTokenFromEnv ?? []).filter(
+    (n) => isAllowedAuthEnvName(n) && !isModelProviderSecretKey(n),
+  )
+  if (names.length === 0) return undefined
+  return firstEnv(env, names)
 }
 
 export function resolveMcpContribution(

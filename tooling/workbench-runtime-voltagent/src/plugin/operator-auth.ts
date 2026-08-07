@@ -25,6 +25,7 @@ import {
 import {
   createAuthBindingStore,
   createDefaultSecretStore,
+  oauthKeychainAccount,
   pluginAuthKeychainAccount,
   resolveKeychainCapability,
   type AuthBindingStore,
@@ -669,46 +670,39 @@ export async function runAuthLogout(
         })()
       : ctx.bindingStore.list().filter((b) => b.pluginId === pluginId)
 
-    // Snapshot non-secret cleanup refs before revoke (accounts are not secrets)
-    const pendingKeychainAccounts: string[] = []
+    // Snapshot non-secret cleanup refs before revoke (accounts are not secrets).
+    // Also include deterministic host-owned OAuth accounts so concurrent refresh
+    // tokens written after this snapshot can still be cleared (acceptance P1).
+    const pendingKeychainAccounts = new Set<string>()
     for (const b of bindings) {
       if (b.secretRef?.backend === 'keychain') {
-        pendingKeychainAccounts.push(b.secretRef.account)
+        pendingKeychainAccounts.add(b.secretRef.account)
       }
       if (b.oauth?.refreshAccount) {
-        pendingKeychainAccounts.push(b.oauth.refreshAccount)
+        pendingKeychainAccounts.add(b.oauth.refreshAccount)
+      }
+    }
+    const declaredResources = scoped
+      ? (manifest?.contributes?.auth ?? []).filter(
+          (r) => r.resourceId === scoped,
+        )
+      : (manifest?.contributes?.auth ?? [])
+    for (const r of declaredResources) {
+      if (r.kind === 'oauth2') {
+        pendingKeychainAccounts.add(
+          oauthKeychainAccount(pluginId, r.resourceId, 'access'),
+        )
+        pendingKeychainAccounts.add(
+          oauthKeychainAccount(pluginId, r.resourceId, 'refresh'),
+        )
+      } else {
+        pendingKeychainAccounts.add(
+          pluginAuthKeychainAccount(pluginId, r.resourceId, 'env'),
+        )
       }
     }
 
-    // Phase 1: Keychain cleanup while refs still known
-    const keychainClearErrors: string[] = []
-    if (options.clearKeychain !== false && ctx.secretStore.clear) {
-      for (const b of bindings) {
-        if (b.secretRef) {
-          try {
-            await ctx.secretStore.clear(b.secretRef)
-          } catch (err) {
-            keychainClearErrors.push(
-              `access:${b.resourceId}:${b.secretRef.backend === 'keychain' ? b.secretRef.account : '?'}:${err instanceof Error ? err.message : String(err)}`,
-            )
-          }
-        }
-        if (b.oauth?.refreshAccount) {
-          try {
-            await ctx.secretStore.clear({
-              backend: 'keychain',
-              account: b.oauth.refreshAccount,
-            })
-          } catch (err) {
-            keychainClearErrors.push(
-              `refresh:${b.resourceId}:${b.oauth.refreshAccount}:${err instanceof Error ? err.message : String(err)}`,
-            )
-          }
-        }
-      }
-    }
-
-    // Phase 2: always revoke bindings so host dispatch stops (even if cleanup failed)
+    // Phase 1: revoke bindings FIRST (durable linearization vs in-flight refresh)
     const clearedResourceIds = new Set<string>()
     if (scoped) {
       ctx.bindingStore.clear(pluginId, scoped)
@@ -718,6 +712,20 @@ export async function runAuthLogout(
       ctx.bindingStore.clear(pluginId)
       for (const r of manifest?.contributes?.auth ?? []) {
         clearedResourceIds.add(r.resourceId)
+      }
+    }
+
+    // Phase 2: Keychain cleanup using snapshotted + deterministic accounts
+    const keychainClearErrors: string[] = []
+    if (options.clearKeychain !== false && ctx.secretStore.clear) {
+      for (const account of pendingKeychainAccounts) {
+        try {
+          await ctx.secretStore.clear({ backend: 'keychain', account })
+        } catch (err) {
+          keychainClearErrors.push(
+            `${account}:${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
       }
     }
 
@@ -779,8 +787,8 @@ export async function runAuthLogout(
         needsSidecarRestart: true,
         keychainClearErrors: cleanupFailed ? keychainClearErrors : undefined,
         pendingKeychainAccounts:
-          cleanupFailed && pendingKeychainAccounts.length > 0
-            ? pendingKeychainAccounts
+          cleanupFailed && pendingKeychainAccounts.size > 0
+            ? [...pendingKeychainAccounts]
             : undefined,
         error: cleanupFailed ? 'keychain_clear_failed' : undefined,
       },

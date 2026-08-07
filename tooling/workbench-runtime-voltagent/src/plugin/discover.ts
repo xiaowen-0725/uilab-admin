@@ -16,6 +16,7 @@ import type {
   SkillsContribution,
 } from './manifest.js'
 import { parseEnvStringList } from './parse-util.js'
+import { isAllowedAuthEnvName, isModelProviderSecretKey } from './security-policy.js'
 import type { ProfileEnv } from './types.js'
 
 export type PluginDiscoveryFailure = {
@@ -150,12 +151,21 @@ function parseMcpContributions(raw: unknown): ParseResult<McpContribution[]> {
     if (!serverId) {
       return { ok: false, reason: 'mcp.serverId 必填' }
     }
+    const bearerTokenFromEnv = asStringArray(item.bearerTokenFromEnv) ?? []
+    for (const name of bearerTokenFromEnv) {
+      if (!isAllowedAuthEnvName(name) || isModelProviderSecretKey(name)) {
+        return {
+          ok: false,
+          reason: `mcp.bearerTokenFromEnv 禁止模型密钥：${name}`,
+        }
+      }
+    }
     mcp.push({
       serverId,
       urlFromEnv: asStringArray(item.urlFromEnv),
       commandFromEnv: asStringArray(item.commandFromEnv),
       argsFromEnv: asStringArray(item.argsFromEnv),
-      bearerTokenFromEnv: asStringArray(item.bearerTokenFromEnv),
+      bearerTokenFromEnv,
       childEnvKeys: asStringArray(item.childEnvKeys),
       timeoutMs: typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
       readOnlyToolNames: asStringArray(item.readOnlyToolNames),
