@@ -186,6 +186,7 @@ export function createPluginRegistry(
         contrib: CliContribution
         authMaterial?: CredentialMaterial
         authEnforced?: boolean
+        resolveAuthMaterial?: () => Promise<CredentialMaterial | undefined>
       }> = []
       const authItems: Array<{
         pluginId: string
@@ -232,22 +233,33 @@ export function createPluginRegistry(
           expected.push({ pluginId: manifest.id, serverId: c.serverId })
           try {
             let material: CredentialMaterial | undefined
-            if (authEnforced) {
-              const resource = pickAuthResourceForMcp(authResources, c.serverId)
-              if (resource) {
-                material = await resolveAuthResourceMaterial(
-                  manifest.id,
-                  resource,
-                  true,
-                  authOpts,
-                )
-              }
+            const resource = authEnforced
+              ? pickAuthResourceForMcp(authResources, c.serverId)
+              : undefined
+            if (resource) {
+              material = await resolveAuthResourceMaterial(
+                manifest.id,
+                resource,
+                true,
+                authOpts,
+              )
             }
             const resolved = resolveMcpContribution(manifest.id, c, env, {
               authEnforced,
               authMaterial: material,
             })
-            if (resolved) resolvedServers.push(resolved)
+            if (resolved) {
+              if (resource) {
+                resolved.resolveAuthMaterial = () =>
+                  resolveAuthResourceMaterial(
+                    manifest.id,
+                    resource,
+                    true,
+                    authOpts,
+                  )
+              }
+              resolvedServers.push(resolved)
+            }
           } catch (err) {
             plugins.push({
               id: manifest.id,
@@ -274,6 +286,9 @@ export function createPluginRegistry(
 
         for (const c of manifest.contributes?.cli ?? []) {
           let material: CredentialMaterial | undefined
+          let resolveAuthMaterial:
+            | (() => Promise<CredentialMaterial | undefined>)
+            | undefined
           if (authEnforced) {
             const resource = pickAuthResourceForCli(authResources, c.cliId)
             if (resource) {
@@ -283,6 +298,15 @@ export function createPluginRegistry(
                 true,
                 authOpts,
               )
+              // Live re-resolve on each CLI tool invoke so revoke/logout
+              // is effective without restarting the sidecar process.
+              resolveAuthMaterial = () =>
+                resolveAuthResourceMaterial(
+                  manifest.id,
+                  resource,
+                  true,
+                  authOpts,
+                )
             }
           }
           cliItems.push({
@@ -290,6 +314,7 @@ export function createPluginRegistry(
             contrib: c,
             authEnforced,
             authMaterial: material,
+            resolveAuthMaterial,
           })
         }
 

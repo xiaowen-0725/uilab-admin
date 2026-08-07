@@ -11,10 +11,15 @@ import {
   createPersistedAuthBindingStore,
   parseAuthBindingSnapshot,
 } from './auth-binding-persist.js'
-import { buildCliChildEnv } from './cli-loader.js'
+import { buildCliChildEnv, loadCliContributions } from './cli-loader.js'
 import type { CliContribution } from './manifest.js'
-import { buildMcpChildEnv } from './mcp-loader.js'
+import {
+  buildMcpChildEnv,
+  wrapMcpToolsWithLiveAuthGate,
+} from './mcp-loader.js'
 import type { McpContribution } from './manifest.js'
+import { createTool } from '@voltagent/core'
+import { z } from 'zod'
 import {
   beginOAuthAuthorization,
   createDurableOAuthPendingStore,
@@ -459,6 +464,179 @@ describe('adversarial re-review: persist read fail-closed', () => {
           mkdir: async () => undefined,
         }),
       /EACCES|permission|读取/,
+    )
+  })
+})
+
+describe('adversarial residual: persist RMW lock + reload', () => {
+  it('concurrent store instances: logout revoke survives sibling upsert', async () => {
+    const root = await tempDir('uilab-adv-cas-')
+    try {
+      const s1 = await createPersistedAuthBindingStore({ rootDir: root })
+      s1.upsert({
+        pluginId: 'multi',
+        resourceId: 'a',
+        kind: 'env_ref',
+        envNames: ['TOKEN_A'],
+      })
+      s1.upsert({
+        pluginId: 'multi',
+        resourceId: 'b',
+        kind: 'env_ref',
+        envNames: ['TOKEN_B'],
+      })
+
+      // Second process attaches to same file (stale in-memory if no RMW)
+      const s2 = await createPersistedAuthBindingStore({ rootDir: root })
+      s1.clear('multi') // operator logout plugin-wide
+      // delayed login only for resource a
+      s2.upsert({
+        pluginId: 'multi',
+        resourceId: 'a',
+        kind: 'env_ref',
+        envNames: ['TOKEN_A'],
+      })
+
+      const s3 = await createPersistedAuthBindingStore({ rootDir: root })
+      assert.equal(s3.isRevoked('multi', 'a'), false)
+      assert.equal(
+        s3.isRevoked('multi', 'b'),
+        true,
+        'plugin-wide revoke must survive concurrent upsert RMW',
+      )
+      assert.equal(s3.get('multi', 'b'), undefined)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('adversarial residual: live CLI re-resolve + MCP host gate', () => {
+  it('CLI tool re-resolves child env after revoke without restart', async () => {
+    const bindings = createAuthBindingStore()
+    bindings.upsert({
+      pluginId: 'cli.feishu',
+      resourceId: 'app',
+      kind: 'static_bearer',
+      envNames: ['FEISHU_APP_SECRET'],
+      secretRef: { backend: 'memory', key: 'pat' },
+    })
+    const memory = createEnvSecretStore({})
+    // use memory store via resolveAuthMaterial mock
+    const secretStore = {
+      async resolve(ref: { backend: string; key?: string }) {
+        if (ref.backend === 'memory' && ref.key === 'pat') return SENTINEL
+        return null
+      },
+    }
+    let lastEnv: Record<string, string> | undefined
+    const agg = await loadCliContributions(
+      [
+        {
+          pluginId: 'cli.feishu',
+          contrib: {
+            cliId: 'feishu',
+            command: process.execPath,
+            childEnvKeys: ['FEISHU_APP_SECRET'],
+            commands: [{ name: 'status', argv: ['-e', 'process.exit(0)'] }],
+          },
+          authEnforced: true,
+          resolveAuthMaterial: async () => {
+            if (bindings.isRevoked('cli.feishu', 'app')) {
+              return {
+                status: 'missing' as const,
+                envValues: {} as Record<string, string>,
+                controlledEnvNames: ['FEISHU_APP_SECRET'],
+                hint: 'revoked',
+              }
+            }
+            const v = await secretStore.resolve({
+              backend: 'memory',
+              key: 'pat',
+            })
+            const envValues: Record<string, string> = {}
+            if (v) envValues.FEISHU_APP_SECRET = v
+            return {
+              status: 'connected' as const,
+              envValues,
+              controlledEnvNames: ['FEISHU_APP_SECRET'],
+              bearerToken: v ?? undefined,
+            }
+          },
+        },
+      ],
+      {
+        env: { PATH: process.env.PATH ?? '/usr/bin' },
+        runner: async (_cmd, _argv, opts) => {
+          lastEnv = opts.env
+          return { stdout: '', stderr: '', exitCode: 0 }
+        },
+      },
+    )
+    assert.equal(agg.tools.length, 1)
+    await (agg.tools[0] as { execute: (a: object) => Promise<unknown> }).execute(
+      {},
+    )
+    assert.equal(lastEnv?.FEISHU_APP_SECRET, SENTINEL)
+
+    bindings.clear('cli.feishu', 'app')
+    await (agg.tools[0] as { execute: (a: object) => Promise<unknown> }).execute(
+      {},
+    )
+    assert.equal(
+      lastEnv?.FEISHU_APP_SECRET,
+      undefined,
+      'after revoke, live CLI env must drop secret',
+    )
+  })
+
+  it('MCP tool host gate rejects execute when material not connected', async () => {
+    let calls = 0
+    const base = createTool({
+      name: 'docs_read',
+      description: 'r',
+      parameters: z.object({}),
+      execute: async () => {
+        calls += 1
+        return { ok: true }
+      },
+    })
+    const [gated] = wrapMcpToolsWithLiveAuthGate([base as any], async () => ({
+      status: 'missing',
+      envValues: {},
+      controlledEnvNames: [],
+      hint: 'revoked',
+    }))
+    const out = await (
+      gated as { execute: (a: object) => Promise<Record<string, unknown>> }
+    ).execute({})
+    assert.equal(out.error, 'auth_revoked')
+    assert.equal(calls, 0)
+  })
+})
+
+describe('adversarial residual: keychain set avoids secret in argv', () => {
+  it('OS keychain set uses security -i stdin, not -w <secret>', async () => {
+    const seen: Array<{ args: string[]; stdin?: string }> = []
+    const store = createKeychainSecretStore({
+      mode: 'os',
+      platform: 'darwin',
+      runSecurity: async (args, opts) => {
+        seen.push({ args: [...args], stdin: opts?.stdin })
+        return { stdout: '', stderr: '', exitCode: 0 }
+      },
+    })
+    await store.set!(
+      { backend: 'keychain', account: 'acct' },
+      'super-secret-pat-value',
+    )
+    assert.equal(seen.length, 1)
+    assert.deepEqual(seen[0]!.args, ['-i'])
+    assert.ok(seen[0]!.stdin?.includes('-X'))
+    assert.doesNotMatch(seen[0]!.stdin ?? '', /super-secret-pat-value/)
+    assert.ok(
+      !seen[0]!.args.includes('super-secret-pat-value'),
+      'secret must not appear in security argv',
     )
   })
 })

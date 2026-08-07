@@ -671,13 +671,20 @@ export async function runAuthLogout(
       ? `${pluginId}/${scoped}`
       : `${pluginId}（全部资源）`
 
+    // Live semantics (honest):
+    // - AuthBinding revoke is durable (file RMW + lock); process env leftovers ignored.
+    // - Domain CLI tools re-resolve child env per invoke → logout effective without restart.
+    // - MCP host gates tool execute on live status → host-side calls stop after revoke.
+    // - MCP wire session (HTTP Authorization / stdio env at spawn) may still hold tokens
+    //   until sidecar disconnect/restart — report needsSidecarRestart for that residual.
     return {
       ok: true,
       text: [
         `已登出：${scopeLabel}`,
         statusLine,
-        'process env 中的残留变量不再用于注入（#28 revoke）。',
-        '提示：已运行的 sidecar 进程需重启后注入快照才会失效（needsSidecarRestart）。',
+        'binding 已撤销：CLI 下次调用与 MCP 工具分发会拒绝已撤销凭据。',
+        '提示：MCP 传输层会话（HTTP Authorization / stdio 子进程 env）可能仍持有旧 token，',
+        '完整吊销请重启 sidecar（needsSidecarRestart）。',
         '',
       ].join('\n'),
       json: {
@@ -686,6 +693,8 @@ export async function runAuthLogout(
         resourceId: scoped ?? null,
         clearedResources: [...clearedResourceIds],
         status: statusLine,
+        bindingRevoked: true,
+        liveHostGate: true,
         needsSidecarRestart: true,
         keychainClearErrors:
           keychainClearErrors.length > 0 ? keychainClearErrors : undefined,

@@ -86,10 +86,20 @@ export type CreateKeychainSecretStoreOptions = {
   initial?: Iterable<readonly [string, string]>
   /** Override platform detection (tests) */
   platform?: NodeJS.Platform
-  /** Override security(1) runner (tests) */
+  /**
+   * Override security(1) runner (tests).
+   * Prefer passing secrets via `stdin` (security -i) so they never appear in argv.
+   */
   runSecurity?: (
     args: string[],
+    options?: { stdin?: string },
   ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
+}
+
+/** Quote a token for `security -i` command language. */
+function quoteSecurityInteractiveArg(value: string): string {
+  if (/^[A-Za-z0-9._:@+/-]+$/.test(value)) return value
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }
 
 const DEFAULT_KEYCHAIN_SERVICE = 'uilab.workbench.runtime'
@@ -161,34 +171,51 @@ export function createKeychainSecretStore(
   // macOS OS Keychain via security(1)
   const run =
     options.runSecurity ??
-    (async (args: string[]) => {
-      const { execFile } = await import('node:child_process')
-      const { promisify } = await import('node:util')
-      const execFileAsync = promisify(execFile)
-      try {
-        const { stdout, stderr } = await execFileAsync('/usr/bin/security', args, {
-          encoding: 'utf8',
-          timeout: 15_000,
-          maxBuffer: 1024 * 1024,
+    (async (args: string[], runOpts?: { stdin?: string }) => {
+      const { spawn } = await import('node:child_process')
+      return await new Promise<{
+        stdout: string
+        stderr: string
+        exitCode: number
+      }>((resolve) => {
+        const child = spawn('/usr/bin/security', args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
         })
-        return {
-          stdout: String(stdout ?? ''),
-          stderr: String(stderr ?? ''),
-          exitCode: 0,
+        let stdout = ''
+        let stderr = ''
+        const timer = setTimeout(() => {
+          child.kill('SIGKILL')
+        }, 15_000)
+        child.stdout?.setEncoding('utf8')
+        child.stderr?.setEncoding('utf8')
+        child.stdout?.on('data', (c: string) => {
+          stdout += c
+        })
+        child.stderr?.on('data', (c: string) => {
+          stderr += c
+        })
+        child.on('error', (err) => {
+          clearTimeout(timer)
+          resolve({
+            stdout,
+            stderr: err.message,
+            exitCode: 1,
+          })
+        })
+        child.on('close', (code) => {
+          clearTimeout(timer)
+          resolve({
+            stdout,
+            stderr,
+            exitCode: code ?? 1,
+          })
+        })
+        if (runOpts?.stdin != null) {
+          child.stdin?.end(runOpts.stdin, 'utf8')
+        } else {
+          child.stdin?.end()
         }
-      } catch (err: unknown) {
-        const e = err as {
-          code?: number | string
-          stdout?: string
-          stderr?: string
-          message?: string
-        }
-        return {
-          stdout: String(e.stdout ?? ''),
-          stderr: String(e.stderr ?? e.message ?? ''),
-          exitCode: typeof e.code === 'number' ? e.code : 1,
-        }
-      }
+      })
     })
 
   return {
@@ -212,17 +239,17 @@ export function createKeychainSecretStore(
       if (ref.backend !== 'keychain') {
         throw new Error('keychain store only accepts backend=keychain refs')
       }
-      // -U updates if exists
-      const r = await run([
+      // Prefer security -i + hex payload so the secret never appears in argv
+      // (adversarial: same-user ps/argv inspection).
+      const hex = Buffer.from(value, 'utf8').toString('hex')
+      const script = [
         'add-generic-password',
-        '-a',
-        ref.account,
-        '-s',
-        service,
-        '-w',
-        value,
+        `-a ${quoteSecurityInteractiveArg(ref.account)}`,
+        `-s ${quoteSecurityInteractiveArg(service)}`,
+        `-X ${hex}`,
         '-U',
-      ])
+      ].join(' ')
+      const r = await run(['-i'], { stdin: `${script}\n` })
       if (r.exitCode !== 0) {
         throw new Error(
           `写入 Keychain 失败（account=${ref.account}）：${r.stderr || r.stdout || 'unknown'}`,

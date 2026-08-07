@@ -116,3 +116,15 @@ Adversarial regression suite: `src/plugin/auth-adversarial.test.ts`.
 | **high** | Keychain `security -w` argv | residual (known) |
 | **high** | Non-ENOENT bind-file read → empty store | **fixed follow-up** — fail closed |
 | **medium** | Keychain delete ignores all nonzero exits | **fixed follow-up** — only not-found ignored |
+
+### Residual follow-up (same day)
+
+| Residual | Status |
+| --- | --- |
+| Persist concurrent RMW | **fixed** — exclusive `.lock` + reload-before-mutate; mtime reload on read |
+| Live CLI inject after logout | **fixed** — `resolveAuthMaterial` per tool invoke |
+| Live MCP host-side after logout | **fixed** — `wrapMcpToolsWithLiveAuthGate` refuses revoked material |
+| MCP wire session (HTTP/stdio spawn env) | residual — still needs sidecar restart for transport-layer token drop |
+| Keychain argv exposure | **mitigated** — `security -i` + hex `-X` via stdin (secret not in argv) |
+
+Tests: 178 pass.

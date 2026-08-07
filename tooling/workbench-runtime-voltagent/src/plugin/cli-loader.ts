@@ -282,10 +282,16 @@ function createCliTool(input: {
   commandPath: string
   cmd: CliCommandContribution
   cwd: string | undefined
+  /** Static child env when auth is not live-resolved */
   childEnv: Record<string, string> | undefined
   runner: CliRunner
   /** Local/discovered plugins cannot self-certify free tools */
   forceApproval?: boolean
+  /**
+   * When set, re-resolve credential material + child env on every invoke
+   * so logout/revoke takes effect without sidecar restart (adversarial).
+   */
+  resolveChildEnv?: () => Promise<Record<string, string> | undefined>
 }): Tool<any, any> {
   const toolName = cliToolName(input.cliId, input.cmd.name)
   assertSafeArgvTemplate(input.cmd.argv)
@@ -306,9 +312,12 @@ function createCliTool(input: {
     needsApproval,
     execute: async (rawArgs: Record<string, unknown>) => {
       const argv = buildCliArgv(input.cmd.argv, rawArgs ?? {})
+      const env = input.resolveChildEnv
+        ? await input.resolveChildEnv()
+        : input.childEnv
       const result = await input.runner(input.commandPath, argv, {
         cwd: input.cwd,
-        env: input.childEnv,
+        env,
         timeoutMs: input.cmd.timeoutMs,
       })
       return {
@@ -359,6 +368,11 @@ export async function loadCliContributions(
     contrib: CliContribution
     authEnforced?: boolean
     authMaterial?: CredentialMaterial
+    /**
+     * Live re-resolve material at tool invoke (preferred when authEnforced).
+     * When provided, static authMaterial is only used for load-time diagnostics.
+     */
+    resolveAuthMaterial?: () => Promise<CredentialMaterial | undefined>
   }>,
   options: LoadCliOptions = {},
 ): Promise<CliLoadAggregate> {
@@ -369,7 +383,13 @@ export async function loadCliContributions(
   const toolNames: string[] = []
   const statuses: CliLoadStatus[] = []
 
-  for (const { pluginId, contrib, authEnforced, authMaterial } of items) {
+  for (const {
+    pluginId,
+    contrib,
+    authEnforced,
+    authMaterial,
+    resolveAuthMaterial,
+  } of items) {
     const forceApproval = trusted ? !trusted.has(pluginId) : false
     if (!contrib.cliId?.trim()) {
       statuses.push({
@@ -424,6 +444,16 @@ export async function loadCliContributions(
       authEnforced,
       authMaterial,
     })
+    const resolveChildEnv =
+      authEnforced && resolveAuthMaterial
+        ? async () => {
+            const material = await resolveAuthMaterial()
+            return buildCliChildEnv(contrib, env, {
+              authEnforced: true,
+              authMaterial: material,
+            })
+          }
+        : undefined
     const cwd = resolveCliCwd(contrib, options.workspaceRoot)
     // Only commit tools after all commands validate (no partial mount on failure)
     const pendingTools: Tool<any, any>[] = []
@@ -445,6 +475,7 @@ export async function loadCliContributions(
           childEnv,
           runner,
           forceApproval,
+          resolveChildEnv,
         })
         pendingTools.push(tool)
         names.push(tool.name)

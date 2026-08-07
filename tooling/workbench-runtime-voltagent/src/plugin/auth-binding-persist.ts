@@ -7,12 +7,14 @@ import {
   mkdirSync,
   renameSync,
   writeFileSync,
+  readFileSync,
   existsSync,
   realpathSync,
   openSync,
   fsyncSync,
   closeSync,
   unlinkSync,
+  statSync,
   constants as fsConstants,
 } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -26,6 +28,10 @@ import {
   type AuthBindingStore,
   type AuthBindingStoreSnapshot,
 } from './secret-store.js'
+
+/** Exclusive lock wait budget for concurrent operator processes. */
+const AUTH_BIND_LOCK_STALE_MS = 8_000
+const AUTH_BIND_LOCK_WAIT_MS = 5_000
 
 export const AUTH_BINDINGS_FILENAME = 'auth-bindings.json'
 export const RUNTIME_CONFIG_DIRNAME = path.join('.uilab', 'runtime')
@@ -281,6 +287,98 @@ export async function loadAuthBindingSnapshot(
   }
 }
 
+/** Sync load for lock-held RMW / mtime refresh (default FS only). */
+export function loadAuthBindingSnapshotSync(
+  filePath: string,
+): AuthBindingStoreSnapshot | null {
+  try {
+    if (!existsSync(filePath)) return null
+    const raw = readFileSync(filePath, 'utf8')
+    return parseAuthBindingSnapshot(raw)
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code
+    if (code === 'ENOENT') return null
+    if (err instanceof Error) throw err
+    throw new Error(`读取 auth-bindings 失败：${String(err)}`)
+  }
+}
+
+/**
+ * Exclusive lock around auth-bindings RMW (adversarial: concurrent login/logout).
+ * Uses O_EXCL lock file; steals after AUTH_BIND_LOCK_STALE_MS.
+ */
+export function withAuthBindingFileLock(
+  filePath: string,
+  fn: () => void,
+): void {
+  const lockPath = `${filePath}.lock`
+  const dir = path.dirname(filePath)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+  }
+  const deadline = Date.now() + AUTH_BIND_LOCK_WAIT_MS
+  while (true) {
+    try {
+      const fd = openSync(lockPath, 'wx', 0o600)
+      try {
+        writeFileSync(fd, `${process.pid}\n${Date.now()}\n`, 'utf8')
+        fn()
+      } finally {
+        closeSync(fd)
+        try {
+          unlinkSync(lockPath)
+        } catch {
+          // ignore
+        }
+      }
+      return
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code
+      if (code !== 'EEXIST') throw err
+      let stale = false
+      try {
+        const st = statSync(lockPath)
+        stale = Date.now() - st.mtimeMs > AUTH_BIND_LOCK_STALE_MS
+      } catch {
+        stale = true
+      }
+      if (stale || Date.now() >= deadline) {
+        try {
+          unlinkSync(lockPath)
+        } catch {
+          // ignore
+        }
+        if (Date.now() >= deadline && !stale) {
+          // one last steal attempt after wait budget
+          try {
+            unlinkSync(lockPath)
+          } catch {
+            // ignore
+          }
+        }
+        if (Date.now() >= deadline) {
+          // final attempt: if still locked, throw
+          try {
+            const fd = openSync(lockPath, 'wx', 0o600)
+            closeSync(fd)
+            unlinkSync(lockPath)
+          } catch {
+            throw new Error(
+              `auth-bindings 文件锁超时（${AUTH_BIND_LOCK_WAIT_MS}ms）：${lockPath}`,
+            )
+          }
+        }
+        continue
+      }
+      // brief backoff
+      const waitUntil = Date.now() + 15
+      while (Date.now() < waitUntil) {
+        /* spin */
+      }
+    }
+  }
+}
+
 function snapshotBody(snapshot: AuthBindingStoreSnapshot): string {
   const safe: AuthBindingStoreSnapshot = {
     schemaVersion: 1,
@@ -365,11 +463,15 @@ export type CreatePersistedAuthBindingStoreOptions = {
 
 /**
  * AuthBindingStore that flushes non-secret snapshot after upsert/clear (#29).
- * Uses atomic sync write so mutations are durable before return.
+ * - Atomic 0600 write
+ * - Exclusive lock + reload-before-mutate (RMW) so concurrent logout/login
+ *   cannot drop a revoke (adversarial re-review)
+ * - mtime-based reload on read so a running sidecar sees operator mutations
+ *   without process restart (CLI re-resolve path)
  */
 export async function createPersistedAuthBindingStore(
   options: CreatePersistedAuthBindingStoreOptions = {},
-): Promise<AuthBindingStore & { filePath: string }> {
+): Promise<AuthBindingStore & { filePath: string; reloadFromDisk: () => void }> {
   const env = options.env ?? process.env
   const rootDir = options.rootDir ?? defaultRuntimeConfigDir(env)
   if (!options.skipWorkspaceGuard) {
@@ -379,6 +481,7 @@ export async function createPersistedAuthBindingStore(
     options.filePath ?? resolveAuthBindingsFilePath(rootDir)
   const io = options.io ?? defaultIo
   const persist = options.persist !== false
+  const useRealFs = io === defaultIo && persist
 
   let snapshot: AuthBindingStoreSnapshot = {
     schemaVersion: 1,
@@ -390,37 +493,119 @@ export async function createPersistedAuthBindingStore(
     if (loaded) snapshot = loaded
   }
 
-  const { revoked, reauthorized } = splitRevokedSnapshot(snapshot.revoked)
-  const inner = createAuthBindingStore(snapshot.bindings, {
+  let lastMtimeMs = 0
+  try {
+    if (useRealFs && existsSync(filePath)) {
+      lastMtimeMs = statSync(filePath).mtimeMs
+    }
+  } catch {
+    lastMtimeMs = 0
+  }
+
+  let { revoked, reauthorized } = splitRevokedSnapshot(snapshot.revoked)
+  let inner = createAuthBindingStore(snapshot.bindings, {
     revoked,
     reauthorized,
   })
 
-  function flushSync(): void {
+  function applySnapshot(snap: AuthBindingStoreSnapshot): void {
+    const split = splitRevokedSnapshot(snap.revoked)
+    revoked = split.revoked
+    reauthorized = split.reauthorized
+    inner = createAuthBindingStore(snap.bindings, {
+      revoked: split.revoked,
+      reauthorized: split.reauthorized,
+    })
+  }
+
+  function rehydrateFromDisk(): void {
+    if (!useRealFs) return
+    const loaded = loadAuthBindingSnapshotSync(filePath)
+    if (loaded) {
+      applySnapshot(loaded)
+    } else {
+      applySnapshot({ schemaVersion: 1, bindings: [], revoked: [] })
+    }
+    try {
+      lastMtimeMs = existsSync(filePath) ? statSync(filePath).mtimeMs : 0
+    } catch {
+      lastMtimeMs = 0
+    }
+  }
+
+  function refreshIfStale(): void {
+    if (!useRealFs) return
+    try {
+      if (!existsSync(filePath)) {
+        if (lastMtimeMs !== 0) rehydrateFromDisk()
+        return
+      }
+      const m = statSync(filePath).mtimeMs
+      if (m !== lastMtimeMs) rehydrateFromDisk()
+    } catch {
+      // fail closed: attempt rehydrate; errors propagate from load
+      rehydrateFromDisk()
+    }
+  }
+
+  function flushInner(): void {
     if (!persist) return
     const snap = snapshotAuthBindingStore(inner)
     const body = snapshotBody(snap)
-    if (io === defaultIo) {
+    if (useRealFs) {
       atomicWriteFileSync(filePath, body)
+      try {
+        lastMtimeMs = statSync(filePath).mtimeMs
+      } catch {
+        // ignore
+      }
     } else {
-      // test io is async-only; fire best-effort via writeFileSync-like path not available
       void io.writeFile(filePath, body, 'utf8')
     }
   }
 
+  function mutate(mutator: () => void): void {
+    if (!useRealFs) {
+      mutator()
+      flushInner()
+      return
+    }
+    withAuthBindingFileLock(filePath, () => {
+      // RMW: reload under lock so we never clobber a concurrent revoke
+      rehydrateFromDisk()
+      mutator()
+      flushInner()
+    })
+  }
+
   return {
     filePath,
-    list: () => inner.list(),
-    get: (p, r) => inner.get(p, r),
-    listRevoked: () => inner.listRevoked(),
-    isRevoked: (p, r) => inner.isRevoked(p, r),
+    reloadFromDisk: rehydrateFromDisk,
+    list: () => {
+      refreshIfStale()
+      return inner.list()
+    },
+    get: (p, r) => {
+      refreshIfStale()
+      return inner.get(p, r)
+    },
+    listRevoked: () => {
+      refreshIfStale()
+      return inner.listRevoked()
+    },
+    isRevoked: (p, r) => {
+      refreshIfStale()
+      return inner.isRevoked(p, r)
+    },
     upsert: (binding) => {
-      inner.upsert(binding)
-      flushSync()
+      mutate(() => {
+        inner.upsert(binding)
+      })
     },
     clear: (pluginId, resourceId) => {
-      inner.clear(pluginId, resourceId)
-      flushSync()
+      mutate(() => {
+        inner.clear(pluginId, resourceId)
+      })
     },
   }
 }

@@ -34,6 +34,8 @@ export type ResolvedMcpServer = {
   transport: 'http' | 'stdio'
   server: McpServerConfigShape
   readOnlyToolNames: string[]
+  /** Live re-resolve before each tool execute (revoke-aware gate) */
+  resolveAuthMaterial?: () => Promise<CredentialMaterial | undefined>
 }
 
 export type McpServerLoadStatus = {
@@ -176,6 +178,49 @@ export function resolveMcpContribution(
   }
 
   return null
+}
+
+/**
+ * Gate MCP tool execute on live auth status so revoke/logout blocks further
+ * calls even when HTTP Authorization was snapshotted at load (adversarial).
+ * Does not drop an already-open MCP TCP session's wire credential — that still
+ * needs disconnect/restart — but host-side tool dispatch refuses revoked auth.
+ */
+export function wrapMcpToolsWithLiveAuthGate(
+  tools: Tool<any, any>[],
+  resolveMaterial: () => Promise<CredentialMaterial | undefined>,
+): Tool<any, any>[] {
+  return tools.map((tool) => {
+    const anyTool = tool as Tool<any, any> & {
+      parameters?: unknown
+      execute?: (...args: any[]) => any
+      description?: string
+      needsApproval?: unknown
+    }
+    if (typeof anyTool.execute !== 'function' || anyTool.parameters == null) {
+      return tool
+    }
+    const original = anyTool.execute.bind(tool)
+    return createTool({
+      name: tool.name,
+      description: anyTool.description ?? tool.name,
+      parameters: anyTool.parameters as any,
+      needsApproval: anyTool.needsApproval === true,
+      execute: async (...args: any[]) => {
+        const material = await resolveMaterial()
+        if (!material || material.status !== 'connected') {
+          return {
+            ok: false,
+            error: 'auth_revoked',
+            hint:
+              material?.hint ??
+              '授权已撤销或未连接；请 auth login 后重启 sidecar（MCP 会话）',
+          }
+        }
+        return original(...args)
+      },
+    }) as Tool<any, any>
+  })
 }
 
 export function forceToolNeedsApproval(tool: Tool<any, any>): Tool<any, any> {
@@ -329,8 +374,12 @@ export async function loadResolvedMcpServers(
         continue
       }
       const approved = applyMcpNeedsApproval(tools, allow)
-      const names = approved.map((t) => t.name)
-      allTools.push(...approved)
+      const gated =
+        conf.resolveAuthMaterial != null
+          ? wrapMcpToolsWithLiveAuthGate(approved, conf.resolveAuthMaterial)
+          : approved
+      const names = gated.map((t) => t.name)
+      allTools.push(...gated)
       allNames.push(...names)
       disconnectors.push(disconnect)
       statuses.push({
