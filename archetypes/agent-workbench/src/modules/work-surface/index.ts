@@ -14,6 +14,8 @@ export type {
 
 export { WorkspaceDocumentEmptyExtra } from './ui/workspace-document-empty-extra'
 export type { WorkspaceDocumentEmptyExtraProps } from './ui/workspace-document-empty-extra'
+export { WorkspaceDocumentToolbarTrailing } from './ui/workspace-document-toolbar-trailing'
+export type { WorkspaceDocumentToolbarTrailingProps } from './ui/workspace-document-toolbar-trailing'
 
 export { createSurfaceRegistry } from './application/surface-registry'
 export { resolveOpenWorkSurfaceIntent } from './application/open-work-surface-intent'
@@ -25,7 +27,6 @@ export type {
 export {
   createWorkspaceDocumentSourceController,
   useWorkspaceDocumentSource,
-  isFsAccessDirectoryPickerSupported,
 } from './application/workspace-document-source'
 export type {
   UseWorkspaceDocumentSourceOptions,
@@ -87,10 +88,12 @@ export type {
 export type { DocumentViewState } from './surfaces/document/document-panel'
 export {
   normalizeWorkspaceResourceKey,
+  /** @deprecated Prefer toWorkspaceResourceKey */
   coerceWorkspaceResourceKey,
   toWorkspaceResourceKey,
   DOCUMENT_TEXT_MAX_BYTES,
   DOCUMENT_IMAGE_MAX_BYTES,
   DOCUMENT_OFFICE_MAX_BYTES,
 } from './surfaces/document/path-utils'
+export { mapPortFailureToViewState } from './surfaces/document/document-panel'
 export { normalizeBrowserUrl } from './surfaces/browser/url-utils'

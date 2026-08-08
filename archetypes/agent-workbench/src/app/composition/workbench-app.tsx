@@ -64,6 +64,7 @@ import {
   resolveOpenWorkSurfaceIntent,
   useWorkspaceDocumentSource,
   WorkspaceDocumentEmptyExtra,
+  WorkspaceDocumentToolbarTrailing,
   type DocumentContentPort,
   type SurfaceRegistry,
 } from '@/modules/work-surface'
@@ -167,6 +168,7 @@ export function WorkbenchApp({
         }
         workspaceHint={documentSource.workspaceHint}
         localFolderBound={documentSource.localFolderBound}
+        pickerSupported={documentSource.pickerSupported}
         bindNotice={documentSource.bindNotice}
         onPickLocalFolder={documentSource.pickLocalFolder}
         onClearLocalFolder={documentSource.clearLocalFolder}
@@ -177,28 +179,23 @@ export function WorkbenchApp({
       documentSource.clearLocalFolder,
       documentSource.localFolderBound,
       documentSource.pickLocalFolder,
+      documentSource.pickerSupported,
       documentSource.workspaceHint,
     ],
   )
 
   /**
-   * When folder is bound and tabs are open, emptyExtra is hidden — offer clear
-   * in toolbar so user need not close all tabs. When empty, clear lives in emptyExtra.
+   * When folder is bound and tabs are open, emptyExtra is hidden — module
+   * toolbar trailing offers clear (Composition only mounts; no bind Button here).
    */
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
   const workSurfaceToolbarTrailing = useMemo(() => {
-    if (!documentSource.localFolderBound || !hasOpenWorkTabs) return undefined
+    if (!hasOpenWorkTabs) return undefined
     return (
-      <Button
-        type='button'
-        variant='ghost'
-        size='sm'
-        className='h-auto px-2 py-1 text-xs text-muted-foreground'
-        data-testid='clear-local-workspace-folder'
-        onClick={documentSource.clearLocalFolder}
-      >
-        恢复演示文档
-      </Button>
+      <WorkspaceDocumentToolbarTrailing
+        localFolderBound={documentSource.localFolderBound}
+        onClearLocalFolder={documentSource.clearLocalFolder}
+      />
     )
   }, [
     documentSource.clearLocalFolder,

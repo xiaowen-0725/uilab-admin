@@ -22,6 +22,7 @@ describe('createWorkspaceDocumentSourceController', () => {
       {
         createMemory: () => memory,
         createHttp: () => stubPort('http'),
+        isPickerSupported: () => true,
       },
     )
     const s = ctrl.getState()
@@ -29,6 +30,18 @@ describe('createWorkspaceDocumentSourceController', () => {
     expect(s.localFolderBound).toBe(false)
     expect(s.workspaceHint).toBeNull()
     expect(s.bindNotice).toBeNull()
+    expect(s.pickerSupported).toBe(true)
+  })
+
+  it('voltagent reports pickerSupported false', () => {
+    const ctrl = createWorkspaceDocumentSourceController(
+      { runtimeMode: 'voltagent', voltAgentBaseUrl: '/va' },
+      {
+        createHttp: () => stubPort('http'),
+        isPickerSupported: () => true,
+      },
+    )
+    expect(ctrl.getState().pickerSupported).toBe(false)
   })
 
   it('voltagent mode defaults to HTTP port (no Memory fallback)', () => {

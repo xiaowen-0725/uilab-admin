@@ -77,9 +77,9 @@ components.json        # shadcn 配置（base-nova）
 10. **Base UI 约束** — `render={...}`；禁止 `asChild` 与 `@radix-ui/*`；禁止 Desktop/Node built-in 进入 renderer 源码。
 11. **中文优先** — 用户可见文案中文；标识符英文。
 12. **本地 Runtime 体验 + 远程诚实** — 交互应像真产品；凡未接远程处须诚实，不得把「未接后端」做成「控件不可用」。
-13. **Document 内容源** — 状态与绑定 UI 归属 `modules/work-surface`（`WorkspaceDocumentSource` / `useWorkspaceDocumentSource`）；Composition 只选 `runtimeMode` 并注入，**禁止**在 `workbench-app` 内联文件夹绑定业务。
-14. **路径策略** — 只经 `path-utils` 公开 API（`toWorkspaceResourceKey` / `normalizeWorkspaceResourceKey`）；adapter / intent **禁止**自写 peel 或对字符串做 `includes('..')` 式包含判定（段级 `..` 由 normalize 处理，允许 `v1..v2.md`）。
-15. **IO 失败 vs 渲染失败** — DocumentPanel：`read-failed`（Port 读失败）≠ `render-failed`（解码/渲染失败）；不得把 `read-failed` 映射为 `render-failed`。
+13. **Document 内容源** — 状态与绑定 UI 归属 `modules/work-surface`（`WorkspaceDocumentSource` / `useWorkspaceDocumentSource` + `WorkspaceDocumentEmptyExtra` / `WorkspaceDocumentToolbarTrailing`）；Composition 只选 `runtimeMode` 并 **挂载** 模块组件，**禁止**在 `workbench-app` 内联绑定 Button / 探测 `showDirectoryPicker`。
+14. **路径策略** — 公开入口优先 `toWorkspaceResourceKey`（`coerceWorkspaceResourceKey` 为同实现别名，新代码勿直接用 coerce 名）；已规范化 key 用 `normalizeWorkspaceResourceKey`。adapter / intent **禁止**自写 peel 或 `includes('..')`（段级 `..` 由 normalize 处理，允许 `v1..v2.md`）。
+15. **IO 失败 vs 渲染失败** — DocumentPanel：Port 失败 / Port throw → `read-failed`（及 not-found 等）；重型渲染/解码失败 → `render-failed`。用 `mapPortFailureToViewState`；禁止把 IO 映射成 `render-failed`。
 
 ## 完成定义（包级）
 

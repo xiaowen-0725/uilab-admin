@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { DocumentContentPort } from '../../ports/document-content-port'
+import type {
+  DocumentContentPort,
+  DocumentReadFailureReason,
+} from '../../ports/document-content-port'
 import {
   codeLanguageFor,
   isBinaryDocumentFamily,
@@ -33,6 +36,16 @@ const STATE_COPY: Record<
   'permission-denied': '没有权限读取该文件。',
   'read-failed': '无法读取该文件。',
   'render-failed': '文档渲染失败。可尝试关闭后重新打开。',
+}
+
+/** Map Port failure reason → panel state (IO vs render stay separate). */
+export function mapPortFailureToViewState(
+  reason: DocumentReadFailureReason,
+): Exclude<DocumentViewState, 'loading' | 'ready' | 'empty' | 'unsupported'> {
+  if (reason === 'not-found') return 'not-found'
+  if (reason === 'permission-denied') return 'permission-denied'
+  if (reason === 'too-large') return 'too-large'
+  return 'read-failed'
 }
 
 function statusMessage(
@@ -96,35 +109,40 @@ export function DocumentPanel({
         return
       }
 
-      try {
-        if (isBinaryDocumentFamily(fmt)) {
-          if (!content.readBinary) {
-            if (!cancelled) setState('unsupported')
-            return
+      // Port IO failures → read-failed (and siblings); heavy render → render-failed.
+      if (isBinaryDocumentFamily(fmt)) {
+        if (!content.readBinary) {
+          if (!cancelled) setState('unsupported')
+          return
+        }
+        let result
+        try {
+          result = await content.readBinary(key)
+        } catch {
+          if (!cancelled) {
+            setState('read-failed')
+            setDetail('无法读取该文件。')
           }
-          const result = await content.readBinary(key)
-          if (cancelled) return
-          if (!result.ok) {
-            setDetail(result.message ?? null)
-            if (result.reason === 'not-found') setState('not-found')
-            else if (result.reason === 'permission-denied')
-              setState('permission-denied')
-            else if (result.reason === 'too-large') setState('too-large')
-            else if (result.reason === 'read-failed') setState('read-failed')
-            else setState('render-failed')
-            return
-          }
-          if (result.byteLength === 0) {
-            setState('empty')
-            return
-          }
-          const max = maxBytesForFamily(fmt)
-          if (result.byteLength > max) {
-            setState('too-large')
-            setDetail(`文件过大（上限 ${max} 字节）`)
-            return
-          }
-          setState('ready')
+          return
+        }
+        if (cancelled) return
+        if (!result.ok) {
+          setDetail(result.message ?? null)
+          setState(mapPortFailureToViewState(result.reason))
+          return
+        }
+        if (result.byteLength === 0) {
+          setState('empty')
+          return
+        }
+        const max = maxBytesForFamily(fmt)
+        if (result.byteLength > max) {
+          setState('too-large')
+          setDetail(`文件过大（上限 ${max} 字节）`)
+          return
+        }
+        setState('ready')
+        try {
           // Lazy load heavy renderer modules (A7 — dynamic import)
           const mime = mimeForResourceKey(key) ?? result.mimeType ?? ''
           if (fmt === 'image') {
@@ -176,31 +194,35 @@ export function DocumentPanel({
               )
             }
           }
-          return
+        } catch {
+          if (!cancelled) setState('render-failed')
         }
-
-        const result = await content.readText(key)
-        if (cancelled) return
-        if (!result.ok) {
-          setDetail(result.message ?? null)
-          if (result.reason === 'not-found') setState('not-found')
-          else if (result.reason === 'permission-denied')
-            setState('permission-denied')
-          else if (result.reason === 'too-large') setState('too-large')
-          else if (result.reason === 'read-failed') setState('read-failed')
-          else setState('render-failed')
-          return
-        }
-        if (result.text.length === 0) {
-          setText('')
-          setState('empty')
-          return
-        }
-        setText(result.text)
-        setState('ready')
-      } catch {
-        if (!cancelled) setState('render-failed')
+        return
       }
+
+      let result
+      try {
+        result = await content.readText(key)
+      } catch {
+        if (!cancelled) {
+          setState('read-failed')
+          setDetail('无法读取该文件。')
+        }
+        return
+      }
+      if (cancelled) return
+      if (!result.ok) {
+        setDetail(result.message ?? null)
+        setState(mapPortFailureToViewState(result.reason))
+        return
+      }
+      if (result.text.length === 0) {
+        setText('')
+        setState('empty')
+        return
+      }
+      setText(result.text)
+      setState('ready')
     }
 
     void load()

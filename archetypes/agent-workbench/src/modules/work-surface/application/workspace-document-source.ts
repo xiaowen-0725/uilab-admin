@@ -30,6 +30,8 @@ export type WorkspaceDocumentSource = {
   content: DocumentContentPort
   workspaceHint: string | null
   localFolderBound: boolean
+  /** Fake path: whether showDirectoryPicker is available (UI must not re-probe). */
+  pickerSupported: boolean
   /** notice after failed pick etc. */
   bindNotice: string | null
   pickLocalFolder: () => Promise<void>
@@ -41,6 +43,7 @@ export type WorkspaceDocumentSourceState = {
   content: DocumentContentPort
   workspaceHint: string | null
   localFolderBound: boolean
+  pickerSupported: boolean
   bindNotice: string | null
 }
 
@@ -99,11 +102,14 @@ export function createWorkspaceDocumentSourceController(
 ): WorkspaceDocumentSourceController {
   const d: WorkspaceDocumentSourceDeps = { ...defaultDeps, ...deps }
   const defaultContent = createDefaultContent(options, d)
+  const pickerSupported =
+    options.runtimeMode === 'fake' && d.isPickerSupported()
 
   let state: WorkspaceDocumentSourceState = {
     content: defaultContent,
     workspaceHint: null,
     localFolderBound: false,
+    pickerSupported,
     bindNotice: null,
   }
   const listeners = new Set<() => void>()
@@ -200,11 +206,9 @@ export function useWorkspaceDocumentSource(
     content: snap.content,
     workspaceHint: snap.workspaceHint,
     localFolderBound: snap.localFolderBound,
+    pickerSupported: snap.pickerSupported,
     bindNotice: snap.bindNotice,
     pickLocalFolder: controller.pickLocalFolder,
     clearLocalFolder: controller.clearLocalFolder,
   }
 }
-
-/** Re-export picker support for empty-extra presentational (no composition import of adapter). */
-export { isFsAccessDirectoryPickerSupported }

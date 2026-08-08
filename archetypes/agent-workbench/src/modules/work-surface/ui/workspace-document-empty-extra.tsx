@@ -1,18 +1,17 @@
 /**
  * Presentational empty-state bind UI for workspace Document content source.
- * Data/actions from WorkspaceDocumentSource; Host only hosts the node.
+ * All flags/actions from source; does not call picker APIs itself.
  */
 
 import { Button } from '@/components/ui/button'
-import {
-  isFsAccessDirectoryPickerSupported,
-  type WorkspaceDocumentRuntimeMode,
-} from '../application/workspace-document-source'
+import type { WorkspaceDocumentRuntimeMode } from '../application/workspace-document-source'
 
 export type WorkspaceDocumentEmptyExtraProps = {
   runtimeMode: WorkspaceDocumentRuntimeMode
   workspaceHint: string | null
   localFolderBound: boolean
+  /** Whether Chromium directory picker is available (from source, not adapter import). */
+  pickerSupported: boolean
   bindNotice: string | null
   onPickLocalFolder: () => void | Promise<void>
   onClearLocalFolder: () => void
@@ -25,6 +24,7 @@ export function WorkspaceDocumentEmptyExtra({
   runtimeMode,
   workspaceHint,
   localFolderBound,
+  pickerSupported,
   bindNotice,
   onPickLocalFolder,
   onClearLocalFolder,
@@ -37,8 +37,6 @@ export function WorkspaceDocumentEmptyExtra({
       </p>
     )
   }
-
-  const canPick = isFsAccessDirectoryPickerSupported()
 
   return (
     <div className='flex flex-col items-start gap-2'>
@@ -61,11 +59,11 @@ export function WorkspaceDocumentEmptyExtra({
       ) : (
         <>
           <p className='text-xs leading-relaxed text-muted-foreground'>
-            {canPick
+            {pickerSupported
               ? '可选：绑定本机文件夹，用浏览器只读预览真实文件（非 Electron 桌面宿主）。'
               : '当前浏览器不支持本地文件夹选择；Fake 路径使用内置演示文档。'}
           </p>
-          {canPick ? (
+          {pickerSupported ? (
             <Button
               type='button'
               variant='outline'

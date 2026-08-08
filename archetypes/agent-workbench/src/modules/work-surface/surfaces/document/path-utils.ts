@@ -55,12 +55,16 @@ export function normalizeWorkspaceResourceKey(raw: string): string | null {
 }
 
 /**
- * Coerce Timeline / tool / host paths into a workspace-relative resourceKey.
- * Aligns with VoltAgent tool path mapping: for absolute host paths, extract the
- * trailing `/output|notes|skills/…` segment, then run {@link normalizeWorkspaceResourceKey}.
+ * Timeline / tool / host path → workspace-relative resourceKey.
  *
- * Relative keys (e.g. `fixture/notes/plan.txt`) are left intact — marker peel
- * only runs on absolute-looking inputs so mid-path `/notes/` is not stripped.
+ * **Prefer calling {@link toWorkspaceResourceKey}** at open/read call sites.
+ * This name is kept as an implementation alias for tests and older imports.
+ *
+ * Policy: absolute-looking inputs may peel the last `/output|/notes|/skills/`
+ * segment; relative keys (e.g. `fixture/notes/plan.txt`) are never mid-path peeled;
+ * then {@link normalizeWorkspaceResourceKey} (segment `..` reject, allow `v1..v2.md`).
+ *
+ * @deprecated Prefer {@link toWorkspaceResourceKey} at new call sites.
  */
 export function coerceWorkspaceResourceKey(raw: string): string | null {
   if (typeof raw !== 'string') return null
