@@ -99,6 +99,15 @@ export function createTaskCatalogRow(input: {
   }
 }
 
+/**
+ * Unused blank draft (Codex / WorkBuddy “new chat once”):
+ * catalog title is still the default「新对话」until the first user turn renames it.
+ * titleSource may be `local` or `runtime` after bind — only the title matters here.
+ */
+export function isBlankDraftTask(row: Pick<TaskCatalogRow, 'title'>): boolean {
+  return row.title === NEW_TASK_TITLE
+}
+
 /** Sort projects: pinned first, then sortOrder asc, then name. */
 export function sortProjects(projects: readonly ProjectRecord[]): ProjectRecord[] {
   return [...projects].sort((a, b) => {

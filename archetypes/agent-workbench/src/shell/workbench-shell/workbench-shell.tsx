@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, TransitionEvent } from 'react'
+import type { CSSProperties, ReactNode, TransitionEvent } from 'react'
 import {
   FolderIcon,
   PanelBottom,
@@ -109,6 +109,11 @@ export interface WorkbenchShellProps {
    * User channel: Timeline file chip/card → Composition → Session openWorkSurfaceTab.
    */
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  /**
+   * Composition-owned empty Work Surface actions (e.g. bind local folder).
+   * Shell/Host only pass-through; no folder policy in Shell.
+   */
+  workSurfaceEmptyExtra?: ReactNode
 }
 
 /**
@@ -131,6 +136,7 @@ export function WorkbenchShell({
   composerRuntime,
   surfaceRegistry,
   onOpenFileRef,
+  workSurfaceEmptyExtra,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -310,6 +316,7 @@ export function WorkbenchShell({
     onDeleteTask,
     onSelectProject,
     onOpenSettings: openSettings,
+    onToggleNavigator: toggleNavigatorFromPointer,
   }
 
   return (
@@ -370,14 +377,20 @@ export function WorkbenchShell({
               data-testid='workspace-top-bar'
               data-slot='task-pane-toolbar'
             >
-              <ToolbarIconButton
-                testId={workFullStage ? undefined : 'toggle-navigator'}
-                pressed={view.navigatorOpen}
-                label='切换导航'
-                onClick={toggleNavigatorFromPointer}
-              >
-                <PanelLeftIcon className='size-4' aria-hidden />
-              </ToolbarIconButton>
+              {/*
+                Nav toggle lives on the left rail (WorkBuddy-style) when open.
+                Only re-open here when the rail is collapsed (reserved gap is 0).
+              */}
+              {!view.navigatorOpen && !workFullStage ? (
+                <ToolbarIconButton
+                  testId='toggle-navigator'
+                  pressed={false}
+                  label='打开导航'
+                  onClick={toggleNavigatorFromPointer}
+                >
+                  <PanelLeftIcon className='size-4' aria-hidden />
+                </ToolbarIconButton>
+              ) : null}
 
               <FolderIcon
                 className='size-4 shrink-0 text-muted-foreground'
@@ -386,7 +399,7 @@ export function WorkbenchShell({
 
               <div className='min-w-0 flex-1'>
                 <h1 className='truncate text-sm leading-none font-semibold'>
-                  {taskView?.title ?? '还没有对话'}
+                  {taskView?.title ?? '还没有任务'}
                 </h1>
               </div>
 
@@ -431,7 +444,7 @@ export function WorkbenchShell({
                   className='flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
                   data-testid='workspace-empty-shell'
                 >
-                  <p className='text-sm text-muted-foreground'>还没有对话</p>
+                  <p className='text-sm text-muted-foreground'>还没有任务</p>
                   <Button
                     type='button'
                     variant='outline'
@@ -479,12 +492,17 @@ export function WorkbenchShell({
               registry={surfaceRegistry}
               taskId={view.selectedTaskId}
               fullStage={workFullStage}
+              emptyExtra={workSurfaceEmptyExtra}
               toolbarLeading={
-                workFullStage && view.layout.workSurfaceVisible ? (
+                // Re-open only: when Work is full-stage and the rail is already open,
+                // the toggle lives on the Navigator toolbar (not duplicated here).
+                workFullStage &&
+                view.layout.workSurfaceVisible &&
+                !view.navigatorOpen ? (
                   <ToolbarIconButton
                     testId='toggle-navigator'
-                    pressed={view.navigatorOpen}
-                    label='切换导航'
+                    pressed={false}
+                    label='打开导航'
                     onClick={toggleNavigatorFromPointer}
                   >
                     <PanelLeftIcon className='size-4' aria-hidden />

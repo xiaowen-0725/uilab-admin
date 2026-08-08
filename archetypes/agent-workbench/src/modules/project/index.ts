@@ -11,6 +11,7 @@ export {
   NEW_TASK_TITLE,
   createDefaultProject,
   createTaskCatalogRow,
+  isBlankDraftTask,
   sortProjects,
   sortTasksByUpdatedAt,
   toProjectSummary,

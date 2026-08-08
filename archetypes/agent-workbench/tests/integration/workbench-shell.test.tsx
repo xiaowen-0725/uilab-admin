@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
-const INSET = 8
+/** Borderless shell: workspace is flush (no floating 8px inset card). */
+const INSET = 0
 const NAV_WIDTH = 306
 const TOOLBAR_HEIGHT = 44
 const GEOMETRY_TOLERANCE = 2
@@ -148,7 +149,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(Math.abs(navBox.width - NAV_WIDTH)).toBeLessThanOrEqual(
       GEOMETRY_TOLERANCE
     )
-    // Workspace: 8px top/right/bottom; left sits against Navigator (no extra gap).
+    // Workspace: full-bleed (no card inset); left sits against Navigator.
     expect(Math.abs(wsBox.top - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
     expect(
       Math.abs(window.innerWidth - wsBox.right - INSET)
@@ -226,7 +227,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
-  it('1440 collapsed by pointer: Navigator inert, left inset, animated motion', async () => {
+  it('1440 collapsed by pointer: Navigator inert, full-bleed stage, animated motion', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
 
@@ -267,9 +268,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .getByTestId('workbench-workspace')
       .element()
       .getBoundingClientRect()
-    // Collapsed: ~8px left inset; workspace expands into remaining viewport.
+    // Collapsed: rail gap is 0; workspace is full-bleed to the left edge.
     expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
-    expect(wsBox.width).toBeGreaterThan(1400 - INSET * 2 - GEOMETRY_TOLERANCE)
+    expect(wsBox.width).toBeGreaterThan(1400 - GEOMETRY_TOLERANCE)
   })
 
   it('Navigator account menu opens upward with settings and sign-out fixtures', async () => {
@@ -399,9 +400,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(shell)
       .toHaveAttribute('data-context-motion', 'animated')
-    await expect.element(panel).toHaveTextContent('环境')
-    // Runtime path honesty chips (not capture fixture).
-    await expect.element(panel).toHaveTextContent(/Fake Runtime|非生产/)
+    // Runtime path: no honesty chips in product chrome.
+    await expect.element(panel).toHaveTextContent('任务上下文')
+    expect(panel.element().textContent ?? '').not.toMatch(
+      /Fake Runtime|非生产|Deterministic Fake/,
+    )
 
     await userEvent.click(page.getByTestId('toggle-context'))
     await expect.element(panel).toHaveAttribute('data-open', 'false')
@@ -727,10 +730,15 @@ describe('Workbench Shell integration (visible behavior)', () => {
       taskToolbarBox.bottom > workToolbarBox.top
     expect(headersOverlap).toBe(false)
 
-    // Split: exactly one operable toggle-navigator, owned by Task toolbar (not Work).
+    // Split + nav open: toggle lives on the left rail toolbar (WorkBuddy-style), not Task chrome.
     const navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
-    expect(taskToolbar.contains(navToggles[0]!)).toBe(true)
+    const navToolbar = document.querySelector(
+      '[data-testid="navigator-toolbar"]',
+    ) as HTMLElement
+    expect(navToolbar).toBeTruthy()
+    expect(navToolbar.contains(navToggles[0]!)).toBe(true)
+    expect(taskToolbar.contains(navToggles[0]!)).toBe(false)
     expect(
       workToolbar.querySelector('[data-testid="toggle-navigator"]')
     ).toBeNull()
@@ -759,14 +767,13 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(taskPane.hasAttribute('inert')).toBe(true)
     expect(taskPane.getAttribute('aria-hidden')).toBe('true')
 
-    const navToggles = visibleByTestId('toggle-navigator')
+    // Nav open → toggle on left rail only (not Work toolbar duplicate).
+    let navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
-
-    const workToolbar = document.querySelector(
-      '[data-slot="work-surface-toolbar"]'
+    const navToolbar = document.querySelector(
+      '[data-testid="navigator-toolbar"]',
     ) as HTMLElement
-    expect(workToolbar).toBeTruthy()
-    expect(workToolbar.contains(navToggles[0]!)).toBe(true)
+    expect(navToolbar.contains(navToggles[0]!)).toBe(true)
 
     // Full-stage Work has no internal left divider (Workspace outer frame unchanged).
     const workHost = page.getByTestId('work-surface-host').element()
@@ -777,6 +784,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await userEvent.click(page.getByTestId('toggle-navigator'))
     await expect.element(shell).toHaveAttribute('data-nav-open', 'false')
     await expect.element(shell).toHaveAttribute('data-nav-motion', 'animated')
+
+    // After collapse, re-open control moves to Work toolbar (rail is gone).
+    navToggles = visibleByTestId('toggle-navigator')
+    expect(navToggles.length).toBe(1)
+    const workToolbar = document.querySelector(
+      '[data-slot="work-surface-toolbar"]',
+    ) as HTMLElement
+    expect(workToolbar.contains(navToggles[0]!)).toBe(true)
   })
 
   it('760 serial Work: unique toggle-navigator lives in Work toolbar and is clickable', async () => {
@@ -831,7 +846,13 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('restores per-Task layout when switching A → B → A', async () => {
     await renderWorkbenchWithTask()
     const taskAId = page.getByTestId('task-surface').element().dataset.taskId!
+    // Leave blank-draft state so the next 新对话 creates a distinct task.
+    await userEvent.fill(page.getByTestId('composer-input'), 'seed task A')
+    await userEvent.click(page.getByTestId('composer-submit'))
+    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
+
     await userEvent.click(page.getByTestId('navigator-new-chat'))
+    await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
     const taskBId = page.getByTestId('task-surface').element().dataset.taskId!
     expect(taskBId).not.toBe(taskAId)
 
@@ -946,6 +967,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(page.getByTestId('composer'))
       .toHaveAttribute('data-composer-mode', 'runtime')
+    // New-task empty hub: two-layer rail + project chip for workspace selection.
     await expect
       .element(page.getByTestId('composer-context-bar'))
       .toBeInTheDocument()
@@ -959,9 +981,20 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await userEvent.fill(input, 'hello composer')
     await userEvent.click(submit)
     await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
+    // Conversation: rail stays for depth hierarchy; project chip hides.
     await expect
-      .element(page.getByTestId('composer-notice'))
-      .toHaveTextContent(/非生产|不会调用远程/)
+      .element(page.getByTestId('composer-context-bar'))
+      .toBeInTheDocument()
+    expect(
+      page.getByTestId('composer-context-bar').element().getAttribute('data-empty'),
+    ).toBe('true')
+    expect(
+      document.querySelector('[data-testid="composer-chip-project"]'),
+    ).toBeNull()
+    // Notice is sr-only (no visible honesty chrome under Composer)
+    expect(
+      page.getByTestId('composer-notice').element().classList.contains('sr-only'),
+    ).toBe(true)
 
     const composers = document.querySelectorAll('[data-testid="composer"]')
     expect(composers.length).toBe(1)

@@ -52,6 +52,11 @@ export interface WorkSurfaceHostProps {
    * Composition only — Host does not own Navigator state or callbacks.
    */
   toolbarLeading?: ReactNode
+  /**
+   * Optional empty-state actions (e.g. bind local folder). Composition-owned;
+   * Host only renders the node when no tabs are open.
+   */
+  emptyExtra?: ReactNode
 }
 
 /**
@@ -65,6 +70,7 @@ export function WorkSurfaceHost({
   taskId,
   fullStage = false,
   toolbarLeading,
+  emptyExtra,
 }: WorkSurfaceHostProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -137,9 +143,17 @@ export function WorkSurfaceHost({
   let panelBody: ReactNode
   if (!activeTab) {
     panelBody = (
-      <p className='text-sm leading-relaxed text-muted-foreground'>
-        {WORK_SURFACE_EMPTY_NOTICE}
-      </p>
+      <div
+        className='flex flex-col gap-3'
+        data-testid='work-surface-empty'
+      >
+        <p className='text-sm leading-relaxed text-muted-foreground'>
+          {WORK_SURFACE_EMPTY_NOTICE}
+        </p>
+        {emptyExtra != null ? (
+          <div data-testid='work-surface-empty-extra'>{emptyExtra}</div>
+        ) : null}
+      </div>
     )
   } else if (activeDefinition) {
     panelBody = activeDefinition.render({

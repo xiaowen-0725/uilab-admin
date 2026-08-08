@@ -35,6 +35,17 @@ export type {
   WorkspaceInfoResponse,
 } from './adapters/http-workspace-document-content'
 export {
+  createFsAccessDocumentContent,
+  fsAccessWorkspaceHint,
+  isFsAccessDirectoryPickerSupported,
+  pickWorkspaceDirectory,
+  resolveFsAccessFileHandle,
+} from './adapters/fs-access-document-content'
+export type {
+  FsAccessDocumentContentOptions,
+  PickWorkspaceDirectoryResult,
+} from './adapters/fs-access-document-content'
+export {
   createWebBrowserHostPort,
   type BrowserHostPort,
 } from './ports/browser-host-port'

@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   deleteTaskCascade,
@@ -27,6 +28,7 @@ import {
   DEFAULT_PROJECT_ID,
   NEW_TASK_TITLE,
   ProjectCatalogController,
+  isBlankDraftTask,
   useProjectCatalog,
   type ProjectSummary,
   type TaskSummary,
@@ -45,7 +47,6 @@ import {
   createRunStatusIndex,
   createVoltAgentRuntimeAdapter,
   isNavigatorBusyStatus,
-  runtimeHonestyCopy,
   TaskRuntimeController,
   useTaskRuntime,
   VirtualClock,
@@ -57,12 +58,16 @@ import {
 import {
   createBrowserSurfaceDefinition,
   createDocumentSurfaceDefinition,
+  createFsAccessDocumentContent,
   createHttpWorkspaceDocumentContent,
   createMemoryDocumentContent,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   createWebBrowserHostPort,
   fetchWorkspaceHint,
+  fsAccessWorkspaceHint,
+  isFsAccessDirectoryPickerSupported,
+  pickWorkspaceDirectory,
   resolveOpenWorkSurfaceIntent,
   type DocumentContentPort,
   type SurfaceRegistry,
@@ -105,11 +110,12 @@ const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
 }
 
 /**
- * Document content Port selection:
+ * Default Document content Port:
  * - fake / tests → Memory fixtures
  * - voltagent → HTTP read of sidecar WORKSPACE_ROOT (no Memory fallback)
+ * Local folder bind (FS Access) overrides fake path only — see WorkbenchApp state.
  */
-function createDocumentContentPort(): DocumentContentPort {
+function createDefaultDocumentContentPort(): DocumentContentPort {
   if (RUNTIME_ADAPTER_MODE === 'voltagent') {
     return createHttpWorkspaceDocumentContent({
       baseUrl: resolveVoltAgentBaseUrl(),
@@ -123,10 +129,10 @@ function createDocumentContentPort(): DocumentContentPort {
  * Host must never register; Document/Browser/test register here only.
  */
 function createWorkbenchSurfaceRegistry(
+  documentContent: DocumentContentPort,
   workspaceHint: string | null = null,
 ): SurfaceRegistry {
   const registry = createSurfaceRegistry()
-  const documentContent = createDocumentContentPort()
   // Document before test so workspace paths resolve to document, not test.
   registry.register(
     createDocumentSurfaceDefinition({
@@ -153,8 +159,21 @@ export function WorkbenchApp({
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
 
-  /** Voltagent only: sidecar /workspace/info root for Document header honesty. */
+  /**
+   * Document content source:
+   * - voltagent: always sidecar HTTP (folder pick disabled)
+   * - fake: Memory default; optional Chromium FS Access local folder bind
+   */
+  const defaultDocumentContent = useMemo(
+    () => createDefaultDocumentContentPort(),
+    [],
+  )
+  const [documentContent, setDocumentContent] =
+    useState<DocumentContentPort>(defaultDocumentContent)
+  const [localFolderBound, setLocalFolderBound] = useState(false)
   const [workspaceHint, setWorkspaceHint] = useState<string | null>(null)
+  const [folderBindNotice, setFolderBindNotice] = useState<string | null>(null)
+
   useEffect(() => {
     if (RUNTIME_ADAPTER_MODE !== 'voltagent') return
     let cancelled = false
@@ -167,9 +186,103 @@ export function WorkbenchApp({
   }, [])
 
   const surfaceRegistry = useMemo(
-    () => createWorkbenchSurfaceRegistry(workspaceHint),
-    [workspaceHint],
+    () => createWorkbenchSurfaceRegistry(documentContent, workspaceHint),
+    [documentContent, workspaceHint],
   )
+
+  const onPickLocalWorkspaceFolder = useCallback(async () => {
+    if (RUNTIME_ADAPTER_MODE === 'voltagent') {
+      setFolderBindNotice(
+        '当前使用侧车工作区（WORKSPACE_ROOT）。本地文件夹绑定仅在 Fake 路径可用。',
+      )
+      return
+    }
+    const result = await pickWorkspaceDirectory()
+    if (!result.ok) {
+      if (result.reason !== 'aborted') {
+        setFolderBindNotice(result.message)
+      }
+      return
+    }
+    setDocumentContent(createFsAccessDocumentContent({ root: result.handle }))
+    setWorkspaceHint(fsAccessWorkspaceHint(result.handle))
+    setLocalFolderBound(true)
+    setFolderBindNotice(null)
+  }, [])
+
+  const onClearLocalWorkspaceFolder = useCallback(() => {
+    setDocumentContent(createDefaultDocumentContentPort())
+    setWorkspaceHint(null)
+    setLocalFolderBound(false)
+    setFolderBindNotice(null)
+  }, [])
+
+  const workSurfaceEmptyExtra = useMemo(() => {
+    // Tests / Fake product path only — voltagent workspace is sidecar-owned.
+    if (RUNTIME_ADAPTER_MODE === 'voltagent') {
+      return (
+        <p className='text-xs leading-relaxed text-muted-foreground'>
+          文档内容来自侧车工作区
+          {workspaceHint ? `（${workspaceHint}）` : ''}。
+        </p>
+      )
+    }
+    const canPick = isFsAccessDirectoryPickerSupported()
+    return (
+      <div className='flex flex-col items-start gap-2'>
+        {localFolderBound ? (
+          <>
+            <p className='text-xs leading-relaxed text-muted-foreground'>
+              已绑定{workspaceHint ? `：${workspaceHint}` : '本地文件夹'}。
+              打开对话中的文件路径将从该文件夹读取。
+            </p>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              data-testid='clear-local-workspace-folder'
+              onClick={onClearLocalWorkspaceFolder}
+            >
+              恢复演示文档
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className='text-xs leading-relaxed text-muted-foreground'>
+              {canPick
+                ? '可选：绑定本机文件夹，用浏览器只读预览真实文件（非 Electron 桌面宿主）。'
+                : '当前浏览器不支持本地文件夹选择；Fake 路径使用内置演示文档。'}
+            </p>
+            {canPick ? (
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                data-testid='pick-local-workspace-folder'
+                onClick={() => void onPickLocalWorkspaceFolder()}
+              >
+                绑定本地文件夹
+              </Button>
+            ) : null}
+          </>
+        )}
+        {folderBindNotice ? (
+          <p
+            className='text-xs text-destructive'
+            data-testid='local-workspace-bind-notice'
+          >
+            {folderBindNotice}
+          </p>
+        ) : null}
+      </div>
+    )
+  }, [
+    folderBindNotice,
+    localFolderBound,
+    onClearLocalWorkspaceFolder,
+    onPickLocalWorkspaceFolder,
+    workspaceHint,
+  ])
 
   const [bootReady, setBootReady] = useState(false)
   const [bootError, setBootError] = useState<string | null>(null)
@@ -546,19 +659,40 @@ export function WorkbenchApp({
     [runtime, taskId],
   )
 
+  // Keep selection pointer fresh for 新对话 (avoids stale-closure double-create).
+  const selectedTaskIdRef = useRef(session.view.selectedTaskId)
+  selectedTaskIdRef.current = session.view.selectedTaskId
+  const selectedProjectIdRef = useRef(session.view.selectedProjectId)
+  selectedProjectIdRef.current = session.view.selectedProjectId
+
   const onNewChat = useCallback(async () => {
     const controller = catalogControllerRef.current
     if (!controller) return
+
+    const projectId = selectedProjectIdRef.current
+    const selectedId = selectedTaskIdRef.current
+    const selected = selectedId ? controller.getTaskRow(selectedId) : null
+
+    // Codex / WorkBuddy: blank unused draft → re-select only, never spawn again.
+    if (
+      selected &&
+      selected.projectId === projectId &&
+      isBlankDraftTask(selected)
+    ) {
+      session.commands.selectTask(selected.id)
+      return
+    }
+
     newTaskCounterRef.current += 1
     const newTaskId = `task-${Date.now().toString(36)}-${newTaskCounterRef.current}`
     const row = await controller.createTask({
-      projectId: session.view.selectedProjectId,
+      projectId,
       taskId: newTaskId,
       title: NEW_TASK_TITLE,
     })
     session.commands.ensureTaskLayout(row.id)
     session.commands.selectTask(row.id)
-  }, [session.commands, session.view.selectedProjectId])
+  }, [session.commands])
 
   const onSelectProject = useCallback(
     (nextProjectId: string) => {
@@ -685,12 +819,14 @@ export function WorkbenchApp({
   )
 
   /**
-   * Runtime channel: work_surface.open_requested (attached/selected task only).
+   * Runtime channel: work_surface.open_requested (only attached/selected task reaches controller).
+   * pane-hidden → tabs only; pane-visible → activate (Session focus defaults for source:runtime).
    */
   useEffect(() => {
     const controller = controllerRef.current
-    if (!controller || !bootReady) return
+    if (!controller) return
     controller.setWorkSurfaceOpenListener(({ taskId: openTaskId, payload }) => {
+      // Defense in depth: only act for currently selected task.
       if (openTaskId !== session.view.selectedTaskId) return
       const intent = resolveOpenWorkSurfaceIntent(surfaceRegistry, {
         kind: payload.kind,
@@ -711,7 +847,14 @@ export function WorkbenchApp({
     return () => {
       controller.setWorkSurfaceOpenListener(null)
     }
-  }, [bootReady, session.commands, session.view.selectedTaskId, surfaceRegistry])
+  }, [
+    bootReady,
+    session.commands,
+    session.view.selectedTaskId,
+    surfaceRegistry,
+    // re-bind when controller instance becomes available
+    controllerRef.current,
+  ])
 
   if (!bootReady) {
     return (
@@ -744,6 +887,7 @@ export function WorkbenchApp({
           composerRuntime={composerRuntime}
           surfaceRegistry={surfaceRegistry}
           onOpenFileRef={onOpenFileRef}
+          workSurfaceEmptyExtra={workSurfaceEmptyExtra}
         />
         {deleteConfirmTaskId ? (
           <div
@@ -753,33 +897,37 @@ export function WorkbenchApp({
             aria-modal='true'
             aria-labelledby='delete-task-title'
           >
-            <div className='w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-lg'>
+            <div className='w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-lg'>
               <h2
                 id='delete-task-title'
-                className='text-sm font-semibold'
+                className='text-[15px] font-semibold tracking-tight'
               >
-                删除对话？
+                删除任务？
               </h2>
-              <p className='mt-2 text-sm text-muted-foreground'>
-                将永久删除此对话及其本地事件记录，无法恢复。
+              <p className='mt-2 text-sm leading-relaxed text-muted-foreground'>
+                将从应用中移除此任务。本地事件记录会被删除，无法恢复。
               </p>
-              <div className='mt-4 flex justify-end gap-2'>
-                <button
+              <div className='mt-5 flex justify-end gap-2'>
+                <Button
                   type='button'
-                  className='rounded-md px-3 py-1.5 text-sm hover:bg-muted'
+                  variant='ghost'
+                  size='sm'
                   data-testid='delete-task-cancel'
                   onClick={() => setDeleteConfirmTaskId(null)}
                 >
                   取消
-                </button>
-                <button
+                </Button>
+                {/* Soft destructive — light fill + danger text (Codex/WorkBuddy style) */}
+                <Button
                   type='button'
-                  className='rounded-md bg-destructive px-3 py-1.5 text-sm text-destructive-foreground hover:opacity-90'
+                  variant='destructive'
+                  size='sm'
+                  className='rounded-full px-4'
                   data-testid='delete-task-confirm'
                   onClick={() => void performDeleteTask(deleteConfirmTaskId)}
                 >
-                  永久删除
-                </button>
+                  移除任务
+                </Button>
               </div>
             </div>
           </div>
@@ -789,13 +937,7 @@ export function WorkbenchApp({
   )
 }
 
-function runtimeContext(mode: 'fake' | 'voltagent') {
-  const honesty = runtimeHonestyCopy(mode)
-  return [
-    {
-      id: 'env',
-      title: '环境',
-      items: honesty.contextItems,
-    },
-  ]
+/** Runtime path: no honesty chips in product chrome (data-honesty-mode / a11y only). */
+function runtimeContext(_mode: 'fake' | 'voltagent') {
+  return []
 }
