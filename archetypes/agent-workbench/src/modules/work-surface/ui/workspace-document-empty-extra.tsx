@@ -38,13 +38,17 @@ export function WorkspaceDocumentEmptyExtra({
     )
   }
 
+  const boundHint = workspaceHint ? `：${workspaceHint}` : '本地文件夹'
+  const unboundHint = pickerSupported
+    ? '可选：绑定本机文件夹，用浏览器只读预览真实文件（非 Electron 桌面宿主）。'
+    : '当前浏览器不支持本地文件夹选择；Fake 路径使用内置演示文档。'
+
   return (
     <div className='flex flex-col items-start gap-2'>
       {localFolderBound ? (
         <>
           <p className='text-xs leading-relaxed text-muted-foreground'>
-            已绑定{workspaceHint ? `：${workspaceHint}` : '本地文件夹'}。
-            打开对话中的文件路径将从该文件夹读取。
+            已绑定{boundHint}。打开对话中的文件路径将从该文件夹读取。
           </p>
           <Button
             type='button'
@@ -59,9 +63,7 @@ export function WorkspaceDocumentEmptyExtra({
       ) : (
         <>
           <p className='text-xs leading-relaxed text-muted-foreground'>
-            {pickerSupported
-              ? '可选：绑定本机文件夹，用浏览器只读预览真实文件（非 Electron 桌面宿主）。'
-              : '当前浏览器不支持本地文件夹选择；Fake 路径使用内置演示文档。'}
+            {unboundHint}
           </p>
           {pickerSupported ? (
             <Button

@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type {
+  DocumentBinaryReadResult,
   DocumentContentPort,
   DocumentReadFailureReason,
+  DocumentTextReadResult,
 } from '../../ports/document-content-port'
 import {
   codeLanguageFor,
@@ -38,14 +40,21 @@ const STATE_COPY: Record<
   'render-failed': '文档渲染失败。可尝试关闭后重新打开。',
 }
 
+const PORT_FAILURE_STATE: Record<
+  DocumentReadFailureReason,
+  Exclude<DocumentViewState, 'loading' | 'ready' | 'empty' | 'unsupported'>
+> = {
+  'not-found': 'not-found',
+  'permission-denied': 'permission-denied',
+  'too-large': 'too-large',
+  'read-failed': 'read-failed',
+}
+
 /** Map Port failure reason → panel state (IO vs render stay separate). */
 export function mapPortFailureToViewState(
   reason: DocumentReadFailureReason,
 ): Exclude<DocumentViewState, 'loading' | 'ready' | 'empty' | 'unsupported'> {
-  if (reason === 'not-found') return 'not-found'
-  if (reason === 'permission-denied') return 'permission-denied'
-  if (reason === 'too-large') return 'too-large'
-  return 'read-failed'
+  return PORT_FAILURE_STATE[reason] ?? 'read-failed'
 }
 
 function statusMessage(
@@ -57,6 +66,54 @@ function statusMessage(
   if (state === 'ready') return ''
   if (detail && detail.trim()) return detail.trim()
   return STATE_COPY[state]
+}
+
+async function loadHeavyRenderer(
+  fmt: DocumentFormatFamily,
+  bytes: Uint8Array,
+  mime: string,
+  resourceKey: string,
+  onRenderFailed: () => void,
+): Promise<ReactNode> {
+  if (fmt === 'image') {
+    const { loadImageRenderer } = await import('./renderers/heavy-lazy')
+    const ImageRenderer = await loadImageRenderer()
+    return (
+      <ImageRenderer
+        bytes={bytes}
+        mimeType={mime || 'image/png'}
+        resourceKey={resourceKey}
+      />
+    )
+  }
+  if (fmt === 'pdf') {
+    const { loadPdfRenderer } = await import('./renderers/heavy-lazy')
+    const PdfRenderer = await loadPdfRenderer()
+    return <PdfRenderer bytes={bytes} resourceKey={resourceKey} />
+  }
+  if (fmt === 'docx') {
+    const { loadDocxRenderer } = await import('./renderers/heavy-lazy')
+    const DocxRenderer = await loadDocxRenderer()
+    return (
+      <DocxRenderer
+        bytes={bytes}
+        resourceKey={resourceKey}
+        onFailed={onRenderFailed}
+      />
+    )
+  }
+  if (fmt === 'xlsx') {
+    const { loadXlsxRenderer } = await import('./renderers/heavy-lazy')
+    const XlsxRenderer = await loadXlsxRenderer()
+    return (
+      <XlsxRenderer
+        bytes={bytes}
+        resourceKey={resourceKey}
+        onFailed={onRenderFailed}
+      />
+    )
+  }
+  return null
 }
 
 export interface DocumentPanelProps {
@@ -87,6 +144,47 @@ export function DocumentPanel({
     let cancelled = false
     const key = normalizeWorkspaceResourceKey(resourceKey)
 
+    function failPort(
+      reason: DocumentReadFailureReason,
+      message?: string | null,
+    ) {
+      if (cancelled) return
+      setDetail(message ?? null)
+      setState(mapPortFailureToViewState(reason))
+    }
+
+    function failReadThrown() {
+      if (cancelled) return
+      setState('read-failed')
+      setDetail('无法读取该文件。')
+    }
+
+    async function readPortText(
+      pathKey: string,
+    ): Promise<DocumentTextReadResult | null> {
+      try {
+        return await content.readText(pathKey)
+      } catch {
+        failReadThrown()
+        return null
+      }
+    }
+
+    async function readPortBinary(
+      pathKey: string,
+    ): Promise<DocumentBinaryReadResult | null> {
+      if (!content.readBinary) {
+        if (!cancelled) setState('unsupported')
+        return null
+      }
+      try {
+        return await content.readBinary(pathKey)
+      } catch {
+        failReadThrown()
+        return null
+      }
+    }
+
     async function load() {
       setState('loading')
       setDetail(null)
@@ -109,26 +207,11 @@ export function DocumentPanel({
         return
       }
 
-      // Port IO failures → read-failed (and siblings); heavy render → render-failed.
       if (isBinaryDocumentFamily(fmt)) {
-        if (!content.readBinary) {
-          if (!cancelled) setState('unsupported')
-          return
-        }
-        let result
-        try {
-          result = await content.readBinary(key)
-        } catch {
-          if (!cancelled) {
-            setState('read-failed')
-            setDetail('无法读取该文件。')
-          }
-          return
-        }
-        if (cancelled) return
+        const result = await readPortBinary(key)
+        if (cancelled || result == null) return
         if (!result.ok) {
-          setDetail(result.message ?? null)
-          setState(mapPortFailureToViewState(result.reason))
+          failPort(result.reason, result.message)
           return
         }
         if (result.byteLength === 0) {
@@ -143,77 +226,27 @@ export function DocumentPanel({
         }
         setState('ready')
         try {
-          // Lazy load heavy renderer modules (A7 — dynamic import)
           const mime = mimeForResourceKey(key) ?? result.mimeType ?? ''
-          if (fmt === 'image') {
-            const { loadImageRenderer } = await import('./renderers/heavy-lazy')
-            const ImageRenderer = await loadImageRenderer()
-            if (!cancelled) {
-              setHeavyNode(
-                <ImageRenderer
-                  bytes={result.bytes}
-                  mimeType={mime || 'image/png'}
-                  resourceKey={key}
-                />,
-              )
-            }
-          } else if (fmt === 'pdf') {
-            const { loadPdfRenderer } = await import('./renderers/heavy-lazy')
-            const PdfRenderer = await loadPdfRenderer()
-            if (!cancelled) {
-              setHeavyNode(
-                <PdfRenderer bytes={result.bytes} resourceKey={key} />,
-              )
-            }
-          } else if (fmt === 'docx') {
-            const { loadDocxRenderer } = await import('./renderers/heavy-lazy')
-            const DocxRenderer = await loadDocxRenderer()
-            if (!cancelled) {
-              setHeavyNode(
-                <DocxRenderer
-                  bytes={result.bytes}
-                  resourceKey={key}
-                  onFailed={() => {
-                    if (!cancelled) setState('render-failed')
-                  }}
-                />,
-              )
-            }
-          } else if (fmt === 'xlsx') {
-            const { loadXlsxRenderer } = await import('./renderers/heavy-lazy')
-            const XlsxRenderer = await loadXlsxRenderer()
-            if (!cancelled) {
-              setHeavyNode(
-                <XlsxRenderer
-                  bytes={result.bytes}
-                  resourceKey={key}
-                  onFailed={() => {
-                    if (!cancelled) setState('render-failed')
-                  }}
-                />,
-              )
-            }
-          }
+          const node = await loadHeavyRenderer(
+            fmt,
+            result.bytes,
+            mime,
+            key,
+            () => {
+              if (!cancelled) setState('render-failed')
+            },
+          )
+          if (!cancelled) setHeavyNode(node)
         } catch {
           if (!cancelled) setState('render-failed')
         }
         return
       }
 
-      let result
-      try {
-        result = await content.readText(key)
-      } catch {
-        if (!cancelled) {
-          setState('read-failed')
-          setDetail('无法读取该文件。')
-        }
-        return
-      }
-      if (cancelled) return
+      const result = await readPortText(key)
+      if (cancelled || result == null) return
       if (!result.ok) {
-        setDetail(result.message ?? null)
-        setState(mapPortFailureToViewState(result.reason))
+        failPort(result.reason, result.message)
         return
       }
       if (result.text.length === 0) {
@@ -230,6 +263,9 @@ export function DocumentPanel({
       cancelled = true
     }
   }, [content, resourceKey])
+
+  const showStateMessage = state !== 'ready'
+  const readyBinary = state === 'ready' && isBinaryDocumentFamily(family)
 
   return (
     <div
@@ -260,29 +296,13 @@ export function DocumentPanel({
         ) : null}
       </header>
 
-      {state === 'loading' ? (
+      {showStateMessage ? (
         <p
           className='text-sm text-muted-foreground'
           data-testid='document-state-message'
-        >
-          {statusMessage('loading', detail)}
-        </p>
-      ) : null}
-
-      {state === 'empty' ? (
-        <p
-          className='text-sm text-muted-foreground'
-          data-testid='document-state-message'
-        >
-          {statusMessage('empty', detail)}
-        </p>
-      ) : null}
-
-      {state !== 'loading' && state !== 'ready' && state !== 'empty' ? (
-        <p
-          className='text-sm text-muted-foreground'
-          data-testid='document-state-message'
-          data-state={state}
+          {...(state !== 'loading' && state !== 'empty'
+            ? { 'data-state': state }
+            : {})}
         >
           {statusMessage(state, detail)}
         </p>
@@ -301,7 +321,7 @@ export function DocumentPanel({
           resourceKey={resourceKey}
         />
       ) : null}
-      {state === 'ready' && isBinaryDocumentFamily(family) ? heavyNode : null}
+      {readyBinary ? heavyNode : null}
     </div>
   )
 }

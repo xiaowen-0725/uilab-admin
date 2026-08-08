@@ -160,9 +160,7 @@ export function createHttpWorkspaceDocumentContent(
   }
 
   return {
-    async readBinary(resourceKey: string): Promise<DocumentBinaryReadResult> {
-      return readRaw(resourceKey)
-    },
+    readBinary: readRaw,
 
     async readText(resourceKey: string): Promise<DocumentTextReadResult> {
       const bin = await readRaw(resourceKey)
@@ -171,11 +169,7 @@ export function createHttpWorkspaceDocumentContent(
         const text = new TextDecoder('utf-8', { fatal: false }).decode(
           bin.bytes,
         )
-        return {
-          ok: true,
-          text,
-          byteLength: bin.byteLength,
-        }
+        return { ok: true, text, byteLength: bin.byteLength }
       } catch {
         return {
           ok: false,

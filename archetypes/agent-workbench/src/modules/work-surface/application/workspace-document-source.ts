@@ -206,11 +206,7 @@ export function useWorkspaceDocumentSource(
 
   return {
     runtimeMode: options.runtimeMode,
-    content: snap.content,
-    workspaceHint: snap.workspaceHint,
-    localFolderBound: snap.localFolderBound,
-    pickerSupported: snap.pickerSupported,
-    bindNotice: snap.bindNotice,
+    ...snap,
     pickLocalFolder: controller.pickLocalFolder,
     clearLocalFolder: controller.clearLocalFolder,
   }

@@ -151,35 +151,43 @@ export function WorkbenchApp({
     voltAgentBaseUrl: resolveVoltAgentBaseUrl(),
   })
 
+  const {
+    runtimeMode: documentRuntimeMode,
+    workspaceHint: documentWorkspaceHint,
+    localFolderBound,
+    pickerSupported,
+    bindNotice,
+    pickLocalFolder,
+    clearLocalFolder,
+    content: documentContent,
+  } = documentSource
+
   const surfaceRegistry = useMemo(
     () =>
-      createWorkbenchSurfaceRegistry(
-        documentSource.content,
-        documentSource.workspaceHint,
-      ),
-    [documentSource.content, documentSource.workspaceHint],
+      createWorkbenchSurfaceRegistry(documentContent, documentWorkspaceHint),
+    [documentContent, documentWorkspaceHint],
   )
 
   const workSurfaceEmptyExtra = useMemo(
     () => (
       <WorkspaceDocumentEmptyExtra
-        runtimeMode={documentSource.runtimeMode}
-        workspaceHint={documentSource.workspaceHint}
-        localFolderBound={documentSource.localFolderBound}
-        pickerSupported={documentSource.pickerSupported}
-        bindNotice={documentSource.bindNotice}
-        onPickLocalFolder={documentSource.pickLocalFolder}
-        onClearLocalFolder={documentSource.clearLocalFolder}
+        runtimeMode={documentRuntimeMode}
+        workspaceHint={documentWorkspaceHint}
+        localFolderBound={localFolderBound}
+        pickerSupported={pickerSupported}
+        bindNotice={bindNotice}
+        onPickLocalFolder={pickLocalFolder}
+        onClearLocalFolder={clearLocalFolder}
       />
     ),
     [
-      documentSource.bindNotice,
-      documentSource.clearLocalFolder,
-      documentSource.localFolderBound,
-      documentSource.pickLocalFolder,
-      documentSource.pickerSupported,
-      documentSource.runtimeMode,
-      documentSource.workspaceHint,
+      bindNotice,
+      clearLocalFolder,
+      documentRuntimeMode,
+      documentWorkspaceHint,
+      localFolderBound,
+      pickLocalFolder,
+      pickerSupported,
     ],
   )
 
@@ -192,15 +200,11 @@ export function WorkbenchApp({
     if (!hasOpenWorkTabs) return undefined
     return (
       <WorkspaceDocumentToolbarTrailing
-        localFolderBound={documentSource.localFolderBound}
-        onClearLocalFolder={documentSource.clearLocalFolder}
+        localFolderBound={localFolderBound}
+        onClearLocalFolder={clearLocalFolder}
       />
     )
-  }, [
-    documentSource.clearLocalFolder,
-    documentSource.localFolderBound,
-    hasOpenWorkTabs,
-  ])
+  }, [clearLocalFolder, hasOpenWorkTabs, localFolderBound])
 
   const [bootReady, setBootReady] = useState(false)
   const [bootError, setBootError] = useState<string | null>(null)
