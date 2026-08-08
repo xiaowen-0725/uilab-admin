@@ -239,7 +239,7 @@ describe('DocumentPanel', () => {
       .toBe('unsupported')
   })
 
-  it('shows port failure message detail when present', async () => {
+  it('maps port read-failed to data-state read-failed (not render-failed)', async () => {
     const content = {
       async readText() {
         return {
@@ -267,7 +267,7 @@ describe('DocumentPanel', () => {
       .poll(() =>
         page.getByTestId('work-surface-document').element().getAttribute('data-state'),
       )
-      .toBe('render-failed')
+      .toBe('read-failed')
     await expect
       .element(page.getByTestId('document-state-message'))
       .toHaveTextContent('工作区侧车未连接')

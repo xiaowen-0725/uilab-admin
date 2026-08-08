@@ -53,6 +53,11 @@ export interface WorkSurfaceHostProps {
    */
   toolbarLeading?: ReactNode
   /**
+   * Optional trailing toolbar chrome (before maximize/close), e.g. clear local folder.
+   * Composition-owned; Host only places the node.
+   */
+  toolbarTrailing?: ReactNode
+  /**
    * Optional empty-state actions (e.g. bind local folder). Composition-owned;
    * Host only renders the node when no tabs are open.
    */
@@ -70,6 +75,7 @@ export function WorkSurfaceHost({
   taskId,
   fullStage = false,
   toolbarLeading,
+  toolbarTrailing,
   emptyExtra,
 }: WorkSurfaceHostProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -269,6 +275,14 @@ export function WorkSurfaceHost({
             )
           })}
         </div>
+        {toolbarTrailing != null ? (
+          <div
+            className='flex shrink-0 items-center gap-1'
+            data-slot='work-toolbar-trailing'
+          >
+            {toolbarTrailing}
+          </div>
+        ) : null}
         <ToolbarIconButton
           testId={view.visible ? 'work-surface-maximize' : undefined}
           pressed={view.maximized}

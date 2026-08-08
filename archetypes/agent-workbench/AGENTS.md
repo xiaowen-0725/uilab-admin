@@ -54,7 +54,7 @@ src/
     project/           # Project 实体 + Task 目录 + ProjectCatalogPort
     workbench-session/ # 选择指针 + 每 Task 布局（无 projects/tasks 数组）
     task/              # Runtime / EventStore / projection / Task Surface UI
-    work-surface/      # placeholder Host
+    work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
   components/ui/       # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
   lib/                 # cn 等应用侧工具
   config/              # fixtures / captures（capture 非产品默认 boot）
@@ -77,6 +77,9 @@ components.json        # shadcn 配置（base-nova）
 10. **Base UI 约束** — `render={...}`；禁止 `asChild` 与 `@radix-ui/*`；禁止 Desktop/Node built-in 进入 renderer 源码。
 11. **中文优先** — 用户可见文案中文；标识符英文。
 12. **本地 Runtime 体验 + 远程诚实** — 交互应像真产品；凡未接远程处须诚实，不得把「未接后端」做成「控件不可用」。
+13. **Document 内容源** — 状态与绑定 UI 归属 `modules/work-surface`（`WorkspaceDocumentSource` / `useWorkspaceDocumentSource`）；Composition 只选 `runtimeMode` 并注入，**禁止**在 `workbench-app` 内联文件夹绑定业务。
+14. **路径策略** — 只经 `path-utils` 公开 API（`toWorkspaceResourceKey` / `normalizeWorkspaceResourceKey`）；adapter / intent **禁止**自写 peel 或对字符串做 `includes('..')` 式包含判定（段级 `..` 由 normalize 处理，允许 `v1..v2.md`）。
+15. **IO 失败 vs 渲染失败** — DocumentPanel：`read-failed`（Port 读失败）≠ `render-failed`（解码/渲染失败）；不得把 `read-failed` 映射为 `render-failed`。
 
 ## 完成定义（包级）
 

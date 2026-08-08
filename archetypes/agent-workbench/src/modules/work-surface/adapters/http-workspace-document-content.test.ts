@@ -112,6 +112,37 @@ describe('createHttpWorkspaceDocumentContent', () => {
       expect(result.message).toMatch(/侧车/)
     }
   })
+
+  it('maps Load failed / TypeError without Failed to fetch to Chinese network message', async () => {
+    const fetchLoadFailed = vi.fn(async () => {
+      throw new TypeError('Load failed')
+    })
+    const portA = createHttpWorkspaceDocumentContent({
+      baseUrl: '/voltagent-runtime',
+      fetchImpl: fetchLoadFailed as unknown as typeof fetch,
+    })
+    const a = await portA.readText('a.md')
+    expect(a.ok).toBe(false)
+    if (!a.ok) {
+      expect(a.reason).toBe('read-failed')
+      expect(a.message).toBe('工作区侧车未连接或网络错误')
+      expect(a.message).not.toMatch(/Load failed/i)
+    }
+
+    const fetchNetworkError = vi.fn(async () => {
+      throw new Error('NetworkError when attempting to fetch resource.')
+    })
+    const portB = createHttpWorkspaceDocumentContent({
+      baseUrl: '/voltagent-runtime',
+      fetchImpl: fetchNetworkError as unknown as typeof fetch,
+    })
+    const b = await portB.readText('b.md')
+    expect(b.ok).toBe(false)
+    if (!b.ok) {
+      expect(b.reason).toBe('read-failed')
+      expect(b.message).toBe('工作区侧车未连接或网络错误')
+    }
+  })
 })
 
 describe('fetchWorkspaceHint', () => {

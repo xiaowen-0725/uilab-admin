@@ -10,10 +10,22 @@ import type {
   DocumentTextReadResult,
 } from '../ports/document-content-port'
 import {
-  coerceWorkspaceResourceKey,
   maxBytesForFamily,
+  toWorkspaceResourceKey,
 } from '../surfaces/document/path-utils'
 import { resolveDocumentFormat } from '../surfaces/document/format-router'
+
+/** English browser network strings → Chinese sidecar honesty (never surface raw EN). */
+const NETWORK_ERROR_RE =
+  /failed to fetch|load failed|networkerror|network request failed/i
+
+function isNetworkClassError(err: unknown): boolean {
+  if (err instanceof TypeError) return true
+  const msg = err instanceof Error ? err.message : String(err)
+  return NETWORK_ERROR_RE.test(msg)
+}
+
+const SIDECAR_NETWORK_MESSAGE = '工作区侧车未连接或网络错误'
 
 export type HttpWorkspaceDocumentContentOptions = {
   /** e.g. `/voltagent-runtime` or `http://127.0.0.1:3141` */
@@ -78,7 +90,7 @@ export function createHttpWorkspaceDocumentContent(
   async function readRaw(
     resourceKey: string,
   ): Promise<DocumentBinaryReadResult> {
-    const key = coerceWorkspaceResourceKey(resourceKey)
+    const key = toWorkspaceResourceKey(resourceKey)
     if (!key) {
       return {
         ok: false,
@@ -131,13 +143,18 @@ export function createHttpWorkspaceDocumentContent(
         mimeType,
       }
     } catch (err) {
+      if (isNetworkClassError(err)) {
+        return {
+          ok: false,
+          reason: 'read-failed',
+          message: SIDECAR_NETWORK_MESSAGE,
+        }
+      }
       const msg = err instanceof Error ? err.message : String(err)
       return {
         ok: false,
         reason: 'read-failed',
-        message: msg.includes('Failed to fetch')
-          ? '工作区侧车未连接或网络错误'
-          : msg || '读取失败',
+        message: msg || '读取失败',
       }
     }
   }

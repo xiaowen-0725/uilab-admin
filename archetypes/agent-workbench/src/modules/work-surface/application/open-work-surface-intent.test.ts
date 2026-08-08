@@ -109,5 +109,18 @@ describe('resolveOpenWorkSurfaceIntent', () => {
       expect(notes.resourceKey).toBe('notes/seed.md')
     }
   })
+
+  it('accepts filenames with ".." characters (not parent segment)', () => {
+    const r = registry()
+    const ok = resolveOpenWorkSurfaceIntent(r, {
+      resourceKey: 'notes/v1..v2.md',
+      source: 'user',
+    })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) {
+      expect(ok.kind).toBe('document')
+      expect(ok.resourceKey).toBe('notes/v1..v2.md')
+    }
+  })
 })
 

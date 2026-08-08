@@ -1,6 +1,12 @@
 /**
- * Workspace-relative resourceKey rules for Document Surface.
- * resourceKey uses `/` separators; `..` escape is rejected.
+ * Workspace resourceKey policy (single entry for open/read adapters).
+ *
+ * Keys are workspace-relative with `/` separators (e.g. `notes/plan.md`).
+ * Absolute host paths may peel the trailing virtual marker segment
+ * `/output|/notes|/skills/…` before normalize — never peel those markers mid
+ * relative keys. Segment `..` is rejected; a filename containing `..` as
+ * characters (e.g. `v1..v2.md`) is allowed. Prefer {@link toWorkspaceResourceKey}
+ * at open/read call sites.
  */
 
 /** Text / markdown / code default size ceiling (bytes). */
@@ -16,7 +22,8 @@ export const DOCUMENT_XLSX_MAX_COLS = 40
 
 /**
  * Normalize a user/runtime path to a workspace-relative resourceKey.
- * Returns null when the path is empty, absolute, or escapes with `..`.
+ * Pure segment validator — no absolute peel. Returns null when empty,
+ * scheme/drive/UNC, or a segment is exactly `..`.
  */
 export function normalizeWorkspaceResourceKey(raw: string): string | null {
   if (typeof raw !== 'string') return null
@@ -86,9 +93,16 @@ export function coerceWorkspaceResourceKey(raw: string): string | null {
   return normalizeWorkspaceResourceKey(v)
 }
 
+/**
+ * Preferred public entry for open/read of workspace document paths.
+ * Absolute peel (when needed) then segment normalize — same as
+ * {@link coerceWorkspaceResourceKey}.
+ */
+export const toWorkspaceResourceKey = coerceWorkspaceResourceKey
+
 /** True when string looks like a non-URL workspace path (for Registry match). */
 export function looksLikeWorkspacePath(raw: string): boolean {
-  return coerceWorkspaceResourceKey(raw) != null
+  return toWorkspaceResourceKey(raw) != null
 }
 
 export function maxBytesForFamily(

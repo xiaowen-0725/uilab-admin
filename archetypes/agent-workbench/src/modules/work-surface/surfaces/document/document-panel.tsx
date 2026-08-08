@@ -20,6 +20,7 @@ export type DocumentViewState =
   | 'too-large'
   | 'not-found'
   | 'permission-denied'
+  | 'read-failed'
   | 'render-failed'
 
 const STATE_COPY: Record<
@@ -30,6 +31,7 @@ const STATE_COPY: Record<
   'too-large': '文件过大，无法在工作区内完整预览。',
   'not-found': '找不到该文件。路径可能已变更或不在当前工作区。',
   'permission-denied': '没有权限读取该文件。',
+  'read-failed': '无法读取该文件。',
   'render-failed': '文档渲染失败。可尝试关闭后重新打开。',
 }
 
@@ -108,6 +110,7 @@ export function DocumentPanel({
             else if (result.reason === 'permission-denied')
               setState('permission-denied')
             else if (result.reason === 'too-large') setState('too-large')
+            else if (result.reason === 'read-failed') setState('read-failed')
             else setState('render-failed')
             return
           }
@@ -184,6 +187,7 @@ export function DocumentPanel({
           else if (result.reason === 'permission-denied')
             setState('permission-denied')
           else if (result.reason === 'too-large') setState('too-large')
+          else if (result.reason === 'read-failed') setState('read-failed')
           else setState('render-failed')
           return
         }

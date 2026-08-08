@@ -5,7 +5,7 @@
 
 import type { SurfaceRegistry } from '../model/types'
 import { normalizeBrowserUrl } from '../surfaces/browser/url-utils'
-import { coerceWorkspaceResourceKey } from '../surfaces/document/path-utils'
+import { toWorkspaceResourceKey } from '../surfaces/document/path-utils'
 
 export type OpenWorkSurfaceIntentInput = {
   kind?: string
@@ -88,13 +88,8 @@ export function resolveOpenWorkSurfaceIntent(
     }
   }
 
-  // Document / workspace path — never browser-fallback path escapes
-  if (raw.includes('..')) {
-    return { ok: false, reason: 'invalid-path' }
-  }
-
-  // Coerce host absolute / virtual tool paths → workspace-relative key
-  const pathKey = coerceWorkspaceResourceKey(raw)
+  // Document / workspace path — policy sole entry in path-utils (segment `..` only)
+  const pathKey = toWorkspaceResourceKey(raw)
   if (!pathKey) {
     return { ok: false, reason: 'invalid-path' }
   }

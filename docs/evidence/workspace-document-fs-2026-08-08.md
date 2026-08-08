@@ -18,16 +18,22 @@
 ## 前端
 
 - `adapters/http-workspace-document-content.ts` + 单测（mock fetch）
-- Composition：默认 Port 按 adapter 选择；Fake 可切换 FS Access
-- Phase C：`coerceWorkspaceResourceKey` 统一 Timeline/tool 主机绝对路径 → 工作区相对 key
-- Phase C：`DocumentPanel` 优先展示 Port `message`（侧车失败细节）
+- Phase C：`toWorkspaceResourceKey`（= coerce）统一 Timeline/tool 主机绝对路径 → 工作区相对 key
+- Phase C：`DocumentPanel` 优先展示 Port `message`；Port `read-failed` → UI `data-state=read-failed`（≠ `render-failed`）
 - Phase C：voltagent 启动时 `fetchWorkspaceHint`（`GET /workspace/info`）→ Document 头「工作区：…」
 - Phase D：`createFsAccessDocumentContent` + `pickWorkspaceDirectory`（Chromium `showDirectoryPicker`）
 - Phase D：Work 空态「绑定本地文件夹 / 恢复演示文档」；**非** Electron/Tauri 桌面宿主
 
+## 重构（maintainability，同日）
+
+- **WorkspaceDocumentSource** 抽至 `modules/work-surface/application/workspace-document-source.ts`（纯 controller + 薄 hook）；绑定 UI → `ui/workspace-document-empty-extra.tsx`
+- Composition 仅：`useWorkspaceDocumentSource({ runtimeMode, voltAgentBaseUrl })` + 注入 Registry / emptyExtra / toolbarTrailing（绑定后有 tab 时可「恢复演示文档」）
+- 路径公开入口：`toWorkspaceResourceKey`；intent 去掉 `includes('..')` 误伤 `v1..v2.md`
+- HTTP 网络类错误（TypeError / Load failed / NetworkError…）统一中文「工作区侧车未连接或网络错误」
+
 ## 路径
 
-与 Agent tool 一致：相对路径或 host 绝对路径中的 `/output|/notes|/skills` 段；禁 `..`；根外 403。
+与 Agent tool 一致：相对路径或 host 绝对路径中的 `/output|/notes|/skills` 段；**段级**禁 `..`（非字符包含）；根外 403。
 
 ## Phase C 验收点
 

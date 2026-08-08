@@ -10,8 +10,8 @@ import type {
   DocumentTextReadResult,
 } from '../ports/document-content-port'
 import {
-  coerceWorkspaceResourceKey,
   maxBytesForFamily,
+  toWorkspaceResourceKey,
 } from '../surfaces/document/path-utils'
 import { resolveDocumentFormat } from '../surfaces/document/format-router'
 
@@ -79,7 +79,7 @@ export async function pickWorkspaceDirectory(
 
 /**
  * Walk a DirectoryHandle tree for a workspace-relative resourceKey.
- * Rejects escape / empty via coerce; never traverses `..`.
+ * Rejects escape / empty via toWorkspaceResourceKey; never traverses `..`.
  */
 export async function resolveFsAccessFileHandle(
   root: FileSystemDirectoryHandle,
@@ -88,7 +88,7 @@ export async function resolveFsAccessFileHandle(
   | { ok: true; file: FileSystemFileHandle }
   | { ok: false; reason: 'not-found' | 'permission-denied'; message: string }
 > {
-  const key = coerceWorkspaceResourceKey(resourceKey)
+  const key = toWorkspaceResourceKey(resourceKey)
   if (!key) {
     return {
       ok: false,
@@ -156,7 +156,7 @@ export function createFsAccessDocumentContent(
       }
     }
 
-    const key = coerceWorkspaceResourceKey(resourceKey)
+    const key = toWorkspaceResourceKey(resourceKey)
     const family = key ? resolveDocumentFormat(key) : 'unsupported'
     const maxBytes = maxBytesForFamily(family)
 

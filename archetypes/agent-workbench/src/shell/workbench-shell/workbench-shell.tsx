@@ -114,6 +114,11 @@ export interface WorkbenchShellProps {
    * Shell/Host only pass-through; no folder policy in Shell.
    */
   workSurfaceEmptyExtra?: ReactNode
+  /**
+   * Composition-owned Work toolbar trailing chrome (e.g. restore demo docs when bound).
+   * Shell/Host only pass-through.
+   */
+  workSurfaceToolbarTrailing?: ReactNode
 }
 
 /**
@@ -137,6 +142,7 @@ export function WorkbenchShell({
   surfaceRegistry,
   onOpenFileRef,
   workSurfaceEmptyExtra,
+  workSurfaceToolbarTrailing,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -493,6 +499,7 @@ export function WorkbenchShell({
               taskId={view.selectedTaskId}
               fullStage={workFullStage}
               emptyExtra={workSurfaceEmptyExtra}
+              toolbarTrailing={workSurfaceToolbarTrailing}
               toolbarLeading={
                 // Re-open only: when Work is full-stage and the rail is already open,
                 // the toggle lives on the Navigator toolbar (not duplicated here).

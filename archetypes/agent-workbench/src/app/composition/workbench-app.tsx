@@ -58,17 +58,12 @@ import {
 import {
   createBrowserSurfaceDefinition,
   createDocumentSurfaceDefinition,
-  createFsAccessDocumentContent,
-  createHttpWorkspaceDocumentContent,
-  createMemoryDocumentContent,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   createWebBrowserHostPort,
-  fetchWorkspaceHint,
-  fsAccessWorkspaceHint,
-  isFsAccessDirectoryPickerSupported,
-  pickWorkspaceDirectory,
   resolveOpenWorkSurfaceIntent,
+  useWorkspaceDocumentSource,
+  WorkspaceDocumentEmptyExtra,
   type DocumentContentPort,
   type SurfaceRegistry,
 } from '@/modules/work-surface'
@@ -110,23 +105,9 @@ const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
 }
 
 /**
- * Default Document content Port:
- * - fake / tests → Memory fixtures
- * - voltagent → HTTP read of sidecar WORKSPACE_ROOT (no Memory fallback)
- * Local folder bind (FS Access) overrides fake path only — see WorkbenchApp state.
- */
-function createDefaultDocumentContentPort(): DocumentContentPort {
-  if (RUNTIME_ADAPTER_MODE === 'voltagent') {
-    return createHttpWorkspaceDocumentContent({
-      baseUrl: resolveVoltAgentBaseUrl(),
-    })
-  }
-  return createMemoryDocumentContent()
-}
-
-/**
  * Composition-only Surface Registry assembly.
  * Host must never register; Document/Browser/test register here only.
+ * Document content Port comes from WorkspaceDocumentSource (work-surface module).
  */
 function createWorkbenchSurfaceRegistry(
   documentContent: DocumentContentPort,
@@ -160,128 +141,69 @@ export function WorkbenchApp({
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
 
   /**
-   * Document content source:
-   * - voltagent: always sidecar HTTP (folder pick disabled)
-   * - fake: Memory default; optional Chromium FS Access local folder bind
+   * Document content source (work-surface module):
+   * Composition only selects runtimeMode + base URL; bind UI lives in module.
    */
-  const defaultDocumentContent = useMemo(
-    () => createDefaultDocumentContentPort(),
-    [],
-  )
-  const [documentContent, setDocumentContent] =
-    useState<DocumentContentPort>(defaultDocumentContent)
-  const [localFolderBound, setLocalFolderBound] = useState(false)
-  const [workspaceHint, setWorkspaceHint] = useState<string | null>(null)
-  const [folderBindNotice, setFolderBindNotice] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (RUNTIME_ADAPTER_MODE !== 'voltagent') return
-    let cancelled = false
-    void fetchWorkspaceHint(resolveVoltAgentBaseUrl()).then((hint) => {
-      if (!cancelled && hint) setWorkspaceHint(hint)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const documentSource = useWorkspaceDocumentSource({
+    runtimeMode:
+      RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
+    voltAgentBaseUrl: resolveVoltAgentBaseUrl(),
+  })
 
   const surfaceRegistry = useMemo(
-    () => createWorkbenchSurfaceRegistry(documentContent, workspaceHint),
-    [documentContent, workspaceHint],
+    () =>
+      createWorkbenchSurfaceRegistry(
+        documentSource.content,
+        documentSource.workspaceHint,
+      ),
+    [documentSource.content, documentSource.workspaceHint],
   )
 
-  const onPickLocalWorkspaceFolder = useCallback(async () => {
-    if (RUNTIME_ADAPTER_MODE === 'voltagent') {
-      setFolderBindNotice(
-        '当前使用侧车工作区（WORKSPACE_ROOT）。本地文件夹绑定仅在 Fake 路径可用。',
-      )
-      return
-    }
-    const result = await pickWorkspaceDirectory()
-    if (!result.ok) {
-      if (result.reason !== 'aborted') {
-        setFolderBindNotice(result.message)
-      }
-      return
-    }
-    setDocumentContent(createFsAccessDocumentContent({ root: result.handle }))
-    setWorkspaceHint(fsAccessWorkspaceHint(result.handle))
-    setLocalFolderBound(true)
-    setFolderBindNotice(null)
-  }, [])
+  const workSurfaceEmptyExtra = useMemo(
+    () => (
+      <WorkspaceDocumentEmptyExtra
+        runtimeMode={
+          RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake'
+        }
+        workspaceHint={documentSource.workspaceHint}
+        localFolderBound={documentSource.localFolderBound}
+        bindNotice={documentSource.bindNotice}
+        onPickLocalFolder={documentSource.pickLocalFolder}
+        onClearLocalFolder={documentSource.clearLocalFolder}
+      />
+    ),
+    [
+      documentSource.bindNotice,
+      documentSource.clearLocalFolder,
+      documentSource.localFolderBound,
+      documentSource.pickLocalFolder,
+      documentSource.workspaceHint,
+    ],
+  )
 
-  const onClearLocalWorkspaceFolder = useCallback(() => {
-    setDocumentContent(createDefaultDocumentContentPort())
-    setWorkspaceHint(null)
-    setLocalFolderBound(false)
-    setFolderBindNotice(null)
-  }, [])
-
-  const workSurfaceEmptyExtra = useMemo(() => {
-    // Tests / Fake product path only — voltagent workspace is sidecar-owned.
-    if (RUNTIME_ADAPTER_MODE === 'voltagent') {
-      return (
-        <p className='text-xs leading-relaxed text-muted-foreground'>
-          文档内容来自侧车工作区
-          {workspaceHint ? `（${workspaceHint}）` : ''}。
-        </p>
-      )
-    }
-    const canPick = isFsAccessDirectoryPickerSupported()
+  /**
+   * When folder is bound and tabs are open, emptyExtra is hidden — offer clear
+   * in toolbar so user need not close all tabs. When empty, clear lives in emptyExtra.
+   */
+  const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
+  const workSurfaceToolbarTrailing = useMemo(() => {
+    if (!documentSource.localFolderBound || !hasOpenWorkTabs) return undefined
     return (
-      <div className='flex flex-col items-start gap-2'>
-        {localFolderBound ? (
-          <>
-            <p className='text-xs leading-relaxed text-muted-foreground'>
-              已绑定{workspaceHint ? `：${workspaceHint}` : '本地文件夹'}。
-              打开对话中的文件路径将从该文件夹读取。
-            </p>
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              data-testid='clear-local-workspace-folder'
-              onClick={onClearLocalWorkspaceFolder}
-            >
-              恢复演示文档
-            </Button>
-          </>
-        ) : (
-          <>
-            <p className='text-xs leading-relaxed text-muted-foreground'>
-              {canPick
-                ? '可选：绑定本机文件夹，用浏览器只读预览真实文件（非 Electron 桌面宿主）。'
-                : '当前浏览器不支持本地文件夹选择；Fake 路径使用内置演示文档。'}
-            </p>
-            {canPick ? (
-              <Button
-                type='button'
-                variant='outline'
-                size='sm'
-                data-testid='pick-local-workspace-folder'
-                onClick={() => void onPickLocalWorkspaceFolder()}
-              >
-                绑定本地文件夹
-              </Button>
-            ) : null}
-          </>
-        )}
-        {folderBindNotice ? (
-          <p
-            className='text-xs text-destructive'
-            data-testid='local-workspace-bind-notice'
-          >
-            {folderBindNotice}
-          </p>
-        ) : null}
-      </div>
+      <Button
+        type='button'
+        variant='ghost'
+        size='sm'
+        className='h-auto px-2 py-1 text-xs text-muted-foreground'
+        data-testid='clear-local-workspace-folder'
+        onClick={documentSource.clearLocalFolder}
+      >
+        恢复演示文档
+      </Button>
     )
   }, [
-    folderBindNotice,
-    localFolderBound,
-    onClearLocalWorkspaceFolder,
-    onPickLocalWorkspaceFolder,
-    workspaceHint,
+    documentSource.clearLocalFolder,
+    documentSource.localFolderBound,
+    hasOpenWorkTabs,
   ])
 
   const [bootReady, setBootReady] = useState(false)
@@ -888,6 +810,7 @@ export function WorkbenchApp({
           surfaceRegistry={surfaceRegistry}
           onOpenFileRef={onOpenFileRef}
           workSurfaceEmptyExtra={workSurfaceEmptyExtra}
+          workSurfaceToolbarTrailing={workSurfaceToolbarTrailing}
         />
         {deleteConfirmTaskId ? (
           <div

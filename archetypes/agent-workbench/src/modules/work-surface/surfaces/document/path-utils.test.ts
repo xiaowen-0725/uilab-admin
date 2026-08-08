@@ -3,6 +3,7 @@ import {
   coerceWorkspaceResourceKey,
   normalizeWorkspaceResourceKey,
   looksLikeWorkspacePath,
+  toWorkspaceResourceKey,
 } from './path-utils'
 
 describe('normalizeWorkspaceResourceKey', () => {
@@ -69,5 +70,21 @@ describe('coerceWorkspaceResourceKey', () => {
     expect(coerceWorkspaceResourceKey('file:///tmp/x')).toBeNull()
     expect(coerceWorkspaceResourceKey('../secret')).toBeNull()
     expect(coerceWorkspaceResourceKey('')).toBeNull()
+  })
+
+  it('allows filenames that contain ".." as characters (not segment escape)', () => {
+    expect(normalizeWorkspaceResourceKey('notes/v1..v2.md')).toBe(
+      'notes/v1..v2.md',
+    )
+    expect(toWorkspaceResourceKey('notes/v1..v2.md')).toBe('notes/v1..v2.md')
+  })
+})
+
+describe('toWorkspaceResourceKey', () => {
+  it('is the preferred public alias of coerceWorkspaceResourceKey', () => {
+    expect(toWorkspaceResourceKey).toBe(coerceWorkspaceResourceKey)
+    expect(toWorkspaceResourceKey('output/a.md')).toBe('output/a.md')
+    expect(toWorkspaceResourceKey('/tmp/ws/notes/seed.md')).toBe('notes/seed.md')
+    expect(toWorkspaceResourceKey('../secret')).toBeNull()
   })
 })
