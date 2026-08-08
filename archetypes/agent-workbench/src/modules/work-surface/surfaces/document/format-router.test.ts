@@ -16,10 +16,13 @@ describe('resolveDocumentFormat', () => {
     expect(resolveDocumentFormat('main.py')).toBe('code')
   })
 
-  it('marks unknown extensions unsupported (heavy formats deferred)', () => {
-    expect(resolveDocumentFormat('scan.pdf')).toBe('unsupported')
-    expect(resolveDocumentFormat('sheet.xlsx')).toBe('unsupported')
-    expect(resolveDocumentFormat('photo.png')).toBe('unsupported')
+  it('routes heavy formats; legacy office is unsupported', () => {
+    expect(resolveDocumentFormat('scan.pdf')).toBe('pdf')
+    expect(resolveDocumentFormat('sheet.xlsx')).toBe('xlsx')
+    expect(resolveDocumentFormat('photo.png')).toBe('image')
+    expect(resolveDocumentFormat('letter.docx')).toBe('docx')
+    expect(resolveDocumentFormat('old.doc')).toBe('unsupported')
+    expect(resolveDocumentFormat('old.xls')).toBe('unsupported')
   })
 
   it('maps code languages and extensions', () => {

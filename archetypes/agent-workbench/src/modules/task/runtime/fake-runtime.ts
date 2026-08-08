@@ -67,6 +67,9 @@ import {
   resolveScenarioFromKeywords,
   FIXTURE_WORKFLOW_STEPS,
   REASONING_TOOLS_STEPS,
+  WORK_SURFACE_OPEN_BROWSER_STEPS,
+  WORK_SURFACE_OPEN_DOCUMENT_STEPS,
+  WORK_SURFACE_OPEN_ILLEGAL_STEPS,
   type FakeScenarioName,
 } from './fake-scenario-data'
 import { VirtualClock } from './virtual-clock'
@@ -926,6 +929,33 @@ export class DeterministicFakeRuntime implements RuntimePort {
           return
         case 'fixture-workflow':
           this.scheduleFixtureWorkflowStream(rec, turn, runId, attempt)
+          return
+        case 'work-surface-open-document':
+          this.scheduleStepScript(
+            rec,
+            turn,
+            runId,
+            attempt,
+            WORK_SURFACE_OPEN_DOCUMENT_STEPS,
+          )
+          return
+        case 'work-surface-open-browser':
+          this.scheduleStepScript(
+            rec,
+            turn,
+            runId,
+            attempt,
+            WORK_SURFACE_OPEN_BROWSER_STEPS,
+          )
+          return
+        case 'work-surface-open-illegal':
+          this.scheduleStepScript(
+            rec,
+            turn,
+            runId,
+            attempt,
+            WORK_SURFACE_OPEN_ILLEGAL_STEPS,
+          )
           return
         case 'approval-approve':
         case 'approval-reject':

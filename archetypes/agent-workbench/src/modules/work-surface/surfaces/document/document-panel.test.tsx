@@ -111,8 +111,8 @@ describe('DocumentPanel', () => {
 
     await rerender(
       <DocumentPanel
-        resourceKey='scan.pdf'
-        title='scan.pdf'
+        resourceKey='archive.xyz'
+        title='archive.xyz'
         content={content}
       />,
     )
@@ -150,5 +150,92 @@ describe('DocumentPanel', () => {
         page.getByTestId('work-surface-document').element().getAttribute('data-state'),
       )
       .toBe('not-found')
+  })
+
+  it('renders image / pdf / xlsx / docx fixtures (heavy, lazy)', async () => {
+    const content = createMemoryDocumentContent()
+
+    const { rerender } = await render(
+      <DocumentPanel
+        resourceKey='demo/pixel.png'
+        title='pixel.png'
+        content={content}
+      />,
+    )
+    await expect
+      .poll(() =>
+        page.getByTestId('work-surface-document').element().getAttribute('data-state'),
+      )
+      .toBe('ready')
+    await expect
+      .element(page.getByTestId('work-surface-document'))
+      .toHaveAttribute('data-format', 'image')
+    await expect
+      .element(page.getByTestId('document-renderer-image'))
+      .toBeInTheDocument()
+
+    await rerender(
+      <DocumentPanel
+        resourceKey='demo/hello.pdf'
+        title='hello.pdf'
+        content={content}
+      />,
+    )
+    await expect
+      .poll(() =>
+        page.getByTestId('work-surface-document').element().getAttribute('data-format'),
+      )
+      .toBe('pdf')
+    await expect
+      .element(page.getByTestId('document-renderer-pdf'))
+      .toBeInTheDocument()
+
+    await rerender(
+      <DocumentPanel
+        resourceKey='demo/sheet.xlsx'
+        title='sheet.xlsx'
+        content={content}
+      />,
+    )
+    await expect
+      .poll(() =>
+        page
+          .getByTestId('document-renderer-xlsx')
+          .element()
+          .getAttribute('data-readonly'),
+      )
+      .toBe('true')
+    await expect
+      .element(page.getByTestId('document-renderer-xlsx'))
+      .toHaveTextContent('alpha')
+
+    await rerender(
+      <DocumentPanel
+        resourceKey='demo/letter.docx'
+        title='letter.docx'
+        content={content}
+      />,
+    )
+    await expect
+      .poll(() =>
+        page.getByTestId('document-renderer-docx').element().textContent ?? '',
+      )
+      .toMatch(/Hello DOCX|Word|加载/)
+  })
+
+  it('marks legacy .doc as unsupported', async () => {
+    const content = createMemoryDocumentContent({
+      binaryFiles: {
+        'legacy.doc': new Uint8Array([0, 1, 2]),
+      },
+    })
+    await render(
+      <DocumentPanel resourceKey='legacy.doc' title='legacy' content={content} />,
+    )
+    await expect
+      .poll(() =>
+        page.getByTestId('work-surface-document').element().getAttribute('data-state'),
+      )
+      .toBe('unsupported')
   })
 })

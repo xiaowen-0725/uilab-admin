@@ -12,12 +12,24 @@ export type {
 } from './ui/work-surface-host/work-surface-host'
 
 export { createSurfaceRegistry } from './application/surface-registry'
+export { resolveOpenWorkSurfaceIntent } from './application/open-work-surface-intent'
+export type {
+  OpenWorkSurfaceIntentInput,
+  OpenWorkSurfaceIntentResult,
+} from './application/open-work-surface-intent'
+
 export { createTestSurfaceDefinition } from './surfaces/test/test-surface'
 export { createDocumentSurfaceDefinition } from './surfaces/document/document-surface'
+export { createBrowserSurfaceDefinition } from './surfaces/browser/browser-surface'
 export {
   createMemoryDocumentContent,
   DEFAULT_DOCUMENT_FIXTURES,
+  DEFAULT_BINARY_FIXTURES,
 } from './adapters/memory-document-content'
+export {
+  createWebBrowserHostPort,
+  type BrowserHostPort,
+} from './ports/browser-host-port'
 
 export type {
   OpenResourceRef,
@@ -32,10 +44,15 @@ export type {
   DocumentContentPort,
   DocumentReadResult,
   DocumentReadFailureReason,
+  DocumentBinaryReadResult,
+  DocumentTextReadResult,
 } from './ports/document-content-port'
 
 export type { DocumentViewState } from './surfaces/document/document-panel'
 export {
   normalizeWorkspaceResourceKey,
   DOCUMENT_TEXT_MAX_BYTES,
+  DOCUMENT_IMAGE_MAX_BYTES,
+  DOCUMENT_OFFICE_MAX_BYTES,
 } from './surfaces/document/path-utils'
+export { normalizeBrowserUrl } from './surfaces/browser/url-utils'

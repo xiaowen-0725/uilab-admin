@@ -5,6 +5,14 @@
 
 /** Text / markdown / code default size ceiling (bytes). */
 export const DOCUMENT_TEXT_MAX_BYTES = Math.floor(1.5 * 1024 * 1024)
+/** Image default size ceiling. */
+export const DOCUMENT_IMAGE_MAX_BYTES = 15 * 1024 * 1024
+/** PDF / office default size ceiling. */
+export const DOCUMENT_OFFICE_MAX_BYTES = 25 * 1024 * 1024
+/** XLSX preview row cap (read-only). */
+export const DOCUMENT_XLSX_MAX_ROWS = 200
+/** XLSX preview column cap. */
+export const DOCUMENT_XLSX_MAX_COLS = 40
 
 /**
  * Normalize a user/runtime path to a workspace-relative resourceKey.
@@ -20,12 +28,13 @@ export function normalizeWorkspaceResourceKey(raw: string): string | null {
     return null
   }
 
-  // Strip leading ./ and /
+  // Reject Windows drive letters and UNC *before* slash-stripping.
+  if (/^[a-zA-Z]:(\/|$)/.test(key)) return null
+  if (key.startsWith('//')) return null
+
+  // Leading `/` means workspace-root relative (product convention), not host FS absolute.
   key = key.replace(/^\.\/+/, '').replace(/^\/+/, '')
   if (!key) return null
-
-  // Reject Windows drive letters / UNC after normalize attempts.
-  if (/^[a-zA-Z]:/.test(key) || key.startsWith('//')) return null
 
   const segments = key.split('/')
   const out: string[] = []
@@ -41,4 +50,14 @@ export function normalizeWorkspaceResourceKey(raw: string): string | null {
 /** True when string looks like a non-URL workspace path (for Registry match). */
 export function looksLikeWorkspacePath(raw: string): boolean {
   return normalizeWorkspaceResourceKey(raw) != null
+}
+
+export function maxBytesForFamily(
+  family: string,
+): number {
+  if (family === 'image') return DOCUMENT_IMAGE_MAX_BYTES
+  if (family === 'pdf' || family === 'docx' || family === 'xlsx') {
+    return DOCUMENT_OFFICE_MAX_BYTES
+  }
+  return DOCUMENT_TEXT_MAX_BYTES
 }

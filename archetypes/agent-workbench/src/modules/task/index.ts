@@ -227,6 +227,8 @@ export type {
   TaskRuntimeControllerOptions,
   TaskRuntimeListener,
   EventStoreHonestyKind,
+  WorkSurfaceOpenRequestedListener,
+  WorkSurfaceOpenRequestedPayload,
 } from './application/task-runtime-controller'
 export { useTaskRuntime } from './application/use-task-runtime'
 export type { UseTaskRuntimeResult } from './application/use-task-runtime'

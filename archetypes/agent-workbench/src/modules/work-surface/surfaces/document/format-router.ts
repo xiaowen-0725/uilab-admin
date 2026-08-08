@@ -1,13 +1,26 @@
 /**
- * Extension → document format family (ticket 04: text / markdown / code only).
- * Heavy formats (image/pdf/office) → unsupported here; ticket 05 expands.
+ * Extension → document format family (04 light + 05 heavy).
+ * Old binary Office (.doc / .xls) → unsupported (honest).
  */
 
 export type DocumentFormatFamily =
   | 'text'
   | 'markdown'
   | 'code'
+  | 'image'
+  | 'pdf'
+  | 'docx'
+  | 'xlsx'
   | 'unsupported'
+
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'])
+/** Modern OOXML word only; classic .doc → unsupported. */
+const DOCX_EXT = new Set(['docx'])
+/** Modern OOXML sheet only; classic .xls → unsupported. */
+const XLSX_EXT = new Set(['xlsx'])
+const PDF_EXT = new Set(['pdf'])
+/** Explicitly unsupported legacy binaries (not mapped to docx/xlsx). */
+const LEGACY_UNSUPPORTED = new Set(['doc', 'xls'])
 
 const TEXT_EXT = new Set([
   'txt',
@@ -148,11 +161,51 @@ export function resolveDocumentFormat(
     // No extension: treat as plain text if basename looks like a file name
     return resourceKey.includes('/') ? 'text' : 'unsupported'
   }
+  if (LEGACY_UNSUPPORTED.has(ext)) return 'unsupported'
   if (MARKDOWN_EXT.has(ext)) return 'markdown'
   if (CODE_EXT.has(ext)) return 'code'
   if (TEXT_EXT.has(ext)) return 'text'
-  // json/yaml often treated as text; already in TEXT_EXT
+  if (IMAGE_EXT.has(ext)) return 'image'
+  if (PDF_EXT.has(ext)) return 'pdf'
+  if (DOCX_EXT.has(ext)) return 'docx'
+  if (XLSX_EXT.has(ext)) return 'xlsx'
   return 'unsupported'
+}
+
+export function isBinaryDocumentFamily(
+  family: DocumentFormatFamily,
+): boolean {
+  return (
+    family === 'image' ||
+    family === 'pdf' ||
+    family === 'docx' ||
+    family === 'xlsx'
+  )
+}
+
+export function mimeForResourceKey(resourceKey: string): string | undefined {
+  const ext = extensionOf(resourceKey)
+  switch (ext) {
+    case 'png':
+      return 'image/png'
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'gif':
+      return 'image/gif'
+    case 'webp':
+      return 'image/webp'
+    case 'svg':
+      return 'image/svg+xml'
+    case 'pdf':
+      return 'application/pdf'
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    case 'xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    default:
+      return undefined
+  }
 }
 
 /** Language id for code highlighting; unknown → text. */

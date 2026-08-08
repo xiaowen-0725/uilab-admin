@@ -62,6 +62,8 @@ export type AgentRuntimeEventType =
   | 'artifact.created'
   | 'artifact.updated'
   | 'artifact.linked'
+  // work surface open request (Composition consumes; not a timeline fact)
+  | 'work_surface.open_requested'
   // error/recovery
   | 'run.failed'
   | 'runtime.disconnected'
@@ -107,6 +109,7 @@ export const AGENT_RUNTIME_EVENT_TYPES = [
   'artifact.created',
   'artifact.updated',
   'artifact.linked',
+  'work_surface.open_requested',
   'run.failed',
   'runtime.disconnected',
   'runtime.reconnected',

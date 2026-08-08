@@ -55,10 +55,13 @@ import {
   type WorkbenchSessionSeed,
 } from '@/modules/workbench-session'
 import {
+  createBrowserSurfaceDefinition,
   createDocumentSurfaceDefinition,
   createMemoryDocumentContent,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
+  createWebBrowserHostPort,
+  resolveOpenWorkSurfaceIntent,
   type SurfaceRegistry,
 } from '@/modules/work-surface'
 import { ThemeProvider } from '@/shell/theme/theme-provider'
@@ -107,6 +110,9 @@ function createWorkbenchSurfaceRegistry(): SurfaceRegistry {
   const documentContent = createMemoryDocumentContent()
   // Document before test so workspace paths resolve to document, not test.
   registry.register(createDocumentSurfaceDefinition({ content: documentContent }))
+  registry.register(
+    createBrowserSurfaceDefinition({ host: createWebBrowserHostPort() }),
+  )
   registry.register(createTestSurfaceDefinition())
   return registry
 }
@@ -614,33 +620,57 @@ export function WorkbenchApp({
 
   /**
    * User channel: Timeline file chip/card → Session openWorkSurfaceTab.
-   * Composition resolves kind via Registry (document for workspace paths; test: prefix for tests).
-   * Never mutates Host openTabs directly.
+   * Composition validates path/URL and resolves kind; never mutates Host openTabs.
    */
   const onOpenFileRef = useCallback(
     (info: TimelineOpenFileRef) => {
       const raw = (info.path ?? info.label ?? '').trim()
       if (!raw) return
-      const resourceKey = raw.replace(/^\/+/, '')
-      const resolved = surfaceRegistry.resolve({
-        resourceKey,
-        path: resourceKey,
+      const intent = resolveOpenWorkSurfaceIntent(surfaceRegistry, {
+        resourceKey: raw,
+        title: info.label,
+        source: 'user',
       })
-      // Prefer Registry resolve; last-resort test keeps open path honest when nothing matches.
-      const kind = resolved?.kind ?? 'test'
-      const title =
-        info.label?.trim() ||
-        resourceKey.split('/').filter(Boolean).pop() ||
-        resourceKey
+      if (!intent.ok) return
       session.commands.openWorkSurfaceTab({
         source: 'user',
-        kind,
-        resourceKey,
-        title,
+        kind: intent.kind,
+        resourceKey: intent.resourceKey,
+        title: intent.title,
+        focus: intent.focus,
       })
     },
     [session.commands, surfaceRegistry],
   )
+
+  /**
+   * Runtime channel: work_surface.open_requested (attached/selected task only).
+   */
+  useEffect(() => {
+    const controller = controllerRef.current
+    if (!controller || !bootReady) return
+    controller.setWorkSurfaceOpenListener(({ taskId: openTaskId, payload }) => {
+      if (openTaskId !== session.view.selectedTaskId) return
+      const intent = resolveOpenWorkSurfaceIntent(surfaceRegistry, {
+        kind: payload.kind,
+        resourceKey: payload.resourceKey,
+        title: payload.title,
+        source: 'runtime',
+        focus: payload.focus,
+      })
+      if (!intent.ok) return
+      session.commands.openWorkSurfaceTab({
+        source: 'runtime',
+        kind: intent.kind,
+        resourceKey: intent.resourceKey,
+        title: intent.title,
+        focus: intent.focus,
+      })
+    })
+    return () => {
+      controller.setWorkSurfaceOpenListener(null)
+    }
+  }, [bootReady, session.commands, session.view.selectedTaskId, surfaceRegistry])
 
   if (!bootReady) {
     return (

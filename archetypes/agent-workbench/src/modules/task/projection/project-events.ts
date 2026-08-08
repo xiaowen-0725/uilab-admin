@@ -1222,6 +1222,8 @@ export function applyRuntimeEvent(
     case 'artifact.created':
     case 'artifact.updated':
     case 'artifact.linked':
+    // Work Surface open is Session/Composition concern — never a timeline row / openTabs fact.
+    case 'work_surface.open_requested':
       break
     default: {
       pushUnsupported(next, envelope)

@@ -284,6 +284,8 @@ export function WorkSurfaceHost({
         }
         className='min-h-0 flex-1 overflow-auto p-4'
         data-testid={view.visible ? 'work-surface-panel' : undefined}
+        // Force remount on task/tab change so Browser/Document release iframe/blob (A8).
+        key={`${taskId ?? 'none'}:${activeTab?.tabId ?? 'empty'}`}
       >
         {panelBody}
       </div>

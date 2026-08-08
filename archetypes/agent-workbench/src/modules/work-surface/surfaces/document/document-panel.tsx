@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { DocumentContentPort } from '../../ports/document-content-port'
 import {
   codeLanguageFor,
+  isBinaryDocumentFamily,
+  mimeForResourceKey,
   resolveDocumentFormat,
   type DocumentFormatFamily,
 } from './format-router'
-import { normalizeWorkspaceResourceKey } from './path-utils'
+import { maxBytesForFamily, normalizeWorkspaceResourceKey } from './path-utils'
 import { CodeRenderer } from './renderers/code-renderer'
 import { MarkdownRenderer } from './renderers/markdown-renderer'
 import { TextRenderer } from './renderers/text-renderer'
@@ -46,6 +48,7 @@ function statusMessage(state: DocumentViewState): string {
 
 /**
  * Document Surface body — loads via Port, routes by format, read-only preview.
+ * Heavy families use dynamic import (A7).
  */
 export function DocumentPanel({
   resourceKey,
@@ -55,6 +58,7 @@ export function DocumentPanel({
   const [state, setState] = useState<DocumentViewState>('loading')
   const [text, setText] = useState('')
   const [family, setFamily] = useState<DocumentFormatFamily>('unsupported')
+  const [heavyNode, setHeavyNode] = useState<ReactNode>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -63,6 +67,7 @@ export function DocumentPanel({
     async function load() {
       setState('loading')
       setText('')
+      setHeavyNode(null)
 
       if (!key) {
         if (!cancelled) setState('not-found')
@@ -78,6 +83,85 @@ export function DocumentPanel({
       }
 
       try {
+        if (isBinaryDocumentFamily(fmt)) {
+          if (!content.readBinary) {
+            if (!cancelled) setState('unsupported')
+            return
+          }
+          const result = await content.readBinary(key)
+          if (cancelled) return
+          if (!result.ok) {
+            if (result.reason === 'not-found') setState('not-found')
+            else if (result.reason === 'permission-denied')
+              setState('permission-denied')
+            else if (result.reason === 'too-large') setState('too-large')
+            else setState('render-failed')
+            return
+          }
+          if (result.byteLength === 0) {
+            setState('empty')
+            return
+          }
+          const max = maxBytesForFamily(fmt)
+          if (result.byteLength > max) {
+            setState('too-large')
+            return
+          }
+          setState('ready')
+          // Lazy load heavy renderer modules (A7 — dynamic import)
+          const mime = mimeForResourceKey(key) ?? result.mimeType ?? ''
+          if (fmt === 'image') {
+            const { loadImageRenderer } = await import('./renderers/heavy-lazy')
+            const ImageRenderer = await loadImageRenderer()
+            if (!cancelled) {
+              setHeavyNode(
+                <ImageRenderer
+                  bytes={result.bytes}
+                  mimeType={mime || 'image/png'}
+                  resourceKey={key}
+                />,
+              )
+            }
+          } else if (fmt === 'pdf') {
+            const { loadPdfRenderer } = await import('./renderers/heavy-lazy')
+            const PdfRenderer = await loadPdfRenderer()
+            if (!cancelled) {
+              setHeavyNode(
+                <PdfRenderer bytes={result.bytes} resourceKey={key} />,
+              )
+            }
+          } else if (fmt === 'docx') {
+            const { loadDocxRenderer } = await import('./renderers/heavy-lazy')
+            const DocxRenderer = await loadDocxRenderer()
+            if (!cancelled) {
+              setHeavyNode(
+                <DocxRenderer
+                  bytes={result.bytes}
+                  resourceKey={key}
+                  onFailed={() => {
+                    if (!cancelled) setState('render-failed')
+                  }}
+                />,
+              )
+            }
+          } else if (fmt === 'xlsx') {
+            const { loadXlsxRenderer } = await import('./renderers/heavy-lazy')
+            const XlsxRenderer = await loadXlsxRenderer()
+            if (!cancelled) {
+              setHeavyNode(
+                <XlsxRenderer
+                  bytes={result.bytes}
+                  resourceKey={key}
+                  onFailed={() => {
+                    if (!cancelled) setState('render-failed')
+                  }}
+                />,
+              )
+            }
+          }
+          return
+        }
+
         const result = await content.readText(key)
         if (cancelled) return
         if (!result.ok) {
@@ -142,9 +226,7 @@ export function DocumentPanel({
         </p>
       ) : null}
 
-      {state !== 'loading' &&
-      state !== 'ready' &&
-      state !== 'empty' ? (
+      {state !== 'loading' && state !== 'ready' && state !== 'empty' ? (
         <p
           className='text-sm text-muted-foreground'
           data-testid='document-state-message'
@@ -167,6 +249,7 @@ export function DocumentPanel({
           resourceKey={resourceKey}
         />
       ) : null}
+      {state === 'ready' && isBinaryDocumentFamily(family) ? heavyNode : null}
     </div>
   )
 }

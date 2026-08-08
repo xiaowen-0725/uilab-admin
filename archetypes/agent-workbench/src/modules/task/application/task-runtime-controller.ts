@@ -61,6 +61,24 @@ export interface TaskRuntimeControllerOptions {
 
 export type TaskRuntimeListener = () => void
 
+/** Payload subset for Composition open Work Surface (spec §7). */
+export type WorkSurfaceOpenRequestedPayload = {
+  kind?: string
+  resourceKey: string
+  title?: string
+  focus?: 'pane' | 'tab' | 'none'
+  reason?: string
+  relatedEventId?: string
+  relatedArtifactId?: string
+}
+
+export type WorkSurfaceOpenRequestedListener = (
+  envelope: {
+    taskId: string
+    payload: WorkSurfaceOpenRequestedPayload
+  },
+) => void
+
 function isFakeRuntime(port: RuntimePort): port is DeterministicFakeRuntime {
   return (
     typeof port === 'object' &&
@@ -122,6 +140,10 @@ export class TaskRuntimeController {
   /** Optional listener for runStatus changes (Navigator RunStatusIndex). */
   private runStatusListener: ((taskId: string, status: RunStatus | null) => void) | null =
     null
+  /**
+   * Composition-only: work_surface.open_requested (does not mutate projection open set).
+   */
+  private workSurfaceOpenListener: WorkSurfaceOpenRequestedListener | null = null
 
   constructor(options: TaskRuntimeControllerOptions) {
     this.runtime = options.runtime
@@ -646,9 +668,19 @@ export class TaskRuntimeController {
     this.maybeFlush()
   }
 
+  setWorkSurfaceOpenListener(
+    listener: WorkSurfaceOpenRequestedListener | null,
+  ): void {
+    this.workSurfaceOpenListener = listener
+  }
+
   private onSubscriptionEvent(event: RuntimeSubscriptionEvent): void {
     if (event.kind === 'event') {
       if (event.envelope.taskId !== this.taskId) return
+      // Composition open channel — only for the attached (selected) task.
+      if (String(event.envelope.eventType) === 'work_surface.open_requested') {
+        this.dispatchWorkSurfaceOpen(event.envelope)
+      }
       this.projection = applyRuntimeEvent(this.projection, event.envelope)
       void this.persistEnvelope(event.envelope)
       // Drain local queue after terminal (Fake also drains its own queue).
@@ -676,6 +708,39 @@ export class TaskRuntimeController {
       this.notice = event.message || event.code
       this.emit()
     }
+  }
+
+  private dispatchWorkSurfaceOpen(
+    envelope: import('../protocol/events').AgentRuntimeEventEnvelope,
+  ): void {
+    if (!this.workSurfaceOpenListener) return
+    const payload = (envelope.payload ?? {}) as Record<string, unknown>
+    const resourceKey =
+      typeof payload.resourceKey === 'string' ? payload.resourceKey : ''
+    if (!resourceKey) return
+    this.workSurfaceOpenListener({
+      taskId: envelope.taskId,
+      payload: {
+        kind: typeof payload.kind === 'string' ? payload.kind : undefined,
+        resourceKey,
+        title: typeof payload.title === 'string' ? payload.title : undefined,
+        focus:
+          payload.focus === 'pane' ||
+          payload.focus === 'tab' ||
+          payload.focus === 'none'
+            ? payload.focus
+            : undefined,
+        reason: typeof payload.reason === 'string' ? payload.reason : undefined,
+        relatedEventId:
+          typeof payload.relatedEventId === 'string'
+            ? payload.relatedEventId
+            : undefined,
+        relatedArtifactId:
+          typeof payload.relatedArtifactId === 'string'
+            ? payload.relatedArtifactId
+            : undefined,
+      },
+    })
   }
 
   private async persistEnvelope(
