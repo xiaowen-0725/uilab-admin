@@ -1,0 +1,26 @@
+{
+  "toolNames": [
+    "ls",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "delete_file",
+    "stat",
+    "mkdir",
+    "rmdir",
+    "list_tree",
+    "list_files",
+    "glob",
+    "grep",
+    "workspace_list_skills",
+    "workspace_search_skills",
+    "workspace_read_skill",
+    "workspace_activate_skill",
+    "workspace_deactivate_skill",
+    "workspace_read_skill_reference",
+    "workspace_read_skill_script",
+    "workspace_read_skill_asset"
+  ],
+  "count": 20,
+  "source": "GET /agents/workbench"
+}

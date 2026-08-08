@@ -1,0 +1,7 @@
+Navigator items (cold start → after 1 new chat):
+- 工作区 / 默认项目
+- 新对话 (CTA button)
+- 筛选任务
+- 对话 list: 「新对话」 task row + 删除
+- 账户：演示用户
+NO mock utility rows: 拉取请求 / 站点 / 已安排 / 插件假行 not present.

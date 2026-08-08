@@ -159,6 +159,7 @@ export function mapFullStreamChunk(
       const args = chunk.args ?? chunk.input ?? chunk.arguments
       if (isShellTool(name)) {
         push('command.started', {
+          commandId: callId,
           toolId: callId,
           toolCallId: callId,
           toolName: name,
@@ -208,6 +209,7 @@ export function mapFullStreamChunk(
       if (isShellTool(name)) {
         push('command.completed', {
           ...completedBase,
+          commandId: callId,
           command:
             typeof args === 'object' &&
             args &&
@@ -254,14 +256,23 @@ export function mapFullStreamChunk(
 
     case 'tool-error': {
       const name = toolName(chunk)
-      push('tool.completed', {
-        toolCallId: toolCallId(chunk),
+      const callId = toolCallId(chunk)
+      const error = chunk.error ?? chunk.message ?? 'tool error'
+      const completed = {
+        toolId: callId,
+        toolCallId: callId,
         toolName: name,
         name,
-        error: chunk.error ?? chunk.message ?? 'tool error',
+        error,
+        summary: normalizeToolOutput(error).summary,
         isError: true,
         status: 'error',
-      })
+      }
+      if (isShellTool(name)) {
+        push('command.completed', { ...completed, commandId: callId })
+      } else {
+        push('tool.completed', completed)
+      }
       break
     }
 

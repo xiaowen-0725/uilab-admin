@@ -35,9 +35,21 @@ export interface SubmitTurnCommand extends CommandEnvelope {
   proposedTurnId?: TurnId
   proposedRunId?: RunId
   inputText: string
+  /** Safe composer metadata; attachment bytes are never embedded here. */
+  composerContext?: TurnComposerContext
   turnId?: TurnId
   runId?: RunId
   runtimeCursor?: string
+}
+
+export interface TurnComposerContext {
+  attachments?: Array<{
+    name: string
+    kind: 'file' | 'image'
+    meta?: string
+  }>
+  skills?: Array<{ id: string; label: string }>
+  mode?: 'default' | 'goal' | 'plan' | 'goal+plan'
 }
 
 export interface CancelRunCommand extends CommandEnvelope {

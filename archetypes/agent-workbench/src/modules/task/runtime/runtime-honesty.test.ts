@@ -21,6 +21,17 @@ describe('runtimeHonestyCopy', () => {
     expect(c.approvalRejected).not.toMatch(/Fake/)
     expect(c.contextItems.some((i) => /VoltAgent/.test(i))).toBe(true)
     expect(c.contextItems.some((i) => /非远程生产集群/.test(i))).toBe(true)
+    // Secondary paths (retry/queue/steer/reconcile) share mode-aware copy
+    for (const key of [
+      'retryAccepted',
+      'queueAccepted',
+      'steerAccepted',
+      'reconcileAccepted',
+    ] as const) {
+      expect(c[key]).not.toMatch(/Fake/i)
+      expect(c[key]).toMatch(/本机|VoltAgent/)
+    }
+    expect(c.cancelRequested).toBe(c.cancelAccepted)
   })
 
   it('fake approval outcomes keep Fake wording', () => {

@@ -23,6 +23,142 @@ function collectEvents(
 }
 
 describe('VoltAgentRuntimeAdapter', () => {
+  it('forwards safe composer metadata without embedding attachment bytes', async () => {
+    let requestBody = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      requestBody = String(init?.body ?? '')
+      return new Response(sseBody([{ type: 'finish', finishReason: 'stop' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-context',
+      issuedAt: '2026-08-06T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-context',
+      schemaVersion: 1,
+      taskId: 'task-context',
+      inputText: '分析附件',
+      composerContext: {
+        attachments: [{ name: 'report.pdf', kind: 'file', meta: '本地附件' }],
+        skills: [{ id: 'review', label: 'Code Review' }],
+        mode: 'plan',
+      },
+    })
+
+    await vi.waitFor(() => expect(requestBody).toContain('report.pdf'))
+    expect(requestBody).toContain('未上传文件内容')
+    expect(requestBody).toContain('Code Review')
+    expect(requestBody).not.toContain('attachment bytes')
+  })
+
+  it('treats a DONE-only stream as a completed run', async () => {
+    const encoder = new TextEncoder()
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            controller.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    )
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const events = collectEvents(adapter, 'task-done')
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-done',
+      issuedAt: '2026-08-06T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-done',
+      schemaVersion: 1,
+      taskId: 'task-done',
+      inputText: '你好',
+      proposedTurnId: 'turn-done',
+      proposedRunId: 'run-done',
+    })
+
+    await vi.waitFor(() => {
+      expect(
+        events.filter(
+          (event) =>
+            event.kind === 'event' &&
+            event.envelope.eventType === 'run.completed',
+        ),
+      ).toHaveLength(1)
+    })
+  })
+
+  it('flushes a final SSE data line without a trailing newline', async () => {
+    const encoder = new TextEncoder()
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode('data: {"type":"text-delta","delta":"尾帧"}'),
+            )
+            controller.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    )
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const events = collectEvents(adapter, 'task-tail')
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-tail',
+      issuedAt: '2026-08-06T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-tail',
+      schemaVersion: 1,
+      taskId: 'task-tail',
+      inputText: '你好',
+      proposedTurnId: 'turn-tail',
+      proposedRunId: 'run-tail',
+    })
+
+    await vi.waitFor(() => {
+      const envelopes = events.flatMap((event) =>
+        event.kind === 'event' ? [event.envelope] : [],
+      )
+      expect(
+        envelopes.some(
+          (event) =>
+            event.eventType === 'output.delta' &&
+            (event.payload as { text?: string }).text === '尾帧',
+        ),
+      ).toBe(true)
+      expect(
+        envelopes.filter((event) => event.eventType === 'run.completed'),
+      ).toHaveLength(1)
+    })
+  })
+
   it('submitTurn streams mapped envelopes via RuntimePort', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(
@@ -424,5 +560,46 @@ describe('VoltAgentRuntimeAdapter', () => {
       expect(types).toContain('run.completed')
     })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('subscribe seeds nextSequence from EventStore cursor', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(sseBody([{ type: 'text-delta', delta: 'ok' }, { type: 'finish' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        }),
+    )
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-cur')
+    // Simulate rehydrate: store already has sequences 1..10
+    adapter.subscribe('task-cur', 10, () => {})
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-cur',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-cur',
+      schemaVersion: 1,
+      taskId: 'task-cur',
+      inputText: 'hi',
+      proposedTurnId: 'turn-cur',
+      proposedRunId: 'run-cur',
+    })
+
+    await vi.waitFor(() => {
+      const seqs = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.taskSequence : 0))
+      expect(seqs.length).toBeGreaterThan(0)
+      expect(Math.min(...seqs)).toBeGreaterThanOrEqual(11)
+    })
   })
 })

@@ -1069,11 +1069,15 @@ export class DeterministicFakeRuntime implements RuntimePort {
         runId,
         payload: {
           requestId,
-          title: '请求执行敏感操作',
+          toolName: 'terminal',
+          title:
+            scenario === 'approval-reject'
+              ? '是否允许删除临时缓存以演示拒绝路径？'
+              : '是否允许写入本地演示文件以验证授权弹层？（Fake，无真实副作用）',
           detail:
             scenario === 'approval-reject'
-              ? '（演示拒绝路径）删除临时缓存'
-              : '写入本地演示文件（Fake，无真实副作用）',
+              ? '命令: rm -rf /tmp/fake-cache'
+              : '命令: touch /tmp/codex-approval-demo.txt',
           scenario,
         },
       })

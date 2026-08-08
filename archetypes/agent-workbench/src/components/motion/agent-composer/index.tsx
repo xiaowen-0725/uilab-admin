@@ -42,6 +42,7 @@ export function Composer({
 }: ComposerProps) {
   return (
     <div
+      data-slot="agent-composer"
       data-testid={dataTestId}
       style={{
         // Dark (Codex CDP): no shell shadow; light keeps hairline trio via token.
@@ -50,6 +51,7 @@ export function Composer({
       className={cn(
         "relative z-10 flex w-full max-w-full flex-col rounded-[25px] px-4 py-3",
         "bg-[var(--wb-surface-composer)] backdrop-blur-lg",
+        // No shell focus outline (Codex-like): caret in textarea is enough.
         className,
       )}
     >

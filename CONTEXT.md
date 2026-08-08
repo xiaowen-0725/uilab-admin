@@ -85,8 +85,8 @@ _Avoid_: Turn, Task
 _Avoid_: Tool Surface, Runtime Event
 
 **Workbench Session**:
-围绕一个任务协调执行状态、Task Context、活动 Work Surface 与布局恢复的工作台会话。
-_Avoid_: Global Workspace State, Chat State
+工作台壳层会话：记住当前选中的 Project 与 Task（Task 可为空）、以及每 Task 的布局与 Work Surface 恢复；不拥有 Project/Task 目录，也不拥有 Agent Runtime。
+_Avoid_: Global Workspace State, Chat State, Project catalog, Task directory
 
 **Agent Runtime**:
 执行 Agent、处理工具调用并产生流式运行事件的外部运行能力，通过 Adapter 接入 Agent Workbench。

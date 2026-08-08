@@ -1,0 +1,54 @@
+
+> @uilab/agent-workbench@0.0.1 test /Users/zhoujw/develop/github/uilab-admin/archetypes/agent-workbench
+> vitest run --browser.headless
+
+
+ RUN  v4.1.4 /Users/zhoujw/develop/github/uilab-admin/archetypes/agent-workbench
+
+ ✓ |chromium| src/modules/task/model/title-policy.test.ts (6 tests) 8ms
+ ✓ |chromium| src/modules/task/projection/project-events.test.ts (6 tests) 9ms
+ ✓ |chromium| src/modules/task/application/task-runtime-controller-4e.test.ts (5 tests) 10ms
+ ✓ |chromium| src/modules/task/runtime/fake-runtime.test.ts (13 tests) 10ms
+ ✓ |chromium| src/modules/task/application/task-runtime-controller.test.ts (2 tests) 9ms
+ ✓ |chromium| src/modules/task/runtime/voltagent/voltagent-runtime-adapter.test.ts (12 tests) 116ms
+ ✓ |chromium| src/modules/task/runtime/codex-style-stream-order.test.ts (5 tests) 5ms
+ ✓ |chromium| src/modules/project/adapters/memory-project-catalog.test.ts (4 tests) 1ms
+ ✓ |chromium| src/modules/task/projection/project-events-live-status.test.ts (11 tests) 3ms
+ ✓ |chromium| src/modules/task/runtime/voltagent/fullstream-to-envelope.test.ts (13 tests) 3ms
+ ✓ |chromium| src/modules/task/projection/project-events-4d.test.ts (5 tests) 2ms
+ ✓ |chromium| src/modules/task/model/capture-flychess-replay.test.ts (7 tests) 1ms
+ ✓ |chromium| src/modules/task/ui/timeline/group-timeline-turns.test.ts (4 tests) 1ms
+ ✓ |chromium| src/modules/task/projection/tool-activity-copy.test.ts (6 tests) 1ms
+ ✓ |chromium| src/modules/task/runtime/virtual-clock.test.ts (7 tests) 1ms
+ ✓ |chromium| src/modules/workbench-session/reducer.test.ts (10 tests) 1ms
+ ✓ |chromium| src/modules/task/model/capture-progressive-replay.test.ts (6 tests) 1ms
+ ✓ |chromium| src/modules/task/runtime/memory-event-store.test.ts (3 tests) 1ms
+ ✓ |chromium| src/modules/task/ui/markdown/file-reference-chip.test.tsx (2 tests) 899ms
+     ✓ is a real button when an open action is wired  878ms
+ ✓ |chromium| src/modules/task/runtime/tool-output-normalize.test.ts (8 tests) 1ms
+ ✓ |chromium| src/modules/task/model/run-transitions.test.ts (12 tests) 1ms
+ ✓ |chromium| src/modules/task/model/fold-events.test.ts (4 tests) 1ms
+ ✓ |chromium| src/config/runtime-adapter.test.ts (4 tests) 1ms
+ ✓ |chromium| src/modules/task/model/capture-workflow-replay.test.ts (4 tests) 1ms
+ ✓ |chromium| src/modules/task/runtime/runtime-honesty.test.ts (4 tests) 1ms
+ ✓ |chromium| src/modules/task/ui/markdown/simple-markdown.test.ts (3 tests) 1ms
+ ✓ |chromium| src/modules/task/ui/timeline/chinese-status-label.test.ts (4 tests) 0ms
+ ✓ |chromium| tests/integration/workbench-runtime-slice.test.tsx (7 tests) 1056ms
+     ✓ new chat → 新对话 catalog + Runtime empty hub (A2)  347ms
+ ✓ |chromium| tests/integration/workbench-shell.test.tsx (16 tests) 7460ms
+     ✓ renders project, left-rail chrome, empty shell then Runtime hub  355ms
+     ✓ Navigator account menu opens upward with settings and sign-out fixtures  1104ms
+     ✓ pointer Work open/close/maximize uses drawer actions and timings  1504ms
+     ✓ rapid Work toggles retarget drawer width and settle to last command  874ms
+     ✓ wide maximized Work: unique toggle-navigator lives in Work toolbar and is clickable  454ms
+     ✓ 760 serial Work: unique toggle-navigator lives in Work toolbar and is clickable  438ms
+     ✓ restores per-Task layout when switching A → B → A  593ms
+     ✓ medium 1024×768: overlay nav free when closed; Task/Work containment; Context overlay  446ms
+     ✓ narrow 760×800: full-bleed Workspace; Context overlay; Work serial with operable toolbar  643ms
+
+ Test Files  29 passed (29)
+      Tests  193 passed (193)
+   Start at  01:21:41
+   Duration  9.94s (transform 0ms, setup 1.25s, import 5.42s, tests 9.60s, environment 0ms)
+
+test_exit=0

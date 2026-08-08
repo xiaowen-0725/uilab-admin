@@ -4,9 +4,10 @@
  */
 
 import { useState } from 'react'
-import { FileText, RotateCcw } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ToolActivityIcon } from '../tool-activity-icon'
 
 export type FileChangeSummaryCardProps = {
   path: string
@@ -53,7 +54,10 @@ export function FileChangeSummaryCard({
           }}
         >
           <span className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted'>
-            <FileText className='size-4 text-muted-foreground' aria-hidden />
+            <ToolActivityIcon
+              kind='write'
+              className='size-4 text-muted-foreground'
+            />
           </span>
           <span className='min-w-0 flex-1'>
             <span className='block truncate text-[13px] font-[445] leading-5 text-foreground'>

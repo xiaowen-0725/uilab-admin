@@ -1,0 +1,105 @@
+{
+  "ok": true,
+  "elapsed_s": 2.55,
+  "text": "工作区根目录包含 4 个子目录（`.voltagent/`、`notes/`、`output/`、`skills/`）以及一个 `README.md` 文件，其中 `notes/` 存放素材笔记、`output/` 存放交付产物、`skills/` 存放办公技能。",
+  "events": [
+    {
+      "type": "start"
+    },
+    {
+      "type": "tool-input-start"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-delta"
+    },
+    {
+      "type": "tool-input-end"
+    },
+    {
+      "type": "tool-call",
+      "toolName": "ls",
+      "toolCallId": "call_00_JXfAkcia8R7nof8jsxy71010"
+    },
+    {
+      "type": "tool-result",
+      "output": "/.voltagent/ (directory)\n/notes/ (directory)\n/output/ (directory)\n/README.md (969 bytes)\n/skills/ (directory)"
+    },
+    {
+      "type": "text-start"
+    },
+    {
+      "type": "text-end"
+    },
+    {
+      "type": "finish-step"
+    },
+    {
+      "type": "text-start"
+    },
+    {
+      "type": "text-delta",
+      "text": "工作区根目录包含 4 个子目录（`.voltagent/`、`notes/`、`output/`、`skills/`）以及一个 `README.md` 文件，其中 `notes/` 存放素材笔记、`output/` 存放交付产物、`skills/` 存放办公技能。"
+    },
+    {
+      "type": "text-end"
+    },
+    {
+      "type": "finish-step"
+    },
+    {
+      "type": "finish",
+      "finishReason": "stop"
+    }
+  ],
+  "event_types": [
+    "start",
+    "tool-input-start",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-delta",
+    "tool-input-end",
+    "tool-call",
+    "tool-result",
+    "text-start",
+    "text-end",
+    "finish-step",
+    "text-start",
+    "text-delta",
+    "text-end",
+    "finish-step",
+    "finish"
+  ],
+  "has_tool_call": true,
+  "has_approval": false,
+  "has_error": false
+}

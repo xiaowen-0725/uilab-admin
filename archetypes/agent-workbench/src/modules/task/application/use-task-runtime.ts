@@ -4,7 +4,12 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { RunStatus } from '../model/lifecycle'
+import type {
+  CommandAcknowledgement,
+  TurnComposerContext,
+} from '../protocol/commands'
 import type { TaskReadModel } from '../projection/types'
+import type { TimelineFollowMode } from '../projection/types'
 import type { TaskRuntimeController } from './task-runtime-controller'
 
 export interface UseTaskRuntimeResult {
@@ -12,7 +17,10 @@ export interface UseTaskRuntimeResult {
   busy: boolean
   notice: string | null
   runStatus: RunStatus | null
-  submitText: (text: string) => Promise<void>
+  submitText: (
+    text: string,
+    composerContext?: TurnComposerContext,
+  ) => Promise<CommandAcknowledgement | null>
   cancelActiveRun: () => Promise<void>
   respondToApproval: (
     requestId: string,
@@ -20,6 +28,7 @@ export interface UseTaskRuntimeResult {
   ) => Promise<void>
   provideRunInput: (text: string, requestId?: string) => Promise<void>
   retryTurn: () => Promise<void>
+  setFollowMode: (mode: TimelineFollowMode) => void
   ready: boolean
 }
 
@@ -83,12 +92,15 @@ export function useTaskRuntime(
     return () => {
       cancelled = true
     }
-  }, [controller, enabled, taskId, title])
+    // `title` is only the seed used when a task is first attached. Runtime
+    // title projection may later rename the navigator entry; that must not
+    // re-attach the same task and restart this lifecycle effect.
+  }, [controller, enabled, taskId])
 
   const submitText = useCallback(
-    async (text: string) => {
-      if (!controller || !enabled) return
-      await controller.submitText(text)
+    async (text: string, composerContext?: TurnComposerContext) => {
+      if (!controller || !enabled) return null
+      return controller.submitText(text, composerContext)
     },
     [controller, enabled],
   )
@@ -119,6 +131,14 @@ export function useTaskRuntime(
     await controller.retryTurn()
   }, [controller, enabled])
 
+  const setFollowMode = useCallback(
+    (mode: TimelineFollowMode) => {
+      if (!controller || !enabled) return
+      controller.setFollowMode(mode)
+    },
+    [controller, enabled],
+  )
+
   if (!controller || !enabled) {
     return {
       readModel: emptyReadModel(taskId, title),
@@ -131,6 +151,7 @@ export function useTaskRuntime(
       respondToApproval,
       provideRunInput,
       retryTurn,
+      setFollowMode,
     }
   }
 
@@ -145,5 +166,6 @@ export function useTaskRuntime(
     respondToApproval,
     provideRunInput,
     retryTurn,
+    setFollowMode,
   }
 }

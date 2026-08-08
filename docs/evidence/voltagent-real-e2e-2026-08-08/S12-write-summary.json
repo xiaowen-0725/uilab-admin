@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "elapsed_s": 1.34,
+  "text": "",
+  "events": [
+    {
+      "type": "start"
+    },
+    {
+      "type": "tool-call",
+      "toolName": "write_file",
+      "toolCallId": "call_00_Uo7bQ9jExdtNhKAu4eHm7887",
+      "input_preview": "{'file_path': '/output/e2e-hitl.txt', 'content': 'e2e-ok\\n', 'overwrite': False, 'create_parent_dirs': True}"
+    },
+    {
+      "type": "tool-approval-request",
+      "keys": [
+        "type",
+        "approvalId",
+        "toolCall"
+      ],
+      "approvalId": "aitxt-6oeHuIc1gBA81RW6MY1gCWMo",
+      "toolName": "write_file",
+      "toolCallId": "call_00_Uo7bQ9jExdtNhKAu4eHm7887"
+    },
+    {
+      "type": "finish",
+      "finishReason": "tool-calls"
+    }
+  ],
+  "has_approval": true,
+  "tool_calls": [
+    {
+      "toolName": "write_file",
+      "toolCallId": "call_00_Uo7bQ9jExdtNhKAu4eHm7887",
+      "input": {
+        "file_path": "/output/e2e-hitl.txt",
+        "content": "e2e-ok\n",
+        "overwrite": false,
+        "create_parent_dirs": true
+      }
+    }
+  ],
+  "approval_summary": {
+    "type": "tool-approval-request",
+    "keys": [
+      "type",
+      "approvalId",
+      "toolCall"
+    ],
+    "approvalId": "aitxt-6oeHuIc1gBA81RW6MY1gCWMo",
+    "toolName": "write_file",
+    "toolCallId": "call_00_Uo7bQ9jExdtNhKAu4eHm7887"
+  }
+}

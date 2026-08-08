@@ -478,7 +478,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = '已重试 Turn（Fake Runtime，非生产）'
+        this.notice = this.honesty.retryAccepted
         this.maybeFlush()
       } else {
         this.notice = ack.message ?? `重试未接受：${ack.status}`
@@ -506,7 +506,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = '已排队后续消息（Fake queue，非生产）'
+        this.notice = this.honesty.queueAccepted
         this.maybeFlush()
       } else if (ack.status === 'unsupported') {
         // Fallback local queue + submit when idle
@@ -543,7 +543,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = '已发送转向（Fake steer，非生产）'
+        this.notice = this.honesty.steerAccepted
         this.maybeFlush()
       } else {
         this.notice = ack.message ?? `转向未接受：${ack.status}`
@@ -583,7 +583,7 @@ export class TaskRuntimeController {
       const ack = await dispatchCommand(this.runtime, command)
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = '已对账中断 Run（Fake reconcile，非生产）'
+        this.notice = this.honesty.reconcileAccepted
         this.maybeFlush()
       } else {
         this.notice = ack.message ?? `对账未接受：${ack.status}`

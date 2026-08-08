@@ -14,13 +14,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ChevronDown,
-  FileText,
-  Globe,
   Info,
-  Terminal,
-  Wrench,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,6 +33,7 @@ import type {
   TaskReadModel,
   TimelineItem,
   TimelineItemMeta,
+  ProcessSummary,
 } from '../../projection/types'
 import { LiveStatusLine } from '../live-status-line'
 import { FileChangeSummaryCard } from '../markdown/file-change-summary-card'
@@ -45,14 +43,33 @@ import {
   type RuntimeHonestyMode,
 } from '../../runtime/runtime-honesty'
 import { groupTimelineIntoTurns } from './group-timeline-turns'
+import { ToolActivityIcon } from '../tool-activity-icon'
 
 export const TIMELINE_FOLD_THRESHOLD = 600
 
+const PROCESS_KIND_LABELS: Array<[
+  keyof ProcessSummary['counts'],
+  string,
+]> = [
+  ['read', '读取'],
+  ['write', '写入'],
+  ['list', '列出'],
+  ['search', '搜索'],
+  ['command', '命令'],
+  ['other', '其他'],
+]
+
+function processSummaryDetail(summary: ProcessSummary | undefined): string | null {
+  if (!summary || summary.stepCount === 0) return null
+  const parts = PROCESS_KIND_LABELS.flatMap(([kind, label]) => {
+    const count = summary.counts[kind]
+    return count ? [`${label} ${count}`] : []
+  })
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 export interface TimelineProps {
   readModel: TaskReadModel
-  onApprove?: (requestId: string) => void
-  onReject?: (requestId: string) => void
-  onProvideInput?: (requestId: string, text: string) => void
   onRetryTurn?: () => void
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
   /** Honesty mode for banner / HITL copy. Default fake. */
@@ -86,39 +103,45 @@ function statusTone(status: string | undefined): string {
   return 'text-foreground'
 }
 
-/** Turn chrome label without embedding duration (duration appended once by header). */
-function chineseStatusLabel(item: TimelineItem): string {
-  if (item.status === 'completed' || item.title === '已处理') {
-    return '已处理'
-  }
-  if (item.title && /[\u4e00-\u9fff]/.test(item.title)) {
-    if (item.title === '处理中' || item.title === '正在思考') {
-      return item.status === 'running' ? '已处理' : item.title
-    }
-    return item.title
-  }
+/**
+ * Turn chrome label without embedding duration (duration appended once by header).
+ *
+ * Status wins over title for active runs. Projection may historically stamp title
+ * 「已处理」while status is still `running` (Codex-shaped "Worked for Xs"); in Chinese
+ * that past-tense reads as completed — never show 「已处理」until status is completed.
+ * Align present-tense with ExecutionStream / liveStatus (「正在思考」/「处理中」).
+ */
+export function chineseStatusLabel(item: TimelineItem): string {
   switch (item.status) {
     case 'queued':
       return '排队中'
-    case 'running':
-      return '已处理'
-    case 'completed':
-      return '已处理'
-    case 'cancelled':
-      return '已取消'
-    case 'failed':
-      return '失败'
+    case 'running': {
+      // Present tense only while active. Prefer explicit thinking/process titles.
+      if (item.title === '正在思考') return '正在思考'
+      if (item.title === '处理中') return '处理中'
+      // title「已处理」or missing/English under running → present tense (stream early chrome).
+      return '正在思考'
+    }
     case 'cancelling':
       return '取消中'
     case 'waiting_for_approval':
       return '等待审批'
     case 'waiting_for_input':
       return '等待输入'
+    case 'completed':
+      return '已处理'
+    case 'cancelled':
+      return '已取消'
+    case 'failed':
+      return '失败'
     case 'interrupted':
       return '已中断'
     default:
-      return item.title ?? item.status ?? '运行'
+      break
   }
+  if (item.title === '已处理') return '已处理'
+  if (item.title && /[\u4e00-\u9fff]/.test(item.title)) return item.title
+  return item.title ?? item.status ?? '运行'
 }
 
 function readStartedAtMs(item: TimelineItem | undefined): number | null {
@@ -171,20 +194,18 @@ function isNearBottom(el: HTMLElement, threshold = 80): boolean {
 
 export function Timeline({
   readModel,
-  onApprove,
-  onReject,
-  onProvideInput,
   onRetryTurn,
   onFollowModeChange,
   honestyMode = 'fake',
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const [followMode, setFollowMode] = useState<'follow' | 'user-pinned'>(
     readModel.scroll.followMode ?? 'follow',
   )
+  const followModeRef = useRef(followMode)
   const [localUnread, setLocalUnread] = useState(0)
-  const prevLenRef = useRef(readModel.timeline.length)
 
   const runActive = isActiveRunStatus(readModel.runStatus)
   const runAttr =
@@ -197,12 +218,22 @@ export function Timeline({
 
   const setMode = useCallback(
     (mode: 'follow' | 'user-pinned') => {
+      followModeRef.current = mode
       setFollowMode(mode)
       if (mode === 'follow') setLocalUnread(0)
       onFollowModeChange?.(mode)
     },
     [onFollowModeChange],
   )
+
+  useEffect(() => {
+    followModeRef.current = followMode
+  }, [followMode])
+
+  useEffect(() => {
+    setMode('follow')
+    scrollRef.current?.scrollTo({ top: 0 })
+  }, [readModel.taskId, setMode])
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current
@@ -214,19 +245,30 @@ export function Timeline({
     }
   }, [followMode, setMode])
 
-  // Smart scroll: follow last item; pinned accumulates unread.
+  // Follow actual rendered height, not only item count: output.delta updates an
+  // existing item and Markdown/table layout may grow after the projection pass.
   useEffect(() => {
-    const len = readModel.timeline.length
-    const grew = len > prevLenRef.current
-    prevLenRef.current = len
-    if (!grew) return
-    if (followMode === 'follow') {
-      bottomRef.current?.scrollIntoView({ block: 'end' })
-      setLocalUnread(0)
-    } else {
-      setLocalUnread((n) => n + 1)
+    const content = contentRef.current
+    const scroller = scrollRef.current
+    if (!content || !scroller || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        if (followModeRef.current === 'follow') {
+          scroller.scrollTop = scroller.scrollHeight
+          setLocalUnread(0)
+        } else {
+          setLocalUnread((count) => Math.max(1, count))
+        }
+      })
+    })
+    observer.observe(content)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
     }
-  }, [readModel.timeline, readModel.projectionVersion, followMode])
+  }, [])
 
   const jumpToBottom = useCallback(() => {
     setMode('follow')
@@ -249,7 +291,22 @@ export function Timeline({
       aria-label={honesty.timelineAriaLabel}
       onScroll={onScroll}
     >
-      <div className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-1'>
+      <div
+        ref={contentRef}
+        className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-1'
+      >
+        <span
+          className='sr-only'
+          role='status'
+          aria-live='polite'
+          data-testid='timeline-run-announcement'
+        >
+          {readModel.runStatus === 'completed'
+            ? '回复已完成'
+            : readModel.runStatus === 'failed'
+              ? '回复失败'
+              : ''}
+        </span>
         {/* Quiet honesty: thin line, never dominate first paint */}
         <p
           className='mb-2 text-[11px] leading-4 text-muted-foreground/80'
@@ -324,9 +381,6 @@ export function Timeline({
                       key={item.id}
                       item={item}
                       runActive={runActive && isLast}
-                      onApprove={onApprove}
-                      onReject={onReject}
-                      onProvideInput={onProvideInput}
                     />
                   ))}
 
@@ -334,9 +388,6 @@ export function Timeline({
                     latestTerminal={seg.terminal}
                     streamItems={seg.bodyItems}
                     runActive={runActive && isLast}
-                    onApprove={onApprove}
-                    onReject={onReject}
-                    onProvideInput={onProvideInput}
                     liveStatus={isLast ? readModel.liveStatus : null}
                   />
                 </div>
@@ -366,24 +417,18 @@ export function Timeline({
 }
 
 /**
- * Codex process fold: header「已处理 Xs」(live while running) + body tools/commentary.
+ * Codex process fold: header「正在思考/处理中 Xs」while run active; 「已处理 Xs」when complete.
  * Final assistant renders outside; fold auto-collapses when completed.
  */
 function TimelineTurnBlock({
   latestTerminal,
   streamItems,
   runActive,
-  onApprove,
-  onReject,
-  onProvideInput,
   liveStatus,
 }: {
   latestTerminal: TimelineItem | undefined
   streamItems: TimelineItem[]
   runActive: boolean
-  onApprove?: (requestId: string) => void
-  onReject?: (requestId: string) => void
-  onProvideInput?: (requestId: string, text: string) => void
   liveStatus: string | null | undefined
 }) {
   const completed = latestTerminal?.status === 'completed' && !runActive
@@ -441,9 +486,6 @@ function TimelineTurnBlock({
               key={item.id}
               item={item}
               runActive={runActive}
-              onApprove={onApprove}
-              onReject={onReject}
-              onProvideInput={onProvideInput}
               forceToolCollapsed={
                 (!runActive && completed) || item.status === 'completed'
               }
@@ -461,9 +503,6 @@ function TimelineTurnBlock({
           key={item.id}
           item={item}
           runActive={runActive}
-          onApprove={onApprove}
-          onReject={onReject}
-          onProvideInput={onProvideInput}
         />
       ))}
     </>
@@ -485,6 +524,7 @@ function ProcessFold({
   canToggle: boolean
   children: ReactNode
 }) {
+  const reduceMotion = useReducedMotion() ?? false
   const startedAtMs = readStartedAtMs(terminal)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
@@ -503,11 +543,13 @@ function ProcessFold({
   const baseLabel = chineseStatusLabel(terminal)
   const durationLabel =
     elapsedMs != null ? formatDurationMs(elapsedMs) : null
+  const processSummary = terminal.meta?.processSummary
+  const summaryDetail = processSummaryDetail(processSummary)
 
   const statusClass = cn(
     'text-[14px] font-[445] leading-[21px]',
     !runActive && terminal.status === 'completed'
-      ? 'text-[color:color(srgb_0.988235_0.988235_0.988235_/_0.65)]'
+      ? 'text-muted-foreground'
       : statusTone(terminal.status),
   )
 
@@ -517,6 +559,9 @@ function ProcessFold({
       {durationLabel ? (
         <span className='tabular-nums'>{durationLabel}</span>
       ) : null}
+      {processSummary && processSummary.stepCount > 0 ? (
+        <span>· {processSummary.stepCount} 步</span>
+      ) : null}
     </span>
   )
 
@@ -524,7 +569,7 @@ function ProcessFold({
     <button
       type='button'
       className={cn(
-        'inline-flex items-center gap-1 rounded-md border border-transparent',
+        'inline-flex min-h-7 items-center gap-1 rounded-md border border-transparent px-0.5',
         'focus-visible:ring-2 focus-visible:ring-ring/50',
         'active:scale-[0.96] transition-transform',
         statusClass,
@@ -557,18 +602,29 @@ function ProcessFold({
       data-fold-open={open ? 'true' : 'false'}
     >
       <div className='mb-1 flex items-center gap-2 pt-1'>{header}</div>
-      <Separator className='mb-2 opacity-80' />
-      {open ? (
-        <div
-          className={cn(
-            'flex flex-col gap-0.5 border-s border-border/40 ps-3',
-            'text-[13px]',
-          )}
-          data-slot='process-fold-body'
-        >
-          {children}
-        </div>
+      {!open && summaryDetail ? (
+        <p className='mb-1 text-[12px] leading-5 text-muted-foreground/80'>
+          {summaryDetail}
+        </p>
       ) : null}
+      <Separator className='mb-2 opacity-80' />
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -2 }}
+            transition={{ duration: reduceMotion ? 0.01 : 0.14, ease: [0.2, 0, 0, 1] }}
+            className={cn(
+              'flex flex-col gap-0.5 border-s border-border/40 ps-3',
+              'text-[13px]',
+            )}
+            data-slot='process-fold-body'
+          >
+            {children}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   )
 }
@@ -578,18 +634,22 @@ function FoldableBody({
   body,
   markdown = false,
   muted = false,
+  streaming = false,
 }: {
   itemId: string
   body: string
   markdown?: boolean
   muted?: boolean
+  streaming?: boolean
 }) {
   const long = body.length > TIMELINE_FOLD_THRESHOLD
   const [open, setOpen] = useState(!long)
-  const mdClass = muted ? 'text-muted-foreground' : 'text-foreground'
+  const mdClass = muted
+    ? 'text-[13px] leading-[20px] text-muted-foreground'
+    : 'text-foreground'
   if (!long) {
     return markdown ? (
-      <SimpleMarkdown source={body} className={mdClass} />
+      <SimpleMarkdown source={body} className={mdClass} isAnimating={streaming} />
     ) : (
       <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
         {body}
@@ -601,7 +661,7 @@ function FoldableBody({
     <div data-testid={`timeline-fold-${itemId}`}>
       {open ? (
         markdown ? (
-          <SimpleMarkdown source={body} className={mdClass} />
+          <SimpleMarkdown source={body} className={mdClass} isAnimating={streaming} />
         ) : (
           <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
             {body}
@@ -636,21 +696,11 @@ function UserBubble({ item }: { item: TimelineItem }) {
       data-testid={`timeline-item-${item.id}`}
       data-category='user-message'
     >
-      <div className='max-w-[77%] rounded-2xl bg-muted px-3 py-2 text-sm leading-[22px]'>
+      <div className='max-w-[77%] [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl bg-muted px-3 py-2 text-sm leading-[22px]'>
         {item.body}
       </div>
     </div>
   )
-}
-
-function ToolKindIcon({ kind }: { kind?: string }) {
-  const cls = 'size-3.5 shrink-0 opacity-80'
-  const k = (kind ?? '').toLowerCase()
-  if (/search|web|搜索/.test(k)) return <Globe className={cls} aria-hidden />
-  if (/read|file|读取/.test(k)) return <FileText className={cls} aria-hidden />
-  if (/command|shell|cmd|命令/.test(k))
-    return <Terminal className={cls} aria-hidden />
-  return <Wrench className={cls} aria-hidden />
 }
 
 function ToolRow({
@@ -675,8 +725,42 @@ function ToolRow({
   useEffect(() => {
     setOpen(wantOpen)
   }, [wantOpen, item.id, item.status])
+
+  const title = item.title ?? '工具'
+  const rowContent = (
+    <>
+      <ToolActivityIcon kind={item.meta?.toolKind ?? item.title} />
+      <span
+        className={cn(
+          'min-w-0 flex-1 truncate',
+          item.status === 'running' && 'text-foreground',
+          item.status === 'error' && 'text-destructive',
+        )}
+        title={title}
+      >
+        {title}
+      </span>
+    </>
+  )
+
+  if (!hasChildren) {
+    return (
+      <div
+        className='flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-[13px] leading-4 font-[445] text-foreground/85'
+        data-kind='tool-group'
+        data-testid={`timeline-item-${item.id}`}
+        data-category='tool-group'
+        data-status={item.status}
+        data-expanded='false'
+      >
+        <span className='size-3.5 shrink-0' aria-hidden />
+        {rowContent}
+      </div>
+    )
+  }
+
   return (
-    <Collapsible open={open && hasChildren} onOpenChange={setOpen}>
+    <Collapsible open={open} onOpenChange={setOpen}>
       <div
         className='rounded-md'
         data-kind='tool-group'
@@ -694,36 +778,27 @@ function ToolRow({
           )}
           data-testid={`timeline-tool-trigger-${item.id}`}
         >
-          {hasChildren ? (
-            open ? (
-              <ChevronDown className='size-3.5 shrink-0 opacity-70' />
-            ) : (
-              <ChevronDown className='size-3.5 shrink-0 -rotate-90 opacity-70' />
-            )
-          ) : (
-            <span className='size-3.5 shrink-0' />
-          )}
-          <ToolKindIcon kind={item.meta?.toolKind ?? item.title} />
-          <span
+          <ChevronDown
             className={cn(
-              'min-w-0 flex-1 truncate',
-              item.status === 'running' && 'text-foreground',
+              'size-3.5 shrink-0 opacity-70 transition-transform duration-150 ease-out',
+              !open && '-rotate-90',
             )}
-          >
-            {item.title ?? '工具'}
-          </span>
+            aria-hidden
+          />
+          {rowContent}
         </CollapsibleTrigger>
-        {hasChildren ? (
-          <CollapsibleContent className='pb-1 ps-7'>
-            <ul className='space-y-0.5 text-[12px] leading-5 text-muted-foreground'>
-              {children.map((c, i) => (
-                <li key={i} className='truncate font-mono'>
-                  {c}
-                </li>
-              ))}
-            </ul>
-          </CollapsibleContent>
-        ) : null}
+        <CollapsibleContent className='pb-1 ps-7'>
+          <ul className='space-y-0.5 text-[12px] leading-5 text-muted-foreground'>
+            {children.map((child, index) => (
+              <li
+                key={`${child}:${index}`}
+                className='[overflow-wrap:anywhere] whitespace-pre-wrap font-mono'
+              >
+                {child}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleContent>
       </div>
     </Collapsible>
   )
@@ -759,19 +834,53 @@ function FileDiffCard({ item }: { item: TimelineItem }) {
   )
 }
 
+function ReasoningRow({ item }: { item: TimelineItem }) {
+  const [open, setOpen] = useState(
+    item.status === 'streaming' ||
+      (item.body?.length ?? 0) < TIMELINE_FOLD_THRESHOLD,
+  )
+
+  useEffect(() => {
+    if (item.status === 'streaming') setOpen(true)
+  }, [item.status])
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div
+        className='mb-1'
+        data-kind='reasoning-section'
+        data-testid={`timeline-item-${item.id}`}
+        data-category='reasoning-section'
+        data-status={item.status}
+      >
+        <CollapsibleTrigger className='flex min-h-7 w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-[12px] text-muted-foreground hover:bg-wb-hover-subtle'>
+          <ChevronDown
+            className={cn(
+              'size-3.5 opacity-70 transition-transform duration-150 ease-out',
+              !open && '-rotate-90',
+            )}
+            aria-hidden
+          />
+          <span>思考过程</span>
+          {item.title && item.title !== '思考过程' ? (
+            <span className='truncate opacity-70'>· {item.title}</span>
+          ) : null}
+        </CollapsibleTrigger>
+        <CollapsibleContent className='px-1 pb-1 ps-6 text-[12px] text-muted-foreground'>
+          <FoldableBody itemId={item.id} body={item.body ?? ''} />
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  )
+}
+
 function TimelineRow({
   item,
   runActive,
-  onApprove,
-  onReject,
   forceToolCollapsed = false,
 }: {
   item: TimelineItem
   runActive: boolean
-  onApprove?: (requestId: string) => void
-  onReject?: (requestId: string) => void
-  /** Reserved for inline input UI; Composer currently owns provideRunInput. */
-  onProvideInput?: (requestId: string, text: string) => void
   forceToolCollapsed?: boolean
 }) {
   switch (item.category) {
@@ -798,6 +907,7 @@ function TimelineRow({
             body={item.body ?? ''}
             markdown
             muted={isCommentary}
+            streaming={runActive && item.status === 'streaming'}
           />
           {runActive && item.status === 'streaming' ? (
             <span
@@ -813,28 +923,7 @@ function TimelineRow({
       )
     }
     case 'reasoning-section':
-      return (
-        <Collapsible defaultOpen={(item.body?.length ?? 0) < TIMELINE_FOLD_THRESHOLD}>
-          <div
-            className='mb-1'
-            data-kind='reasoning-section'
-            data-testid={`timeline-item-${item.id}`}
-            data-category='reasoning-section'
-            data-status={item.status}
-          >
-            <CollapsibleTrigger className='flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-[12px] text-muted-foreground hover:bg-wb-hover-subtle'>
-              <ChevronDown className='size-3.5 opacity-70' />
-              <span>思考过程</span>
-              {item.title && item.title !== '思考过程' ? (
-                <span className='truncate opacity-70'>· {item.title}</span>
-              ) : null}
-            </CollapsibleTrigger>
-            <CollapsibleContent className='px-1 pb-1 ps-6 text-[12px] text-muted-foreground'>
-              <FoldableBody itemId={item.id} body={item.body ?? ''} />
-            </CollapsibleContent>
-          </div>
-        </Collapsible>
-      )
+      return <ReasoningRow item={item} />
     case 'plan-update':
       return (
         <div
@@ -863,7 +952,7 @@ function TimelineRow({
           data-status={item.status}
         >
           <div className='flex items-center gap-2 rounded-md px-1 py-1.5 text-[13px] text-muted-foreground hover:bg-wb-hover-subtle'>
-            <Terminal className='size-3.5 shrink-0 opacity-80' aria-hidden />
+            <ToolActivityIcon kind='command' />
             <span className='min-w-0 flex-1 truncate font-mono'>
               $ {item.title}
             </span>
@@ -892,56 +981,9 @@ function TimelineRow({
           <div className='whitespace-pre-wrap ps-5 font-mono'>{item.body}</div>
         </div>
       )
-    case 'approval-request': {
-      const requestId = requestIdFromItem(item, 'approval-request:')
-      const waiting = item.status === 'waiting'
-      return (
-        <div
-          className='mb-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm'
-          data-kind='approval-request'
-          data-testid={`timeline-item-${item.id}`}
-          data-category='approval-request'
-          data-status={item.status}
-          data-request-id={requestId}
-        >
-          <div className='font-medium'>{item.title ?? '需要审批'}</div>
-          {item.body ? (
-            <div className='mt-1 whitespace-pre-wrap text-xs text-muted-foreground'>
-              {item.body}
-            </div>
-          ) : null}
-          {waiting ? (
-            <div className='mt-2 flex gap-2'>
-              <Button
-                type='button'
-                size='sm'
-                data-testid={`timeline-approve-${requestId}`}
-                onClick={() => onApprove?.(requestId)}
-              >
-                允许一次
-              </Button>
-              <Button
-                type='button'
-                size='sm'
-                variant='outline'
-                data-testid={`timeline-reject-${requestId}`}
-                onClick={() => onReject?.(requestId)}
-              >
-                拒绝
-              </Button>
-            </div>
-          ) : (
-            <div className='mt-1 text-xs text-muted-foreground'>
-              {item.status === 'approved'
-                ? '已允许'
-                : item.status === 'rejected'
-                  ? '已拒绝'
-                  : item.status}
-            </div>
-          )}
-        </div>
-      )
-    }
+    case 'approval-request':
+      // Approval HITL is only the bottom ApprovalDock — never mirror in the stream.
+      return null
     case 'input-request': {
       const requestId = requestIdFromItem(item, 'input-request:')
       const waiting = item.status === 'waiting'

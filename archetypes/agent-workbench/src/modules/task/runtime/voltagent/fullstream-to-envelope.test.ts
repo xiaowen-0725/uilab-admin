@@ -13,6 +13,32 @@ const baseCtx = (): MapFullStreamContext => ({
 })
 
 describe('mapFullStreamChunks', () => {
+  it('keeps tool-error on the original tool call id', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        { type: 'tool-call', toolCallId: 'call-err', toolName: 'read_file' },
+        {
+          type: 'tool-error',
+          toolCallId: 'call-err',
+          toolName: 'read_file',
+          error: 'not found',
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'tool.called',
+      'tool.completed',
+    ])
+    expect(envelopes[1]?.payload).toMatchObject({
+      toolId: 'call-err',
+      toolCallId: 'call-err',
+      isError: true,
+      summary: 'not found',
+    })
+  })
+
   it('maps text stream to output deltas and run.completed', () => {
     const { envelopes, nextSequence } = mapFullStreamChunks(
       [
@@ -324,6 +350,11 @@ describe('mapFullStreamChunks', () => {
       'command.started',
       'command.completed',
     ])
+    expect(envelopes[0]?.payload).toMatchObject({ commandId: 'b1' })
+    expect(envelopes[1]?.payload).toMatchObject({
+      commandId: 'b1',
+      summary: 'file.txt',
+    })
   })
 
   it('maps abort and error; ignores unknown types', () => {

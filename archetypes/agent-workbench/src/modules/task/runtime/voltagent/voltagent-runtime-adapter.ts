@@ -11,6 +11,7 @@ import type {
   RespondToApprovalCommand,
   SubmitTurnCommand,
 } from '../../protocol/commands'
+import type { TurnComposerContext } from '../../protocol/commands'
 import type { AgentRuntimeEventEnvelope } from '../../protocol/events'
 import type {
   RuntimeCapabilities,
@@ -89,6 +90,30 @@ type StreamInput =
       parts: Array<{ type: string; text?: string } | UiToolPart>
     }>
 
+function modelInputWithComposerContext(
+  text: string,
+  context: TurnComposerContext | undefined,
+): string {
+  if (!context) return text
+  const lines: string[] = []
+  if (context.attachments?.length) {
+    lines.push(
+      `附件元数据（未上传文件内容）：${context.attachments
+        .map((item) => `${item.name} [${item.kind}]`)
+        .join('、')}`,
+    )
+  }
+  if (context.skills?.length) {
+    lines.push(`已选技能：${context.skills.map((item) => item.label).join('、')}`)
+  }
+  if (context.mode && context.mode !== 'default') {
+    lines.push(`Workbench 模式：${context.mode}`)
+  }
+  return lines.length > 0
+    ? `${text}\n\n<workbench_context>\n${lines.join('\n')}\n</workbench_context>`
+    : text
+}
+
 /**
  * Workspace tools use virtual paths (start with `/` under the authorized root).
  * Models sometimes emit host absolute paths; map known shapes back to virtual
@@ -136,6 +161,27 @@ export function parseSseDataLine(
   }
 }
 
+function isTerminalRunEvent(eventType: string): boolean {
+  return (
+    eventType === 'run.completed' ||
+    eventType === 'run.failed' ||
+    eventType === 'run.cancelled'
+  )
+}
+
+/** Read first non-empty string field from a chunk-like object. */
+function pickString(
+  source: Record<string, unknown> | undefined,
+  keys: readonly string[],
+): string | null {
+  if (!source) return null
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return null
+}
+
 /**
  * When sidecar metadata cannot be loaded, return **no** tools rather than
  * inventing DIY/minimal names (honesty: do not claim run_command on office).
@@ -173,9 +219,22 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
   subscribe(
     taskId: string,
-    _cursor: number | string | null | undefined,
+    cursor: number | string | null | undefined,
     listener: Listener,
   ): () => void {
+    // EventStore owns rehydrate; seed live sequences so post-rehydrate appends
+    // do not restart at 1 and collide with store checkpoints.
+    const state = this.ensureTask(taskId)
+    const cursorNum =
+      cursor == null || cursor === ''
+        ? null
+        : typeof cursor === 'number'
+          ? cursor
+          : Number(cursor)
+    if (cursorNum != null && Number.isFinite(cursorNum) && cursorNum >= 0) {
+      state.nextSequence = Math.max(state.nextSequence, Math.floor(cursorNum) + 1)
+    }
+
     let set = this.listeners.get(taskId)
     if (!set) {
       set = new Set()
@@ -409,7 +468,11 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const { turnId, runId } = this.allocateIds(taskId, command)
     state.lastRunId = runId
     state.lastTurnId = turnId
-    state.lastUserText = command.inputText
+    const modelInput = modelInputWithComposerContext(
+      command.inputText,
+      command.composerContext,
+    )
+    state.lastUserText = modelInput
     state.pendingApprovals.clear()
 
     this.pushBookkeeping(taskId, turnId, runId, command.inputText)
@@ -417,7 +480,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       taskId,
       turnId,
       runId,
-      input: command.inputText,
+      input: modelInput,
       completeIfNoTerminal: true,
     })
 
@@ -549,21 +612,14 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const state = this.ensureTask(taskId)
     const nested =
       typeof chunk.toolCall === 'object' && chunk.toolCall !== null
-        ? (chunk.toolCall as FullStreamChunk)
+        ? (chunk.toolCall as Record<string, unknown>)
         : undefined
-    const approvalId =
-      (typeof chunk.approvalId === 'string' && chunk.approvalId) ||
-      (typeof chunk.requestId === 'string' && chunk.requestId) ||
-      null
+    const chunkRec = chunk as unknown as Record<string, unknown>
+    const approvalId = pickString(chunkRec, ['approvalId', 'requestId'])
     if (!approvalId || !nested) return
     const toolCallId =
-      (typeof nested.toolCallId === 'string' && nested.toolCallId) ||
-      (typeof nested.id === 'string' && nested.id) ||
-      approvalId
-    const toolName =
-      (typeof nested.toolName === 'string' && nested.toolName) ||
-      (typeof nested.name === 'string' && nested.name) ||
-      'tool'
+      pickString(nested, ['toolCallId', 'id']) ?? approvalId
+    const toolName = pickString(nested, ['toolName', 'name']) ?? 'tool'
     const input = nested.input ?? nested.args ?? nested.arguments
     state.pendingApprovals.set(approvalId, {
       approvalId,
@@ -628,8 +684,63 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      // Terminal stream markers (finish/abort/error or [DONE]); used for stream_ended compensation.
-      let sawFinish = false
+      // Exactly one terminal Runtime event per launched stream.
+      let sawTerminalEvent = false
+
+      const emitCompleted = (reason: 'done_marker' | 'stream_ended'): void => {
+        if (
+          sawTerminalEvent ||
+          signal.aborted ||
+          state.pendingApprovals.size > 0
+        ) {
+          return
+        }
+        this.pushTaskEnvelope(
+          taskId,
+          { turnId, runId },
+          'va-complete',
+          'run.completed',
+          { reason },
+        )
+        sawTerminalEvent = true
+      }
+
+      const consumeLine = (line: string): void => {
+        const parsed = parseSseDataLine(line)
+        if (parsed === null) return
+        if (parsed === 'done') {
+          if (completeIfNoTerminal) emitCompleted('done_marker')
+          return
+        }
+        const chunk = parsed
+
+        // Record pending approvals before deciding whether a terminal event is legal.
+        this.rememberApprovalFromChunk(taskId, runId, turnId, chunk)
+        const pausedForApproval = state.pendingApprovals.size > 0
+
+        const mapped = mapFullStreamChunk(chunk, {
+          projectId: this.projectId,
+          taskId,
+          turnId,
+          runId,
+          nextSequence: state.nextSequence,
+          schemaVersion: this.schemaVersion,
+          nowIso: this.nowIso,
+          eventIdPrefix: 'va',
+        })
+        for (const env of mapped.envelopes) {
+          if (env.eventType === 'run.started') continue
+          const terminal = isTerminalRunEvent(env.eventType)
+          if (terminal && (pausedForApproval || sawTerminalEvent)) continue
+          this.emitEnvelope(taskId, {
+            ...env,
+            taskSequence: state.nextSequence,
+            eventId: `va-${runId}-${state.nextSequence}`,
+          })
+          state.nextSequence += 1
+          if (terminal) sawTerminalEvent = true
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -638,71 +749,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         const parts = buffer.split('\n')
         buffer = parts.pop() ?? ''
         for (const line of parts) {
-          const parsed = parseSseDataLine(line)
-          if (parsed === null) continue
-          if (parsed === 'done') {
-            sawFinish = true
-            continue
-          }
-          const chunk = parsed
-          if (
-            chunk.type === 'finish' ||
-            chunk.type === 'abort' ||
-            chunk.type === 'error'
-          ) {
-            sawFinish = true
-          }
-
-          // Record pending approvals *before* mapping finish → run.completed
-          // so we can suppress terminal completion while HITL is open (Codex P1).
-          this.rememberApprovalFromChunk(taskId, runId, turnId, chunk)
-          const pausedForApproval = state.pendingApprovals.size > 0
-
-          const mapped = mapFullStreamChunk(chunk, {
-            projectId: this.projectId,
-            taskId,
-            turnId,
-            runId,
-            nextSequence: state.nextSequence,
-            schemaVersion: this.schemaVersion,
-            nowIso: this.nowIso,
-            eventIdPrefix: 'va',
-          })
-          for (const env of mapped.envelopes) {
-            if (env.eventType === 'run.started') continue
-            // Do not complete the Run while tools are waiting for approval.
-            if (
-              pausedForApproval &&
-              (env.eventType === 'run.completed' || env.eventType === 'run.failed')
-            ) {
-              continue
-            }
-            this.emitEnvelope(taskId, {
-              ...env,
-              taskSequence: state.nextSequence,
-              eventId: `va-${runId}-${state.nextSequence}`,
-            })
-            state.nextSequence += 1
-          }
+          consumeLine(line)
         }
       }
 
-      const pausedForApproval = state.pendingApprovals.size > 0
-
-      if (
-        completeIfNoTerminal &&
-        !sawFinish &&
-        !signal.aborted &&
-        !pausedForApproval
-      ) {
-        this.pushTaskEnvelope(
-          taskId,
-          { turnId, runId },
-          'va-complete',
-          'run.completed',
-          { reason: 'stream_ended' },
-        )
-      }
+      buffer += decoder.decode()
+      if (buffer.trim()) consumeLine(buffer)
+      if (completeIfNoTerminal) emitCompleted('stream_ended')
     } catch (err) {
       if (signal.aborted) {
         return

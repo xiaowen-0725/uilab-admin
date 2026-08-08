@@ -69,6 +69,10 @@ import {
 import { Input } from '@/components/ui/input'
 
 import type { RunStatus } from '../../model/lifecycle'
+import type {
+  CommandAcknowledgement,
+  TurnComposerContext,
+} from '../../protocol/commands'
 
 export interface ComposerProps {
   /** Context chip — project / workspace name (local fixture state). */
@@ -101,7 +105,10 @@ export interface ComposerProps {
   /** Active run status from TaskReadModel (runtime mode). */
   runStatus?: RunStatus | null
   /** Runtime mode: submit user text via controller. */
-  onSubmitText?: (text: string) => void | Promise<void>
+  onSubmitText?: (
+    text: string,
+    composerContext?: TurnComposerContext,
+  ) => Promise<CommandAcknowledgement | null>
   /** Runtime mode: cancel active run via controller. */
   onCancelRun?: () => void | Promise<void>
   /** Optional notice override from runtime controller. */
@@ -328,7 +335,7 @@ export function TaskComposer({
   /**
    * Send acts as Stop only while the run is actively executing / queued / cancelling.
    * `waiting_for_input` must accept clarification text (→ provideRunInput via submitText).
-   * `waiting_for_approval` is resolved on the timeline, not via Send-as-Stop.
+   * `waiting_for_approval` is resolved on the bottom ApprovalDock (Composer hidden), not via Send-as-Stop.
    */
   const sendActsAsStop =
     isRuntimeMode &&
@@ -428,14 +435,14 @@ export function TaskComposer({
     recordIntervalRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
   }, [])
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (recording) stopRecording()
 
     // Runtime path: Application Command → RuntimePort (Fake or VoltAgent).
     if (isRuntimeMode) {
       // Stop only while actively running / queued / cancelling (not HITL waits).
       if (sendActsAsStop) {
-        void onCancelRun?.()
+        await onCancelRun?.()
         setNotice(honesty.cancelRequested)
         return
       }
@@ -448,8 +455,33 @@ export function TaskComposer({
           ? honesty.clarifyingSubmit(preview)
           : honesty.submitWithPreview(preview),
       )
-      setText('')
-      void onSubmitText?.(payload)
+      const mode: TurnComposerContext['mode'] =
+        goalMode && planMode
+          ? 'goal+plan'
+          : goalMode
+            ? 'goal'
+            : planMode
+              ? 'plan'
+              : 'default'
+      const acknowledgement = await onSubmitText?.(payload, {
+        attachments: attachments.map(({ name, meta, icon }) => ({
+          name,
+          meta,
+          kind: icon,
+        })),
+        skills: skillTokens.map(({ id, label }) => ({ id, label })),
+        mode,
+      })
+      if (
+        acknowledgement?.status === 'accepted' ||
+        acknowledgement?.status === 'duplicate'
+      ) {
+        setText('')
+        setAttachments([])
+        setSkillTokens([])
+        setGoalMode(false)
+        setPlanMode(false)
+      }
       return
     }
 
@@ -483,6 +515,10 @@ export function TaskComposer({
     onCancelRun,
     onSubmitText,
     honesty,
+    attachments,
+    skillTokens,
+    goalMode,
+    planMode,
   ])
 
   // Prefer controller notice when runtime mode surfaces one.
@@ -718,9 +754,7 @@ export function TaskComposer({
       disabled={
         !sendRunning &&
         !recording &&
-        text.trim().length === 0 &&
-        skillTokens.length === 0 &&
-        attachments.length === 0
+        text.trim().length === 0
       }
       onClick={handleSend}
       data-testid='composer-submit'
@@ -1116,13 +1150,22 @@ export function TaskComposer({
                 {showContextGauge ? (
                   <ComposerContextGauge used={48_000} limit={200_000} />
                 ) : null}
-                <ComposerModelPicker
-                  label={modelTriggerLabel}
-                  open={pickerOpen}
-                  onOpenChange={setPickerOpen}
-                  data-testid='composer-model'
-                  title='模型与推理设置（本地）'
-                >
+                {isRuntimeMode ? (
+                  <span
+                    className='inline-flex min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-violet-500 dark:text-violet-400'
+                    data-testid='composer-model'
+                    title='模型由当前 Runtime 决定'
+                  >
+                    {modelLabel}
+                  </span>
+                ) : (
+                  <ComposerModelPicker
+                    label={modelTriggerLabel}
+                    open={pickerOpen}
+                    onOpenChange={setPickerOpen}
+                    data-testid='composer-model'
+                    title='模型与推理设置（本地）'
+                  >
                   <div className='flex items-center justify-between px-2 pt-1 text-xs text-muted-foreground'>
                     <span>模型</span>
                   </div>
@@ -1167,7 +1210,8 @@ export function TaskComposer({
                       aria-label='自主度'
                     />
                   </div>
-                </ComposerModelPicker>
+                  </ComposerModelPicker>
+                )}
                 <ComposerIconButton
                   aria-label='语音输入'
                   data-testid='composer-mic'

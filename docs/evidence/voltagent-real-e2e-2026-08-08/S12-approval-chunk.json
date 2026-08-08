@@ -1,0 +1,15 @@
+{
+  "type": "tool-approval-request",
+  "approvalId": "aitxt-6oeHuIc1gBA81RW6MY1gCWMo",
+  "toolCall": {
+    "type": "tool-call",
+    "toolCallId": "call_00_Uo7bQ9jExdtNhKAu4eHm7887",
+    "toolName": "write_file",
+    "input": {
+      "file_path": "/output/e2e-hitl.txt",
+      "content": "e2e-ok\n",
+      "overwrite": false,
+      "create_parent_dirs": true
+    }
+  }
+}
