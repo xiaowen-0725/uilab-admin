@@ -55,6 +55,8 @@ import {
   type WorkbenchSessionSeed,
 } from '@/modules/workbench-session'
 import {
+  createDocumentSurfaceDefinition,
+  createMemoryDocumentContent,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   type SurfaceRegistry,
@@ -98,10 +100,13 @@ const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
 
 /**
  * Composition-only Surface Registry assembly.
- * Host must never register; add Document/Browser registrations here later.
+ * Host must never register; Document/Browser/test register here only.
  */
 function createWorkbenchSurfaceRegistry(): SurfaceRegistry {
   const registry = createSurfaceRegistry()
+  const documentContent = createMemoryDocumentContent()
+  // Document before test so workspace paths resolve to document, not test.
+  registry.register(createDocumentSurfaceDefinition({ content: documentContent }))
   registry.register(createTestSurfaceDefinition())
   return registry
 }
@@ -609,7 +614,7 @@ export function WorkbenchApp({
 
   /**
    * User channel: Timeline file chip/card → Session openWorkSurfaceTab.
-   * Composition resolves kind via Registry; interim fallback `test` until Document Surface (04).
+   * Composition resolves kind via Registry (document for workspace paths; test: prefix for tests).
    * Never mutates Host openTabs directly.
    */
   const onOpenFileRef = useCallback(
@@ -621,7 +626,7 @@ export function WorkbenchApp({
         resourceKey,
         path: resourceKey,
       })
-      // Explicit kind after resolve; fallback test so open always has a render surface in 03.
+      // Prefer Registry resolve; last-resort test keeps open path honest when nothing matches.
       const kind = resolved?.kind ?? 'test'
       const title =
         info.label?.trim() ||

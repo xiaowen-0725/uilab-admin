@@ -75,15 +75,27 @@ describe('Work Surface user open channel (ticket 03)', () => {
     await expect
       .element(page.getByTestId('work-surface-host'))
       .toHaveAttribute('data-visible', 'true')
+    // Document Surface (ticket 04) owns workspace paths after Registry resolve.
     await expect
-      .element(page.getByTestId('work-surface-test-body'))
+      .element(page.getByTestId('work-surface-document'))
       .toBeInTheDocument()
     await expect
-      .element(page.getByTestId('work-surface-test-body'))
+      .poll(() =>
+        page
+          .getByTestId('work-surface-document')
+          .element()
+          .getAttribute('data-state'),
+      )
+      .toBe('ready')
+    await expect
+      .element(page.getByTestId('work-surface-document'))
       .toHaveAttribute(
         'data-resource-key',
         'fixture/notes/workflow-result.md',
       )
+    await expect
+      .element(page.getByTestId('document-renderer-markdown'))
+      .toHaveTextContent('Checklist')
     // Pane open, not maximized (user focus default).
     await expect
       .element(page.getByTestId('work-surface-host'))
