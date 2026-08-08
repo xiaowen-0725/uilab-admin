@@ -163,9 +163,7 @@ export function WorkbenchApp({
   const workSurfaceEmptyExtra = useMemo(
     () => (
       <WorkspaceDocumentEmptyExtra
-        runtimeMode={
-          RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake'
-        }
+        runtimeMode={documentSource.runtimeMode}
         workspaceHint={documentSource.workspaceHint}
         localFolderBound={documentSource.localFolderBound}
         pickerSupported={documentSource.pickerSupported}
@@ -180,6 +178,7 @@ export function WorkbenchApp({
       documentSource.localFolderBound,
       documentSource.pickLocalFolder,
       documentSource.pickerSupported,
+      documentSource.runtimeMode,
       documentSource.workspaceHint,
     ],
   )

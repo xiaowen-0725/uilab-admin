@@ -27,6 +27,8 @@ export type UseWorkspaceDocumentSourceOptions = {
 }
 
 export type WorkspaceDocumentSource = {
+  /** Echo of options so UI does not re-branch on Composition env. */
+  runtimeMode: WorkspaceDocumentRuntimeMode
   content: DocumentContentPort
   workspaceHint: string | null
   localFolderBound: boolean
@@ -203,6 +205,7 @@ export function useWorkspaceDocumentSource(
   )
 
   return {
+    runtimeMode: options.runtimeMode,
     content: snap.content,
     workspaceHint: snap.workspaceHint,
     localFolderBound: snap.localFolderBound,
