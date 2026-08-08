@@ -84,7 +84,59 @@ new VoltAgent({
   agents: {
     workbench: agent,
   },
-  server: honoServer({ port }),
+  server: honoServer({
+    port,
+    hostname: '127.0.0.1',
+    /**
+     * Workbench Document Surface — read-only workspace file bytes.
+     * Not a tool call; not multi-tenant production storage.
+     */
+    configureApp: (app) => {
+      app.get('/workspace/info', (c) =>
+        c.json({
+          workspaceRoot,
+          profile: resolvedProfile,
+          note: 'local sidecar workspace — not remote production storage',
+        }),
+      )
+
+      app.get('/workspace/file', async (c) => {
+        const filePath = c.req.query('path') ?? ''
+        const maxRaw = c.req.query('maxBytes')
+        const maxBytes = maxRaw ? Number(maxRaw) : undefined
+        const {
+          readWorkspaceFile,
+          httpStatusForWorkspaceRead,
+          guessMimeFromPath,
+        } = await import('./workspace-file-api.js')
+
+        const result = await readWorkspaceFile(workspaceRoot, filePath, {
+          maxBytes:
+            Number.isFinite(maxBytes) && (maxBytes as number) > 0
+              ? (maxBytes as number)
+              : undefined,
+        })
+
+        if (!result.ok) {
+          return c.json(
+            {
+              ok: false,
+              reason: result.reason,
+              message: result.message,
+            },
+            httpStatusForWorkspaceRead(result.reason) as 400 | 403 | 404 | 413 | 500,
+          )
+        }
+
+        const mime = guessMimeFromPath(result.relativePath)
+        c.header('Content-Type', mime)
+        c.header('X-Workspace-Relative-Path', result.relativePath)
+        c.header('X-Byte-Length', String(result.byteLength))
+        c.header('Cache-Control', 'no-store')
+        return c.body(result.bytes)
+      })
+    },
+  }),
   logger,
 })
 

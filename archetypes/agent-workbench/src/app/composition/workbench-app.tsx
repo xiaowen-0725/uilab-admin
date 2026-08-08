@@ -57,11 +57,13 @@ import {
 import {
   createBrowserSurfaceDefinition,
   createDocumentSurfaceDefinition,
+  createHttpWorkspaceDocumentContent,
   createMemoryDocumentContent,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   createWebBrowserHostPort,
   resolveOpenWorkSurfaceIntent,
+  type DocumentContentPort,
   type SurfaceRegistry,
 } from '@/modules/work-surface'
 import { ThemeProvider } from '@/shell/theme/theme-provider'
@@ -102,12 +104,26 @@ const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
 }
 
 /**
+ * Document content Port selection:
+ * - fake / tests → Memory fixtures
+ * - voltagent → HTTP read of sidecar WORKSPACE_ROOT (no Memory fallback)
+ */
+function createDocumentContentPort(): DocumentContentPort {
+  if (RUNTIME_ADAPTER_MODE === 'voltagent') {
+    return createHttpWorkspaceDocumentContent({
+      baseUrl: resolveVoltAgentBaseUrl(),
+    })
+  }
+  return createMemoryDocumentContent()
+}
+
+/**
  * Composition-only Surface Registry assembly.
  * Host must never register; Document/Browser/test register here only.
  */
 function createWorkbenchSurfaceRegistry(): SurfaceRegistry {
   const registry = createSurfaceRegistry()
-  const documentContent = createMemoryDocumentContent()
+  const documentContent = createDocumentContentPort()
   // Document before test so workspace paths resolve to document, not test.
   registry.register(createDocumentSurfaceDefinition({ content: documentContent }))
   registry.register(

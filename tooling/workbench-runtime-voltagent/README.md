@@ -105,6 +105,17 @@ Then open empty / 新对话 and send a message. Capture tasks still use local-si
 
 Paths outside the workspace root are rejected by `NodeFilesystemBackend`（`contained` + `virtualMode`）与 DIY `resolvePathWithinRoot`。
 
+### Workspace file HTTP（Document Surface 真读）
+
+Workbench UI 在 `VITE_RUNTIME_ADAPTER=voltagent` 时经 Vite 代理调用侧车只读 API（**不是** Agent tool call）：
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/workspace/info` | `{ workspaceRoot, profile }` |
+| `GET` | `/workspace/file?path=<rel>&maxBytes=` | 根内只读字节；`403` 越界 / `404` 不存在 / `413` 过大 |
+
+`path` 为工作区相对路径（可带虚拟前导 `/`）。Fake 路径仍用 Memory fixtures，不访问侧车。
+
 ### 插件系统（PluginRegistry）
 
 office 装配**只经** `createPluginRegistry().load()` 聚合：

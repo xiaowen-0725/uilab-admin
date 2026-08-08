@@ -26,6 +26,8 @@ export {
   DEFAULT_DOCUMENT_FIXTURES,
   DEFAULT_BINARY_FIXTURES,
 } from './adapters/memory-document-content'
+export { createHttpWorkspaceDocumentContent } from './adapters/http-workspace-document-content'
+export type { HttpWorkspaceDocumentContentOptions } from './adapters/http-workspace-document-content'
 export {
   createWebBrowserHostPort,
   type BrowserHostPort,
