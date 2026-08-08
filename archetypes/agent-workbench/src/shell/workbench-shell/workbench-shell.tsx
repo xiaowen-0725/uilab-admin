@@ -13,6 +13,7 @@ import type {
   LaunchAction,
   TaskSurfaceComposerRuntime,
   TaskSurfaceView,
+  TimelineOpenFileRef,
 } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
 import {
@@ -104,6 +105,10 @@ export interface WorkbenchShellProps {
    * Shell/Host never register; Host only resolves render by kind.
    */
   surfaceRegistry: SurfaceRegistry
+  /**
+   * User channel: Timeline file chip/card → Composition → Session openWorkSurfaceTab.
+   */
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
 }
 
 /**
@@ -125,6 +130,7 @@ export function WorkbenchShell({
   onSelectProject,
   composerRuntime,
   surfaceRegistry,
+  onOpenFileRef,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -410,6 +416,7 @@ export function WorkbenchShell({
                   view={taskView}
                   onLaunchAction={onLaunchAction}
                   composerRuntime={composerRuntime}
+                  onOpenFileRef={onOpenFileRef}
                   onCloseContextPanel={
                     taskView.contextPanelOpen
                       ? () => {

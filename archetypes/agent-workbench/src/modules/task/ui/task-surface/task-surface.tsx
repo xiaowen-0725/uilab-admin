@@ -16,7 +16,10 @@ import { ContextPanel } from '../context-panel/context-panel'
 import { EmptyHub } from '../empty-hub/empty-hub'
 import { ExecutionStream } from '../execution-stream/execution-stream'
 import type { RuntimeHonestyMode } from '../../runtime/runtime-honesty'
-import { Timeline } from '../timeline/timeline'
+import {
+  Timeline,
+  type TimelineOpenFileRef,
+} from '../timeline/timeline'
 
 export interface TaskSurfaceView {
   taskId: string
@@ -62,6 +65,11 @@ export interface TaskSurfaceProps {
   onLaunchAction?: (action: LaunchAction) => void
   /** Dual-path composer: default local-sim; runtime for Fake vertical slice. */
   composerRuntime?: TaskSurfaceComposerRuntime
+  /**
+   * Open a path/file from Timeline chips/cards into Work Surface.
+   * Composition wires Session.openWorkSurfaceTab; Task does not own openTabs.
+   */
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
 }
 
 export function TaskSurface({
@@ -69,6 +77,7 @@ export function TaskSurface({
   onCloseContextPanel,
   onLaunchAction,
   composerRuntime,
+  onOpenFileRef,
 }: TaskSurfaceProps) {
   const [lastActionId, setLastActionId] = useState<string | null>(null)
 
@@ -108,6 +117,7 @@ export function TaskSurface({
               onRetryTurn={composerRuntime?.onRetryTurn}
               onFollowModeChange={composerRuntime?.onFollowModeChange}
               honestyMode={honestyMode}
+              onOpenFileRef={onOpenFileRef}
             />
           ) : view.mode === 'stream' && view.stream ? (
             <ExecutionStream
@@ -138,6 +148,9 @@ export function TaskSurface({
               runtimeNotice={composerRuntime?.runtimeNotice}
               honestyMode={honestyMode}
               modelLabel={composerRuntime?.modelLabel}
+              // Codex top-rail stack: rail always on for depth; project chip only on empty hub.
+              showContextBar
+              showProjectChip={view.mode === 'empty'}
             />
           )}
         </div>

@@ -21,7 +21,10 @@ export type {
 } from './ui/task-surface/task-surface'
 
 export { Timeline, TIMELINE_FOLD_THRESHOLD } from './ui/timeline/timeline'
-export type { TimelineProps } from './ui/timeline/timeline'
+export type {
+  TimelineProps,
+  TimelineOpenFileRef,
+} from './ui/timeline/timeline'
 
 export { LiveStatusLine } from './ui/live-status-line'
 export type { LiveStatusLineProps } from './ui/live-status-line'

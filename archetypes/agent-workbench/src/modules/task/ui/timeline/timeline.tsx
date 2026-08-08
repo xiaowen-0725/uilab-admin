@@ -68,12 +68,24 @@ function processSummaryDetail(summary: ProcessSummary | undefined): string | nul
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
+/** User intent to open a file/path in Work Surface (Session open, not Host mutate). */
+export type TimelineOpenFileRef = {
+  path?: string
+  line?: number
+  label: string
+}
+
 export interface TimelineProps {
   readModel: TaskReadModel
   onRetryTurn?: () => void
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
   /** Honesty mode for banner / HITL copy. Default fake. */
   honestyMode?: RuntimeHonestyMode
+  /**
+   * Timeline file chip / file-change card → open Work Surface tab.
+   * Must be wired by Composition through Session; Task never owns openTabs.
+   */
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
 }
 
 function isActiveRunStatus(status: RunStatus | null): boolean {
@@ -197,6 +209,7 @@ export function Timeline({
   onRetryTurn,
   onFollowModeChange,
   honestyMode = 'fake',
+  onOpenFileRef,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -307,17 +320,16 @@ export function Timeline({
               ? '回复失败'
               : ''}
         </span>
-        {/* Quiet honesty: thin line, never dominate first paint */}
-        <p
-          className='mb-2 text-[11px] leading-4 text-muted-foreground/80'
-          data-testid='runtime-honesty-banner'
-        >
+        {/* Product UI: no visible honesty/status chrome; keep live regions for a11y/tests */}
+        <span className='sr-only' data-testid='runtime-honesty-banner'>
           {honesty.banner}
-        </p>
+        </span>
 
         {readModel.recoveryRequired ? (
           <p
-            className='mb-2 text-[12px] text-amber-600 dark:text-amber-400'
+            className='sr-only'
+            role='status'
+            aria-live='polite'
             data-testid='runtime-recovery-notice'
           >
             {honesty.recovery}
@@ -326,7 +338,9 @@ export function Timeline({
 
         {readModel.runStatus === 'waiting_for_approval' ? (
           <p
-            className='mb-2 text-[12px] text-muted-foreground'
+            className='sr-only'
+            role='status'
+            aria-live='polite'
             data-testid='runtime-approval-notice'
           >
             {honesty.waitingApproval}
@@ -335,7 +349,9 @@ export function Timeline({
 
         {readModel.runStatus === 'waiting_for_input' ? (
           <p
-            className='mb-2 text-[12px] text-muted-foreground'
+            className='sr-only'
+            role='status'
+            aria-live='polite'
             data-testid='runtime-input-notice'
           >
             当前 Run 等待补充输入。请在下方 Composer 发送澄清内容（将路由到
@@ -381,6 +397,7 @@ export function Timeline({
                       key={item.id}
                       item={item}
                       runActive={runActive && isLast}
+                      onOpenFileRef={onOpenFileRef}
                     />
                   ))}
 
@@ -389,6 +406,7 @@ export function Timeline({
                     streamItems={seg.bodyItems}
                     runActive={runActive && isLast}
                     liveStatus={isLast ? readModel.liveStatus : null}
+                    onOpenFileRef={onOpenFileRef}
                   />
                 </div>
               )
@@ -425,11 +443,13 @@ function TimelineTurnBlock({
   streamItems,
   runActive,
   liveStatus,
+  onOpenFileRef,
 }: {
   latestTerminal: TimelineItem | undefined
   streamItems: TimelineItem[]
   runActive: boolean
   liveStatus: string | null | undefined
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
 }) {
   const completed = latestTerminal?.status === 'completed' && !runActive
   const processItems = streamItems.filter(isProcessFoldItem)
@@ -489,6 +509,7 @@ function TimelineTurnBlock({
               forceToolCollapsed={
                 (!runActive && completed) || item.status === 'completed'
               }
+              onOpenFileRef={onOpenFileRef}
             />
           ))}
           {liveForBar ? (
@@ -503,6 +524,7 @@ function TimelineTurnBlock({
           key={item.id}
           item={item}
           runActive={runActive}
+          onOpenFileRef={onOpenFileRef}
         />
       ))}
     </>
@@ -635,12 +657,14 @@ function FoldableBody({
   markdown = false,
   muted = false,
   streaming = false,
+  onOpenFileRef,
 }: {
   itemId: string
   body: string
   markdown?: boolean
   muted?: boolean
   streaming?: boolean
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
 }) {
   const long = body.length > TIMELINE_FOLD_THRESHOLD
   const [open, setOpen] = useState(!long)
@@ -649,7 +673,12 @@ function FoldableBody({
     : 'text-foreground'
   if (!long) {
     return markdown ? (
-      <SimpleMarkdown source={body} className={mdClass} isAnimating={streaming} />
+      <SimpleMarkdown
+        source={body}
+        className={mdClass}
+        isAnimating={streaming}
+        onOpenFileRef={onOpenFileRef}
+      />
     ) : (
       <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
         {body}
@@ -661,14 +690,23 @@ function FoldableBody({
     <div data-testid={`timeline-fold-${itemId}`}>
       {open ? (
         markdown ? (
-          <SimpleMarkdown source={body} className={mdClass} isAnimating={streaming} />
+          <SimpleMarkdown
+            source={body}
+            className={mdClass}
+            isAnimating={streaming}
+            onOpenFileRef={onOpenFileRef}
+          />
         ) : (
           <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
             {body}
           </div>
         )
       ) : markdown ? (
-        <SimpleMarkdown source={`${preview}…`} className={mdClass} />
+        <SimpleMarkdown
+          source={`${preview}…`}
+          className={mdClass}
+          onOpenFileRef={onOpenFileRef}
+        />
       ) : (
         <div className='whitespace-pre-wrap text-sm text-muted-foreground'>
           {preview}…
@@ -804,7 +842,13 @@ function ToolRow({
   )
 }
 
-function FileDiffCard({ item }: { item: TimelineItem }) {
+function FileDiffCard({
+  item,
+  onOpenFileRef,
+}: {
+  item: TimelineItem
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
+}) {
   const meta: TimelineItemMeta | undefined = item.meta
   const path = meta?.path ?? item.title ?? 'file'
   const additions = meta?.additions
@@ -821,6 +865,8 @@ function FileDiffCard({ item }: { item: TimelineItem }) {
         ? item.body.split('\n')
         : undefined
 
+  const base = path.split('/').pop() || path
+
   return (
     <div data-kind='file-change' data-category='file-change'>
       <FileChangeSummaryCard
@@ -829,6 +875,15 @@ function FileDiffCard({ item }: { item: TimelineItem }) {
         deletions={deletions}
         previewLines={previewLines}
         testId={`timeline-item-${item.id}`}
+        onOpen={
+          onOpenFileRef
+            ? (p) =>
+                onOpenFileRef({
+                  path: p,
+                  label: base,
+                })
+            : undefined
+        }
       />
     </div>
   )
@@ -878,10 +933,12 @@ function TimelineRow({
   item,
   runActive,
   forceToolCollapsed = false,
+  onOpenFileRef,
 }: {
   item: TimelineItem
   runActive: boolean
   forceToolCollapsed?: boolean
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
 }) {
   switch (item.category) {
     case 'user-message':
@@ -908,6 +965,7 @@ function TimelineRow({
             markdown
             muted={isCommentary}
             streaming={runActive && item.status === 'streaming'}
+            onOpenFileRef={onOpenFileRef}
           />
           {runActive && item.status === 'streaming' ? (
             <span
@@ -965,7 +1023,7 @@ function TimelineRow({
         </div>
       )
     case 'file-change':
-      return <FileDiffCard item={item} />
+      return <FileDiffCard item={item} onOpenFileRef={onOpenFileRef} />
     case 'source-group':
       return (
         <div

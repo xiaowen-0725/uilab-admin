@@ -36,6 +36,7 @@ import type {
   LaunchAction,
   RuntimePort,
   TaskSurfaceView,
+  TimelineOpenFileRef,
 } from '@/modules/task'
 import {
   createDeterministicFakeRuntime,
@@ -606,6 +607,36 @@ export function WorkbenchApp({
     setDeleteConfirmTaskId(id)
   }, [])
 
+  /**
+   * User channel: Timeline file chip/card → Session openWorkSurfaceTab.
+   * Composition resolves kind via Registry; interim fallback `test` until Document Surface (04).
+   * Never mutates Host openTabs directly.
+   */
+  const onOpenFileRef = useCallback(
+    (info: TimelineOpenFileRef) => {
+      const raw = (info.path ?? info.label ?? '').trim()
+      if (!raw) return
+      const resourceKey = raw.replace(/^\/+/, '')
+      const resolved = surfaceRegistry.resolve({
+        resourceKey,
+        path: resourceKey,
+      })
+      // Explicit kind after resolve; fallback test so open always has a render surface in 03.
+      const kind = resolved?.kind ?? 'test'
+      const title =
+        info.label?.trim() ||
+        resourceKey.split('/').filter(Boolean).pop() ||
+        resourceKey
+      session.commands.openWorkSurfaceTab({
+        source: 'user',
+        kind,
+        resourceKey,
+        title,
+      })
+    },
+    [session.commands, surfaceRegistry],
+  )
+
   if (!bootReady) {
     return (
       <ThemeProvider>
@@ -636,6 +667,7 @@ export function WorkbenchApp({
           onSelectProject={onSelectProject}
           composerRuntime={composerRuntime}
           surfaceRegistry={surfaceRegistry}
+          onOpenFileRef={onOpenFileRef}
         />
         {deleteConfirmTaskId ? (
           <div
