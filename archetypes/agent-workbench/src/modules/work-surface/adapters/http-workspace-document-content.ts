@@ -10,8 +10,8 @@ import type {
   DocumentTextReadResult,
 } from '../ports/document-content-port'
 import {
+  coerceWorkspaceResourceKey,
   maxBytesForFamily,
-  normalizeWorkspaceResourceKey,
 } from '../surfaces/document/path-utils'
 import { resolveDocumentFormat } from '../surfaces/document/format-router'
 
@@ -20,6 +20,35 @@ export type HttpWorkspaceDocumentContentOptions = {
   baseUrl: string
   /** Optional fetch override (tests). */
   fetchImpl?: typeof fetch
+}
+
+export type WorkspaceInfoResponse = {
+  workspaceRoot?: string
+  profile?: string
+  note?: string
+}
+
+/**
+ * Best-effort sidecar workspace root label for Document header honesty.
+ * Returns null when sidecar is down or response is incomplete (non-fatal).
+ */
+export async function fetchWorkspaceHint(
+  baseUrl: string,
+  fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
+): Promise<string | null> {
+  const root = baseUrl.replace(/\/$/, '')
+  try {
+    const res = await fetchImpl(`${root}/workspace/info`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as WorkspaceInfoResponse
+    const hint = typeof body.workspaceRoot === 'string' ? body.workspaceRoot.trim() : ''
+    return hint || null
+  } catch {
+    return null
+  }
 }
 
 function mapHttpReason(
@@ -49,11 +78,14 @@ export function createHttpWorkspaceDocumentContent(
   async function readRaw(
     resourceKey: string,
   ): Promise<DocumentBinaryReadResult> {
-    // Prefer workspace-relative normalize; keep leading-virtual form for API
-    const key =
-      normalizeWorkspaceResourceKey(resourceKey) ??
-      resourceKey.trim().replace(/^\/+/, '')
-    if (!key) return { ok: false, reason: 'not-found' }
+    const key = coerceWorkspaceResourceKey(resourceKey)
+    if (!key) {
+      return {
+        ok: false,
+        reason: 'not-found',
+        message: '无效的工作区路径',
+      }
+    }
 
     const family = resolveDocumentFormat(key)
     const maxBytes = maxBytesForFamily(family)

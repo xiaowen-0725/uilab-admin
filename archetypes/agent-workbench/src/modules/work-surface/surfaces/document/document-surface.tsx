@@ -5,6 +5,11 @@ import { looksLikeWorkspacePath } from './path-utils'
 
 export type CreateDocumentSurfaceOptions = {
   content: DocumentContentPort
+  /**
+   * Optional workspace root label (e.g. from sidecar GET /workspace/info).
+   * Fake/Memory path leaves this unset.
+   */
+  workspaceHint?: string | null
 }
 
 /**
@@ -14,7 +19,7 @@ export type CreateDocumentSurfaceOptions = {
 export function createDocumentSurfaceDefinition(
   options: CreateDocumentSurfaceOptions,
 ): SurfaceDefinition {
-  const { content } = options
+  const { content, workspaceHint = null } = options
   return {
     kind: 'document',
     displayName: '文档',
@@ -30,6 +35,7 @@ export function createDocumentSurfaceDefinition(
         resourceKey={props.resourceKey}
         title={props.title}
         content={content}
+        workspaceHint={workspaceHint}
       />
     ),
   }

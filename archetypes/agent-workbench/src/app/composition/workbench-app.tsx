@@ -62,6 +62,7 @@ import {
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   createWebBrowserHostPort,
+  fetchWorkspaceHint,
   resolveOpenWorkSurfaceIntent,
   type DocumentContentPort,
   type SurfaceRegistry,
@@ -121,11 +122,18 @@ function createDocumentContentPort(): DocumentContentPort {
  * Composition-only Surface Registry assembly.
  * Host must never register; Document/Browser/test register here only.
  */
-function createWorkbenchSurfaceRegistry(): SurfaceRegistry {
+function createWorkbenchSurfaceRegistry(
+  workspaceHint: string | null = null,
+): SurfaceRegistry {
   const registry = createSurfaceRegistry()
   const documentContent = createDocumentContentPort()
   // Document before test so workspace paths resolve to document, not test.
-  registry.register(createDocumentSurfaceDefinition({ content: documentContent }))
+  registry.register(
+    createDocumentSurfaceDefinition({
+      content: documentContent,
+      workspaceHint,
+    }),
+  )
   registry.register(
     createBrowserSurfaceDefinition({ host: createWebBrowserHostPort() }),
   )
@@ -144,7 +152,24 @@ export function WorkbenchApp({
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
-  const surfaceRegistry = useMemo(() => createWorkbenchSurfaceRegistry(), [])
+
+  /** Voltagent only: sidecar /workspace/info root for Document header honesty. */
+  const [workspaceHint, setWorkspaceHint] = useState<string | null>(null)
+  useEffect(() => {
+    if (RUNTIME_ADAPTER_MODE !== 'voltagent') return
+    let cancelled = false
+    void fetchWorkspaceHint(resolveVoltAgentBaseUrl()).then((hint) => {
+      if (!cancelled && hint) setWorkspaceHint(hint)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const surfaceRegistry = useMemo(
+    () => createWorkbenchSurfaceRegistry(workspaceHint),
+    [workspaceHint],
+  )
 
   const [bootReady, setBootReady] = useState(false)
   const [bootError, setBootError] = useState<string | null>(null)

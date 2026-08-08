@@ -22,12 +22,6 @@ export type DocumentViewState =
   | 'permission-denied'
   | 'render-failed'
 
-export interface DocumentPanelProps {
-  resourceKey: string
-  title: string
-  content: DocumentContentPort
-}
-
 const STATE_COPY: Record<
   Exclude<DocumentViewState, 'ready' | 'loading' | 'empty'>,
   string
@@ -39,11 +33,23 @@ const STATE_COPY: Record<
   'render-failed': '文档渲染失败。可尝试关闭后重新打开。',
 }
 
-function statusMessage(state: DocumentViewState): string {
+function statusMessage(
+  state: DocumentViewState,
+  detail?: string | null,
+): string {
   if (state === 'loading') return '正在加载文档…'
   if (state === 'empty') return '文件为空。'
   if (state === 'ready') return ''
+  if (detail && detail.trim()) return detail.trim()
   return STATE_COPY[state]
+}
+
+export interface DocumentPanelProps {
+  resourceKey: string
+  title: string
+  content: DocumentContentPort
+  /** Optional workspace root label from sidecar /workspace/info */
+  workspaceHint?: string | null
 }
 
 /**
@@ -54,8 +60,10 @@ export function DocumentPanel({
   resourceKey,
   title,
   content,
+  workspaceHint,
 }: DocumentPanelProps) {
   const [state, setState] = useState<DocumentViewState>('loading')
+  const [detail, setDetail] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [family, setFamily] = useState<DocumentFormatFamily>('unsupported')
   const [heavyNode, setHeavyNode] = useState<ReactNode>(null)
@@ -66,11 +74,15 @@ export function DocumentPanel({
 
     async function load() {
       setState('loading')
+      setDetail(null)
       setText('')
       setHeavyNode(null)
 
       if (!key) {
-        if (!cancelled) setState('not-found')
+        if (!cancelled) {
+          setState('not-found')
+          setDetail('无效的工作区路径')
+        }
         return
       }
 
@@ -91,6 +103,7 @@ export function DocumentPanel({
           const result = await content.readBinary(key)
           if (cancelled) return
           if (!result.ok) {
+            setDetail(result.message ?? null)
             if (result.reason === 'not-found') setState('not-found')
             else if (result.reason === 'permission-denied')
               setState('permission-denied')
@@ -105,6 +118,7 @@ export function DocumentPanel({
           const max = maxBytesForFamily(fmt)
           if (result.byteLength > max) {
             setState('too-large')
+            setDetail(`文件过大（上限 ${max} 字节）`)
             return
           }
           setState('ready')
@@ -165,6 +179,7 @@ export function DocumentPanel({
         const result = await content.readText(key)
         if (cancelled) return
         if (!result.ok) {
+          setDetail(result.message ?? null)
           if (result.reason === 'not-found') setState('not-found')
           else if (result.reason === 'permission-denied')
             setState('permission-denied')
@@ -199,13 +214,24 @@ export function DocumentPanel({
       data-format={family}
       data-title={title}
     >
-      <header className='flex shrink-0 items-baseline justify-between gap-2 border-b border-border/60 pb-2'>
-        <h2 className='truncate text-sm font-medium text-foreground'>
-          {title}
-        </h2>
-        <span className='shrink-0 font-mono text-[11px] text-muted-foreground'>
-          {family === 'unsupported' ? '未知格式' : family}
-        </span>
+      <header className='flex shrink-0 flex-col gap-0.5 border-b border-border/60 pb-2'>
+        <div className='flex items-baseline justify-between gap-2'>
+          <h2 className='truncate text-sm font-medium text-foreground'>
+            {title}
+          </h2>
+          <span className='shrink-0 font-mono text-[11px] text-muted-foreground'>
+            {family === 'unsupported' ? '未知格式' : family}
+          </span>
+        </div>
+        {workspaceHint ? (
+          <p
+            className='truncate font-mono text-[11px] text-muted-foreground'
+            data-testid='document-workspace-hint'
+            title={workspaceHint}
+          >
+            工作区：{workspaceHint}
+          </p>
+        ) : null}
       </header>
 
       {state === 'loading' ? (
@@ -213,7 +239,7 @@ export function DocumentPanel({
           className='text-sm text-muted-foreground'
           data-testid='document-state-message'
         >
-          {statusMessage('loading')}
+          {statusMessage('loading', detail)}
         </p>
       ) : null}
 
@@ -222,7 +248,7 @@ export function DocumentPanel({
           className='text-sm text-muted-foreground'
           data-testid='document-state-message'
         >
-          {statusMessage('empty')}
+          {statusMessage('empty', detail)}
         </p>
       ) : null}
 
@@ -232,7 +258,7 @@ export function DocumentPanel({
           data-testid='document-state-message'
           data-state={state}
         >
-          {statusMessage(state)}
+          {statusMessage(state, detail)}
         </p>
       ) : null}
 

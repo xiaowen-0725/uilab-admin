@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  coerceWorkspaceResourceKey,
   normalizeWorkspaceResourceKey,
   looksLikeWorkspacePath,
 } from './path-utils'
@@ -25,8 +26,48 @@ describe('normalizeWorkspaceResourceKey', () => {
     expect(normalizeWorkspaceResourceKey('C:\\Windows\\x')).toBeNull()
   })
 
-  it('looksLikeWorkspacePath mirrors normalize success', () => {
+  it('looksLikeWorkspacePath mirrors coerce success', () => {
     expect(looksLikeWorkspacePath('a/b.md')).toBe(true)
     expect(looksLikeWorkspacePath('..')).toBe(false)
+    expect(
+      looksLikeWorkspacePath('/Users/me/ws/output/report.md'),
+    ).toBe(true)
+  })
+})
+
+describe('coerceWorkspaceResourceKey', () => {
+  it('peels host absolute paths at virtual markers', () => {
+    expect(
+      coerceWorkspaceResourceKey(
+        '/Users/me/VoltAgent-Office/workspace/output/report.md',
+      ),
+    ).toBe('output/report.md')
+    expect(
+      coerceWorkspaceResourceKey('/tmp/ws/notes/seed.md'),
+    ).toBe('notes/seed.md')
+    expect(
+      coerceWorkspaceResourceKey('/repo/skills/pack/SKILL.md'),
+    ).toBe('skills/pack/SKILL.md')
+  })
+
+  it('uses the last matching virtual marker', () => {
+    expect(
+      coerceWorkspaceResourceKey('/outer/notes/x/output/inner.txt'),
+    ).toBe('output/inner.txt')
+  })
+
+  it('keeps already-relative workspace keys', () => {
+    expect(coerceWorkspaceResourceKey('output/a.md')).toBe('output/a.md')
+    expect(coerceWorkspaceResourceKey('/output/a.md')).toBe('output/a.md')
+    expect(coerceWorkspaceResourceKey('fixture/notes/plan.txt')).toBe(
+      'fixture/notes/plan.txt',
+    )
+  })
+
+  it('rejects URLs, escapes, and empty', () => {
+    expect(coerceWorkspaceResourceKey('https://example.com/a')).toBeNull()
+    expect(coerceWorkspaceResourceKey('file:///tmp/x')).toBeNull()
+    expect(coerceWorkspaceResourceKey('../secret')).toBeNull()
+    expect(coerceWorkspaceResourceKey('')).toBeNull()
   })
 })

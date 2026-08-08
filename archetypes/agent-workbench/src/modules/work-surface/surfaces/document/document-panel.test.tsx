@@ -238,4 +238,53 @@ describe('DocumentPanel', () => {
       )
       .toBe('unsupported')
   })
+
+  it('shows port failure message detail when present', async () => {
+    const content = {
+      async readText() {
+        return {
+          ok: false as const,
+          reason: 'read-failed' as const,
+          message: '工作区侧车未连接或网络错误',
+        }
+      },
+      async readBinary() {
+        return {
+          ok: false as const,
+          reason: 'read-failed' as const,
+          message: '工作区侧车未连接或网络错误',
+        }
+      },
+    }
+    await render(
+      <DocumentPanel
+        resourceKey='notes/seed.md'
+        title='seed.md'
+        content={content}
+      />,
+    )
+    await expect
+      .poll(() =>
+        page.getByTestId('work-surface-document').element().getAttribute('data-state'),
+      )
+      .toBe('render-failed')
+    await expect
+      .element(page.getByTestId('document-state-message'))
+      .toHaveTextContent('工作区侧车未连接')
+  })
+
+  it('renders optional workspace hint in header', async () => {
+    const content = createMemoryDocumentContent()
+    await render(
+      <DocumentPanel
+        resourceKey='fixture/notes/plan.txt'
+        title='plan.txt'
+        content={content}
+        workspaceHint='/tmp/voltagent-e2e-workspace'
+      />,
+    )
+    await expect
+      .element(page.getByTestId('document-workspace-hint'))
+      .toHaveTextContent('工作区：/tmp/voltagent-e2e-workspace')
+  })
 })

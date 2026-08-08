@@ -5,7 +5,7 @@
 
 import type { SurfaceRegistry } from '../model/types'
 import { normalizeBrowserUrl } from '../surfaces/browser/url-utils'
-import { normalizeWorkspaceResourceKey } from '../surfaces/document/path-utils'
+import { coerceWorkspaceResourceKey } from '../surfaces/document/path-utils'
 
 export type OpenWorkSurfaceIntentInput = {
   kind?: string
@@ -93,7 +93,8 @@ export function resolveOpenWorkSurfaceIntent(
     return { ok: false, reason: 'invalid-path' }
   }
 
-  const pathKey = normalizeWorkspaceResourceKey(raw)
+  // Coerce host absolute / virtual tool paths → workspace-relative key
+  const pathKey = coerceWorkspaceResourceKey(raw)
   if (!pathKey) {
     return { ok: false, reason: 'invalid-path' }
   }

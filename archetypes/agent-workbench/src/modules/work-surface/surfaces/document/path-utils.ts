@@ -47,9 +47,48 @@ export function normalizeWorkspaceResourceKey(raw: string): string | null {
   return out.join('/')
 }
 
+/**
+ * Coerce Timeline / tool / host paths into a workspace-relative resourceKey.
+ * Aligns with VoltAgent tool path mapping: for absolute host paths, extract the
+ * trailing `/output|notes|skills/…` segment, then run {@link normalizeWorkspaceResourceKey}.
+ *
+ * Relative keys (e.g. `fixture/notes/plan.txt`) are left intact — marker peel
+ * only runs on absolute-looking inputs so mid-path `/notes/` is not stripped.
+ */
+export function coerceWorkspaceResourceKey(raw: string): string | null {
+  if (typeof raw !== 'string') return null
+  let v = raw.trim().replace(/\\/g, '/')
+  if (!v) return null
+
+  // URLs are not workspace documents
+  if (/^(https?|blob|file):/i.test(v)) return null
+
+  // Absolute host / rooted paths may embed virtual workspace segments.
+  // Do not peel relative keys that merely contain `/notes/` mid-path.
+  const isAbsoluteLooking =
+    v.startsWith('/') || /^[a-zA-Z]:(\/|$)/.test(v) || v.startsWith('//')
+  if (isAbsoluteLooking) {
+    const markers = ['/output/', '/notes/', '/skills/'] as const
+    let best = -1
+    const lower = v.toLowerCase()
+    for (const m of markers) {
+      const i = lower.lastIndexOf(m)
+      if (i >= 0 && i >= best) {
+        best = i
+      }
+    }
+    if (best >= 0) {
+      // Keep segment name: …/output/foo → output/foo
+      v = v.slice(best + 1)
+    }
+  }
+
+  return normalizeWorkspaceResourceKey(v)
+}
+
 /** True when string looks like a non-URL workspace path (for Registry match). */
 export function looksLikeWorkspacePath(raw: string): boolean {
-  return normalizeWorkspaceResourceKey(raw) != null
+  return coerceWorkspaceResourceKey(raw) != null
 }
 
 export function maxBytesForFamily(

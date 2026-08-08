@@ -26,8 +26,14 @@ export {
   DEFAULT_DOCUMENT_FIXTURES,
   DEFAULT_BINARY_FIXTURES,
 } from './adapters/memory-document-content'
-export { createHttpWorkspaceDocumentContent } from './adapters/http-workspace-document-content'
-export type { HttpWorkspaceDocumentContentOptions } from './adapters/http-workspace-document-content'
+export {
+  createHttpWorkspaceDocumentContent,
+  fetchWorkspaceHint,
+} from './adapters/http-workspace-document-content'
+export type {
+  HttpWorkspaceDocumentContentOptions,
+  WorkspaceInfoResponse,
+} from './adapters/http-workspace-document-content'
 export {
   createWebBrowserHostPort,
   type BrowserHostPort,
@@ -53,6 +59,7 @@ export type {
 export type { DocumentViewState } from './surfaces/document/document-panel'
 export {
   normalizeWorkspaceResourceKey,
+  coerceWorkspaceResourceKey,
   DOCUMENT_TEXT_MAX_BYTES,
   DOCUMENT_IMAGE_MAX_BYTES,
   DOCUMENT_OFFICE_MAX_BYTES,

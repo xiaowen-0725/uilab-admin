@@ -85,5 +85,29 @@ describe('resolveOpenWorkSurfaceIntent', () => {
       }).ok,
     ).toBe(false)
   })
+
+  it('coerces Timeline/tool host paths via virtual markers', () => {
+    const r = registry()
+    const ok = resolveOpenWorkSurfaceIntent(r, {
+      resourceKey: '/Users/me/ws/output/report.md',
+      source: 'user',
+      title: 'report.md',
+    })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) {
+      expect(ok.kind).toBe('document')
+      expect(ok.resourceKey).toBe('output/report.md')
+      expect(ok.title).toBe('report.md')
+    }
+
+    const notes = resolveOpenWorkSurfaceIntent(r, {
+      resourceKey: '/tmp/agent/notes/seed.md',
+      source: 'runtime',
+    })
+    expect(notes.ok).toBe(true)
+    if (notes.ok) {
+      expect(notes.resourceKey).toBe('notes/seed.md')
+    }
+  })
 })
 
