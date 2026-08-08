@@ -8,12 +8,13 @@ import {
 import { Maximize2, Minimize2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
-import type { WorkSurfaceTab } from '@/modules/workbench-session'
 import { cn } from '@/lib/utils'
+import type { SurfaceRegistry, WorkSurfaceHostTab } from '../../model/types'
+import { UnknownSurfaceFallback } from './unknown-surface-fallback'
 
-/** Work Surface Module Implementation copy — Phase 6 surfaces not present. */
-const WORK_SURFACE_PLACEHOLDER_NOTICE =
-  '占位 Work Surface — 具体 Document / Browser / Review Surface Module 在 Phase 6 交付，当前仅验证 Host（显隐、tabs、调宽、最大化）。'
+/** Empty host body when no tabs are open. */
+const WORK_SURFACE_EMPTY_NOTICE =
+  '工作区暂无打开的标签。打开文档或预览后将显示在此。'
 
 export interface WorkSurfaceHostView {
   visible: boolean
@@ -21,13 +22,16 @@ export interface WorkSurfaceHostView {
   width: number
   minWidth: number
   maxWidth: number
-  /** Derived from session openTabs; may be empty when nothing is open. */
-  tabs: WorkSurfaceTab[]
+  /** Task-scoped open tabs from Session (truth projected into chrome). */
+  tabs: WorkSurfaceHostTab[]
   activeTabId: string | null
 }
 
 export interface WorkSurfaceHostCallbacks {
+  /** Close the whole Work pane (retains openTabs in Session). */
   onClose: () => void
+  /** Close one tab (Session closeWorkSurfaceTab). */
+  onCloseTab: (tabId: string) => void
   onActivateTab: (tabId: string) => void
   onResize: (width: number) => void
   onToggleMaximize: () => void
@@ -37,6 +41,10 @@ export interface WorkSurfaceHostCallbacks {
 export interface WorkSurfaceHostProps {
   view: WorkSurfaceHostView
   callbacks: WorkSurfaceHostCallbacks
+  /** Injected by Composition Root — Host never registers or imports concrete surfaces. */
+  registry: SurfaceRegistry
+  /** Selected Task id for SurfaceRenderProps; empty string when none. */
+  taskId: string | null
   /** When true, host occupies full stage (narrow serial / maximize). */
   fullStage?: boolean
   /**
@@ -46,24 +54,15 @@ export interface WorkSurfaceHostProps {
   toolbarLeading?: ReactNode
 }
 
-function tabPlaceholderBody(tabId: string, label: string): string {
-  return [
-    `占位标签：${label}`,
-    '',
-    WORK_SURFACE_PLACEHOLDER_NOTICE,
-    '',
-    `tabId=${tabId}`,
-    '这不是 Document / Browser / Review 实现，也不是 Surface Registry。',
-  ].join('\n')
-}
-
 /**
  * Work Surface Host — always mounted so the Shell drawer can collapse with live pixels.
- * Drawer slot owns width; Host fills the slot. Hidden: inert + aria-hidden, no compat test id.
+ * Renders active tab body via Surface Registry only (no Document/Browser imports).
  */
 export function WorkSurfaceHost({
   view,
   callbacks,
+  registry,
+  taskId,
   fullStage = false,
   toolbarLeading,
 }: WorkSurfaceHostProps) {
@@ -73,8 +72,6 @@ export function WorkSurfaceHost({
     (event: PointerEvent<HTMLDivElement>) => {
       event.preventDefault()
       const target = event.currentTarget
-      // Focus before capture so keyboard resize continues after pointer interaction
-      // even when preventDefault would otherwise suppress the browser focus step.
       target.focus()
       target.setPointerCapture(event.pointerId)
       dragRef.current = {
@@ -82,17 +79,16 @@ export function WorkSurfaceHost({
         startWidth: view.width,
       }
     },
-    [view.width]
+    [view.width],
   )
 
   const onPointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (!dragRef.current) return
-      // Dragging the left-edge handle: moving left increases Work Surface width.
       const delta = dragRef.current.startX - event.clientX
       callbacks.onResize(dragRef.current.startWidth + delta)
     },
-    [callbacks]
+    [callbacks],
   )
 
   const onPointerUp = useCallback((event: PointerEvent<HTMLDivElement>) => {
@@ -122,17 +118,48 @@ export function WorkSurfaceHost({
         callbacks.onResize(view.minWidth)
       }
     },
-    [callbacks, view.maxWidth, view.minWidth, view.width]
+    [callbacks, view.maxWidth, view.minWidth, view.width],
   )
 
   const activeTab =
-    view.tabs.find((t) => t.id === view.activeTabId) ?? view.tabs[0]
+    view.tabs.find((t) => t.tabId === view.activeTabId) ?? view.tabs[0] ?? null
+
+  const activeDefinition = activeTab
+    ? registry.get(activeTab.kind)
+    : undefined
 
   // Drawer slot owns width; Host fills 100% at scale(1). Split shows left divider.
   const hostClassName =
     view.maximized || fullStage || !view.visible
       ? 'relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col bg-background'
       : 'relative flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col border-l border-border bg-background'
+
+  let panelBody: ReactNode
+  if (!activeTab) {
+    panelBody = (
+      <p className='text-sm leading-relaxed text-muted-foreground'>
+        {WORK_SURFACE_EMPTY_NOTICE}
+      </p>
+    )
+  } else if (activeDefinition) {
+    panelBody = activeDefinition.render({
+      tabId: activeTab.tabId,
+      kind: activeTab.kind,
+      resourceKey: activeTab.resourceKey,
+      title: activeTab.title,
+      taskId: taskId ?? '',
+    })
+  } else {
+    panelBody = (
+      <UnknownSurfaceFallback
+        kind={activeTab.kind}
+        title={activeTab.title}
+        resourceKey={activeTab.resourceKey}
+        tabId={activeTab.tabId}
+        onCloseTab={callbacks.onCloseTab}
+      />
+    )
+  }
 
   return (
     <section
@@ -183,28 +210,48 @@ export function WorkSurfaceHost({
           aria-label='工作面标签'
         >
           {view.tabs.map((tab) => {
-            const selected = tab.id === view.activeTabId
+            const selected = tab.tabId === view.activeTabId
             return (
-              <Button
-                key={tab.id}
-                type='button'
-                variant='ghost'
-                size='sm'
-                role='tab'
-                id={`work-tab-${tab.id}`}
-                aria-selected={selected}
-                aria-controls='work-surface-panel'
-                data-testid={view.visible ? `work-tab-${tab.id}` : undefined}
+              <div
+                key={tab.tabId}
                 className={cn(
-                  'h-auto rounded-md px-2.5 py-1.5 text-xs font-medium',
-                  selected
-                    ? 'bg-muted'
-                    : 'text-muted-foreground hover:bg-muted/60'
+                  'flex shrink-0 items-center gap-0.5 rounded-md',
+                  selected ? 'bg-muted' : '',
                 )}
-                onClick={() => callbacks.onActivateTab(tab.id)}
               >
-                {tab.label}
-              </Button>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='sm'
+                  role='tab'
+                  id={`work-tab-${tab.tabId}`}
+                  aria-selected={selected}
+                  aria-controls='work-surface-panel'
+                  data-testid={
+                    view.visible ? `work-tab-${tab.tabId}` : undefined
+                  }
+                  className={cn(
+                    'h-auto rounded-md px-2.5 py-1.5 text-xs font-medium',
+                    selected
+                      ? 'bg-transparent'
+                      : 'text-muted-foreground hover:bg-muted/60',
+                  )}
+                  onClick={() => callbacks.onActivateTab(tab.tabId)}
+                >
+                  {tab.title}
+                </Button>
+                <ToolbarIconButton
+                  testId={
+                    view.visible
+                      ? `work-tab-close-${tab.tabId}`
+                      : undefined
+                  }
+                  label={`关闭 ${tab.title}`}
+                  onClick={() => callbacks.onCloseTab(tab.tabId)}
+                >
+                  <X className='size-3' aria-hidden />
+                </ToolbarIconButton>
+              </div>
             )
           })}
         </div>
@@ -232,15 +279,13 @@ export function WorkSurfaceHost({
       <div
         id='work-surface-panel'
         role='tabpanel'
-        aria-labelledby={activeTab ? `work-tab-${activeTab.id}` : undefined}
+        aria-labelledby={
+          activeTab ? `work-tab-${activeTab.tabId}` : undefined
+        }
         className='min-h-0 flex-1 overflow-auto p-4'
         data-testid={view.visible ? 'work-surface-panel' : undefined}
       >
-        <pre className='font-sans text-sm leading-relaxed whitespace-pre-wrap text-foreground'>
-          {activeTab
-            ? tabPlaceholderBody(activeTab.id, activeTab.label)
-            : WORK_SURFACE_PLACEHOLDER_NOTICE}
-        </pre>
+        {panelBody}
       </div>
     </section>
   )

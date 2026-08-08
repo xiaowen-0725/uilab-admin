@@ -53,6 +53,11 @@ import {
   useWorkbenchSession,
   type WorkbenchSessionSeed,
 } from '@/modules/workbench-session'
+import {
+  createSurfaceRegistry,
+  createTestSurfaceDefinition,
+  type SurfaceRegistry,
+} from '@/modules/work-surface'
 import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 
@@ -90,6 +95,16 @@ const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
   selectedTaskId: null,
 }
 
+/**
+ * Composition-only Surface Registry assembly.
+ * Host must never register; add Document/Browser registrations here later.
+ */
+function createWorkbenchSurfaceRegistry(): SurfaceRegistry {
+  const registry = createSurfaceRegistry()
+  registry.register(createTestSurfaceDefinition())
+  return registry
+}
+
 function resolveDefaultPersistence(): WorkbenchPersistence {
   if (INSTANT_DEMO) return 'memory'
   return 'idb'
@@ -101,6 +116,7 @@ export function WorkbenchApp({
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
+  const surfaceRegistry = useMemo(() => createWorkbenchSurfaceRegistry(), [])
 
   const [bootReady, setBootReady] = useState(false)
   const [bootError, setBootError] = useState<string | null>(null)
@@ -619,6 +635,7 @@ export function WorkbenchApp({
           onDeleteTask={onDeleteTask}
           onSelectProject={onSelectProject}
           composerRuntime={composerRuntime}
+          surfaceRegistry={surfaceRegistry}
         />
         {deleteConfirmTaskId ? (
           <div

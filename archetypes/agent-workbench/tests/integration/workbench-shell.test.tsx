@@ -444,7 +444,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect.element(host).toHaveAttribute('data-maximized', 'false')
     await expect
       .element(page.getByTestId('work-surface-panel'))
-      .toHaveTextContent('Phase 6')
+      .toHaveTextContent('工作区暂无打开的标签')
 
     // Open: 200ms + drawer easing; only width transitions; no scale.
     const openStyle = getComputedStyle(slot)
@@ -514,7 +514,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // openTabs is task-scoped (no global seed tabs); empty pane still hosts chrome.
     await expect
       .element(page.getByTestId('work-surface-panel'))
-      .toHaveTextContent('占位 Work Surface')
+      .toHaveTextContent('工作区暂无打开的标签')
 
     await userEvent.click(page.getByTestId('work-surface-maximize'))
     await expect
@@ -848,7 +848,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBeInTheDocument()
     await expect
       .element(page.getByTestId('work-surface-panel'))
-      .toHaveTextContent('占位 Work Surface')
+      .toHaveTextContent('工作区暂无打开的标签')
 
     // Task B defaults: Task-only
     await userEvent.click(page.getByTestId(`task-${taskBId}`))

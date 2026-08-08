@@ -359,6 +359,25 @@ async function checkSources() {
   for (const p of required) {
     await mustExist(path.join(workbenchRoot, p), p)
   }
+
+  // Work Surface Host must not import concrete Document/Browser surfaces
+  // (ticket 02 — Host only depends on Registry Interface).
+  const hostDir = path.join(workbenchSrc, 'modules', 'work-surface', 'ui', 'work-surface-host')
+  if (await exists(hostDir)) {
+    const hostFiles = await walkSources(hostDir)
+    for (const file of hostFiles) {
+      const source = await readFile(file, 'utf8')
+      if (
+        /surfaces\/document|surfaces\/browser|@\/modules\/work-surface\/surfaces\/(?:document|browser)/.test(
+          source,
+        )
+      ) {
+        errors.push(
+          `Work Surface Host must not import Document/Browser surfaces: ${rel(file)}`,
+        )
+      }
+    }
+  }
 }
 
 async function main() {
@@ -386,6 +405,7 @@ async function main() {
   console.log('  Module boundaries: root Interfaces only')
   console.log('  Foundation: button + input + tokens')
   console.log('  Forbidden: radix/asChild, desktop host, node builtins in src')
+  console.log('  Work Surface Host: no Document/Browser surface imports')
   process.exit(0)
 }
 

@@ -15,7 +15,10 @@ import type {
   TaskSurfaceView,
 } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
-import { WorkSurfaceHost } from '@/modules/work-surface'
+import {
+  WorkSurfaceHost,
+  type SurfaceRegistry,
+} from '@/modules/work-surface'
 import type {
   WorkbenchSessionCommands,
   WorkbenchSessionView,
@@ -96,6 +99,11 @@ export interface WorkbenchShellProps {
   onSelectProject?: (projectId: string) => void
   /** Runtime composer props for product Runtime path. */
   composerRuntime?: TaskSurfaceComposerRuntime
+  /**
+   * Surface Registry from Composition Root only.
+   * Shell/Host never register; Host only resolves render by kind.
+   */
+  surfaceRegistry: SurfaceRegistry
 }
 
 /**
@@ -116,6 +124,7 @@ export function WorkbenchShell({
   onDeleteTask,
   onSelectProject,
   composerRuntime,
+  surfaceRegistry,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -444,16 +453,24 @@ export function WorkbenchShell({
                 width: effectiveWorkWidth,
                 minWidth: view.workSurfaceMinWidth,
                 maxWidth: effectiveWorkMax,
-                tabs: view.workSurfaceTabs,
+                tabs: view.layout.openTabs.map((t) => ({
+                  tabId: t.tabId,
+                  kind: t.kind,
+                  resourceKey: t.resourceKey,
+                  title: t.title,
+                })),
                 activeTabId: view.layout.activeTabId ?? null,
               }}
               callbacks={{
                 onClose: closeWorkFromPointer,
+                onCloseTab: commands.closeWorkSurfaceTab,
                 onActivateTab: commands.activateTab,
                 onResize: resizeWorkFromPointer,
                 onToggleMaximize: toggleMaximizeFromPointer,
                 onExitMaximize: exitMaximizeFromKeyboard,
               }}
+              registry={surfaceRegistry}
+              taskId={view.selectedTaskId}
               fullStage={workFullStage}
               toolbarLeading={
                 workFullStage && view.layout.workSurfaceVisible ? (
