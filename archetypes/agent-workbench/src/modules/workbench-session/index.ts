@@ -5,9 +5,11 @@
  */
 
 export { useWorkbenchSession } from './application/use-workbench-session'
+export { workSurfaceTabIdFor } from './application/reducer'
 
 export type {
   ProjectId,
+  SurfaceKind,
   TaskId,
   TaskLayoutState,
   WorkbenchSessionCommand,
@@ -15,6 +17,9 @@ export type {
   WorkbenchSessionController,
   WorkbenchSessionSeed,
   WorkbenchSessionView,
+  WorkSurfaceOpenFocus,
+  WorkSurfaceOpenSource,
   WorkSurfaceTab,
   WorkSurfaceTabId,
+  WorkSurfaceTabRecord,
 } from './model/types'

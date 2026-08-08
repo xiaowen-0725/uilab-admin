@@ -511,10 +511,10 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBeInTheDocument()
     await expectPaneSettledInstant(shell)
 
-    await userEvent.click(page.getByTestId('work-tab-tab-browser'))
+    // openTabs is task-scoped (no global seed tabs); empty pane still hosts chrome.
     await expect
       .element(page.getByTestId('work-surface-panel'))
-      .toHaveTextContent('浏览器预览')
+      .toHaveTextContent('占位 Work Surface')
 
     await userEvent.click(page.getByTestId('work-surface-maximize'))
     await expect
@@ -835,11 +835,10 @@ describe('Workbench Shell integration (visible behavior)', () => {
     const taskBId = page.getByTestId('task-surface').element().dataset.taskId!
     expect(taskBId).not.toBe(taskAId)
 
-    // Select A and configure layout
+    // Select A and configure layout (pane chrome; openTabs covered by session unit tests)
     await userEvent.click(page.getByTestId(`task-${taskAId}`))
     await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
     await userEvent.click(page.getByTestId('toggle-context'))
-    await userEvent.click(page.getByTestId('work-tab-tab-browser'))
 
     await expect
       .element(page.getByTestId('context-panel'))
@@ -849,7 +848,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBeInTheDocument()
     await expect
       .element(page.getByTestId('work-surface-panel'))
-      .toHaveTextContent('浏览器预览')
+      .toHaveTextContent('占位 Work Surface')
 
     // Task B defaults: Task-only
     await userEvent.click(page.getByTestId(`task-${taskBId}`))
@@ -863,7 +862,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('task-surface'))
       .toHaveAttribute('data-task-id', taskBId)
 
-    // Back to A restores
+    // Back to A restores pane + context visibility
     await userEvent.click(page.getByTestId(`task-${taskAId}`))
     await expect
       .element(page.getByTestId('task-surface'))
@@ -874,9 +873,6 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(page.getByTestId('work-surface-host'))
       .toBeInTheDocument()
-    await expect
-      .element(page.getByTestId('work-surface-panel'))
-      .toHaveTextContent('浏览器预览')
 
     // Task switch marks context/pane motion instant (no restored entry animation).
     const shell = page.getByTestId('workbench-shell')

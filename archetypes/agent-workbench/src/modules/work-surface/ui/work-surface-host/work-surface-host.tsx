@@ -21,8 +21,9 @@ export interface WorkSurfaceHostView {
   width: number
   minWidth: number
   maxWidth: number
+  /** Derived from session openTabs; may be empty when nothing is open. */
   tabs: WorkSurfaceTab[]
-  activeTabId: string
+  activeTabId: string | null
 }
 
 export interface WorkSurfaceHostCallbacks {

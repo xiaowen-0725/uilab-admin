@@ -88,10 +88,6 @@ export interface WorkbenchAppProps {
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
   selectedProjectId: DEFAULT_PROJECT_ID,
   selectedTaskId: null,
-  workSurfaceTabs: [
-    { id: 'tab-layout', label: '布局规格.md' },
-    { id: 'tab-browser', label: '浏览器预览' },
-  ],
 }
 
 function resolveDefaultPersistence(): WorkbenchPersistence {

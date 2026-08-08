@@ -4,13 +4,17 @@ import {
   WORK_SURFACE_MIN_WIDTH,
 } from '../model/constants'
 import type {
+  SurfaceKind,
   TaskId,
   TaskLayoutState,
   WorkbenchSessionCommand,
   WorkbenchSessionSeed,
   WorkbenchSessionState,
   WorkbenchSessionView,
+  WorkSurfaceOpenFocus,
+  WorkSurfaceOpenSource,
   WorkSurfaceTabId,
+  WorkSurfaceTabRecord,
 } from '../model/types'
 
 function clampWidth(width: number, min: number, max: number): number {
@@ -18,18 +22,55 @@ function clampWidth(width: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(width)))
 }
 
-function createDefaultLayout(
-  tabs: { id: WorkSurfaceTabId }[],
-  defaultWidth: number,
-): TaskLayoutState {
-  const firstTab = tabs[0]?.id ?? 'tab-1'
+function createDefaultLayout(defaultWidth: number): TaskLayoutState {
   return {
     contextPanelOpen: false,
     workSurfaceVisible: false,
     workSurfaceWidth: defaultWidth,
-    activeTabId: firstTab,
+    openTabs: [],
+    activeTabId: null,
     workSurfaceMaximized: false,
   }
+}
+
+/** Stable tab id for a (kind, resourceKey) pair within a Task. */
+export function workSurfaceTabIdFor(
+  kind: SurfaceKind,
+  resourceKey: string,
+): WorkSurfaceTabId {
+  return `ws:${kind}:${resourceKey}`
+}
+
+function findTabByResource(
+  openTabs: WorkSurfaceTabRecord[],
+  kind: SurfaceKind,
+  resourceKey: string,
+): WorkSurfaceTabRecord | undefined {
+  return openTabs.find((t) => t.kind === kind && t.resourceKey === resourceKey)
+}
+
+function findTabById(
+  openTabs: WorkSurfaceTabRecord[],
+  tabId: WorkSurfaceTabId,
+): WorkSurfaceTabRecord | undefined {
+  return openTabs.find((t) => t.tabId === tabId)
+}
+
+function resolveOpenFocus(
+  source: WorkSurfaceOpenSource,
+  paneVisible: boolean,
+  focus?: WorkSurfaceOpenFocus,
+): WorkSurfaceOpenFocus {
+  if (focus) return focus
+  if (source === 'user') return 'pane'
+  // runtime default: activate only when pane already visible
+  return paneVisible ? 'tab' : 'none'
+}
+
+function defaultTitle(resourceKey: string, title?: string): string {
+  if (title && title.trim()) return title
+  const segments = resourceKey.split('/').filter(Boolean)
+  return segments[segments.length - 1] ?? resourceKey
 }
 
 /**
@@ -46,14 +87,11 @@ export function createInitialSessionState(
     max,
   )
 
-  const emptyLayout = createDefaultLayout(seed.workSurfaceTabs, defaultWidth)
+  const emptyLayout = createDefaultLayout(defaultWidth)
   const taskLayouts: Record<TaskId, TaskLayoutState> = {}
   const selectedTaskId = seed.selectedTaskId ?? null
   if (selectedTaskId) {
-    taskLayouts[selectedTaskId] = createDefaultLayout(
-      seed.workSurfaceTabs,
-      defaultWidth,
-    )
+    taskLayouts[selectedTaskId] = createDefaultLayout(defaultWidth)
   }
 
   const lastTaskByProject: Record<string, string | null> = {
@@ -69,7 +107,6 @@ export function createInitialSessionState(
     lastTaskByProject,
     navigatorOpen: seed.navigatorOpen ?? true,
     taskLayouts,
-    workSurfaceTabs: seed.workSurfaceTabs,
     workSurfaceMinWidth: min,
     workSurfaceMaxWidth: max,
     emptyLayout,
@@ -119,8 +156,34 @@ function ensureLayout(
     ...state,
     taskLayouts: {
       ...state.taskLayouts,
-      [taskId]: createDefaultLayout(state.workSurfaceTabs, defaultWidth),
+      [taskId]: createDefaultLayout(defaultWidth),
     },
+  }
+}
+
+function applyOpenFocus(
+  tabId: WorkSurfaceTabId,
+  focus: WorkSurfaceOpenFocus,
+): Partial<TaskLayoutState> {
+  switch (focus) {
+    case 'pane':
+      return {
+        activeTabId: tabId,
+        workSurfaceVisible: true,
+        workSurfaceMaximized: false,
+      }
+    case 'tab':
+      return {
+        activeTabId: tabId,
+        // keep visibility as-is (runtime: only when already visible)
+      }
+    case 'none':
+      // Write selection memory only — do not open the pane (runtime default).
+      return { activeTabId: tabId }
+    default: {
+      const _exhaustive: never = focus
+      return _exhaustive
+    }
   }
 }
 
@@ -220,6 +283,7 @@ export function workbenchSessionReducer(
     }
 
     case 'closeWorkSurface': {
+      // Close pane only — retain openTabs / activeTabId for restore.
       const layout = requireSelectedLayout(state)
       if (!layout.workSurfaceVisible) return state
       return updateSelectedLayout(state, {
@@ -242,8 +306,86 @@ export function workbenchSessionReducer(
       })
     }
 
+    case 'openWorkSurfaceTab': {
+      // No selected Task → open is a no-op (spec §4.4).
+      if (!state.selectedTaskId) return state
+
+      // Without Registry (ticket 02), kind is required to open.
+      const kind = command.kind
+      if (!kind) return state
+
+      const resourceKey = command.resourceKey
+      if (!resourceKey) return state
+
+      const layout = requireSelectedLayout(state)
+      const existing = findTabByResource(layout.openTabs, kind, resourceKey)
+      const title = defaultTitle(resourceKey, command.title)
+      const focus = resolveOpenFocus(
+        command.source,
+        layout.workSurfaceVisible,
+        command.focus,
+      )
+
+      if (existing) {
+        // Re-open same resource → activate (dedup); refresh title if provided.
+        const openTabs =
+          command.title && command.title !== existing.title
+            ? layout.openTabs.map((t) =>
+                t.tabId === existing.tabId ? { ...t, title: command.title! } : t,
+              )
+            : layout.openTabs
+        return updateSelectedLayout(state, {
+          openTabs,
+          ...applyOpenFocus(existing.tabId, focus),
+        })
+      }
+
+      const tabId = workSurfaceTabIdFor(kind, resourceKey)
+      const record: WorkSurfaceTabRecord = {
+        tabId,
+        kind,
+        resourceKey,
+        title,
+      }
+      return updateSelectedLayout(state, {
+        openTabs: [...layout.openTabs, record],
+        ...applyOpenFocus(tabId, focus),
+      })
+    }
+
+    case 'closeWorkSurfaceTab': {
+      const layout = requireSelectedLayout(state)
+      const index = layout.openTabs.findIndex((t) => t.tabId === command.tabId)
+      if (index < 0) return state
+
+      const openTabs = layout.openTabs.filter((t) => t.tabId !== command.tabId)
+
+      if (openTabs.length === 0) {
+        // No remaining tabs → close pane.
+        return updateSelectedLayout(state, {
+          openTabs: [],
+          activeTabId: null,
+          workSurfaceVisible: false,
+          workSurfaceMaximized: false,
+        })
+      }
+
+      let activeTabId = layout.activeTabId
+      if (activeTabId === command.tabId) {
+        // Prefer next tab, else previous.
+        const next = openTabs[index] ?? openTabs[index - 1] ?? openTabs[0]
+        activeTabId = next.tabId
+      }
+
+      return updateSelectedLayout(state, {
+        openTabs,
+        activeTabId,
+      })
+    }
+
     case 'activateTab': {
-      if (!state.workSurfaceTabs.some((t) => t.id === command.tabId)) {
+      const layout = requireSelectedLayout(state)
+      if (!findTabById(layout.openTabs, command.tabId)) {
         return state
       }
       return updateSelectedLayout(state, {
@@ -296,7 +438,10 @@ export function selectSessionView(
     selectedTaskId: state.selectedTaskId,
     navigatorOpen: state.navigatorOpen,
     layout,
-    workSurfaceTabs: state.workSurfaceTabs,
+    workSurfaceTabs: layout.openTabs.map((t) => ({
+      id: t.tabId,
+      label: t.title,
+    })),
     workSurfaceMinWidth: state.workSurfaceMinWidth,
     workSurfaceMaxWidth: state.workSurfaceMaxWidth,
     isTaskOnly: !layout.workSurfaceVisible,

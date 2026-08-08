@@ -445,7 +445,7 @@ export function WorkbenchShell({
                 minWidth: view.workSurfaceMinWidth,
                 maxWidth: effectiveWorkMax,
                 tabs: view.workSurfaceTabs,
-                activeTabId: view.layout.activeTabId,
+                activeTabId: view.layout.activeTabId ?? null,
               }}
               callbacks={{
                 onClose: closeWorkFromPointer,

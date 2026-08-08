@@ -187,10 +187,6 @@ export const taskFixtures: Record<string, TaskFixture> = Object.fromEntries(
 export const phase3SessionSeed: WorkbenchSessionSeed = {
   selectedProjectId: 'project-default',
   selectedTaskId: null,
-  workSurfaceTabs: [
-    { id: 'tab-layout', label: '布局规格.md' },
-    { id: 'tab-browser', label: '浏览器预览' },
-  ],
 }
 
 /** Capture fixture seeds for test harness only (not product default boot). */

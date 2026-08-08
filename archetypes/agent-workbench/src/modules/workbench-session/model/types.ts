@@ -6,6 +6,28 @@
 export type TaskId = string
 export type ProjectId = string
 export type WorkSurfaceTabId = string
+/** Registered surface type id (document / browser / test / …). */
+export type SurfaceKind = string
+
+/**
+ * One open Work Surface tab for a Task.
+ * Dedup key within a Task: (kind, resourceKey).
+ */
+export interface WorkSurfaceTabRecord {
+  tabId: WorkSurfaceTabId
+  kind: SurfaceKind
+  resourceKey: string
+  title: string
+}
+
+/**
+ * Host chrome tab shape (id + label). Derived from openTabs for Host display.
+ * Not the session truth source for "what is open".
+ */
+export interface WorkSurfaceTab {
+  id: WorkSurfaceTabId
+  label: string
+}
 
 /**
  * Per-Task layout state. Switching Task A → B → A must restore these values.
@@ -14,13 +36,11 @@ export interface TaskLayoutState {
   contextPanelOpen: boolean
   workSurfaceVisible: boolean
   workSurfaceWidth: number
-  activeTabId: WorkSurfaceTabId
+  /** Task-scoped open Work Surface tabs (truth for "what is open"). */
+  openTabs: WorkSurfaceTabRecord[]
+  /** Active tab among openTabs; null only when openTabs is empty. */
+  activeTabId: WorkSurfaceTabId | null
   workSurfaceMaximized: boolean
-}
-
-export interface WorkSurfaceTab {
-  id: WorkSurfaceTabId
-  label: string
 }
 
 export interface WorkbenchSessionState {
@@ -31,7 +51,6 @@ export interface WorkbenchSessionState {
   lastTaskByProject: Record<ProjectId, TaskId | null>
   navigatorOpen: boolean
   taskLayouts: Record<TaskId, TaskLayoutState>
-  workSurfaceTabs: WorkSurfaceTab[]
   workSurfaceMinWidth: number
   workSurfaceMaxWidth: number
   /** Fallback layout when no task is selected. */
@@ -44,6 +63,10 @@ export interface WorkbenchSessionView {
   selectedTaskId: TaskId | null
   navigatorOpen: boolean
   layout: TaskLayoutState
+  /**
+   * Host chrome tabs derived from layout.openTabs.
+   * Not a global seed — empty when the selected task has no open tabs.
+   */
   workSurfaceTabs: WorkSurfaceTab[]
   workSurfaceMinWidth: number
   workSurfaceMaxWidth: number
@@ -51,6 +74,9 @@ export interface WorkbenchSessionView {
   isTaskOnly: boolean
   lastTaskByProject: Record<ProjectId, TaskId | null>
 }
+
+export type WorkSurfaceOpenFocus = 'pane' | 'tab' | 'none'
+export type WorkSurfaceOpenSource = 'user' | 'runtime'
 
 export type WorkbenchSessionCommand =
   | { type: 'selectProject'; projectId: ProjectId; taskId?: TaskId | null }
@@ -63,6 +89,15 @@ export type WorkbenchSessionCommand =
   | { type: 'openWorkSurface' }
   | { type: 'closeWorkSurface' }
   | { type: 'toggleWorkSurface' }
+  | {
+      type: 'openWorkSurfaceTab'
+      kind?: SurfaceKind
+      resourceKey: string
+      title?: string
+      focus?: WorkSurfaceOpenFocus
+      source: WorkSurfaceOpenSource
+    }
+  | { type: 'closeWorkSurfaceTab'; tabId: WorkSurfaceTabId }
   | { type: 'activateTab'; tabId: WorkSurfaceTabId }
   | { type: 'resizeWorkSurface'; width: number }
   | { type: 'toggleMaximize' }
@@ -86,6 +121,14 @@ export interface WorkbenchSessionCommands {
   openWorkSurface: () => void
   closeWorkSurface: () => void
   toggleWorkSurface: () => void
+  openWorkSurfaceTab: (input: {
+    kind?: SurfaceKind
+    resourceKey: string
+    title?: string
+    focus?: WorkSurfaceOpenFocus
+    source: WorkSurfaceOpenSource
+  }) => void
+  closeWorkSurfaceTab: (tabId: WorkSurfaceTabId) => void
   activateTab: (tabId: WorkSurfaceTabId) => void
   resizeWorkSurface: (width: number) => void
   toggleMaximize: () => void
@@ -104,12 +147,11 @@ export interface WorkbenchSessionController {
   commands: WorkbenchSessionCommands
 }
 
-/** Seed for session chrome only — no project/tasks arrays. */
+/** Seed for session chrome only — no project/tasks arrays, no global open tabs. */
 export interface WorkbenchSessionSeed {
   selectedProjectId: ProjectId
   selectedTaskId?: TaskId | null
   lastTaskByProject?: Record<ProjectId, TaskId | null>
-  workSurfaceTabs: WorkSurfaceTab[]
   workSurfaceMinWidth?: number
   workSurfaceMaxWidth?: number
   defaultWorkSurfaceWidth?: number

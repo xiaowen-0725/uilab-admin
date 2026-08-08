@@ -6,11 +6,14 @@ import {
 } from './reducer'
 import type {
   ProjectId,
+  SurfaceKind,
   TaskId,
   WorkbenchSessionCommand,
   WorkbenchSessionCommands,
   WorkbenchSessionController,
   WorkbenchSessionSeed,
+  WorkSurfaceOpenFocus,
+  WorkSurfaceOpenSource,
   WorkSurfaceTabId,
 } from '../model/types'
 
@@ -47,6 +50,23 @@ export function useWorkbenchSession(
       openWorkSurface: () => run({ type: 'openWorkSurface' }),
       closeWorkSurface: () => run({ type: 'closeWorkSurface' }),
       toggleWorkSurface: () => run({ type: 'toggleWorkSurface' }),
+      openWorkSurfaceTab: (input: {
+        kind?: SurfaceKind
+        resourceKey: string
+        title?: string
+        focus?: WorkSurfaceOpenFocus
+        source: WorkSurfaceOpenSource
+      }) =>
+        run({
+          type: 'openWorkSurfaceTab',
+          kind: input.kind,
+          resourceKey: input.resourceKey,
+          title: input.title,
+          focus: input.focus,
+          source: input.source,
+        }),
+      closeWorkSurfaceTab: (tabId: WorkSurfaceTabId) =>
+        run({ type: 'closeWorkSurfaceTab', tabId }),
       activateTab: (tabId: WorkSurfaceTabId) =>
         run({ type: 'activateTab', tabId }),
       resizeWorkSurface: (width: number) =>
