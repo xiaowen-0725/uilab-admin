@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createTaskRuntimeController,
   createWorkbenchRuntimePorts,
+  ensureTaskRuntimeController,
   projectBusyTaskIds,
   setFakeRuntimeClockRealtime,
 } from './runtime-wiring'
@@ -55,6 +56,38 @@ describe('createTaskRuntimeController', () => {
     expect(controller).toBeTruthy()
     // Listener path: index starts empty until runs update
     expect(ports.runStatusIndex.getBusyTaskIds().size).toBe(0)
+  })
+})
+
+describe('ensureTaskRuntimeController', () => {
+  it('creates once and reuses existing instance', () => {
+    const ports = createWorkbenchRuntimePorts({
+      adapterMode: 'fake',
+      instantDemo: true,
+    })
+    const store = createMemoryEventStore()
+    const options = {
+      runtimePort: ports.runtimePort,
+      eventStore: store,
+      projectId: DEFAULT_PROJECT_ID,
+      honestyMode: 'fake' as const,
+      eventStoreKind: 'memory' as const,
+      instantDemo: true,
+      adapterMode: 'fake' as const,
+      runStatusIndex: ports.runStatusIndex,
+    }
+
+    const first = ensureTaskRuntimeController(null, options)
+    const second = ensureTaskRuntimeController(first, {
+      ...options,
+      // Different projectId must not force a new instance when existing is passed
+      projectId: 'other-project',
+    })
+    expect(second).toBe(first)
+
+    // Factory path (null existing) yields a distinct instance
+    const third = ensureTaskRuntimeController(null, options)
+    expect(third).not.toBe(first)
   })
 })
 

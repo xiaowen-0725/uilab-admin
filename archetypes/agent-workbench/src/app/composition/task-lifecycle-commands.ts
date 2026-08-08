@@ -139,9 +139,24 @@ export async function hardDeleteTask(
       ? remaining.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0]!.id
       : null
 
+  // Session memory map must stay consistent with selection:
+  // - deleting selected → last for project = nextSelected (newest remaining or null)
+  // - deleting non-selected → keep selectedTaskId when it remains; else nextSelected
+  // Other projects' keys are preserved from the input map.
+  const deletingSelected = selectedTaskId === deleteTaskId
+  let lastForProject: string | null
+  if (deletingSelected) {
+    lastForProject = nextSelected
+  } else {
+    const selectedStillExists =
+      selectedTaskId != null &&
+      remaining.some((t) => t.id === selectedTaskId)
+    lastForProject = selectedStillExists ? selectedTaskId : nextSelected
+  }
+
   const lastTaskByProject = {
     ...input.lastTaskByProject,
-    [selectedProjectId]: nextSelected,
+    [selectedProjectId]: lastForProject,
   }
 
   if (persistence === 'idb' && db) {

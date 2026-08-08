@@ -92,7 +92,7 @@ describe('createNewChatTask', () => {
 })
 
 describe('hardDeleteTask', () => {
-  it('removes catalog + events and retargets selection (memory path)', async () => {
+  it('delete selected → nextSelected + lastTaskByProject updated', async () => {
     const catalogPort = createMemoryProjectCatalog()
     const catalog = new ProjectCatalogController(catalogPort)
     await catalog.hydrate()
@@ -131,14 +131,60 @@ describe('hardDeleteTask', () => {
       activeTaskId: a.id,
       selectedTaskId: a.id,
       selectedProjectId: DEFAULT_PROJECT_ID,
-      lastTaskByProject: { [DEFAULT_PROJECT_ID]: a.id },
+      lastTaskByProject: {
+        [DEFAULT_PROJECT_ID]: a.id,
+        'other-project': 'task-other',
+      },
     })
 
     expect(catalog.getTaskRow(a.id)).toBeNull()
     expect(catalog.getTaskRow(b.id)).toBeTruthy()
     expect(result.selectionChanged).toBe(true)
     expect(result.nextSelectedTaskId).toBe(b.id)
+    expect(result.lastTaskByProject[DEFAULT_PROJECT_ID]).toBe(b.id)
+    // Other projects' keys preserved
+    expect(result.lastTaskByProject['other-project']).toBe('task-other')
     expect(runStatusIndex.get(a.id)).toBeNull()
+  })
+
+  it('delete non-selected while another remains selected → last stays selected', async () => {
+    const catalogPort = createMemoryProjectCatalog()
+    const catalog = new ProjectCatalogController(catalogPort)
+    await catalog.hydrate()
+    const selected = await catalog.createTask({
+      projectId: DEFAULT_PROJECT_ID,
+      taskId: 'task-selected',
+      title: 'Selected',
+    })
+    const other = await catalog.createTask({
+      projectId: DEFAULT_PROJECT_ID,
+      taskId: 'task-other',
+      title: 'Other',
+    })
+    // Make other newer so nextSelected would prefer it if we wrongly always used it
+    await catalog.renameTask(other.id, 'Other2', 'user')
+
+    const runStatusIndex = createRunStatusIndex()
+    const result = await hardDeleteTask({
+      taskId: other.id,
+      catalog,
+      eventStore: createMemoryEventStore(),
+      db: null,
+      persistence: 'memory',
+      runStatusIndex,
+      runtimeController: null,
+      activeTaskId: selected.id,
+      selectedTaskId: selected.id,
+      selectedProjectId: DEFAULT_PROJECT_ID,
+      lastTaskByProject: { [DEFAULT_PROJECT_ID]: selected.id },
+    })
+
+    expect(catalog.getTaskRow(other.id)).toBeNull()
+    expect(catalog.getTaskRow(selected.id)).toBeTruthy()
+    expect(result.selectionChanged).toBe(false)
+    // nextSelected is still the newest remaining (selected is older after rename of other)
+    // but last for project must stay on the still-selected task
+    expect(result.lastTaskByProject[DEFAULT_PROJECT_ID]).toBe(selected.id)
   })
 
   it('cancel timeout/failure does not block hard delete', async () => {
@@ -184,6 +230,7 @@ describe('hardDeleteTask', () => {
 
     expect(catalog.getTaskRow(row.id)).toBeNull()
     expect(result.nextSelectedTaskId).toBeNull()
+    expect(result.lastTaskByProject[DEFAULT_PROJECT_ID]).toBeNull()
     expect(detach).toHaveBeenCalled()
   })
 })

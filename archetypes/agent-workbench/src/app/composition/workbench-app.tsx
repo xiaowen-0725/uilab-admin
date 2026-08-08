@@ -366,10 +366,17 @@ export function WorkbenchApp({
         activeRunStatus: runtime.runStatus,
       })
 
+      // Always sync selection + lastTaskByProject into session memory so the
+      // putSessionPointer effect cannot overwrite IDB with a stale map.
       session.commands.removeTaskLayout(deleteTaskId)
-      if (result.selectionChanged) {
-        session.commands.selectTask(result.nextSelectedTaskId)
-      }
+      session.commands.hydratePointers({
+        selectedProjectId: session.view.selectedProjectId,
+        selectedTaskId: result.selectionChanged
+          ? result.nextSelectedTaskId
+          : session.view.selectedTaskId,
+        lastTaskByProject: result.lastTaskByProject,
+        navigatorOpen: session.view.navigatorOpen,
+      })
       setDeleteConfirmTaskId(null)
     },
     [

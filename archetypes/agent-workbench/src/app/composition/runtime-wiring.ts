@@ -3,7 +3,13 @@
  * Browser-only; no Node/Electron imports.
  */
 
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import {
   resolveRuntimeAdapterMode,
   resolveVoltAgentBaseUrl,
@@ -151,6 +157,19 @@ export function createTaskRuntimeController(
 }
 
 /**
+ * Ensure a single TaskRuntimeController instance.
+ * Returns `existing` when present; otherwise creates via {@link createTaskRuntimeController}.
+ * Used by React wiring so create is not duplicated if ensure re-runs.
+ */
+export function ensureTaskRuntimeController(
+  existing: TaskRuntimeController | null,
+  options: EnsureTaskRuntimeControllerOptions,
+): TaskRuntimeController {
+  if (existing != null) return existing
+  return createTaskRuntimeController(options)
+}
+
+/**
  * Drive Fake VirtualClock realtime for interactive demos.
  * No-op for VoltAgent or instant demo / non-runtime path.
  */
@@ -237,6 +256,10 @@ export interface WorkbenchRuntimeWiring {
 /**
  * React wiring: ports, controller lifecycle, Fake clock.
  * Busy projection is {@link useBusyTaskIds} after useTaskRuntime.
+ *
+ * Controller is **never** constructed during render — only in an effect when
+ * `bootReady && eventStore`, held in state so consumers re-render. Mid-session
+ * `projectId` changes go through `setProjectId` only (no recreate).
  */
 export function useWorkbenchRuntimeWiring(
   options: UseWorkbenchRuntimeWiringOptions,
@@ -250,6 +273,7 @@ export function useWorkbenchRuntimeWiring(
     adapterMode: adapterModeProp,
   } = options
 
+  // Ports: factory once per mount (stable across renders).
   const portsRef = useRef<WorkbenchRuntimePorts | null>(null)
   if (portsRef.current == null) {
     portsRef.current = createWorkbenchRuntimePorts({
@@ -258,54 +282,51 @@ export function useWorkbenchRuntimeWiring(
   }
   const ports = portsRef.current
 
+  // Controller: state for re-render; ref for guard + cleanup identity.
+  const [controller, setController] =
+    useState<TaskRuntimeController | null>(null)
   const controllerRef = useRef<TaskRuntimeController | null>(null)
 
-  if (
-    controllerRef.current == null &&
-    eventStore != null
-  ) {
-    controllerRef.current = createTaskRuntimeController({
-      runtimePort: ports.runtimePort,
-      eventStore,
-      projectId,
-      honestyMode: ports.honestyMode,
-      eventStoreKind: persistence === 'idb' ? 'idb' : 'memory',
-      instantDemo: ports.instantDemo,
-      adapterMode: ports.adapterMode,
-      runStatusIndex: ports.runStatusIndex,
-    })
-  }
-
-  // Ensure controller after async boot when store becomes available.
+  // Create only after boot + store; never during render. projectId not a create dep.
   useEffect(() => {
     if (!bootReady || !eventStore) return
-    if (controllerRef.current == null) {
-      controllerRef.current = createTaskRuntimeController({
-        runtimePort: ports.runtimePort,
-        eventStore,
-        projectId,
-        honestyMode: ports.honestyMode,
-        eventStoreKind: persistence === 'idb' ? 'idb' : 'memory',
-        instantDemo: ports.instantDemo,
-        adapterMode: ports.adapterMode,
-        runStatusIndex: ports.runStatusIndex,
-      })
+
+    const portsNow = portsRef.current!
+    // Guard: reuse instance if effect re-runs while controller still held
+    // (e.g. identity-stable deps). ensure* is also unit-tested for create-once.
+    const next = ensureTaskRuntimeController(controllerRef.current, {
+      runtimePort: portsNow.runtimePort,
+      eventStore,
+      projectId,
+      honestyMode: portsNow.honestyMode,
+      eventStoreKind: persistence === 'idb' ? 'idb' : 'memory',
+      instantDemo: portsNow.instantDemo,
+      adapterMode: portsNow.adapterMode,
+      runStatusIndex: portsNow.runStatusIndex,
+    })
+    if (controllerRef.current !== next) {
+      controllerRef.current = next
+      setController(next)
     }
-  }, [
-    bootReady,
-    eventStore,
-    persistence,
-    ports.adapterMode,
-    ports.honestyMode,
-    ports.instantDemo,
-    ports.runtimePort,
-    ports.runStatusIndex,
-    projectId,
-  ])
+
+    return () => {
+      const held = controllerRef.current
+      controllerRef.current = null
+      setController((current) => (current === held ? null : current))
+      try {
+        held?.detach()
+      } catch {
+        // detach is best-effort on unmount / Strict Mode remount
+      }
+    }
+    // Intentionally omit projectId — updates via setProjectId effect only.
+    // ports* are stable (ref). eventStoreKind follows persistence.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- create once on boot+store
+  }, [bootReady, eventStore, persistence])
 
   useEffect(() => {
-    controllerRef.current?.setProjectId(projectId)
-  }, [projectId])
+    controller?.setProjectId(projectId)
+  }, [projectId, controller])
 
   const isRuntimePath = Boolean(selectedTaskId)
   useEffect(() => {
@@ -318,7 +339,7 @@ export function useWorkbenchRuntimeWiring(
 
   return {
     honestyMode: ports.honestyMode,
-    controller: controllerRef.current,
+    controller,
     runStatusIndex: ports.runStatusIndex,
     runtimePort: ports.runtimePort,
   }
