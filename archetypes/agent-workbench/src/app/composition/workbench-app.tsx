@@ -43,7 +43,10 @@ import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
-import { useWorkbenchRuntimeWiring } from './runtime-wiring'
+import {
+  useBusyTaskIds,
+  useWorkbenchRuntimeWiring,
+} from './runtime-wiring'
 import { useWorkbenchSurfaceAssembly } from './surface-assembly'
 import {
   createNewChatTask,
@@ -144,32 +147,24 @@ export function WorkbenchApp({
     bootReady,
     selectedTaskId: taskId,
   })
-  const { honestyMode, controller: runtimeController, runStatusIndex, busyTaskIds } =
-    runtimeWiring
+  const {
+    honestyMode,
+    controller: runtimeController,
+    runStatusIndex,
+  } = runtimeWiring
 
-  // Pass live runStatus after useTaskRuntime (see below) — first pass uses index only;
-  // selected-task merge happens once runtime hook is available.
   const isRuntimePath = Boolean(taskId)
   const runtime = useTaskRuntime(runtimeController, taskId ?? '', {
     enabled: isRuntimePath && bootReady && Boolean(runtimeController),
     title: selectedTaskRow?.title ?? NEW_TASK_TITLE,
   })
 
-  const busyTaskIdsMerged = useMemo(() => {
-    // Re-project with live selected run status (Navigator spinner).
-    const base = busyTaskIds
-    const status = runtime.runStatus
-    if (
-      taskId &&
-      (status === 'queued' || status === 'running' || status === 'cancelling')
-    ) {
-      if (base.has(taskId)) return base
-      const set = new Set(base)
-      set.add(taskId)
-      return set
-    }
-    return base
-  }, [busyTaskIds, runtime.runStatus, taskId])
+  // Busy projection lives in runtime-wiring (after live runStatus is known).
+  const busyTaskIds = useBusyTaskIds(
+    runStatusIndex,
+    taskId,
+    runtime.runStatus,
+  )
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
@@ -421,7 +416,7 @@ export function WorkbenchApp({
           project={currentProject}
           projects={catalogView.projects}
           tasks={tasks}
-          busyTaskIds={busyTaskIdsMerged}
+          busyTaskIds={busyTaskIds}
           onLaunchAction={onLaunchAction}
           onNewChat={() => void onNewChat()}
           onDeleteTask={onDeleteTask}

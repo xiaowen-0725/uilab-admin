@@ -5,6 +5,7 @@ import {
   projectBusyTaskIds,
   setFakeRuntimeClockRealtime,
 } from './runtime-wiring'
+// useBusyTaskIds is covered via projectBusyTaskIds + integration shell/runtime tests
 import { createMemoryEventStore, createRunStatusIndex } from '@/modules/task'
 import { DEFAULT_PROJECT_ID } from '@/modules/project'
 

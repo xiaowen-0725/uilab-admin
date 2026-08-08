@@ -190,6 +190,33 @@ export function projectBusyTaskIds(
   return base
 }
 
+/**
+ * Subscribe to RunStatusIndex + merge selected-task live status for Navigator.
+ * Call after `useTaskRuntime` so live runStatus is available.
+ */
+export function useBusyTaskIds(
+  runStatusIndex: RunStatusIndex,
+  selectedTaskId: string | null,
+  selectedRunStatus: RunStatus | null | undefined,
+): ReadonlySet<string> {
+  const busyRevision = useSyncExternalStore(
+    (cb) => runStatusIndex.subscribe(cb),
+    () => runStatusIndex.getRevision(),
+    () => runStatusIndex.getRevision(),
+  )
+  return useMemo(
+    () =>
+      projectBusyTaskIds(
+        runStatusIndex,
+        selectedTaskId,
+        selectedRunStatus,
+      ),
+    // busyRevision invalidates when index mutates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [busyRevision, selectedRunStatus, selectedTaskId, runStatusIndex],
+  )
+}
+
 export interface UseWorkbenchRuntimeWiringOptions {
   eventStore: EventStorePort | null
   projectId: string
@@ -197,8 +224,6 @@ export interface UseWorkbenchRuntimeWiringOptions {
   bootReady: boolean
   /** Selected task id for clock drive; null = stop. */
   selectedTaskId: string | null
-  /** Live run status of selected task (for busy merge). */
-  selectedRunStatus?: RunStatus | null
   adapterMode?: RuntimeHonestyMode
 }
 
@@ -206,12 +231,12 @@ export interface WorkbenchRuntimeWiring {
   honestyMode: RuntimeHonestyMode
   controller: TaskRuntimeController | null
   runStatusIndex: RunStatusIndex
-  busyTaskIds: ReadonlySet<string>
   runtimePort: RuntimePort
 }
 
 /**
- * React wiring: ports, controller lifecycle, Fake clock, busy projection.
+ * React wiring: ports, controller lifecycle, Fake clock.
+ * Busy projection is {@link useBusyTaskIds} after useTaskRuntime.
  */
 export function useWorkbenchRuntimeWiring(
   options: UseWorkbenchRuntimeWiringOptions,
@@ -222,7 +247,6 @@ export function useWorkbenchRuntimeWiring(
     persistence,
     bootReady,
     selectedTaskId,
-    selectedRunStatus,
     adapterMode: adapterModeProp,
   } = options
 
@@ -292,30 +316,10 @@ export function useWorkbenchRuntimeWiring(
     return setFakeRuntimeClockRealtime(ports.fakeRuntime, true)
   }, [isRuntimePath, ports.adapterMode, ports.fakeRuntime, ports.instantDemo])
 
-  const runStatusIndex = ports.runStatusIndex
-  const busyRevision = useSyncExternalStore(
-    (cb) => runStatusIndex.subscribe(cb),
-    () => runStatusIndex.getRevision(),
-    () => runStatusIndex.getRevision(),
-  )
-
-  const busyTaskIds = useMemo(
-    () =>
-      projectBusyTaskIds(
-        runStatusIndex,
-        selectedTaskId,
-        selectedRunStatus,
-      ),
-    // busyRevision invalidates when index mutates
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busyRevision, selectedRunStatus, selectedTaskId, runStatusIndex],
-  )
-
   return {
     honestyMode: ports.honestyMode,
     controller: controllerRef.current,
-    runStatusIndex,
-    busyTaskIds,
+    runStatusIndex: ports.runStatusIndex,
     runtimePort: ports.runtimePort,
   }
 }
