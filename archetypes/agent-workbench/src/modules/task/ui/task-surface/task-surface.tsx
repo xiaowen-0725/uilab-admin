@@ -131,7 +131,6 @@ export function TaskSurface({
           ) : (
             <Composer
               projectLabel={view.projectName}
-              branchLabel='main'
               mode={composerMode}
               runStatus={composerRuntime?.runStatus}
               onSubmitText={composerRuntime?.onSubmitText}

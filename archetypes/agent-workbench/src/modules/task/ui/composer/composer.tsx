@@ -89,9 +89,10 @@ export interface ComposerProps {
    */
   showContextGauge?: boolean
   /**
-   * Scenario toggles for the context rail. All default on.
-   * Product rule: when no project is selected, env/branch chips stay hidden
-   * even if their flags are true (they only make sense bound to a workspace).
+   * Scenario toggles for the context rail.
+   * Product: project chip defaults on; env/branch chips default **off** until a
+   * real environment / Git port is wired (no fake 「本地」「main」 without backend).
+   * Even when flags are true, env/branch stay hidden if no project is selected.
    */
   showContextBar?: boolean
   showProjectChip?: boolean
@@ -317,8 +318,8 @@ export function TaskComposer({
   showContextGauge = false,
   showContextBar = true,
   showProjectChip = true,
-  showEnvironmentChip = true,
-  showBranchChip = true,
+  showEnvironmentChip = false,
+  showBranchChip = false,
   mode = 'local-sim',
   runStatus = null,
   onSubmitText,
