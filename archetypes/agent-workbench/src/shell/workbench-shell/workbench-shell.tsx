@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, TransitionEvent } from 'react'
 import {
-  FolderIcon,
-  PanelBottom,
-  PanelLeftIcon,
-  SlidersHorizontal,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ToolbarIconButton } from '@/components/toolbar-icon-button'
+  CapabilityManagementSurface,
+  type CapabilityController,
+} from '@/modules/capabilities'
 import type { ProjectSummary, TaskSummary } from '@/modules/project'
 import type {
   LaunchAction,
@@ -16,19 +12,20 @@ import type {
   TimelineOpenFileRef,
 } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
-import {
-  WorkSurfaceHost,
-  type SurfaceRegistry,
-} from '@/modules/work-surface'
+import { WorkSurfaceHost, type SurfaceRegistry } from '@/modules/work-surface'
 import type {
   WorkbenchSessionCommands,
   WorkbenchSessionView,
 } from '@/modules/workbench-session'
-import { Navigator } from '../navigator/navigator'
 import {
-  SettingsDialog,
-  type SettingsSectionId,
-} from '../settings/settings-dialog'
+  FolderIcon,
+  PanelBottom,
+  PanelLeftIcon,
+  SlidersHorizontal,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ToolbarIconButton } from '@/components/toolbar-icon-button'
+import { Navigator } from '../navigator/navigator'
 import {
   TASK_SURFACE_MIN_WIDTH,
   WORK_SURFACE_MIN_WIDTH,
@@ -36,6 +33,10 @@ import {
 } from '../responsive-layout/geometry'
 import { useStageWidth } from '../responsive-layout/use-stage-width'
 import { useViewportMode } from '../responsive-layout/use-viewport-mode'
+import {
+  SettingsDialog,
+  type SettingsSectionId,
+} from '../settings/settings-dialog'
 import { useWorkbenchShortcuts } from './use-workbench-shortcuts'
 
 /** Shell-owned motion modality — never stored in Session. */
@@ -100,6 +101,8 @@ export interface WorkbenchShellProps {
   onSelectProject?: (projectId: string) => void
   /** Runtime composer props for product Runtime path. */
   composerRuntime?: TaskSurfaceComposerRuntime
+  /** Capability catalog controller assembled by Composition Root. */
+  capabilityController?: CapabilityController | null
   /**
    * Surface Registry from Composition Root only.
    * Shell/Host never register; Host only resolves render by kind.
@@ -139,6 +142,7 @@ export function WorkbenchShell({
   onDeleteTask,
   onSelectProject,
   composerRuntime,
+  capabilityController,
   surfaceRegistry,
   onOpenFileRef,
   workSurfaceEmptyExtra,
@@ -153,6 +157,9 @@ export function WorkbenchShell({
   const [paneTransition, setPaneTransition] =
     useState<PaneTransition>('instant')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [activeDestination, setActiveDestination] = useState<
+    'task' | 'capabilities'
+  >('task')
   const [settingsSection, setSettingsSection] =
     useState<SettingsSectionId>('profile')
 
@@ -160,6 +167,23 @@ export function WorkbenchShell({
     setSettingsSection('profile')
     setSettingsOpen(true)
   }, [])
+
+  const openCapabilities = useCallback(() => {
+    setActiveDestination('capabilities')
+    if (viewport !== 'wide' && view.navigatorOpen) {
+      setNavMotion('instant')
+      commands.setNavigatorOpen(false)
+    }
+  }, [commands, viewport, view.navigatorOpen])
+
+  const showTask = useCallback(() => {
+    setActiveDestination('task')
+  }, [])
+
+  const startNewChatFromShell = useCallback(() => {
+    showTask()
+    onNewChat?.()
+  }, [onNewChat, showTask])
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false)
@@ -238,11 +262,12 @@ export function WorkbenchShell({
   /** Task select: mark context/pane instant so restored layout never plays entry. */
   const selectTaskFromShell = useCallback(
     (taskId: string) => {
+      showTask()
       setContextMotion('instant')
       setPaneInstant()
       commands.selectTask(taskId)
     },
-    [commands, setPaneInstant]
+    [commands, setPaneInstant, showTask]
   )
 
   /** Slot width only — ignore bubbled child transitions. */
@@ -302,12 +327,15 @@ export function WorkbenchShell({
     effectiveWorkMax
   )
 
-  const drawerWidth = workDrawerWidth(
-    view.layout.workSurfaceVisible,
-    workFullStage,
-    effectiveWorkWidth,
-    stageWidth
-  )
+  const drawerWidth =
+    activeDestination === 'capabilities'
+      ? 0
+      : workDrawerWidth(
+          view.layout.workSurfaceVisible,
+          workFullStage,
+          effectiveWorkWidth,
+          stageWidth
+        )
 
   const widthAnimating = paneMotionSource === 'animated'
 
@@ -318,10 +346,12 @@ export function WorkbenchShell({
     selectedTaskId: view.selectedTaskId,
     busyTaskIds,
     open: view.navigatorOpen,
-    onNewChat,
+    onNewChat: startNewChatFromShell,
     onDeleteTask,
     onSelectProject,
     onOpenSettings: openSettings,
+    activeDestination,
+    onOpenCapabilities: openCapabilities,
     onToggleNavigator: toggleNavigatorFromPointer,
   }
 
@@ -369,113 +399,136 @@ export function WorkbenchShell({
           className='relative flex min-h-0 min-w-0 flex-1 overflow-hidden'
           data-testid='workbench-stage'
         >
-          {/* Task stays mounted; full-stage Work shrinks it via the drawer width. */}
-          <div
-            className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
-            style={getTaskPaneStyle(sideBySide, widthAnimating)}
-            data-slot='task-pane'
-            aria-hidden={workFullStage || undefined}
-            inert={workFullStage || undefined}
-          >
-            {/* Task pane toolbar (44px) — was Workspace-wide header. */}
-            <header
-              className='flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
-              data-testid='workspace-top-bar'
-              data-slot='task-pane-toolbar'
+          {activeDestination === 'capabilities' ? (
+            <CapabilityManagementSurface
+              controller={capabilityController}
+              taskId={view.selectedTaskId}
+              onBack={showTask}
+            />
+          ) : (
+            /* Task pane: full-stage Work shrinks it via the drawer width. */
+            <div
+              className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+              style={getTaskPaneStyle(sideBySide, widthAnimating)}
+              data-slot='task-pane'
+              aria-hidden={workFullStage || undefined}
+              inert={workFullStage || undefined}
             >
-              {/*
+              {/* Task pane toolbar (44px) — was Workspace-wide header. */}
+              <header
+                className='flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
+                data-testid='workspace-top-bar'
+                data-slot='task-pane-toolbar'
+              >
+                {/*
                 Nav toggle lives on the left rail (WorkBuddy-style) when open.
                 Only re-open here when the rail is collapsed (reserved gap is 0).
               */}
-              {!view.navigatorOpen && !workFullStage ? (
-                <ToolbarIconButton
-                  testId='toggle-navigator'
-                  pressed={false}
-                  label='打开导航'
-                  onClick={toggleNavigatorFromPointer}
-                >
-                  <PanelLeftIcon className='size-4' aria-hidden />
-                </ToolbarIconButton>
-              ) : null}
-
-              <FolderIcon
-                className='size-4 shrink-0 text-muted-foreground'
-                aria-hidden
-              />
-
-              <div className='min-w-0 flex-1'>
-                <h1 className='truncate text-sm leading-none font-semibold'>
-                  {taskView?.title ?? '还没有任务'}
-                </h1>
-              </div>
-
-              <div className='flex shrink-0 items-center gap-0.5'>
-                <ToolbarIconButton
-                  testId='toggle-context'
-                  pressed={view.layout.contextPanelOpen}
-                  label='切换任务上下文面板'
-                  onClick={toggleContextFromPointer}
-                >
-                  <SlidersHorizontal className='size-4' aria-hidden />
-                </ToolbarIconButton>
-                <ToolbarIconButton
-                  testId='toggle-work-surface-chrome'
-                  pressed={view.layout.workSurfaceVisible}
-                  label='切换工作面'
-                  onClick={toggleWorkFromPointer}
-                >
-                  <PanelBottom className='size-4' aria-hidden />
-                </ToolbarIconButton>
-              </div>
-            </header>
-
-            <div className='flex min-h-0 min-w-0 flex-1'>
-              {taskView ? (
-                <TaskSurface
-                  view={taskView}
-                  onLaunchAction={onLaunchAction}
-                  composerRuntime={composerRuntime}
-                  onOpenFileRef={onOpenFileRef}
-                  onCloseContextPanel={
-                    taskView.contextPanelOpen
-                      ? () => {
-                          setContextMotion('instant')
-                          commands.toggleContextPanel()
-                        }
-                      : undefined
-                  }
-                />
-              ) : (
-                <div
-                  className='flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
-                  data-testid='workspace-empty-shell'
-                >
-                  <p className='text-sm text-muted-foreground'>还没有任务</p>
-                  <Button
-                    type='button'
-                    variant='outline'
-                    data-testid='workspace-empty-new-chat'
-                    onClick={() => onNewChat?.()}
+                {!view.navigatorOpen && !workFullStage ? (
+                  <ToolbarIconButton
+                    testId='toggle-navigator'
+                    pressed={false}
+                    label='打开导航'
+                    onClick={toggleNavigatorFromPointer}
                   >
-                    新对话
-                  </Button>
+                    <PanelLeftIcon className='size-4' aria-hidden />
+                  </ToolbarIconButton>
+                ) : null}
+
+                <FolderIcon
+                  className='size-4 shrink-0 text-muted-foreground'
+                  aria-hidden
+                />
+
+                <div className='min-w-0 flex-1'>
+                  <h1 className='truncate text-sm leading-none font-semibold'>
+                    {taskView?.title ?? '还没有任务'}
+                  </h1>
                 </div>
-              )}
+
+                <div className='flex shrink-0 items-center gap-0.5'>
+                  <ToolbarIconButton
+                    testId='toggle-context'
+                    pressed={view.layout.contextPanelOpen}
+                    label='切换任务上下文面板'
+                    onClick={toggleContextFromPointer}
+                  >
+                    <SlidersHorizontal className='size-4' aria-hidden />
+                  </ToolbarIconButton>
+                  <ToolbarIconButton
+                    testId='toggle-work-surface-chrome'
+                    pressed={view.layout.workSurfaceVisible}
+                    label='切换工作面'
+                    onClick={toggleWorkFromPointer}
+                  >
+                    <PanelBottom className='size-4' aria-hidden />
+                  </ToolbarIconButton>
+                </div>
+              </header>
+
+              <div className='flex min-h-0 min-w-0 flex-1'>
+                {taskView ? (
+                  <TaskSurface
+                    view={taskView}
+                    onLaunchAction={onLaunchAction}
+                    composerRuntime={
+                      composerRuntime
+                        ? {
+                            ...composerRuntime,
+                            onManageCapabilities: openCapabilities,
+                          }
+                        : undefined
+                    }
+                    onOpenFileRef={onOpenFileRef}
+                    onCloseContextPanel={
+                      taskView.contextPanelOpen
+                        ? () => {
+                            setContextMotion('instant')
+                            commands.toggleContextPanel()
+                          }
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <div
+                    className='flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
+                    data-testid='workspace-empty-shell'
+                  >
+                    <p className='text-sm text-muted-foreground'>还没有任务</p>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      data-testid='workspace-empty-new-chat'
+                      onClick={() => onNewChat?.()}
+                    >
+                      新对话
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Always-mounted right-anchored Work drawer — width is the only moving boundary. */}
           <div
             className='work-drawer-slot'
             data-slot='work-drawer-slot'
             style={{ width: drawerWidth }}
-            aria-hidden={!view.layout.workSurfaceVisible || undefined}
+            aria-hidden={
+              activeDestination === 'capabilities' ||
+              !view.layout.workSurfaceVisible ||
+              undefined
+            }
             onTransitionEnd={handleWorkDrawerTransitionEnd}
           >
             <WorkSurfaceHost
               view={{
-                visible: view.layout.workSurfaceVisible,
-                maximized: view.layout.workSurfaceMaximized,
+                visible:
+                  activeDestination === 'task' &&
+                  view.layout.workSurfaceVisible,
+                maximized:
+                  activeDestination === 'task' &&
+                  view.layout.workSurfaceMaximized,
                 width: effectiveWorkWidth,
                 minWidth: view.workSurfaceMinWidth,
                 maxWidth: effectiveWorkMax,
@@ -497,7 +550,7 @@ export function WorkbenchShell({
               }}
               registry={surfaceRegistry}
               taskId={view.selectedTaskId}
-              fullStage={workFullStage}
+              fullStage={activeDestination === 'task' && workFullStage}
               emptyExtra={workSurfaceEmptyExtra}
               toolbarTrailing={workSurfaceToolbarTrailing}
               toolbarLeading={

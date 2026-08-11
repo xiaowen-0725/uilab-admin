@@ -86,6 +86,7 @@ describe('TaskComposer connector selection', () => {
       setSelection,
       startAuth: vi.fn(),
       refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
       subscribe(listener) {
         listeners.add(listener)
         return () => listeners.delete(listener)

@@ -55,6 +55,7 @@ describe('useCapabilitySnapshot', () => {
       setSelection: vi.fn(),
       startAuth: vi.fn(),
       refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
       subscribe: () => () => {},
     }
     const controller = createCapabilityController(port)
@@ -84,6 +85,7 @@ describe('useCapabilitySnapshot', () => {
       setSelection: vi.fn(),
       startAuth: vi.fn(),
       refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
       subscribe(listener) {
         listeners.add(listener)
         return () => listeners.delete(listener)

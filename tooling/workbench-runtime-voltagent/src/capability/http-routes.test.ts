@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import type { PluginAuthStatus } from '../plugin/auth-status.js'
 import {
   BUILTIN_CONNECTOR_DESCRIPTORS,
+  CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
   CONNECTOR_FEISHU_ID,
   CONNECTOR_GITHUB_ID,
 } from '../plugin/builtins.js'
@@ -23,6 +24,10 @@ function createTestApp(input?: {
       message: string
     }>
   >
+  revokeConnectorAuth?: (connectorId: string) => Promise<{
+    message: string
+    needsSidecarRestart: boolean
+  }>
 }) {
   const app = new Hono()
   const versionRef = { current: 1 }
@@ -52,6 +57,7 @@ function createTestApp(input?: {
       message: '请先完成 CLI 应用配置。',
     }),
     reconcileConnectorAuth: input?.reconcileConnectorAuth,
+    revokeConnectorAuth: input?.revokeConnectorAuth,
   })
   return { app, versionRef }
 }
@@ -176,6 +182,51 @@ describe('Capability OAuth HTTP routes', () => {
     assert.equal(body.ok, true)
     assert.equal(reconciled, 1)
     assert.equal(versionRef.current, 2)
+  })
+
+  it('revokes account auth by generic connector id and returns a refreshed snapshot', async () => {
+    const statuses: PluginAuthStatus[] = [
+      {
+        pluginId: 'mcp.github',
+        resourceId: CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
+        kind: 'oauth2',
+        pluginEnabled: true,
+        status: 'connected',
+      },
+    ]
+    const revoked: string[] = []
+    const { app } = createTestApp({
+      authStatuses: statuses,
+      revokeConnectorAuth: async (connectorId) => {
+        revoked.push(connectorId)
+        statuses[0] = { ...statuses[0]!, status: 'missing' }
+        return {
+          message: '连接已撤销',
+          needsSidecarRestart: true,
+        }
+      },
+    })
+
+    const response = await app.request('/capability/auth/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        connectorId: CONNECTOR_GITHUB_ID,
+        taskId: 'task-a',
+      }),
+    })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(revoked, [CONNECTOR_GITHUB_ID])
+    assert.equal(body.ok, true)
+    assert.equal(body.needsSidecarRestart, true)
+    assert.equal(
+      body.snapshot.connectors.find(
+        (connector: { id: string }) => connector.id === CONNECTOR_GITHUB_ID,
+      ).connected,
+      false,
+    )
   })
 
   it('starts and continues a CLI flow without exposing a device code', async () => {

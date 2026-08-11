@@ -122,6 +122,14 @@ export type CapabilityAuthRefreshResult = {
   transitions: ConnectorAuthTransition[]
 }
 
+export type CapabilityAuthRevokeResult = {
+  snapshot: CapabilitySnapshot
+  connectorId: string
+  message: string
+  /** Existing MCP wire sessions may require a sidecar restart for full cleanup. */
+  needsSidecarRestart: boolean
+}
+
 export type CapabilitySnapshotListener = (snapshot: CapabilitySnapshot) => void
 
 /**
@@ -146,6 +154,12 @@ export interface CapabilitySnapshotPort {
     taskId?: string | null,
     connectorId?: string
   ): Promise<CapabilityAuthRefreshResult>
+
+  /** Revoke one descriptor-owned account binding without exposing Provider details. */
+  revokeAuth(
+    taskId: string | null | undefined,
+    connectorId: string
+  ): Promise<CapabilityAuthRevokeResult>
 
   subscribe(listener: CapabilitySnapshotListener): () => void
 }

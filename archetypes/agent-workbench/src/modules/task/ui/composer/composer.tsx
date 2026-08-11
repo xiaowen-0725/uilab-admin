@@ -132,6 +132,8 @@ export interface ComposerProps {
   capabilityController?: CapabilityController | null
   /** Task id for capability selection. */
   capabilityTaskId?: string | null
+  /** Open the shared global capability management Surface. */
+  onManageCapabilities?: () => void
 }
 
 const ACCESS_LEVELS = ['只读', '需确认', '作用域自动', '完全访问'] as const
@@ -345,6 +347,7 @@ export function TaskComposer({
   honestyMode = 'fake',
   capabilityController = null,
   capabilityTaskId = null,
+  onManageCapabilities,
 }: ComposerProps) {
   const honesty = runtimeHonestyCopy(honestyMode)
   const noticeId = useId()
@@ -967,9 +970,8 @@ export function TaskComposer({
       onStartAuth={handleStartAuth}
       onRefreshAuth={handleRefreshAuth}
       onManageConnectors={() => {
-        setNotice(
-          '连接器管理页后置：当前请在「连接器」列表内开关选用或点「连接」完成 CLI 登录。'
-        )
+        setAddOpen(false)
+        onManageCapabilities?.()
       }}
     />
   )

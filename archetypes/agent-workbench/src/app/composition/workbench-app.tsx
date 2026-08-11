@@ -417,6 +417,7 @@ export function WorkbenchApp({
           onDeleteTask={onDeleteTask}
           onSelectProject={onSelectProject}
           composerRuntime={composerRuntime}
+          capabilityController={capabilityController}
           surfaceRegistry={surface.surfaceRegistry}
           onOpenFileRef={surface.onOpenFileRef}
           workSurfaceEmptyExtra={surface.workSurfaceEmptyExtra}

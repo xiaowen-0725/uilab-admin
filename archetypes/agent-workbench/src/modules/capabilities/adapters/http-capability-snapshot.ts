@@ -7,6 +7,7 @@ import type {
   CapabilitySnapshot,
   CapabilitySnapshotPort,
   CapabilitySnapshotListener,
+  CapabilityAuthRevokeResult,
   CapabilityAuthRefreshResult,
   StartAuthResult,
 } from '../ports/capability-snapshot-port'
@@ -101,6 +102,26 @@ export function createHttpCapabilitySnapshotPort(
       return {
         snapshot: res.snapshot,
         transitions: res.transitions ?? [],
+      }
+    },
+
+    async revokeAuth(taskId, connectorId) {
+      const res = await getJson<{ ok: boolean } & CapabilityAuthRevokeResult>(
+        '/capability/auth/revoke',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            taskId: taskId ?? null,
+            connectorId,
+          }),
+        }
+      )
+      notify(res.snapshot)
+      return {
+        snapshot: res.snapshot,
+        connectorId: res.connectorId,
+        message: res.message,
+        needsSidecarRestart: res.needsSidecarRestart,
       }
     },
 
