@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
-import { render } from 'vitest-browser-react'
-import { page } from 'vitest/browser'
 import {
   createCapabilityController,
   type CapabilitySnapshot,
   type CapabilitySnapshotPort,
 } from '@/modules/capabilities'
+import { describe, expect, it, vi } from 'vitest'
+import { render } from 'vitest-browser-react'
+import { page } from 'vitest/browser'
 import { TaskComposer } from './composer'
 
 const selectedSnapshot: CapabilitySnapshot = {
@@ -56,12 +56,25 @@ const selectedSnapshot: CapabilitySnapshot = {
 }
 
 describe('TaskComposer connector selection', () => {
+  it('names the add menu by every capability it actually opens', async () => {
+    render(<TaskComposer mode='runtime' />)
+
+    await expect
+      .element(
+        page.getByRole('button', {
+          name: '添加文件、模式、专家、技能或连接器',
+        })
+      )
+      .toBeInTheDocument()
+  })
+
   it('uses the same Task toggle feedback when removing a toolbar connector badge', async () => {
     let current = selectedSnapshot
     const listeners = new Set<(snapshot: CapabilitySnapshot) => void>()
     const setSelection = vi.fn<CapabilitySnapshotPort['setSelection']>(
       async (taskId, selection) => {
-        const connectorIds = selection.connectorIds ?? current.selection.connectorIds
+        const connectorIds =
+          selection.connectorIds ?? current.selection.connectorIds
         current = {
           ...current,
           version: current.version + 1,
@@ -104,11 +117,15 @@ describe('TaskComposer connector selection', () => {
       />
     )
 
+    const liveNotice = page.getByTestId('composer-notice')
+    await expect.element(liveNotice).toHaveAttribute('role', 'status')
+    await expect.element(liveNotice).toHaveAttribute('aria-live', 'polite')
+
     await page.getByRole('button', { name: '移除 飞书' }).click()
 
     await expect
-      .element(page.getByText('已停止为当前任务启用「飞书」；账号仍保持连接。'))
-      .toBeInTheDocument()
+      .element(liveNotice)
+      .toHaveTextContent('已停止为当前任务启用「飞书」；账号仍保持连接。')
     expect(setSelection).toHaveBeenCalledTimes(1)
     expect(current.connectors[0]).toMatchObject({
       connected: true,
@@ -116,5 +133,178 @@ describe('TaskComposer connector selection', () => {
       capabilityEffective: false,
       effectiveCommandScopes: [],
     })
+  })
+
+  it('announces a recoverable product error without exposing adapter diagnostics', async () => {
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => selectedSnapshot),
+      setSelection: vi.fn(async () => {
+        throw new Error('Capability Snapshot sidecar request failed')
+      }),
+      startAuth: vi.fn(),
+      refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
+      subscribe: () => () => {},
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+      />
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-connectors-nav').click()
+    await page.getByTestId('capability-connector-connector.feishu').click()
+
+    const notice = page.getByTestId('composer-notice')
+    await expect
+      .element(notice)
+      .toHaveTextContent('暂时无法更新当前任务的连接器。请重试。')
+    await expect
+      .element(notice)
+      .not.toHaveTextContent(/Capability Snapshot|sidecar/)
+  })
+
+  it('announces when a skill will begin affecting the current Task', async () => {
+    const skillSnapshot: CapabilitySnapshot = {
+      ...selectedSnapshot,
+      skills: [
+        {
+          id: 'meeting-notes',
+          name: '会议纪要',
+          taskSelected: false,
+          discoverable: true,
+          source: 'workspace',
+        },
+      ],
+    }
+    const setSelection = vi.fn(async () => skillSnapshot)
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => skillSnapshot),
+      setSelection,
+      startAuth: vi.fn(),
+      refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
+      subscribe: () => () => {},
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+      />
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-skills-nav').click()
+    await page.getByTestId('capability-skill-meeting-notes').click()
+
+    expect(setSelection).toHaveBeenCalledWith('task-a', {
+      skillIds: ['meeting-notes'],
+    })
+    await expect
+      .element(page.getByTestId('composer-notice'))
+      .toHaveTextContent(
+        '已为当前任务启用技能「会议纪要」，将从下次发送开始生效。'
+      )
+  })
+
+  it('announces the selected expert in plain user language', async () => {
+    const expertSnapshot: CapabilitySnapshot = {
+      ...selectedSnapshot,
+      experts: [
+        {
+          id: 'expert.office-meeting',
+          name: '会议纪要专家',
+          description: '整理会议内容',
+          taskSelected: false,
+          skills: [],
+          connectors: [],
+          source: 'static-catalog',
+        },
+      ],
+    }
+    const setSelection = vi.fn(async () => expertSnapshot)
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => expertSnapshot),
+      setSelection,
+      startAuth: vi.fn(),
+      refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
+      subscribe: () => () => {},
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+      />
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-experts-nav').click()
+    await page.getByTestId('capability-expert-expert.office-meeting').click()
+
+    expect(setSelection).toHaveBeenCalledWith('task-a', {
+      expertId: 'expert.office-meeting',
+    })
+    await expect
+      .element(page.getByTestId('composer-notice'))
+      .toHaveTextContent('已选用专家「会议纪要专家」，将从下次发送开始生效。')
+  })
+
+  it('announces account connection failures without adapter diagnostics', async () => {
+    const disconnectedSnapshot: CapabilitySnapshot = {
+      ...selectedSnapshot,
+      connectors: selectedSnapshot.connectors.map((connector) => ({
+        ...connector,
+        connected: false,
+        connectionState: 'missing',
+        taskSelected: false,
+      })),
+      selection: {
+        ...selectedSnapshot.selection,
+        connectorIds: [],
+      },
+    }
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => disconnectedSnapshot),
+      setSelection: vi.fn(),
+      startAuth: vi.fn(async () => {
+        throw new Error('Runtime adapter unavailable')
+      }),
+      refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
+      subscribe: () => () => {},
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    const openWindow = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+      />
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-connectors-nav').click()
+    await page.getByTestId('capability-connector-connector.feishu').click()
+
+    const notice = page.getByTestId('composer-notice')
+    await expect
+      .element(notice)
+      .toHaveTextContent('暂时无法打开账号连接。请重试。')
+    await expect.element(notice).not.toHaveTextContent(/Runtime|adapter/)
+    openWindow.mockRestore()
   })
 })

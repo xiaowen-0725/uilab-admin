@@ -2,10 +2,13 @@
  * WorkBuddy-style Composer「+」menu:
  * compact root + lateral submenu (DropdownMenu Sub), not a full-width panel.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type RefObject } from 'react'
 import {
+  ArrowRight,
   BookOpen,
+  CircleAlert,
   CircleDashed,
+  CircleHelp,
   Lightbulb,
   Link2,
   Paperclip,
@@ -26,7 +29,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Switch } from '@/components/ui/switch'
 import {
   CONNECTOR_FEISHU_ID,
   CONNECTOR_GITHUB_ID,
@@ -62,42 +64,35 @@ function ConnectorGlyph({
   connector: CapabilitySnapshotConnector
 }) {
   if (connector.id === CONNECTOR_GITHUB_ID) {
-    return <GitHubBrandIcon className='size-4' title={connector.name} />
+    return (
+      <GitHubBrandIcon className='size-4' title={connector.name} aria-hidden />
+    )
   }
   if (connector.id === CONNECTOR_FEISHU_ID) {
-    return <FeishuBrandIcon className='size-4' title={connector.name} />
+    return (
+      <FeishuBrandIcon className='size-4' title={connector.name} aria-hidden />
+    )
   }
   return (
-    <span className='flex size-4 items-center justify-center text-[10px] font-semibold text-muted-foreground'>
+    <span
+      className='flex size-4 items-center justify-center text-[10px] font-semibold text-muted-foreground'
+      aria-hidden
+    >
       {connector.name.slice(0, 1)}
     </span>
   )
 }
 
-function connectorAuthSource(connector: CapabilitySnapshotConnector): string {
-  const primaryAuth = connector.channelAuth?.find(
-    (row) => row.channel === connector.primaryChannel
-  )
-  const authKind = primaryAuth?.authKind ?? connector.channelAuth?.[0]?.authKind
-  if (authKind === 'cli_session') return 'CLI Session'
-  if (authKind === 'oauth2') return 'OAuth'
-  if (authKind === 'static_bearer') return '访问凭据'
-  return '账号'
-}
-
 function connectorAccountStatus(
   connector: CapabilitySnapshotConnector
 ): string {
-  const status = (() => {
-    if (connector.connected) return '已连接'
-    if (connector.connectionState === 'auth_in_progress') return '连接中'
-    if (connector.connectionState === 'expired') return '授权已过期'
-    if (connector.connectionState === 'error') return '连接异常'
-    if (connector.connectionState === 'unavailable') return '当前不可用'
-    if (connector.connectionState === 'none_required') return '无需连接'
-    return '未连接'
-  })()
-  return `${status} · ${connectorAuthSource(connector)}`
+  if (connector.connected) return '已连接'
+  if (connector.connectionState === 'auth_in_progress') return '连接中'
+  if (connector.connectionState === 'expired') return '授权已过期'
+  if (connector.connectionState === 'error') return '连接异常'
+  if (connector.connectionState === 'unavailable') return '当前不可用'
+  if (connector.connectionState === 'none_required') return '无需连接'
+  return '未连接'
 }
 
 function SubSearch({
@@ -105,26 +100,35 @@ function SubSearch({
   onChange,
   placeholder,
   testId,
+  inputRef,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
   testId: string
+  inputRef: RefObject<HTMLInputElement | null>
 }) {
   return (
-    <label className='mb-1 flex h-8 items-center gap-1.5 rounded-lg bg-muted/40 px-2 text-muted-foreground'>
+    <label className='mb-1 flex h-10 items-center gap-1.5 rounded-lg bg-muted/40 px-2 text-muted-foreground'>
       <Search className='size-3.5 shrink-0' aria-hidden />
       <input
+        ref={inputRef}
         type='search'
         id={testId}
         name={testId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder.replace('（按 /）', '')}
+        aria-keyshortcuts='/'
         data-testid={testId}
-        className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground'
+        className='h-10 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground'
         // Keep focus inside submenu; don't let menu typeahead steal keys
-        onKeyDown={(e) => e.stopPropagation()}
+        onKeyDown={(event) => {
+          if (!['Escape', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+            event.stopPropagation()
+          }
+        }}
         onClick={(e) => e.stopPropagation()}
       />
     </label>
@@ -152,6 +156,22 @@ export function CapabilityAddMenu({
   const [connectorQuery, setConnectorQuery] = useState('')
   const [skillQuery, setSkillQuery] = useState('')
   const [expertQuery, setExpertQuery] = useState('')
+  const supportDetails = [snapshot?.honesty.note, errorMessage]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join('\n')
+  const expertSearchRef = useRef<HTMLInputElement>(null)
+  const skillSearchRef = useRef<HTMLInputElement>(null)
+  const connectorSearchRef = useRef<HTMLInputElement>(null)
+
+  const focusSearchOnShortcut = (
+    event: React.KeyboardEvent,
+    inputRef: RefObject<HTMLInputElement | null>
+  ) => {
+    if (event.key !== '/' || event.target instanceof HTMLInputElement) return
+    event.preventDefault()
+    event.stopPropagation()
+    inputRef.current?.focus()
+  }
 
   const connectors = useMemo(() => {
     const rows = snapshot?.connectors ?? []
@@ -212,7 +232,7 @@ export function CapabilityAddMenu({
       >
         <DropdownMenuItem
           data-testid='composer-add-files'
-          className='gap-2 rounded-lg px-2 py-2'
+          className='min-h-10 gap-2 rounded-lg px-2 py-2'
           onClick={() => {
             onPickFiles()
             onOpenChange(false)
@@ -225,7 +245,7 @@ export function CapabilityAddMenu({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger
             data-testid='composer-add-mode-nav'
-            className='gap-2 rounded-lg px-2 py-2'
+            className='min-h-10 gap-2 rounded-lg px-2 py-2'
           >
             <Sparkles className='size-4' />
             <span className='flex-1'>模式</span>
@@ -238,7 +258,7 @@ export function CapabilityAddMenu({
           >
             <DropdownMenuItem
               data-testid='composer-add-goal'
-              className='gap-2 rounded-lg px-2 py-2'
+              className='min-h-10 gap-2 rounded-lg px-2 py-2'
               onClick={() => {
                 onEnableGoal()
                 onOpenChange(false)
@@ -249,7 +269,7 @@ export function CapabilityAddMenu({
             </DropdownMenuItem>
             <DropdownMenuItem
               data-testid='composer-add-plan'
-              className='gap-2 rounded-lg px-2 py-2'
+              className='min-h-10 gap-2 rounded-lg px-2 py-2'
               onClick={() => {
                 onEnablePlan()
                 onOpenChange(false)
@@ -264,7 +284,7 @@ export function CapabilityAddMenu({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger
             data-testid='composer-add-experts-nav'
-            className='gap-2 rounded-lg px-2 py-2'
+            className='min-h-10 gap-2 rounded-lg px-2 py-2'
           >
             <UserRound className='size-4' />
             <span className='flex-1'>专家</span>
@@ -275,18 +295,20 @@ export function CapabilityAddMenu({
             sideOffset={6}
             className='max-h-72 w-64 rounded-xl p-1.5'
             data-testid='capability-experts-submenu'
+            onKeyDown={(event) => focusSearchOnShortcut(event, expertSearchRef)}
           >
             <SubSearch
               value={expertQuery}
               onChange={setExpertQuery}
-              placeholder='搜索专家'
+              placeholder='搜索专家（按 /）'
               testId='capability-expert-search'
+              inputRef={expertSearchRef}
             />
             <div className='max-h-52 overflow-y-auto'>
               <DropdownMenuCheckboxItem
                 checked={!snapshot?.selection.expertId}
                 data-testid='capability-expert-none'
-                className='rounded-lg'
+                className='min-h-10 rounded-lg px-2'
                 // Keep submenu open while toggling
                 closeOnClick={false}
                 onCheckedChange={(checked) => {
@@ -306,7 +328,7 @@ export function CapabilityAddMenu({
                     key={e.id}
                     checked={snapshot?.selection.expertId === e.id}
                     data-testid={`capability-expert-${e.id}`}
-                    className='rounded-lg'
+                    className='min-h-10 rounded-lg px-2'
                     closeOnClick={false}
                     onCheckedChange={(checked) => {
                       onSelectExpert(checked ? e.id : null)
@@ -318,8 +340,8 @@ export function CapabilityAddMenu({
                 ))
               )}
             </div>
-            <p className='px-1.5 pt-1 text-[10px] leading-snug text-muted-foreground'>
-              临时配置包目录；仅影响后续 Turn
+            <p className='px-1.5 pt-1 text-xs leading-5 text-muted-foreground'>
+              选择专家后，将从下一次发送开始生效
             </p>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
@@ -327,7 +349,7 @@ export function CapabilityAddMenu({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger
             data-testid='composer-add-skills-nav'
-            className='gap-2 rounded-lg px-2 py-2'
+            className='min-h-10 gap-2 rounded-lg px-2 py-2'
           >
             <BookOpen className='size-4' />
             <span className='flex-1'>技能</span>
@@ -338,12 +360,14 @@ export function CapabilityAddMenu({
             sideOffset={6}
             className='max-h-72 w-64 rounded-xl p-1.5'
             data-testid='capability-skills-submenu'
+            onKeyDown={(event) => focusSearchOnShortcut(event, skillSearchRef)}
           >
             <SubSearch
               value={skillQuery}
               onChange={setSkillQuery}
-              placeholder='搜索技能'
+              placeholder='搜索技能（按 /）'
               testId='capability-skill-search'
+              inputRef={skillSearchRef}
             />
             <div className='max-h-52 overflow-y-auto'>
               {skills.length === 0 ? (
@@ -356,7 +380,7 @@ export function CapabilityAddMenu({
                     key={s.id}
                     checked={s.taskSelected}
                     data-testid={`capability-skill-${s.id}`}
-                    className='rounded-lg'
+                    className='min-h-10 rounded-lg px-2'
                     closeOnClick={false}
                     onCheckedChange={(checked) => {
                       onToggleSkill(s.id, Boolean(checked))
@@ -374,7 +398,7 @@ export function CapabilityAddMenu({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger
             data-testid='composer-add-connectors-nav'
-            className='gap-2 rounded-lg px-2 py-2'
+            className='min-h-10 gap-2 rounded-lg px-2 py-2'
           >
             <Link2 className='size-4' />
             <span className='flex-1'>连接器</span>
@@ -385,20 +409,27 @@ export function CapabilityAddMenu({
             sideOffset={6}
             className='max-h-80 w-72 rounded-xl p-1.5'
             data-testid='capability-connectors-submenu'
+            onKeyDown={(event) =>
+              focusSearchOnShortcut(event, connectorSearchRef)
+            }
           >
             <SubSearch
               value={connectorQuery}
               onChange={setConnectorQuery}
-              placeholder='搜索连接器'
+              placeholder='搜索连接器（按 /）'
               testId='capability-connector-search'
+              inputRef={connectorSearchRef}
             />
             {errorMessage ? (
               <div className='space-y-2 px-2 py-2 text-[12px] text-muted-foreground'>
-                <p data-testid='capability-connectors-error'>{errorMessage}</p>
+                <p data-testid='capability-connectors-error' role='alert'>
+                  暂时无法加载连接器。请重试。
+                </p>
                 <button
                   type='button'
-                  className='font-medium text-violet-600 hover:underline dark:text-violet-400'
+                  className='inline-flex min-h-10 items-center font-medium text-violet-600 hover:underline dark:text-violet-400'
                   data-testid='capability-connectors-retry'
+                  aria-label='重试加载连接器'
                   onClick={onRetry}
                 >
                   重试
@@ -425,7 +456,7 @@ export function CapabilityAddMenu({
                         data-testid={`capability-connector-${c.id}`}
                         data-account-connected='false'
                         data-task-selected={c.taskSelected ? 'true' : 'false'}
-                        className='h-auto gap-2 rounded-lg px-2 py-2'
+                        className='h-auto min-h-12 gap-2 rounded-lg px-2 py-2'
                         closeOnClick={false}
                         onClick={() => {
                           void onStartAuth(c.id)
@@ -435,7 +466,7 @@ export function CapabilityAddMenu({
                         <span className='flex min-w-0 flex-1 flex-col'>
                           <span className='truncate'>{c.name}</span>
                           <span
-                            className='truncate text-[11px] text-muted-foreground'
+                            className='truncate text-xs text-muted-foreground'
                             data-testid={`capability-connector-status-${c.id}`}
                           >
                             {accountStatus}
@@ -452,47 +483,38 @@ export function CapabilityAddMenu({
                     )
                   }
                   return (
-                    <DropdownMenuItem
+                    <DropdownMenuCheckboxItem
                       key={c.id}
+                      checked={c.taskSelected}
                       data-testid={`capability-connector-${c.id}`}
                       data-account-connected='true'
                       data-task-selected={c.taskSelected ? 'true' : 'false'}
-                      className='h-auto gap-2 rounded-lg px-2 py-2'
+                      className='h-auto min-h-12 gap-2 rounded-lg px-2 py-2 pr-8'
                       closeOnClick={false}
                       disabled={busy}
+                      aria-label={
+                        c.taskSelected
+                          ? `停止为当前任务启用${c.name}，账号已连接`
+                          : `为当前任务启用${c.name}，账号已连接`
+                      }
+                      onCheckedChange={(checked) => {
+                        onToggleConnector(c.id, Boolean(checked))
+                      }}
                     >
                       <ConnectorGlyph connector={c} />
                       <span className='flex min-w-0 flex-1 flex-col'>
                         <span className='truncate'>{c.name}</span>
                         <span
-                          className='truncate text-[11px] text-muted-foreground'
+                          className='truncate text-xs text-muted-foreground'
                           data-testid={`capability-connector-status-${c.id}`}
                         >
                           {accountStatus}
                         </span>
                       </span>
-                      <span className='flex shrink-0 flex-col items-end gap-0.5'>
-                        <span className='text-[10px] leading-none text-muted-foreground'>
-                          当前任务
-                        </span>
-                        <Switch
-                          checked={c.taskSelected}
-                          disabled={busy}
-                          aria-label={
-                            c.taskSelected
-                              ? `停止为当前任务启用${c.name}`
-                              : `为当前任务启用${c.name}`
-                          }
-                          data-testid={`capability-connector-switch-${c.id}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                          }}
-                          onCheckedChange={(checked) => {
-                            onToggleConnector(c.id, checked)
-                          }}
-                        />
+                      <span className='shrink-0 text-xs font-medium text-muted-foreground'>
+                        {c.taskSelected ? '已启用' : '启用'}
                       </span>
-                    </DropdownMenuItem>
+                    </DropdownMenuCheckboxItem>
                   )
                 })
               )}
@@ -500,26 +522,61 @@ export function CapabilityAddMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               data-testid='capability-manage-connectors'
-              className='gap-2 rounded-lg px-2 py-2'
+              className='min-h-10 gap-2 rounded-lg px-2 py-2'
+              disabled={!onManageConnectors}
+              aria-label={
+                onManageConnectors ? '管理连接器' : '连接器管理暂不可用'
+              }
               onClick={() => {
                 onManageConnectors?.()
               }}
             >
-              <Link2 className='size-4' />
-              <span className='flex-1'>管理连接器</span>
-              <span className='text-[11px] text-muted-foreground'>↗</span>
+              {onManageConnectors ? (
+                <>
+                  <Link2 className='size-4' aria-hidden />
+                  <span className='flex-1'>管理连接器</span>
+                  <ArrowRight
+                    className='size-4 text-muted-foreground'
+                    data-navigation-icon='forward'
+                    aria-hidden
+                  />
+                </>
+              ) : (
+                <>
+                  <CircleAlert className='size-4' aria-hidden />
+                  <span className='flex-1'>连接器管理暂不可用</span>
+                </>
+              )}
             </DropdownMenuItem>
-            {snapshot?.honesty.note ? (
-              <p
-                className='px-1.5 pt-0.5 pb-1 text-[10px] leading-snug text-muted-foreground'
-                data-testid='capability-honesty-note'
-              >
-                {snapshot.honesty.note}
-              </p>
+            {supportDetails ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger
+                  className='min-h-10 gap-2 rounded-lg px-2 py-2'
+                  data-testid='capability-support-nav'
+                  aria-label='查看连接器支持信息'
+                >
+                  <CircleHelp className='size-4' aria-hidden />
+                  <span className='flex-1'>支持信息</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent
+                  side='right'
+                  align='end'
+                  sideOffset={6}
+                  className='w-72 rounded-xl p-2'
+                  data-testid='capability-support-details'
+                >
+                  <p className='px-2 py-1 text-xs font-medium text-foreground'>
+                    连接器诊断信息
+                  </p>
+                  <p className='px-2 py-1.5 text-xs leading-5 text-muted-foreground'>
+                    {supportDetails}
+                  </p>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             ) : null}
             {/* refresh helper after external auth/login completion */}
             <DropdownMenuItem
-              className='gap-2 rounded-lg px-2 py-1.5 text-[12px] text-muted-foreground'
+              className='min-h-10 gap-2 rounded-lg px-2 py-2 text-xs text-muted-foreground'
               data-testid='capability-connector-refresh-global'
               closeOnClick={false}
               onClick={() => {

@@ -800,8 +800,8 @@ export function TaskComposer({
       .then(() => {
         setNotice(formatTaskConnectorSelectionNotice(connectorName, selected))
       })
-      .catch((err) => {
-        setNotice(err instanceof Error ? err.message : '更新连接器选用失败')
+      .catch(() => {
+        setNotice('暂时无法更新当前任务的连接器。请重试。')
       })
       .finally(() => setCapabilityBusy(false))
   }
@@ -813,20 +813,44 @@ export function TaskComposer({
     const next = selected
       ? [...new Set([...prev, skillId])]
       : prev.filter((id) => id !== skillId)
+    const skillName =
+      capabilitySnapshot?.skills.find((skill) => skill.id === skillId)?.name ??
+      '技能'
     setCapabilityBusy(true)
     void capabilityController
       .setSelection(taskId, { skillIds: next })
+      .then(() => {
+        setNotice(
+          selected
+            ? `已为当前任务启用技能「${skillName}」，将从下次发送开始生效。`
+            : `已停止为当前任务启用技能「${skillName}」。`
+        )
+      })
+      .catch(() => {
+        setNotice('暂时无法更新当前任务的技能。请重试。')
+      })
       .finally(() => setCapabilityBusy(false))
   }
 
   const handleSelectExpert = (expertId: string | null) => {
     const taskId = capabilityTaskId
     if (!taskId || !capabilityController) return
+    const expertName = expertId
+      ? (capabilitySnapshot?.experts.find((expert) => expert.id === expertId)
+          ?.name ?? '专家')
+      : null
     setCapabilityBusy(true)
     void capabilityController
       .setSelection(taskId, { expertId })
       .then(() => {
-        setNotice(expertId ? '已选用专家（仅后续 Turn 生效）' : '已清除专家')
+        setNotice(
+          expertId
+            ? `已选用专家「${expertName}」，将从下次发送开始生效。`
+            : '已清除专家。'
+        )
+      })
+      .catch(() => {
+        setNotice('暂时无法更新当前任务的专家。请重试。')
       })
       .finally(() => setCapabilityBusy(false))
   }
@@ -872,7 +896,7 @@ export function TaskComposer({
                   'noopener,noreferrer'
                 )
               }
-              setNotice(transition.message)
+              setNotice('需要继续完成账号授权。请在新打开的页面中操作。')
             },
           }).then((connected) => {
             if (connected && authWindow && !authWindow.closed) {
@@ -888,9 +912,9 @@ export function TaskComposer({
       } else {
         authWindow?.close()
       }
-    } catch (err) {
+    } catch {
       authWindow?.close()
-      setNotice(err instanceof Error ? err.message : '启动登录失败')
+      setNotice('暂时无法打开账号连接。请重试。')
     } finally {
       setCapabilityBusy(false)
     }
@@ -914,9 +938,13 @@ export function TaskComposer({
           'noopener,noreferrer'
         )
       }
-      setNotice(continuation?.message ?? '已刷新所有连接器状态')
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : '刷新连接状态失败')
+      setNotice(
+        continuation
+          ? '需要继续完成账号授权。请在新打开的页面中操作。'
+          : '已刷新所有连接器状态。'
+      )
+    } catch {
+      setNotice('暂时无法刷新连接状态。请重试。')
     } finally {
       setCapabilityBusy(false)
     }
@@ -932,7 +960,7 @@ export function TaskComposer({
       }}
       trigger={
         <ComposerIconButton
-          aria-label='添加文件等内容'
+          aria-label='添加文件、模式、专家、技能或连接器'
           data-testid='composer-add'
           aria-expanded={addOpen}
           aria-haspopup='menu'
@@ -948,10 +976,8 @@ export function TaskComposer({
         setCapabilityBusy(true)
         void capabilityController
           .refresh(capabilityTaskId)
-          .catch((error) => {
-            setNotice(
-              error instanceof Error ? error.message : '连接器状态刷新失败'
-            )
+          .catch(() => {
+            setNotice('暂时无法加载连接器。请重试。')
           })
           .finally(() => setCapabilityBusy(false))
       }}
