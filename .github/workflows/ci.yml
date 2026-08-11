@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,7 +37,7 @@ jobs:
       #   run: pnpm knip
 
       - name: Run Prettier check
-        run: pnpm format:check
+        run: pnpm format:check:changed -- "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.sha }}"
 
       - name: Typecheck (includes Workbench sidecar)
         run: pnpm typecheck

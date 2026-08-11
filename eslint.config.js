@@ -55,5 +55,13 @@ export default defineConfig(
       // Prevent duplicate imports from the same module
       'no-duplicate-imports': 'error',
     },
+  },
+  {
+    // Scaffold component identifiers intentionally contain replacement tokens
+    // (for example __Domain__Table) until the CLI materializes an application.
+    files: ['archetypes/admin/scaffolds/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
   }
 )

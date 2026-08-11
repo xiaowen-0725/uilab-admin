@@ -14,6 +14,7 @@
     "preview:workbench": "pnpm --filter @uilab/agent-workbench preview",
     "capability:feishu-shell-smoke": "pnpm --filter @uilab/workbench-runtime-voltagent capability:feishu-shell-smoke",
     "format:check": "pnpm --filter @uilab/admin format:check",
+    "format:check:changed": "node tooling/quality-gates/check-admin-format-changed.mjs",
     "format": "pnpm --filter @uilab/admin format",
     "knip": "pnpm --filter @uilab/admin knip",
     "test": "pnpm --filter @uilab/foundation test && pnpm --filter @uilab/admin test && pnpm --filter @uilab/agent-workbench test && pnpm --filter @uilab/workbench-runtime-voltagent test",

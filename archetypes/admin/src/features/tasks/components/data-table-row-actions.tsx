@@ -1,6 +1,5 @@
-import { MoreHorizontal as DotsHorizontalIcon } from 'lucide-react'
 import { type Row } from '@tanstack/react-table'
-import { Trash2 } from 'lucide-react'
+import { MoreHorizontal as DotsHorizontalIcon, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -32,13 +31,17 @@ export function DataTableRowActions<TData>({
 
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger render={<Button
-          variant='ghost'
-          className='flex h-8 w-8 p-0 data-[state=open]:bg-muted'
-        >
-          <DotsHorizontalIcon className='h-4 w-4' />
-          <span className='sr-only'>打开菜单</span>
-        </Button>} />
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant='ghost'
+            className='flex h-8 w-8 p-0 data-[state=open]:bg-muted'
+          >
+            <DotsHorizontalIcon className='h-4 w-4' />
+            <span className='sr-only'>打开菜单</span>
+          </Button>
+        }
+      />
       <DropdownMenuContent align='end' className='w-40'>
         <DropdownMenuItem
           onClick={() => {
