@@ -54,6 +54,7 @@ import {
   type ConnectorOAuthFetch,
 } from './capability/connector-oauth.js'
 import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-sandbox.js'
+import { revokeAuthResource } from './plugin/revoke-auth-resource.js'
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
@@ -118,6 +119,11 @@ export type WorkbenchAgentBundle = {
   reconcileConnectorAuth?: (
     connectorId?: string,
   ) => Promise<ConnectorCliAuthTransition[]>
+  /** Revoke one descriptor-owned auth resource; no Provider-specific branch. */
+  revokeConnectorAuth?: (connectorId: string) => Promise<{
+    message: string
+    needsSidecarRestart: boolean
+  }>
   disconnectMcp: () => Promise<void>
 }
 
@@ -169,15 +175,17 @@ export async function createWorkbenchAgent(
       cliRunner: options.cliRunner,
     })
     const authStores = registry.getAuthRuntimeStores()
-    if (!authStores.bindingStore) {
+    const bindingStore = authStores.bindingStore
+    if (!bindingStore) {
       throw new Error('Office OAuth Runtime 缺少 AuthBindingStore')
     }
+    const manifests = registry.listManifests()
     const connectorOAuth = createConnectorOAuthRuntime({
       env,
       descriptors: registry.listConnectorDescriptors(),
-      manifests: registry.listManifests(),
+      manifests,
       secretStore: authStores.secretStore,
-      bindingStore: authStores.bindingStore,
+      bindingStore,
       fetchImpl: options.oauthFetch,
     })
     const plugins = await registry.load({ workspaceRoot })
@@ -206,7 +214,7 @@ export async function createWorkbenchAgent(
     const connectorCliAuth = createConnectorCliAuthRuntime({
       env,
       descriptors: plugins.connectorDescriptors,
-      manifests: registry.listManifests(),
+      manifests,
       enabledPluginIds,
       runner: options.cliRunner ?? defaultCliRunner,
       processRunner:
@@ -223,7 +231,7 @@ export async function createWorkbenchAgent(
         workspaceRoot,
         env,
         connectors: plugins.connectorDescriptors,
-        manifests: registry.listManifests(),
+        manifests,
         resolveConnectorAccess: async (connectorId, turnContext) => {
           const descriptor = plugins.connectorDescriptors.find(
             (connector) => connector.id === connectorId,
@@ -402,6 +410,34 @@ export async function createWorkbenchAgent(
       liveAuthStatuses = await refreshAuthStatuses()
       return cliTransitions
     }
+    const revokeConnectorAuth = async (connectorId: string) => {
+      const descriptor = plugins.connectorDescriptors.find(
+        (candidate) => candidate.id === connectorId,
+      )
+      if (!descriptor) throw new Error(`未找到连接器：${connectorId}`)
+
+      const pluginId = descriptor.authSummarySource.pluginId
+      const resourceId = descriptor.authSummarySource.resourceId
+      const resource = manifests
+        .find((manifest) => manifest.id === pluginId)
+        ?.contributes?.auth?.find(
+          (candidate) => candidate.resourceId === resourceId,
+        )
+      if (!resource) {
+        throw new Error(`连接器未声明可撤销的账号资源：${connectorId}`)
+      }
+
+      const result = await revokeAuthResource({
+        pluginId,
+        resource,
+        bindingStore,
+        secretStore: authStores.secretStore,
+      })
+      return {
+        message: `已撤销「${descriptor.name}」账号连接`,
+        needsSidecarRestart: result.needsSidecarRestart,
+      }
+    }
 
     let discoverableSkillIds: string[] = []
     try {
@@ -443,6 +479,7 @@ export async function createWorkbenchAgent(
       beginConnectorCliSession: (connectorId, domains) =>
         connectorCliAuth.begin(connectorId, domains),
       reconcileConnectorAuth,
+      revokeConnectorAuth,
       disconnectMcp: async () => {
         await connectorCliAuth.dispose()
         for (const disconnect of dynamicMcpDisconnectors) await disconnect()

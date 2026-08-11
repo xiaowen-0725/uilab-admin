@@ -9,6 +9,7 @@
 export type {
   CapabilityConnectionState,
   CapabilitySnapshot,
+  CapabilityAuthRevokeResult,
   CapabilityAuthRefreshResult,
   ConnectorAuthTransition,
   CapabilitySnapshotConnector,
@@ -76,3 +77,8 @@ export {
   FeishuBrandIcon,
   GitHubBrandIcon,
 } from './ui/brand-icons'
+
+export {
+  CapabilityManagementSurface,
+  type CapabilityManagementSurfaceProps,
+} from './ui/capability-management-surface'

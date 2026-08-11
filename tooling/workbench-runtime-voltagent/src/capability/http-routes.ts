@@ -68,6 +68,10 @@ export type CapabilityHttpContext = {
       message: string
     }>
   >
+  revokeConnectorAuth?: (connectorId: string) => Promise<{
+    message: string
+    needsSidecarRestart: boolean
+  }>
 }
 
 /** Boot-time expert catalog load (files first, builtin fallback). */
@@ -251,6 +255,65 @@ export function mountCapabilityRoutes<
       experts: resolveExperts(ctx),
     })
     return c.json({ ok: true, snapshot, transitions })
+  })
+
+  app.post('/capability/auth/revoke', async (c) => {
+    let body: { connectorId?: string; taskId?: string | null }
+    try {
+      body = (await c.req.json()) as typeof body
+    } catch {
+      return c.json({ ok: false, error: 'invalid_json' }, 400)
+    }
+    const connectorId = body.connectorId?.trim()
+    if (!connectorId) {
+      return c.json({ ok: false, error: 'missing_connectorId' }, 400)
+    }
+    if (!ctx.getConnectorDescriptors().some((row) => row.id === connectorId)) {
+      return c.json({ ok: false, error: 'connector_not_found' }, 404)
+    }
+    if (!ctx.revokeConnectorAuth) {
+      return c.json({ ok: false, error: 'revoke_not_supported' }, 501)
+    }
+
+    const taskId = body.taskId?.trim() || store.getActiveTaskId()
+    if (taskId) store.setActiveTaskId(taskId)
+
+    try {
+      const result = await ctx.revokeConnectorAuth(connectorId)
+      ctx.versionRef.current += 1
+      const authStatuses = ctx.refreshAuthStatuses
+        ? await ctx.refreshAuthStatuses()
+        : await ctx.getAuthStatuses()
+      const snapshot = buildCapabilitySnapshot({
+        version: ctx.versionRef.current,
+        taskId,
+        selectionStore: store,
+        authStatuses,
+        enabledPluginIds: ctx.getEnabledPluginIds(),
+        packagedToolNames: ctx.getPackagedToolNames(),
+        cliStatuses: ctx.getCliStatuses(),
+        descriptors: ctx.getConnectorDescriptors(),
+        discoverableSkillIds: ctx.getDiscoverableSkillIds?.() ?? [],
+        experts: resolveExperts(ctx),
+      })
+      return c.json({
+        ok: true,
+        connectorId,
+        message: result.message,
+        needsSidecarRestart: result.needsSidecarRestart,
+        snapshot,
+      })
+    } catch (cause) {
+      return c.json(
+        {
+          ok: false,
+          error: 'revoke_failed',
+          message:
+            cause instanceof Error ? cause.message : '撤销连接失败，请重试',
+        },
+        500,
+      )
+    }
   })
 }
 

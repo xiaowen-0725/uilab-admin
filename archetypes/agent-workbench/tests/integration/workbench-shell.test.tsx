@@ -150,6 +150,36 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
+  it('opens one capability management surface from Navigator and Composer, then returns to Task', async () => {
+    await page.viewport(1440, 900)
+    await renderWorkbenchWithTask()
+
+    await userEvent.click(page.getByTestId('navigator-menu-skills-connectors'))
+    await expect
+      .element(page.getByTestId('capability-management-surface'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByRole('heading', { name: '专家、技能与连接器' }))
+      .toBeInTheDocument()
+
+    await userEvent.click(page.getByTestId('capability-management-back'))
+    await expect.element(page.getByTestId('task-surface')).toBeInTheDocument()
+
+    await userEvent.click(page.getByTestId('composer-add'))
+    await userEvent.click(page.getByTestId('composer-add-connectors-nav'))
+    await userEvent.click(page.getByTestId('capability-manage-connectors'))
+
+    await expect
+      .element(page.getByTestId('capability-management-surface'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('navigator-menu-skills-connectors'))
+      .toHaveAttribute('aria-current', 'page')
+
+    await userEvent.click(page.getByTestId('navigator-new-chat'))
+    await expect.element(page.getByTestId('task-surface')).toBeInTheDocument()
+  })
+
   it('Task-only: 44px Task toolbar, single title, no subtitle, icon controls', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()

@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import type { ProjectSummary, TaskSummary } from '@/modules/project'
 import {
   ChevronDown,
   Filter,
@@ -12,9 +13,8 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,8 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { ProjectSummary, TaskSummary } from '@/modules/project'
-import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { NavigatorUserMenu } from './navigator-user-menu'
 
 export interface NavigatorProps {
@@ -46,6 +46,8 @@ export interface NavigatorProps {
   /** Collapse / open left rail (control lives on the rail, not Task chrome). */
   onToggleNavigator?: () => void
   onOpenSettings?: () => void
+  activeDestination?: 'task' | 'capabilities'
+  onOpenCapabilities?: () => void
 }
 
 type NavItemId = 'new-chat' | 'board' | 'skills-connectors' | 'automation'
@@ -54,14 +56,23 @@ type NavItem = {
   id: NavItemId
   label: string
   icon: LucideIcon
-  /** Only 新对话 is wired today. */
-  action?: 'new-chat'
+  action?: 'new-chat' | 'open-capabilities'
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
-  { id: 'new-chat', label: '新对话', icon: MessageSquarePlus, action: 'new-chat' },
+  {
+    id: 'new-chat',
+    label: '新对话',
+    icon: MessageSquarePlus,
+    action: 'new-chat',
+  },
   { id: 'board', label: '看板', icon: Kanban },
-  { id: 'skills-connectors', label: '专家·技能·连接器', icon: Puzzle },
+  {
+    id: 'skills-connectors',
+    label: '专家·技能·连接器',
+    icon: Puzzle,
+    action: 'open-capabilities',
+  },
   { id: 'automation', label: '自动化', icon: Workflow },
 ]
 
@@ -105,12 +116,13 @@ export function Navigator({
   onClose,
   onToggleNavigator,
   onOpenSettings,
+  activeDestination = 'task',
+  onOpenCapabilities,
 }: NavigatorProps) {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
-  const [activeNav, setActiveNav] = useState<NavItemId>('new-chat')
   const [tasksExpanded, setTasksExpanded] = useState(true)
 
   const filterActive = statusFilter !== 'all' || timeFilter !== 'all'
@@ -124,8 +136,8 @@ export function Navigator({
   }, [tasks, query])
 
   const handleNavClick = (item: NavItem) => {
-    setActiveNav(item.id)
     if (item.action === 'new-chat') onNewChat?.()
+    if (item.action === 'open-capabilities') onOpenCapabilities?.()
   }
 
   const resetFilters = () => {
@@ -177,7 +189,10 @@ export function Navigator({
             render={
               <button
                 type='button'
-                className={cn(iconBtnClass, filterActive && 'bg-sidebar-accent text-foreground')}
+                className={cn(
+                  iconBtnClass,
+                  filterActive && 'bg-sidebar-accent text-foreground'
+                )}
                 tabIndex={tabIndex}
                 aria-label='筛选'
                 data-testid='navigator-filter'
@@ -234,7 +249,7 @@ export function Navigator({
         ) : null}
       </div>
 
-      <div className='shrink-0 px-3.5 pb-2 pt-1'>
+      <div className='shrink-0 px-3.5 pt-1 pb-2'>
         <p className='truncate text-[13px] leading-5 tracking-tight text-foreground'>
           Workbench
           <span className='ms-1.5 text-foreground/60'>{DISPLAY_VERSION}</span>
@@ -266,17 +281,22 @@ export function Navigator({
         <ul className='flex flex-col gap-0.5'>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
-            const selected = activeNav === item.id
-            const wired = item.action === 'new-chat'
+            const selected =
+              (item.action === 'new-chat' && activeDestination === 'task') ||
+              (item.action === 'open-capabilities' &&
+                activeDestination === 'capabilities')
+            const wired = item.action != null
             return (
               <li key={item.id}>
                 <button
                   type='button'
                   data-testid={
-                    wired ? 'navigator-new-chat' : `navigator-menu-${item.id}`
+                    item.action === 'new-chat'
+                      ? 'navigator-new-chat'
+                      : `navigator-menu-${item.id}`
                   }
                   tabIndex={tabIndex}
-                  aria-current={selected ? 'true' : undefined}
+                  aria-current={selected ? 'page' : undefined}
                   title={
                     wired ? item.label : `${item.label}（菜单占位，功能未接入）`
                   }
@@ -285,7 +305,7 @@ export function Navigator({
                     'hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/50',
                     selected
                       ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-foreground',
+                      : 'text-foreground'
                   )}
                   onClick={() => handleNavClick(item)}
                 >
@@ -334,14 +354,14 @@ export function Navigator({
           >
             <span>
               任务
-              <span className='ms-0.5 tabular-nums text-foreground/50'>
+              <span className='ms-0.5 text-foreground/50 tabular-nums'>
                 ({filteredTasks.length})
               </span>
             </span>
             <ChevronDown
               className={cn(
                 'size-3.5 shrink-0 text-foreground/55 transition-transform',
-                !tasksExpanded && '-rotate-90',
+                !tasksExpanded && '-rotate-90'
               )}
               aria-hidden
             />
@@ -431,7 +451,10 @@ function RailIconButton({
   return (
     <button
       type='button'
-      className={cn(iconBtnClass, pressed && 'bg-sidebar-accent text-foreground')}
+      className={cn(
+        iconBtnClass,
+        pressed && 'bg-sidebar-accent text-foreground'
+      )}
       tabIndex={tabIndex}
       aria-label={ariaLabel}
       aria-pressed={pressed}
@@ -506,7 +529,7 @@ function TaskRow({
           'hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/50',
           selected
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-            : 'text-foreground/90',
+            : 'text-foreground/90'
         )}
         onClick={() => onSelect(task.id)}
       >

@@ -9,6 +9,7 @@ import {
 } from '../model/task-selection'
 import type {
   CapabilitySnapshot,
+  CapabilityAuthRevokeResult,
   CapabilityAuthRefreshResult,
   CapabilitySnapshotPort,
   StartAuthResult,
@@ -36,6 +37,10 @@ export type CapabilityController = {
     taskId?: string | null,
     connectorId?: string
   ): Promise<CapabilityAuthRefreshResult>
+  revokeAuth(
+    taskId: string | null | undefined,
+    connectorId: string
+  ): Promise<CapabilityAuthRevokeResult>
   clearTask(taskId: string): void
   subscribe(listener: (snapshot: CapabilitySnapshot | null) => void): () => void
   dispose(): void
@@ -149,6 +154,16 @@ export function createCapabilityController(
 
     async refreshAuth(taskId, connectorId) {
       const result = await port.refreshAuth(taskId, connectorId)
+      if (!activeTaskId || result.snapshot.taskId === activeTaskId) {
+        cache = result.snapshot
+        error = null
+        emit()
+      }
+      return result
+    },
+
+    async revokeAuth(taskId, connectorId) {
+      const result = await port.revokeAuth(taskId, connectorId)
       if (!activeTaskId || result.snapshot.taskId === activeTaskId) {
         cache = result.snapshot
         error = null

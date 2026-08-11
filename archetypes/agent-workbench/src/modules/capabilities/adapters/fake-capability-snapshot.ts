@@ -199,6 +199,19 @@ export function createFakeCapabilitySnapshotPort(
       return { snapshot: snap, transitions: [] }
     },
 
+    async revokeAuth(taskId, connectorId) {
+      lastTaskId = taskId?.trim() || lastTaskId
+      version += 1
+      const snap = build(lastTaskId)
+      notify(snap)
+      return {
+        snapshot: snap,
+        connectorId,
+        message: 'Fake Runtime 没有可撤销的真实账号连接。',
+        needsSidecarRestart: false,
+      }
+    },
+
     subscribe(listener) {
       listeners.add(listener)
       return () => {

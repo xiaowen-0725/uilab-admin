@@ -10,6 +10,7 @@ export function useCapabilitySnapshot(
   controller: CapabilityController | null | undefined,
   taskId: string | null | undefined
 ): CapabilitySnapshot | null {
+  const normalizedTaskId = taskId?.trim() || null
   const snapshot = useSyncExternalStore(
     (onStoreChange) => {
       if (!controller) return () => {}
@@ -20,13 +21,13 @@ export function useCapabilitySnapshot(
   )
 
   useEffect(() => {
-    if (!controller || !taskId) return
-    void controller.refresh(taskId).catch(() => {
+    if (!controller) return
+    void controller.refresh(normalizedTaskId).catch(() => {
       // Sidecar may be down; Fake always succeeds.
     })
-  }, [controller, taskId])
+  }, [controller, normalizedTaskId])
 
-  if (!taskId || snapshot?.taskId !== taskId) return null
+  if (snapshot?.taskId !== normalizedTaskId) return null
   return snapshot
 }
 
@@ -34,11 +35,12 @@ export function useCapabilitySnapshotError(
   controller: CapabilityController | null | undefined,
   taskId: string | null | undefined
 ): CapabilityControllerError | null {
+  const normalizedTaskId = taskId?.trim() || null
   const error = useSyncExternalStore(
     (onStoreChange) =>
       controller?.subscribe(() => onStoreChange()) ?? (() => {}),
     () => controller?.getError() ?? null,
     () => controller?.getError() ?? null
   )
-  return error?.taskId === taskId ? error : null
+  return error?.taskId === normalizedTaskId ? error : null
 }

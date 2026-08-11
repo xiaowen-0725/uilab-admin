@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react'
 import type { RunStatus } from '../../model/lifecycle'
+import type { StreamViewModel } from '../../model/stream-events'
+import type {
+  ContextSection,
+  LaunchAction,
+  TaskContentMode,
+} from '../../model/types'
+import type { TaskReadModel } from '../../projection/types'
 import type {
   CommandAcknowledgement,
   TurnComposerContext,
 } from '../../protocol/commands'
-import type { ContextSection, LaunchAction, TaskContentMode } from '../../model/types'
-import type { TaskReadModel } from '../../projection/types'
-import type { StreamViewModel } from '../../model/stream-events'
+import type { RuntimeHonestyMode } from '../../runtime/runtime-honesty'
 import {
   ApprovalDock,
   findPendingApproval,
@@ -15,11 +20,7 @@ import { Composer } from '../composer/composer'
 import { ContextPanel } from '../context-panel/context-panel'
 import { EmptyHub } from '../empty-hub/empty-hub'
 import { ExecutionStream } from '../execution-stream/execution-stream'
-import type { RuntimeHonestyMode } from '../../runtime/runtime-honesty'
-import {
-  Timeline,
-  type TimelineOpenFileRef,
-} from '../timeline/timeline'
+import { Timeline, type TimelineOpenFileRef } from '../timeline/timeline'
 
 export interface TaskSurfaceView {
   taskId: string
@@ -43,7 +44,7 @@ export interface TaskSurfaceComposerRuntime {
   runStatus?: RunStatus | null
   onSubmitText?: (
     text: string,
-    composerContext?: TurnComposerContext,
+    composerContext?: TurnComposerContext
   ) => Promise<CommandAcknowledgement | null>
   onCancelRun?: () => void | Promise<void>
   runtimeNotice?: string | null
@@ -57,9 +58,13 @@ export interface TaskSurfaceComposerRuntime {
   /** Runtime-owned label; runtime mode does not pretend a local picker is wired. */
   modelLabel?: string
   /** Capability Surface controller (Composition-owned). */
-  capabilityController?: import('@/modules/capabilities').CapabilityController | null
+  capabilityController?:
+    | import('@/modules/capabilities').CapabilityController
+    | null
   /** Active task id for capability selection persistence. */
   capabilityTaskId?: string | null
+  /** Open the shared global capability management Surface. */
+  onManageCapabilities?: () => void
 }
 
 export interface TaskSurfaceProps {
@@ -99,7 +104,7 @@ export function TaskSurface({
       view.mode === 'runtime'
         ? findPendingApproval(view.readModel?.timeline)
         : null,
-    [view.mode, view.readModel?.timeline],
+    [view.mode, view.readModel?.timeline]
   )
 
   return (
@@ -156,6 +161,7 @@ export function TaskSurface({
               capabilityTaskId={
                 composerRuntime?.capabilityTaskId ?? view.taskId
               }
+              onManageCapabilities={composerRuntime?.onManageCapabilities}
               // Codex top-rail stack: rail always on for depth; project chip only on empty hub.
               showContextBar
               showProjectChip={view.mode === 'empty'}
