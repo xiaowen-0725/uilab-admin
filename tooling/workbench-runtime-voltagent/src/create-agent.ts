@@ -123,6 +123,8 @@ export type WorkbenchAgentBundle = {
   revokeConnectorAuth?: (connectorId: string) => Promise<{
     message: string
     needsSidecarRestart: boolean
+    /** True when the live MCP transport was disconnected in-process. */
+    hotReclaimApplied?: boolean
   }>
   disconnectMcp: () => Promise<void>
 }
@@ -205,7 +207,9 @@ export async function createWorkbenchAgent(
     const skillsEnabled = skillRoots.length > 0
     const honestyTools = [...tools, ...plugins.toolNames]
     const liveMcpStatuses = [...plugins.mcpStatuses]
-    const dynamicMcpDisconnectors: Array<() => Promise<void>> = []
+    // Hot-loaded MCP disconnectors keyed by pluginId so revoke can target only
+    // the affected plugin's transports without tearing down unrelated servers.
+    const dynamicMcpDisconnectors = new Map<string, Array<() => Promise<void>>>()
     // Capability execution requires both configuration enablement and a
     // successfully loaded contribution (including any Provider Skills sync).
     const enabledPluginIds = plugins.plugins
@@ -392,7 +396,24 @@ export async function createWorkbenchAgent(
         liveMcpStatuses.splice(statusIndexes[i]!, 1)
       }
       liveMcpStatuses.push(...hot.statuses)
-      dynamicMcpDisconnectors.push(hot.disconnect)
+      // Disconnect any previous transport for this plugin before recording the
+      // new one, so re-authorization (token refresh / re-login) does not leave
+      // a zombie wire session carrying stale credentials. Guard each disconnect
+      // so a failing old transport never prevents the new disconnector (and its
+      // fresh credentials) from being registered.
+      const previousDisconnectors =
+        dynamicMcpDisconnectors.get(completed.pluginId) ?? []
+      for (const disconnect of previousDisconnectors) {
+        try {
+          await disconnect()
+        } catch (cause) {
+          console.warn(
+            `[workbench] stale MCP disconnect failed during re-auth for ${completed.pluginId}:`,
+            cause instanceof Error ? cause.message : cause,
+          )
+        }
+      }
+      dynamicMcpDisconnectors.set(completed.pluginId, [hot.disconnect])
       if (!hot.statuses.some((row) => row.status === 'connected')) {
         throw new Error(`「${descriptor.name}」已授权，但 MCP 工具热加载失败`)
       }
@@ -433,10 +454,69 @@ export async function createWorkbenchAgent(
         bindingStore,
         secretStore: authStores.secretStore,
       })
+      // Hot-reclaim the live MCP transport for the affected plugin so subsequent
+      // tool dispatch cannot reuse pre-logout wire credentials (HTTP bearer /
+      // stdio child env). If the transport was never hot-loaded (e.g. plugin
+      // loaded at boot and not via OAuth hot-load), the boot-time disconnector
+      // in plugins.disconnect still owns it and needsSidecarRestart stays true.
+      let hotReclaimApplied = false
+      try {
+        const reclaim = await disconnectMcpPlugin(pluginId, descriptor)
+        hotReclaimApplied = reclaim.disconnected
+      } catch (cause) {
+        // Stay honest: if live disconnect failed, fall back to restart advice.
+        console.warn(
+          `[workbench] live MCP disconnect failed for ${pluginId}:`,
+          cause instanceof Error ? cause.message : cause,
+        )
+      }
       return {
         message: `已撤销「${descriptor.name}」账号连接`,
-        needsSidecarRestart: result.needsSidecarRestart,
+        needsSidecarRestart: hotReclaimApplied ? false : result.needsSidecarRestart,
+        hotReclaimApplied,
       }
+    }
+
+    /**
+     * Disconnect the live MCP transport(s) hot-loaded for one plugin and drop
+     * their tools/statuses so post-revoke dispatch cannot reuse stale wire
+     * credentials. Returns disconnected:false when no live transport exists.
+     */
+    const disconnectMcpPlugin = async (
+      pluginId: string,
+      descriptor: ConnectorDescriptor,
+    ): Promise<{ disconnected: boolean }> => {
+      const disconnectors = dynamicMcpDisconnectors.get(pluginId)
+      if (!disconnectors || disconnectors.length === 0) {
+        return { disconnected: false }
+      }
+      for (const disconnect of disconnectors) {
+        await disconnect()
+      }
+      dynamicMcpDisconnectors.delete(pluginId)
+
+      // Remove this connector's tools from the live tool registry.
+      const staleNames = new Set(
+        expandConnectorToolScope(descriptor, honestyTools),
+      )
+      if (staleNames.size > 0) {
+        const retained = livePluginTools.filter(
+          (tool) => !staleNames.has(tool.name),
+        )
+        livePluginTools.splice(0, livePluginTools.length, ...retained)
+        const retainedHonesty = honestyTools.filter(
+          (name) => !staleNames.has(name),
+        )
+        honestyTools.splice(0, honestyTools.length, ...retainedHonesty)
+      }
+
+      // Drop MCP status rows owned by this plugin.
+      for (let i = liveMcpStatuses.length - 1; i >= 0; i--) {
+        if (liveMcpStatuses[i]?.pluginId === pluginId) {
+          liveMcpStatuses.splice(i, 1)
+        }
+      }
+      return { disconnected: true }
     }
 
     let discoverableSkillIds: string[] = []
@@ -482,7 +562,9 @@ export async function createWorkbenchAgent(
       revokeConnectorAuth,
       disconnectMcp: async () => {
         await connectorCliAuth.dispose()
-        for (const disconnect of dynamicMcpDisconnectors) await disconnect()
+        for (const disconnectors of dynamicMcpDisconnectors.values()) {
+          for (const disconnect of disconnectors) await disconnect()
+        }
         await plugins.disconnect()
       },
     }

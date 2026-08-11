@@ -126,8 +126,14 @@ export type CapabilityAuthRevokeResult = {
   snapshot: CapabilitySnapshot
   connectorId: string
   message: string
-  /** Existing MCP wire sessions may require a sidecar restart for full cleanup. */
+  /**
+   * True when a sidecar restart is still needed for full cleanup (e.g. the
+   * transport was loaded at boot and is not reachable for in-process reclaim).
+   * False once the live transport is hot-reclaimed.
+   */
   needsSidecarRestart: boolean
+  /** True when the live MCP transport was disconnected in-process on revoke. */
+  hotReclaimApplied?: boolean
 }
 
 export type CapabilitySnapshotListener = (snapshot: CapabilitySnapshot) => void

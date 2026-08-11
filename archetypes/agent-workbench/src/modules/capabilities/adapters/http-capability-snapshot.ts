@@ -122,6 +122,7 @@ export function createHttpCapabilitySnapshotPort(
         connectorId: res.connectorId,
         message: res.message,
         needsSidecarRestart: res.needsSidecarRestart,
+        hotReclaimApplied: res.hotReclaimApplied,
       }
     },
 

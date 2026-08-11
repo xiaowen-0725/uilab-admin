@@ -60,6 +60,9 @@ describe('revokeAuthResource', () => {
         oauthKeychainAccount('plugin.example', 'account', 'refresh'),
       ]),
     )
+    // Pure store-level result stays true; the live transport downgrade happens
+    // in revokeConnectorAuth (create-agent.ts) which combines this with
+    // disconnectMcpPlugin.
     assert.equal(result.needsSidecarRestart, true)
     assert.deepEqual(result.clearedResources, ['account'])
   })
