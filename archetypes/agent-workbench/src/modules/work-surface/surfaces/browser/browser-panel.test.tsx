@@ -23,9 +23,14 @@ describe('BrowserPanel', () => {
 
   it('times out to load-failed when iframe never loads', async () => {
     const host = { openExternal: vi.fn() }
+    const pendingUrl = new URL(
+      '/__vitest__/browser-frame-pending',
+      window.location.origin,
+    ).toString()
+
     await render(
       <BrowserPanel
-        resourceKey='https://example.invalid/'
+        resourceKey={pendingUrl}
         title='dead'
         host={host}
         loadTimeoutMs={50}
