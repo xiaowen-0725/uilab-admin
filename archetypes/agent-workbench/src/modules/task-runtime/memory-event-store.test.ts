@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentRuntimeEventEnvelope } from '../protocol/events'
+import type { AgentRuntimeEventEnvelope } from '@/modules/task'
 import { createMemoryEventStore } from './memory-event-store'
 
 function envelope(

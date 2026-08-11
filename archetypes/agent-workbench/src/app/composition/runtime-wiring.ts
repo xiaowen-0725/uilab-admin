@@ -26,12 +26,12 @@ import { DEFAULT_PROJECT_ID } from '@/modules/project'
 import type { EventStorePort, RuntimePort } from '@/modules/task'
 import {
   createRunStatusIndex,
-  createVoltAgentRuntimeAdapter,
   isNavigatorBusyStatus,
   TaskRuntimeController,
   type RunStatus,
   type RunStatusIndex,
 } from '@/modules/task'
+import { createVoltAgentRuntimeAdapter } from '@/modules/task-runtime'
 import type { WorkbenchPersistence } from './workbench-boot'
 
 const INSTANT_DEMO =

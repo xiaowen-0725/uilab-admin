@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeSubscriptionEvent } from '../../ports/runtime-port'
+import type { RuntimeSubscriptionEvent } from '@/modules/task'
 import { createVoltAgentRuntimeAdapter } from './voltagent-runtime-adapter'
 
 function sseBody(chunks: object[]): ReadableStream<Uint8Array> {

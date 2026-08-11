@@ -17,11 +17,11 @@ import type {
   EventStoreCheckpointResult,
   EventStorePort,
   EventStoreReadOptions,
-} from '../ports/event-store-port'
-import { EventStorePortError } from '../ports/event-store-port'
-import type { CommandAcknowledgement } from '../protocol/commands'
-import type { AgentRuntimeEventEnvelope } from '../protocol/events'
-import type { RuntimeSnapshot } from '../ports/runtime-port'
+} from '@/modules/task'
+import { EventStorePortError } from '@/modules/task'
+import type { CommandAcknowledgement } from '@/modules/task'
+import type { AgentRuntimeEventEnvelope } from '@/modules/task'
+import type { RuntimeSnapshot } from '@/modules/task'
 
 /** Command ack row shape in commands store. */
 interface CommandAckRow {

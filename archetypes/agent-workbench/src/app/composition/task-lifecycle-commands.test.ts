@@ -4,7 +4,8 @@ import {
   NEW_TASK_TITLE,
   ProjectCatalogController,
 } from '@/modules/project'
-import { createMemoryEventStore, createRunStatusIndex } from '@/modules/task'
+import { createRunStatusIndex } from '@/modules/task'
+import { createMemoryEventStore } from '@/modules/task-runtime'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createNewChatTask,
