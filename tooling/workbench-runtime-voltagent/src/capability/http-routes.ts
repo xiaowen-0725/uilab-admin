@@ -71,6 +71,7 @@ export type CapabilityHttpContext = {
   revokeConnectorAuth?: (connectorId: string) => Promise<{
     message: string
     needsSidecarRestart: boolean
+    hotReclaimApplied?: boolean
   }>
 }
 
@@ -301,6 +302,7 @@ export function mountCapabilityRoutes<
         connectorId,
         message: result.message,
         needsSidecarRestart: result.needsSidecarRestart,
+        hotReclaimApplied: result.hotReclaimApplied,
         snapshot,
       })
     } catch (cause) {

@@ -145,6 +145,150 @@ describe('createWorkbenchAgent', () => {
     await bundle.disconnectMcp()
   })
 
+  it('revokes GitHub auth and hot-reclaims the MCP transport in-process (#33)', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-revoke-'))
+    tempRoots.push(root)
+
+    // Capture EVERY Authorization header the host sees so we can prove the
+    // pre-revoke bearer never survives past the revoke boundary.
+    const seenTokens: string[] = []
+    let disconnectCalls = 0
+    // Each OAuth completion yields a distinct token so that re-login after
+    // revoke produces a visibly different bearer.
+    let loginCount = 0
+    const tokenForLogin = (n: number) => `Bearer github-token-${n}`
+
+    const bundle = await createWorkbenchAgent({
+      profile: 'office',
+      model: stubModel,
+      workspaceRoot: root,
+      env: {
+        PLUGINS_ENABLED: 'mcp.github',
+        UILAB_CONNECTOR_BROKER_URL: 'https://connectors.uilab.test',
+        UILAB_KEYCHAIN_MODE: 'fake',
+        UILAB_PERSIST_AUTH: '0',
+        VOLTAGENT_MEMORY: 'in-memory',
+      },
+      oauthFetch: async (input, init) => {
+        if (input === 'https://connectors.uilab.test/v1/oauth/sessions') {
+          loginCount += 1
+          return jsonResponse(201, {
+            session_id: `session-revoke-${loginCount}`,
+            authorization_url:
+              'https://github.com/login/oauth/authorize?client_id=uilab-connector',
+            claim_token: `claim-token-revoke-${loginCount}`,
+            token_endpoint: 'https://connectors.uilab.test/v1/oauth/token',
+            client_id: 'uilab-agent-workbench',
+            expires_in: 900,
+            poll_interval: 1,
+          })
+        }
+        assert.equal(
+          new Headers(init?.headers).get('authorization'),
+          `Bearer claim-token-revoke-${loginCount}`,
+        )
+        return jsonResponse(200, {
+          status: 'authorized',
+          access_token: `github-token-${loginCount}`,
+          refresh_token: `broker-refresh-${loginCount}`,
+          expires_in: 28_800,
+        })
+      },
+      mcpHost: {
+        getTools: async (servers) => {
+          const headers = (
+            servers.github as {
+              requestInit?: { headers?: Record<string, string> }
+            }
+          ).requestInit?.headers
+          // Unconditionally record the bearer handed to the transport. The
+          // post-revoke assertions below scan this array.
+          seenTokens.push(headers?.Authorization ?? '(none)')
+          return {
+            tools: [
+              createTool({
+                name: 'search_repositories',
+                description: 'Search repositories',
+                parameters: z.object({}),
+                execute: async () => ({ ok: true }),
+              }),
+            ] as any[],
+            disconnect: async () => {
+              disconnectCalls += 1
+            },
+          }
+        },
+      },
+    })
+
+    // --- Phase 1: initial login hot-loads MCP tools with token-1. ---
+    assert.ok(!bundle.tools.includes('github__search_repositories'))
+    await bundle.beginConnectorOAuth?.(CONNECTOR_GITHUB_ID)
+    await bundle.reconcileConnectorAuth?.()
+    assert.ok(bundle.tools.includes('github__search_repositories'))
+    assert.equal(disconnectCalls, 0)
+    const firstLoginCount = seenTokens.length
+    assert.ok(
+      seenTokens.includes(tokenForLogin(1)),
+      'first login must inject the first bearer',
+    )
+
+    // --- Phase 2: revoke in-process — transport torn down immediately. ---
+    const result = await bundle.revokeConnectorAuth?.(CONNECTOR_GITHUB_ID)
+    assert.ok(result, 'revokeConnectorAuth should be present for office profile')
+    assert.equal(
+      result.needsSidecarRestart,
+      false,
+      'hot-reclaim should clear the restart requirement',
+    )
+    assert.equal(result.hotReclaimApplied, true)
+    assert.equal(disconnectCalls, 1, 'live MCP transport must be disconnected')
+    assert.ok(
+      !bundle.tools.includes('github__search_repositories'),
+      'tool must be removed from the live registry after revoke',
+    )
+
+    // Auth status must reflect the revocation.
+    const statuses = await bundle.refreshAuthStatuses()
+    const githubStatus = statuses.find(
+      (row) =>
+        row.pluginId === 'mcp.github' && row.resourceId === 'mcp:github',
+    )
+    assert.notEqual(githubStatus?.status, 'connected')
+
+    // --- Phase 3 (adversarial): re-login must use a fresh bearer, and the
+    // pre-revoke token-1 must NEVER reappear in any subsequent getTools call. ---
+    const tokensBeforeRelogin = seenTokens.length
+    await bundle.beginConnectorOAuth?.(CONNECTOR_GITHUB_ID)
+    await bundle.reconcileConnectorAuth?.()
+    assert.ok(
+      bundle.tools.includes('github__search_repositories'),
+      're-login must hot-load tools again',
+    )
+
+    const reloginTokens = seenTokens.slice(tokensBeforeRelogin)
+    assert.ok(
+      reloginTokens.length > 0,
+      're-login must produce at least one getTools call',
+    )
+    assert.ok(
+      reloginTokens.every((t) => t === tokenForLogin(2)),
+      `re-login must use token-2 exclusively, got: ${JSON.stringify(reloginTokens)}`,
+    )
+    // The decisive adversarial check: across the ENTIRE lifecycle, token-1
+    // appears only in the first-login window and never again after revoke.
+    const token1AfterRevoke = seenTokens
+      .slice(firstLoginCount)
+      .filter((t) => t === tokenForLogin(1))
+    assert.equal(
+      token1AfterRevoke.length,
+      0,
+      'pre-revoke bearer must never be handed to a transport after revoke',
+    )
+
+    await bundle.disconnectMcp()
+  })
+
   it('uses official lark-* Skills plus generic execute_command, never Provider-specific wrappers', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-feishu-'))
     const source = await mkdtemp(path.join(os.tmpdir(), 'wb-feishu-source-'))

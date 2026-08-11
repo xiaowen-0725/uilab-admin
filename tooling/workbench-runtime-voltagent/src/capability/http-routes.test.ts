@@ -27,6 +27,7 @@ function createTestApp(input?: {
   revokeConnectorAuth?: (connectorId: string) => Promise<{
     message: string
     needsSidecarRestart: boolean
+    hotReclaimApplied?: boolean
   }>
 }) {
   const app = new Hono()
@@ -202,7 +203,8 @@ describe('Capability OAuth HTTP routes', () => {
         statuses[0] = { ...statuses[0]!, status: 'missing' }
         return {
           message: '连接已撤销',
-          needsSidecarRestart: true,
+          needsSidecarRestart: false,
+          hotReclaimApplied: true,
         }
       },
     })
@@ -220,13 +222,52 @@ describe('Capability OAuth HTTP routes', () => {
     assert.equal(response.status, 200)
     assert.deepEqual(revoked, [CONNECTOR_GITHUB_ID])
     assert.equal(body.ok, true)
-    assert.equal(body.needsSidecarRestart, true)
+    assert.equal(body.needsSidecarRestart, false)
+    assert.equal(body.hotReclaimApplied, true)
     assert.equal(
       body.snapshot.connectors.find(
         (connector: { id: string }) => connector.id === CONNECTOR_GITHUB_ID,
       ).connected,
       false,
     )
+  })
+
+  it('propagates needsSidecarRestart fallback when hot-reclaim is not applied', async () => {
+    const statuses: PluginAuthStatus[] = [
+      {
+        pluginId: 'mcp.github',
+        resourceId: CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
+        kind: 'oauth2',
+        pluginEnabled: true,
+        status: 'connected',
+      },
+    ]
+    const { app } = createTestApp({
+      authStatuses: statuses,
+      revokeConnectorAuth: async () => {
+        statuses[0] = { ...statuses[0]!, status: 'missing' }
+        return {
+          message: '连接已撤销',
+          needsSidecarRestart: true,
+          hotReclaimApplied: false,
+        }
+      },
+    })
+
+    const response = await app.request('/capability/auth/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        connectorId: CONNECTOR_GITHUB_ID,
+        taskId: 'task-a',
+      }),
+    })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(body.ok, true)
+    assert.equal(body.needsSidecarRestart, true)
+    assert.equal(body.hotReclaimApplied, false)
   })
 
   it('starts and continues a CLI flow without exposing a device code', async () => {
