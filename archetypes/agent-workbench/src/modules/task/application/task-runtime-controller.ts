@@ -25,11 +25,7 @@ import type {
 } from '../projection/types'
 import type { CommandAcknowledgement } from '../protocol/commands'
 import type { TurnComposerContext } from '../protocol/commands'
-import type { DeterministicFakeRuntime } from '../runtime/fake-runtime'
-import {
-  runtimeHonestyCopy,
-  type RuntimeHonestyMode,
-} from '../runtime/runtime-honesty'
+import { runtimeHonestyCopy } from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
 
@@ -43,15 +39,10 @@ export interface TaskRuntimeControllerOptions {
   /** Command id seed prefix (default "wb"). */
   seed?: string
   /**
-   * When true (default), after accepted submit/cancel flush Fake virtual clock
-   * so stream steps apply synchronously (tests + demo).
+   * Command clock for envelope timestamps (default: system wall-clock).
+   * Pass a deterministic clock only in test harnesses that need stable ids.
    */
-  autoFlush?: boolean
-  /**
-   * Honesty copy mode for user notices.
-   * Default `fake` for Deterministic Fake; pass `voltagent` for local sidecar.
-   */
-  honestyMode?: RuntimeHonestyMode
+  clock?: CommandClock
   /**
    * How rehydrate notices describe the EventStore (D14).
    * Default `memory` for test harness; product path should pass `idb`.
@@ -78,15 +69,6 @@ export type WorkSurfaceOpenRequestedListener = (
     payload: WorkSurfaceOpenRequestedPayload
   },
 ) => void
-
-function isFakeRuntime(port: RuntimePort): port is DeterministicFakeRuntime {
-  return (
-    typeof port === 'object' &&
-    port !== null &&
-    'clock' in port &&
-    typeof (port as DeterministicFakeRuntime).clock?.flush === 'function'
-  )
-}
 
 /** Latest waiting timeline item id after `prefix` (e.g. approval-request: / input-request:). */
 function pendingRequestId(
@@ -115,7 +97,6 @@ export class TaskRuntimeController {
   private readonly runtime: RuntimePort
   private projectId: string
   private readonly eventStore: EventStorePort | null
-  private readonly autoFlush: boolean
   private readonly honesty: ReturnType<typeof runtimeHonestyCopy>
   private readonly eventStoreKind: EventStoreHonestyKind
   private readonly commands: CommandFactory
@@ -134,7 +115,7 @@ export class TaskRuntimeController {
   private attachGeneration = 0
   /**
    * Controller-side follow-up queue (product UX).
-   * Fake also supports queueFollowUp; controller prefers dispatching to runtime.
+   * Runtime also supports queueFollowUp; controller prefers dispatching to runtime.
    */
   private localFollowUps: string[] = []
   /** Optional listener for runStatus changes (Navigator RunStatusIndex). */
@@ -149,12 +130,10 @@ export class TaskRuntimeController {
     this.runtime = options.runtime
     this.projectId = options.projectId
     this.eventStore = options.eventStore ?? null
-    this.autoFlush = options.autoFlush ?? true
-    this.honesty = runtimeHonestyCopy(options.honestyMode ?? 'fake')
+    this.honesty = runtimeHonestyCopy()
     this.eventStoreKind = options.eventStoreKind ?? 'memory'
-    const clock: CommandClock = isFakeRuntime(options.runtime)
-      ? options.runtime.clock
-      : { nowIso: () => new Date().toISOString() }
+    const clock: CommandClock =
+      options.clock ?? { nowIso: () => new Date().toISOString() }
     this.commands = new CommandFactory({
       clock,
       seed: options.seed ?? 'wb',
@@ -203,11 +182,6 @@ export class TaskRuntimeController {
   /** Stable snapshot key for React external store. */
   getRevision(): number {
     return this.revision
-  }
-
-  /** Access Fake clock for tests (advance / flush). */
-  getFakeRuntime(): DeterministicFakeRuntime | null {
-    return isFakeRuntime(this.runtime) ? this.runtime : null
   }
 
   subscribe(listener: TaskRuntimeListener): () => void {
@@ -370,7 +344,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.submitAccepted
-        this.maybeFlush()
       } else {
         this.notice =
           ack.message ??
@@ -400,7 +373,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.cancelAccepted
-        this.maybeFlush()
       } else {
         this.notice =
           ack.message ??
@@ -436,7 +408,6 @@ export class TaskRuntimeController {
           decision === 'approved'
             ? this.honesty.approvalApproved
             : this.honesty.approvalRejected
-        this.maybeFlush()
       } else {
         this.notice = ack.message ?? `审批响应未接受：${ack.status}`
       }
@@ -470,7 +441,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.inputProvided
-        this.maybeFlush()
       } else {
         this.notice = ack.message ?? `补充输入未接受：${ack.status}`
       }
@@ -501,7 +471,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.retryAccepted
-        this.maybeFlush()
       } else {
         this.notice = ack.message ?? `重试未接受：${ack.status}`
       }
@@ -529,7 +498,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.queueAccepted
-        this.maybeFlush()
       } else if (ack.status === 'unsupported') {
         // Fallback local queue + submit when idle
         this.localFollowUps.push(trimmed)
@@ -566,7 +534,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.steerAccepted
-        this.maybeFlush()
       } else {
         this.notice = ack.message ?? `转向未接受：${ack.status}`
       }
@@ -606,7 +573,6 @@ export class TaskRuntimeController {
       await this.rememberAck(command.commandId, ack)
       if (ack.status === 'accepted' || ack.status === 'duplicate') {
         this.notice = this.honesty.reconcileAccepted
-        this.maybeFlush()
       } else {
         this.notice = ack.message ?? `对账未接受：${ack.status}`
       }
@@ -645,13 +611,6 @@ export class TaskRuntimeController {
     this.emit()
   }
 
-  /** Test / harness: flush Fake virtual clock. */
-  flush(): void {
-    const fake = this.getFakeRuntime()
-    fake?.clock.flush()
-    this.emit()
-  }
-
   private async ensureTaskCreated(taskId: string, title?: string): Promise<void> {
     if (this.createdTasks.has(taskId)) return
     const command = this.commands.createTask({
@@ -665,7 +624,6 @@ export class TaskRuntimeController {
     if (ack.status === 'accepted' || ack.reasonCode === 'task_exists') {
       this.createdTasks.add(taskId)
     }
-    this.maybeFlush()
   }
 
   setWorkSurfaceOpenListener(
@@ -683,7 +641,7 @@ export class TaskRuntimeController {
       }
       this.projection = applyRuntimeEvent(this.projection, event.envelope)
       void this.persistEnvelope(event.envelope)
-      // Drain local queue after terminal (Fake also drains its own queue).
+      // Drain local queue after terminal (runtime also drains its own queue).
       const status = this.projection.readModel.runStatus
       if (status && isTerminalRunStatus(status)) {
         this.maybeDrainLocalQueue()
@@ -846,13 +804,6 @@ export class TaskRuntimeController {
     const next = this.localFollowUps.shift()
     if (!next) return
     void this.submitText(next)
-  }
-
-  private maybeFlush(): void {
-    if (!this.autoFlush) return
-    const fake = this.getFakeRuntime()
-    if (!fake) return
-    fake.clock.flush()
   }
 
   private detachSubscription(): void {

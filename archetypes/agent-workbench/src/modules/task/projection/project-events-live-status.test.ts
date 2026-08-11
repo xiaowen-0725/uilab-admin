@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
-import { mapFullStreamChunks } from '../runtime/voltagent/fullstream-to-envelope'
+import { mapFullStreamChunks } from '@/modules/task-runtime'
 import { emptyProjectionState } from './empty-read-model'
 import { applyRuntimeEvent, projectEvents } from './project-events'
 

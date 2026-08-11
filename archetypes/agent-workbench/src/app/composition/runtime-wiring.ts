@@ -1,6 +1,8 @@
 /**
- * Workbench Runtime wiring — Fake / VoltAgent adapter + TaskRuntimeController + busy index.
+ * Workbench Runtime wiring — VoltAgent adapter + TaskRuntimeController + busy index.
  * Browser-only; no Node/Electron imports.
+ *
+ * VoltAgent is the only runtime (ADR-0018 removed the Deterministic Fake Runtime).
  */
 import {
   useEffect,
@@ -10,14 +12,12 @@ import {
   useSyncExternalStore,
 } from 'react'
 import {
-  resolveRuntimeAdapterMode,
   resolveVoltAgentBaseUrl,
   resolveVoltAgentId,
 } from '@/config/runtime-adapter'
 import {
   createCapabilityController,
   createBrowserTaskCapabilitySelectionStore,
-  createFakeCapabilitySnapshotPort,
   createHttpCapabilitySnapshotPort,
   type CapabilityController,
   type CapabilitySnapshotPort,
@@ -25,16 +25,13 @@ import {
 import { DEFAULT_PROJECT_ID } from '@/modules/project'
 import type { EventStorePort, RuntimePort } from '@/modules/task'
 import {
-  createDeterministicFakeRuntime,
   createRunStatusIndex,
-  createVoltAgentRuntimeAdapter,
   isNavigatorBusyStatus,
   TaskRuntimeController,
-  VirtualClock,
-  type DeterministicFakeRuntime,
   type RunStatus,
   type RunStatusIndex,
 } from '@/modules/task'
+import { createVoltAgentRuntimeAdapter } from '@/modules/task-runtime'
 import type { WorkbenchPersistence } from './workbench-boot'
 
 const INSTANT_DEMO =
@@ -42,27 +39,18 @@ const INSTANT_DEMO =
   import.meta.env.VITEST === true ||
   import.meta.env.VITEST === 'true'
 
-export type RuntimeHonestyMode = 'fake' | 'voltagent'
-
 export interface CreateWorkbenchRuntimePortsOptions {
-  adapterMode?: RuntimeHonestyMode
-  instantDemo?: boolean
   voltAgentBaseUrl?: string
   voltAgentId?: string
   projectId?: string
   seed?: string
-  nowMs?: number
 }
 
 export interface WorkbenchRuntimePorts {
-  adapterMode: RuntimeHonestyMode
-  honestyMode: RuntimeHonestyMode
   runtimePort: RuntimePort
-  /** Present when adapter is fake (for realtime clock drive). */
-  fakeRuntime: DeterministicFakeRuntime | null
   runStatusIndex: RunStatusIndex
   instantDemo: boolean
-  /** Capability Surface snapshot port (Fake honest / VoltAgent HTTP). */
+  /** Capability Surface snapshot port (VoltAgent HTTP). */
   capabilityPort: CapabilitySnapshotPort
   capabilityController: CapabilityController
 }
@@ -73,69 +61,28 @@ export interface WorkbenchRuntimePorts {
 export function createWorkbenchRuntimePorts(
   options: CreateWorkbenchRuntimePortsOptions = {}
 ): WorkbenchRuntimePorts {
-  const adapterMode = options.adapterMode ?? resolveRuntimeAdapterMode()
-  const instantDemo = options.instantDemo ?? INSTANT_DEMO
   const seed = options.seed ?? 'workbench'
   const projectId = options.projectId ?? DEFAULT_PROJECT_ID
-
-  const fakeRuntime =
-    adapterMode === 'fake'
-      ? createDeterministicFakeRuntime({
-          seed,
-          clock: new VirtualClock({
-            startMs: options.nowMs ?? Date.now(),
-          }),
-          stepMs: instantDemo ? 0 : 48,
-          keywordScenarios: true,
-          buildOutputDeltas: (inputText) => {
-            const prompt = inputText.trim() || '（空输入）'
-            const short =
-              prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt
-            return [
-              `已收到你的消息：\n\n`,
-              `> ${short}\n\n`,
-              `## 本轮说明\n\n`,
-              `这是 **Deterministic Fake Runtime** 的本地**流式**投影（非远程 Agent）。\n\n`,
-              `### 已接通链路\n\n`,
-              `1. Composer → \`submitTurn\`\n`,
-              `2. Fake 按 stepMs 发出事件\n`,
-              `3. 纯函数投影 → Timeline\n\n`,
-              `试关键词：「工具」「审批」「澄清」「长文」「失败」。\n`,
-            ]
-          },
-        })
-      : null
-
-  const voltRuntime =
-    adapterMode === 'voltagent'
-      ? createVoltAgentRuntimeAdapter({
-          baseUrl: options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl(),
-          agentId: options.voltAgentId ?? resolveVoltAgentId(),
-          projectId,
-        })
-      : null
-
-  const runtimePort: RuntimePort =
-    adapterMode === 'voltagent'
-      ? (voltRuntime as RuntimePort)
-      : (fakeRuntime as RuntimePort)
+  void seed
+  void projectId
 
   const voltBase = options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl()
+  const runtimePort: RuntimePort = createVoltAgentRuntimeAdapter({
+    baseUrl: voltBase,
+    agentId: options.voltAgentId ?? resolveVoltAgentId(),
+    projectId,
+  })
+
   const capabilityPort: CapabilitySnapshotPort =
-    adapterMode === 'voltagent'
-      ? createHttpCapabilitySnapshotPort({ baseUrl: voltBase })
-      : createFakeCapabilitySnapshotPort()
+    createHttpCapabilitySnapshotPort({ baseUrl: voltBase })
   const capabilityController = createCapabilityController(capabilityPort, {
     selectionStore: createBrowserTaskCapabilitySelectionStore(),
   })
 
   return {
-    adapterMode,
-    honestyMode: adapterMode,
     runtimePort,
-    fakeRuntime,
     runStatusIndex: createRunStatusIndex(),
-    instantDemo,
+    instantDemo: INSTANT_DEMO,
     capabilityPort,
     capabilityController,
   }
@@ -145,10 +92,7 @@ export interface EnsureTaskRuntimeControllerOptions {
   runtimePort: RuntimePort
   eventStore: EventStorePort
   projectId: string
-  honestyMode: RuntimeHonestyMode
   eventStoreKind: 'idb' | 'memory'
-  instantDemo: boolean
-  adapterMode: RuntimeHonestyMode
   runStatusIndex: RunStatusIndex
   seed?: string
 }
@@ -164,9 +108,7 @@ export function createTaskRuntimeController(
     projectId: options.projectId,
     eventStore: options.eventStore,
     seed: options.seed ?? 'workbench',
-    honestyMode: options.honestyMode,
     eventStoreKind: options.eventStoreKind,
-    autoFlush: options.instantDemo && options.adapterMode === 'fake',
   })
   controller.setRunStatusListener((id, status) => {
     options.runStatusIndex.set(id, status)
@@ -177,7 +119,6 @@ export function createTaskRuntimeController(
 /**
  * Ensure a single TaskRuntimeController instance.
  * Returns `existing` when present; otherwise creates via {@link createTaskRuntimeController}.
- * Used by React wiring so create is not duplicated if ensure re-runs.
  */
 export function ensureTaskRuntimeController(
   existing: TaskRuntimeController | null,
@@ -185,25 +126,6 @@ export function ensureTaskRuntimeController(
 ): TaskRuntimeController {
   if (existing != null) return existing
   return createTaskRuntimeController(options)
-}
-
-/**
- * Drive Fake VirtualClock realtime for interactive demos.
- * No-op for VoltAgent or instant demo / non-runtime path.
- */
-export function setFakeRuntimeClockRealtime(
-  fakeRuntime: DeterministicFakeRuntime | null,
-  active: boolean
-): () => void {
-  if (!fakeRuntime) return () => {}
-  if (!active) {
-    fakeRuntime.clock.stopRealtime()
-    return () => {}
-  }
-  fakeRuntime.clock.startRealtime({ intervalMs: 32, scale: 1 })
-  return () => {
-    fakeRuntime.clock.stopRealtime()
-  }
 }
 
 /**
@@ -251,13 +173,9 @@ export interface UseWorkbenchRuntimeWiringOptions {
   projectId: string
   persistence: WorkbenchPersistence
   bootReady: boolean
-  /** Selected task id for clock drive; null = stop. */
-  selectedTaskId: string | null
-  adapterMode?: RuntimeHonestyMode
 }
 
 export interface WorkbenchRuntimeWiring {
-  honestyMode: RuntimeHonestyMode
   controller: TaskRuntimeController | null
   runStatusIndex: RunStatusIndex
   runtimePort: RuntimePort
@@ -265,7 +183,7 @@ export interface WorkbenchRuntimeWiring {
 }
 
 /**
- * React wiring: ports, controller lifecycle, Fake clock.
+ * React wiring: ports + controller lifecycle.
  * Busy projection is {@link useBusyTaskIds} after useTaskRuntime.
  *
  * Controller is **never** constructed during render — only in an effect when
@@ -275,21 +193,12 @@ export interface WorkbenchRuntimeWiring {
 export function useWorkbenchRuntimeWiring(
   options: UseWorkbenchRuntimeWiringOptions
 ): WorkbenchRuntimeWiring {
-  const {
-    eventStore,
-    projectId,
-    persistence,
-    bootReady,
-    selectedTaskId,
-    adapterMode: adapterModeProp,
-  } = options
+  const { eventStore, projectId, persistence, bootReady } = options
 
   // Ports: factory once per mount (stable across renders).
   const portsRef = useRef<WorkbenchRuntimePorts | null>(null)
   if (portsRef.current == null) {
-    portsRef.current = createWorkbenchRuntimePorts({
-      adapterMode: adapterModeProp,
-    })
+    portsRef.current = createWorkbenchRuntimePorts()
   }
   const ports = portsRef.current
 
@@ -304,16 +213,11 @@ export function useWorkbenchRuntimeWiring(
     if (!bootReady || !eventStore) return
 
     const portsNow = portsRef.current!
-    // Guard: reuse instance if effect re-runs while controller still held
-    // (e.g. identity-stable deps). ensure* is also unit-tested for create-once.
     const next = ensureTaskRuntimeController(controllerRef.current, {
       runtimePort: portsNow.runtimePort,
       eventStore,
       projectId,
-      honestyMode: portsNow.honestyMode,
       eventStoreKind: persistence === 'idb' ? 'idb' : 'memory',
-      instantDemo: portsNow.instantDemo,
-      adapterMode: portsNow.adapterMode,
       runStatusIndex: portsNow.runStatusIndex,
     })
     if (controllerRef.current !== next) {
@@ -332,7 +236,6 @@ export function useWorkbenchRuntimeWiring(
       }
     }
     // Intentionally omit projectId — updates via setProjectId effect only.
-    // ports* are stable (ref). eventStoreKind follows persistence.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- create once on boot+store
   }, [bootReady, eventStore, persistence])
 
@@ -340,17 +243,7 @@ export function useWorkbenchRuntimeWiring(
     controller?.setProjectId(projectId)
   }, [projectId, controller])
 
-  const isRuntimePath = Boolean(selectedTaskId)
-  useEffect(() => {
-    if (ports.adapterMode !== 'fake') return
-    if (ports.instantDemo || !isRuntimePath) {
-      return setFakeRuntimeClockRealtime(ports.fakeRuntime, false)
-    }
-    return setFakeRuntimeClockRealtime(ports.fakeRuntime, true)
-  }, [isRuntimePath, ports.adapterMode, ports.fakeRuntime, ports.instantDemo])
-
   return {
-    honestyMode: ports.honestyMode,
     controller,
     runStatusIndex: ports.runStatusIndex,
     runtimePort: ports.runtimePort,

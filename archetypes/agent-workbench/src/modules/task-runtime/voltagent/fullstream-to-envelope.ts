@@ -3,11 +3,11 @@
  * No network; used by VoltAgentRuntimeAdapter and unit tests.
  */
 
-import type { AgentRuntimeEventEnvelope } from '../../protocol/events'
+import type { AgentRuntimeEventEnvelope } from '@/modules/task'
 import {
   normalizeToolOutput,
   sanitizeToolOutputForEnvelope,
-} from '../tool-output-normalize'
+} from '@/modules/task'
 
 export interface MapFullStreamContext {
   projectId: string

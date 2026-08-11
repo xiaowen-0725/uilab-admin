@@ -52,7 +52,7 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
       .toHaveAttribute('data-composer-mode', 'runtime')
     await expect
       .element(page.getByTestId('composer-model'))
-      .toHaveTextContent('Fake Runtime')
+      .toHaveTextContent('本地侧车模型')
 
     // Catalog row titled 新对话
     const taskButtons = document.querySelectorAll(
@@ -132,25 +132,6 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
     await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
     const secondTaskId = page.getByTestId('task-surface').element().dataset.taskId
     expect(secondTaskId).not.toBe(firstTaskId)
-  })
-
-  it('shows bottom approval dock and hides Composer while waiting_for_approval', async () => {
-    await render(<WorkbenchApp persistence='memory' />)
-    await waitBooted()
-    await openNewChat()
-
-    const input = page.getByTestId('composer-input')
-    const submit = page.getByTestId('composer-submit')
-    await userEvent.fill(input, '需要审批后再执行')
-    await userEvent.click(submit)
-    await expect
-      .element(page.getByTestId('task-timeline'))
-      .toHaveAttribute('data-run-status', 'waiting_for_approval')
-
-    await expect
-      .element(page.getByTestId('approval-dock'))
-      .toBeInTheDocument()
-    expect(document.querySelector('[data-testid="composer"]')).toBeNull()
   })
 
   it('hard-deletes a task with confirm dialog (A4)', async () => {

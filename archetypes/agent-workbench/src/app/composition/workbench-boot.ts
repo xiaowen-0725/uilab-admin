@@ -15,10 +15,7 @@ import {
   ProjectCatalogController,
 } from '@/modules/project'
 import type { EventStorePort } from '@/modules/task'
-import {
-  createIdbEventStore,
-  createMemoryEventStore,
-} from '@/modules/task'
+import { createIdbEventStore, createMemoryEventStore } from '@/modules/task-runtime'
 export type WorkbenchPersistence = 'idb' | 'memory'
 
 /** Initial selection pointers produced by cold-start hydrate. */

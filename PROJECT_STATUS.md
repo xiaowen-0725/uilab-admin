@@ -36,18 +36,19 @@
 | Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Codex 语义图标；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
 | Workbench Composer fidelity | **Phase 3C Done** | UI Lab `agent-composer`；context rail；项目 picker；`/` palette；本地交互完整、远程诚实 |
 | Phase 4A Codex observation | **Approve 12/12** | controlled observation sealed; readiness Approve; raw external-only |
-| Phase 4B Runtime Kernel + Fake | **Done (scaffold)** | domain/protocol/ports + VirtualClock + DeterministicFakeRuntime s01/s03; evidence `docs/evidence/phase-4b-runtime-kernel-fake.md` |
-| Phase 4C Task Pane vertical slice | **Done (dual-path)** | TaskReadModel projection + Timeline + Composer runtime seam; Fake only on empty/new-chat; default seed capture local-sim; evidence `docs/evidence/phase-4c-task-pane-vertical-slice.md` |
-| Phase 4D–4F Fake path close | **Done (template)** | 4D reasoning/tool/approval/input; 4E MemoryEventStore + queue/steer/reconcile; 4F fold + smart scroll; evidence `docs/evidence/phase-4-fake-complete.md`; **no** production Runtime |
+| Phase 4B Runtime Kernel | **Done (scaffold, Fake 已移除 ADR-0018)** | domain/protocol/ports；Fake Runtime + VirtualClock 已删；VoltAgent 唯一默认；evidence `docs/evidence/phase-4b-runtime-kernel-fake.md`（历史） |
+| Phase 4C Task Pane vertical slice | **Done** | TaskReadModel projection + Timeline + Composer runtime seam；VoltAgent 唯一 Runtime（ADR-0018）；evidence `docs/evidence/phase-4c-task-pane-vertical-slice.md` |
+| Phase 4D–4F Runtime path | **Done (template)** | 4D reasoning/tool/approval/input; 4E EventStore + queue/steer/reconcile; 4F fold + smart scroll；Fake 已移除（ADR-0018）；evidence `docs/evidence/phase-4-fake-complete.md`（历史） |
 | Sidecar Plugin System (#17–#25) | **Done (local MVP)** | PluginRegistry + MCP/Skills/CLI/auth/discovery/doctor；office 装配仅经 Registry；证据 `docs/evidence/sidecar-plugin-system-closeout-2026-08-06.md`；**非**远程生产 Runtime / OAuth 产品化 |
 | Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | Workbench **83** tests（含 4B–4F unit + integration）；Foundation/Admin 基线见既有证据 |
+| Browser test suite | **Green** | Workbench 单元 + 集成 + 视觉矩阵测试；Foundation/Admin 基线见既有证据 |
+| Capability Surface 可复现基线 (#56) | **Done** | 7 状态确定性 fixture + 视觉矩阵截图（`tests/visual/baselines/`）+ 键盘路径回归；从干净 checkout 可重现 |
 | 模板“产品打磨/去 demo 化” | **In progress** | Workbench Composer 本地产品体验已推进；Admin 去 demo 仍 planned |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**
-Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B / 3C Shell** 已完成。**Phase 4A–4F Fake path** 已 template-complete：dual-path 保留；4D 投影深度 + 4E Memory 队列/恢复 + 4F 折叠/滚动。**本机 VoltAgent 侧车 Plugin 体系 (#17–#25)** 已 MVP 收口（Registry 装配 MCP/Skills/领域 CLI/auth；Fake 路径不回归）。**仍无** production Agent Runtime / IndexedDB / Surface / OAuth 产品化。完整 Phase 2、CLI Workbench 生成仍未开始。`agent-desktop` 仅作 Admin 兼容基线。
+Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B / 3C Shell** 已完成。**Phase 4A–4F Runtime path** 已 template-complete（ADR-0018 移除 Deterministic Fake Runtime，VoltAgent 唯一默认）：4D 投影深度 + 4E EventStore 队列/恢复 + 4F 折叠/滚动。**本机 VoltAgent 侧车 Plugin 体系 (#17–#25)** 已 MVP 收口（Registry 装配 MCP/Skills/领域 CLI/auth）。**仍无** production Agent Runtime / IndexedDB / Surface / OAuth 产品化。完整 Phase 2、CLI Workbench 生成仍未开始。`agent-desktop` 仅作 Admin 兼容基线。
 
 ## 3. 已锁定决策（勿回退）
 
@@ -224,7 +225,7 @@ uilab-templates/
 ### P1（下一阶段优化优先）
 
 1. **Phase 2 remainder**（共享 theme Provider / 更广 primitives；Workbench 第二消费者已有）
-2. **Phase 4 Fake Runtime** 与 Task lifecycle
+2. **Phase 4 VoltAgent Runtime** 与 Task lifecycle
 3. **模板去 demo 化**
 4. **scenario 质量**（agent-desktop 噪音入口等）
 5. **CLI 体验**（npm 发布、`auth-page` add、Workbench init 属 Phase 8）
@@ -267,7 +268,7 @@ uilab-templates/
 
 1. ~~独立 `archetypes/agent-workbench` Shell 骨架~~（Phase 3）
 2. ~~Composer 产品保真（agent-composer / context rail / + / `/` / 项目 picker）~~（Phase 3C）
-3. Phase 4 Fake Runtime + projection
+3. Phase 4 VoltAgent Runtime + projection
 4. Phase 5–6 Surface Registry + Document/Browser/Review
 5. UI Lab 真源正式发布与 `shadcn add` 回装流程固化
 

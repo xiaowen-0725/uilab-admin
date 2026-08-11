@@ -77,11 +77,7 @@ import type {
   CommandAcknowledgement,
   TurnComposerContext,
 } from '../../protocol/commands'
-import {
-  previewText,
-  runtimeHonestyCopy,
-  type RuntimeHonestyMode,
-} from '../../runtime/runtime-honesty'
+import { previewText, runtimeHonestyCopy } from '../../runtime/runtime-honesty'
 
 export interface ComposerProps {
   /** Context chip — project / workspace name (local fixture state). */
@@ -123,11 +119,6 @@ export interface ComposerProps {
   onCancelRun?: () => void | Promise<void>
   /** Optional notice override from runtime controller. */
   runtimeNotice?: string | null
-  /**
-   * Honesty mode when `mode === 'runtime'`.
-   * Controls interim notices before controller notice arrives.
-   */
-  honestyMode?: RuntimeHonestyMode
   /** Capability Surface controller (Composition). */
   capabilityController?: CapabilityController | null
   /** Task id for capability selection. */
@@ -344,12 +335,11 @@ export function TaskComposer({
   onSubmitText,
   onCancelRun,
   runtimeNotice = null,
-  honestyMode = 'fake',
   capabilityController = null,
   capabilityTaskId = null,
   onManageCapabilities,
 }: ComposerProps) {
-  const honesty = runtimeHonestyCopy(honestyMode)
+  const honesty = runtimeHonestyCopy()
   const noticeId = useId()
   const [text, setText] = useState('')
   const [notice, setNotice] = useState<string | null>(null)

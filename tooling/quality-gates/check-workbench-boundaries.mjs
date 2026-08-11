@@ -354,6 +354,7 @@ async function checkSources() {
     'src/shell/navigator',
     'src/modules/workbench-session/index.ts',
     'src/modules/task/index.ts',
+    'src/modules/task-runtime/index.ts',
     'src/modules/work-surface/index.ts',
     'src/modules/capabilities/index.ts',
   ]

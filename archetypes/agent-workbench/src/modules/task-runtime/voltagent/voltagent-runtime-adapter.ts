@@ -10,15 +10,15 @@ import type {
   RuntimeSnapshot,
   RuntimeSubscriptionEvent,
   RunStartInput,
-} from '../../ports/runtime-port'
+} from '@/modules/task'
 import type {
   ApplicationCommand,
   CommandAcknowledgement,
   RespondToApprovalCommand,
   SubmitTurnCommand,
-} from '../../protocol/commands'
-import type { TurnComposerContext } from '../../protocol/commands'
-import type { AgentRuntimeEventEnvelope } from '../../protocol/events'
+} from '@/modules/task'
+import type { TurnComposerContext } from '@/modules/task'
+import type { AgentRuntimeEventEnvelope } from '@/modules/task'
 import { accepted, rejected, unsupported } from '../command-acks'
 import {
   mapFullStreamChunk,

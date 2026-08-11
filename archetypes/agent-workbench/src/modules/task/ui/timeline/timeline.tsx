@@ -38,10 +38,7 @@ import type {
 import { LiveStatusLine } from '../live-status-line'
 import { FileChangeSummaryCard } from '../markdown/file-change-summary-card'
 import { SimpleMarkdown } from '../markdown/simple-markdown'
-import {
-  runtimeHonestyCopy,
-  type RuntimeHonestyMode,
-} from '../../runtime/runtime-honesty'
+import { runtimeHonestyCopy } from '../../runtime/runtime-honesty'
 import { groupTimelineIntoTurns } from './group-timeline-turns'
 import { ToolActivityIcon } from '../tool-activity-icon'
 
@@ -79,8 +76,6 @@ export interface TimelineProps {
   readModel: TaskReadModel
   onRetryTurn?: () => void
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
-  /** Honesty mode for banner / HITL copy. Default fake. */
-  honestyMode?: RuntimeHonestyMode
   /**
    * Timeline file chip / file-change card → open Work Surface tab.
    * Must be wired by Composition through Session; Task never owns openTabs.
@@ -208,7 +203,6 @@ export function Timeline({
   readModel,
   onRetryTurn,
   onFollowModeChange,
-  honestyMode = 'fake',
   onOpenFileRef,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -288,7 +282,7 @@ export function Timeline({
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [setMode])
 
-  const honesty = runtimeHonestyCopy(honestyMode)
+  const honesty = runtimeHonestyCopy()
 
   return (
     <div
@@ -300,7 +294,7 @@ export function Timeline({
       data-run-status={readModel.runStatus ?? undefined}
       data-recovery={readModel.recoveryRequired ? 'true' : undefined}
       data-follow-mode={followMode}
-      data-honesty-mode={honestyMode}
+      data-honesty-mode="voltagent"
       aria-label={honesty.timelineAriaLabel}
       onScroll={onScroll}
     >

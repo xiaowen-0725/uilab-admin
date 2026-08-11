@@ -111,10 +111,7 @@ export type {
   AgentRuntimeEventEnvelope,
   AgentRuntimeEventType,
 } from './protocol/events'
-export {
-  AGENT_RUNTIME_EVENT_TYPES,
-  FAKE_RUNTIME_CORE_EVENT_TYPES,
-} from './protocol/events'
+export { AGENT_RUNTIME_EVENT_TYPES } from './protocol/events'
 
 // --- Phase 4B Kernel: ports ---
 export type {
@@ -136,53 +133,18 @@ export type {
 } from './ports/event-store-port'
 export { EventStorePortError } from './ports/event-store-port'
 
-// --- Phase 4B Kernel: runtime ---
-export { VirtualClock } from './runtime/virtual-clock'
-export type { VirtualClockOptions, ScheduledHandle } from './runtime/virtual-clock'
-
-export {
-  DeterministicFakeRuntime,
-  createDeterministicFakeRuntime,
-} from './runtime/fake-runtime'
-export type {
-  DeterministicFakeRuntimeOptions,
-  FakeScenarioName,
-} from './runtime/fake-runtime'
-
-export {
-  MemoryEventStore,
-  createMemoryEventStore,
-} from './runtime/memory-event-store'
-
-export {
-  IdbEventStore,
-  createIdbEventStore,
-} from './runtime/idb-event-store'
-
-export {
-  mapFullStreamChunk,
-  mapFullStreamChunks,
-} from './runtime/voltagent/fullstream-to-envelope'
-export type {
-  FullStreamChunk,
-  MapFullStreamContext,
-  MapFullStreamResult,
-} from './runtime/voltagent/fullstream-to-envelope'
-
-export {
-  VoltAgentRuntimeAdapter,
-  createVoltAgentRuntimeAdapter,
-} from './runtime/voltagent/voltagent-runtime-adapter'
-export type { VoltAgentRuntimeAdapterOptions } from './runtime/voltagent/voltagent-runtime-adapter'
-
+// --- runtime utilities (UI honesty copy + projection helpers) ---
 export {
   previewText,
   runtimeHonestyCopy,
 } from './runtime/runtime-honesty'
-export type {
-  RuntimeHonestyCopy,
-  RuntimeHonestyMode,
-} from './runtime/runtime-honesty'
+export type { RuntimeHonestyCopy } from './runtime/runtime-honesty'
+
+export {
+  normalizeToolOutput,
+  sanitizeToolOutputForEnvelope,
+} from './runtime/tool-output-normalize'
+export type { NormalizedToolOutput } from './runtime/tool-output-normalize'
 
 // --- Phase 4B Kernel: application ---
 export { dispatchCommand, validateCommand } from './application/dispatch'

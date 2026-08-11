@@ -2,8 +2,8 @@
  * Shared CommandAcknowledgement builders for Fake Runtime handlers.
  */
 
-import type { RunStatus } from '../model/lifecycle'
-import type { CommandAcknowledgement } from '../protocol/commands'
+import type { RunStatus } from '@/modules/task'
+import type { CommandAcknowledgement } from '@/modules/task'
 
 export function accepted(
   commandId: string,

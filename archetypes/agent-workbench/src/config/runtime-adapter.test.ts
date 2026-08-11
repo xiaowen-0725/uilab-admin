@@ -6,9 +6,9 @@ import {
 } from './runtime-adapter'
 
 describe('runtime-adapter config', () => {
-  it('defaults to fake', () => {
-    expect(resolveRuntimeAdapterMode({})).toBe('fake')
-    expect(resolveRuntimeAdapterMode({ VITE_RUNTIME_ADAPTER: '' })).toBe('fake')
+  it('defaults to voltagent (ADR-0018)', () => {
+    expect(resolveRuntimeAdapterMode({})).toBe('voltagent')
+    expect(resolveRuntimeAdapterMode({ VITE_RUNTIME_ADAPTER: '' })).toBe('voltagent')
   })
 
   it('selects voltagent when configured', () => {
