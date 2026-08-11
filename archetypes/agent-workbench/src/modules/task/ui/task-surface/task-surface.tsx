@@ -11,7 +11,6 @@ import type {
   CommandAcknowledgement,
   TurnComposerContext,
 } from '../../protocol/commands'
-import type { RuntimeHonestyMode } from '../../runtime/runtime-honesty'
 import {
   ApprovalDock,
   findPendingApproval,
@@ -53,8 +52,6 @@ export interface TaskSurfaceComposerRuntime {
   onProvideInput?: (requestId: string, text: string) => void | Promise<void>
   onRetryTurn?: () => void | Promise<void>
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
-  /** Runtime honesty copy mode when mode === 'runtime'. */
-  honestyMode?: RuntimeHonestyMode
   /** Runtime-owned label; runtime mode does not pretend a local picker is wired. */
   modelLabel?: string
   /** Capability Surface controller (Composition-owned). */
@@ -96,7 +93,6 @@ export function TaskSurface({
   }
 
   const composerMode = composerRuntime?.mode ?? 'local-sim'
-  const honestyMode = composerRuntime?.honestyMode ?? 'fake'
 
   // Codex: pending tool approval docks at bottom and replaces Composer.
   const pendingApproval = useMemo(
@@ -125,7 +121,6 @@ export function TaskSurface({
               readModel={view.readModel}
               onRetryTurn={composerRuntime?.onRetryTurn}
               onFollowModeChange={composerRuntime?.onFollowModeChange}
-              honestyMode={honestyMode}
               onOpenFileRef={onOpenFileRef}
             />
           ) : view.mode === 'stream' && view.stream ? (
@@ -155,7 +150,6 @@ export function TaskSurface({
               onSubmitText={composerRuntime?.onSubmitText}
               onCancelRun={composerRuntime?.onCancelRun}
               runtimeNotice={composerRuntime?.runtimeNotice}
-              honestyMode={honestyMode}
               modelLabel={composerRuntime?.modelLabel}
               capabilityController={composerRuntime?.capabilityController}
               capabilityTaskId={

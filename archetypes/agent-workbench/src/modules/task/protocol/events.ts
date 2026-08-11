@@ -121,16 +121,3 @@ export const AGENT_RUNTIME_EVENT_TYPES = [
   'capability.changed',
 ] as const satisfies readonly AgentRuntimeEventType[]
 
-/** Phase 4B Fake minimum emit set (s01/s03 class). */
-export const FAKE_RUNTIME_CORE_EVENT_TYPES = [
-  'task.created',
-  'turn.created',
-  'run.queued',
-  'run.started',
-  'message.accepted',
-  'output.delta',
-  'output.completed',
-  'run.completed',
-  'run.cancel_requested',
-  'run.cancelled',
-] as const satisfies readonly AgentRuntimeEventType[]

@@ -11,10 +11,7 @@ import {
   type SessionPointerRecord,
 } from '@/app/persistence/workbench-idb'
 import { launchActions } from '@/config/fixtures'
-import {
-  resolveRuntimeAdapterMode,
-  resolveVoltAgentBaseUrl,
-} from '@/config/runtime-adapter'
+import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
   DEFAULT_PROJECT_ID,
   NEW_TASK_TITLE,
@@ -41,8 +38,6 @@ import {
   hardDeleteTask,
 } from './task-lifecycle-commands'
 import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
-
-const RUNTIME_ADAPTER_MODE = resolveRuntimeAdapterMode()
 
 const INSTANT_DEMO =
   import.meta.env.MODE === 'test' ||
@@ -71,8 +66,8 @@ function resolveDefaultPersistence(): WorkbenchPersistence {
   return 'idb'
 }
 
-/** Runtime path: no honesty chips in product chrome (data-honesty-mode / a11y only). */
-function runtimeContext(_mode: 'fake' | 'voltagent') {
+/** Runtime context chips are empty in product chrome (data-honesty-mode / a11y only). */
+function runtimeContext(): [] {
   return []
 }
 
@@ -99,7 +94,7 @@ export function WorkbenchApp({
 
   // --- Document source (module-owned bind UI) ---
   const documentSource = useWorkspaceDocumentSource({
-    runtimeMode: RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
+    runtimeMode: 'voltagent',
     voltAgentBaseUrl: resolveVoltAgentBaseUrl(),
   })
 
@@ -128,10 +123,8 @@ export function WorkbenchApp({
     projectId,
     persistence,
     bootReady,
-    selectedTaskId: taskId,
   })
   const {
-    honestyMode,
     controller: runtimeController,
     runStatusIndex,
     capabilityController,
@@ -217,7 +210,7 @@ export function WorkbenchApp({
       streamPlaying: false,
       readModel: isRuntimePath ? runtime.readModel : null,
       launchActions,
-      contextSections: runtimeContext(honestyMode),
+      contextSections: runtimeContext(),
       contextPanelOpen: session.view.layout.contextPanelOpen,
     }
   }, [
@@ -227,7 +220,6 @@ export function WorkbenchApp({
     mode,
     isRuntimePath,
     runtime.readModel,
-    honestyMode,
     session.view.layout.contextPanelOpen,
   ])
 
@@ -236,9 +228,7 @@ export function WorkbenchApp({
       isRuntimePath
         ? {
             mode: 'runtime' as const,
-            honestyMode,
-            modelLabel:
-              honestyMode === 'voltagent' ? '本地侧车模型' : 'Fake Runtime',
+            modelLabel: '本地侧车模型',
             runStatus: runtime.runStatus,
             onSubmitText: runtime.submitText,
             onCancelRun: runtime.cancelActiveRun,
@@ -260,7 +250,6 @@ export function WorkbenchApp({
         : undefined,
     [
       isRuntimePath,
-      honestyMode,
       runtime.runStatus,
       runtime.submitText,
       runtime.cancelActiveRun,

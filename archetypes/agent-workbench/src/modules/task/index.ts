@@ -111,10 +111,7 @@ export type {
   AgentRuntimeEventEnvelope,
   AgentRuntimeEventType,
 } from './protocol/events'
-export {
-  AGENT_RUNTIME_EVENT_TYPES,
-  FAKE_RUNTIME_CORE_EVENT_TYPES,
-} from './protocol/events'
+export { AGENT_RUNTIME_EVENT_TYPES } from './protocol/events'
 
 // --- Phase 4B Kernel: ports ---
 export type {
@@ -137,18 +134,6 @@ export type {
 export { EventStorePortError } from './ports/event-store-port'
 
 // --- Phase 4B Kernel: runtime ---
-export { VirtualClock } from './runtime/virtual-clock'
-export type { VirtualClockOptions, ScheduledHandle } from './runtime/virtual-clock'
-
-export {
-  DeterministicFakeRuntime,
-  createDeterministicFakeRuntime,
-} from './runtime/fake-runtime'
-export type {
-  DeterministicFakeRuntimeOptions,
-  FakeScenarioName,
-} from './runtime/fake-runtime'
-
 export {
   MemoryEventStore,
   createMemoryEventStore,
@@ -179,10 +164,7 @@ export {
   previewText,
   runtimeHonestyCopy,
 } from './runtime/runtime-honesty'
-export type {
-  RuntimeHonestyCopy,
-  RuntimeHonestyMode,
-} from './runtime/runtime-honesty'
+export type { RuntimeHonestyCopy } from './runtime/runtime-honesty'
 
 // --- Phase 4B Kernel: application ---
 export { dispatchCommand, validateCommand } from './application/dispatch'
