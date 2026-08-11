@@ -355,6 +355,7 @@ async function checkSources() {
     'src/modules/workbench-session/index.ts',
     'src/modules/task/index.ts',
     'src/modules/work-surface/index.ts',
+    'src/modules/capabilities/index.ts',
   ]
   for (const p of required) {
     await mustExist(path.join(workbenchRoot, p), p)

@@ -132,12 +132,12 @@ describe('resolveAuthStatus', () => {
         pluginId: 'feishu',
         resourceId: 'cli:feishu',
         kind: 'cli_session',
-        loginHint: '请先运行 feishu-cli auth login',
+        loginHint: '请先运行 lark-cli auth login',
       },
       store,
     )
     assert.equal(r.status, 'missing')
-    assert.match(r.hint ?? '', /feishu-cli/)
+    assert.match(r.hint ?? '', /lark-cli/)
   })
 
   it('oauth2 reports missing when no tokens', async () => {

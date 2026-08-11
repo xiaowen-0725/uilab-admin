@@ -151,6 +151,7 @@ export function WorkbenchApp({
     honestyMode,
     controller: runtimeController,
     runStatusIndex,
+    capabilityController,
   } = runtimeWiring
 
   const isRuntimePath = Boolean(taskId)
@@ -274,6 +275,8 @@ export function WorkbenchApp({
               runtime.provideRunInput(text, requestId),
             onRetryTurn: () => runtime.retryTurn(),
             onFollowModeChange: runtime.setFollowMode,
+            capabilityController,
+            capabilityTaskId: taskId,
           }
         : undefined,
     [
@@ -289,6 +292,8 @@ export function WorkbenchApp({
       runtime.setFollowMode,
       bootError,
       persistence,
+      capabilityController,
+      taskId,
     ],
   )
 

@@ -15,6 +15,10 @@ import {
 } from './auth-status.js'
 import { BUILTIN_PLUGINS } from './builtins.js'
 import {
+  projectConnectorDescriptors,
+  type ConnectorDescriptor,
+} from './connector-descriptor.js'
+import {
   discoverLocalPlugins,
   type PluginDiscoveryFailure,
 } from './discover.js'
@@ -31,6 +35,7 @@ import type {
 } from './manifest.js'
 import { createPersistedAuthBindingStore } from './auth-binding-persist.js'
 import {
+  createAuthBindingStore,
   createDefaultSecretStore,
   type AuthBindingStore,
   type SecretStore,
@@ -39,10 +44,12 @@ import {
   loadResolvedMcpServers,
   resolveMcpContribution,
   type McpHost,
+  type McpLoadAggregate,
   type McpServerLoadStatus,
   type ResolvedMcpServer,
 } from './mcp-loader.js'
 import type { CredentialMaterial } from './types.js'
+import type { RegisteredToolIdentity } from './tool-identity.js'
 import { parseEnvStringList } from './parse-util.js'
 import {
   loadSkillsContributions,
@@ -68,8 +75,12 @@ export type PluginRuntimeRecord = {
 
 export type PluginRegistryLoadResult = {
   plugins: PluginRuntimeRecord[]
+  /** Product Connector catalog projected from Provider-owned manifests. */
+  connectorDescriptors: ConnectorDescriptor[]
   tools: Tool<any, any>[]
   toolNames: string[]
+  /** Reversible model-visible name → Provider identity records. */
+  toolIdentities: RegisteredToolIdentity[]
   mcpStatuses: McpServerLoadStatus[]
   cliStatuses: CliLoadStatus[]
   authStatuses: PluginAuthStatus[]
@@ -93,8 +104,18 @@ export type PluginRegistryLoadOptions = {
 
 export type PluginRegistry = {
   listManifests(): PluginManifest[]
+  listConnectorDescriptors(): ConnectorDescriptor[]
   /** Enabled plugin ids for this env/config */
   resolveEnabledIds(): string[]
+  /** Re-probe auth resources without reconnecting MCP or rebuilding tools. */
+  refreshAuthStatuses(): Promise<PluginAuthStatus[]>
+  /** Connect one enabled MCP plugin after managed OAuth authorization. */
+  loadMcpPlugin(pluginId: string): Promise<McpLoadAggregate>
+  /** Node-side auth infrastructure; never expose through HTTP/Renderer. */
+  getAuthRuntimeStores(): {
+    secretStore: SecretStore
+    bindingStore?: AuthBindingStore
+  }
   load(options?: PluginRegistryLoadOptions): Promise<PluginRegistryLoadResult>
 }
 
@@ -152,6 +173,7 @@ export function createPluginRegistry(
   )
   const byId = new Map(manifests.map((m) => [m.id, m]))
   const discoveryFailures = options.discoveryFailures ?? []
+  const connectorDescriptors = projectConnectorDescriptors(manifests)
 
   function resolveEnabledIds(): string[] {
     if (options.enabledIds) return [...options.enabledIds]
@@ -169,9 +191,69 @@ export function createPluginRegistry(
     return [...ids].filter((id) => byId.has(id) && !disabled.has(id))
   }
 
+  const authOpts: ResolvePluginAuthOptions = {
+    env,
+    store: options.secretStore,
+    bindingStore: options.authBindingStore,
+    runner: options.cliRunner,
+  }
+
+  function buildAuthItems() {
+    const enabled = new Set(resolveEnabledIds())
+    return manifests.map((manifest) => ({
+      pluginId: manifest.id,
+      enabled: enabled.has(manifest.id),
+      resources: manifest.contributes?.auth ?? [],
+    }))
+  }
+
+  async function loadMcpPlugin(pluginId: string): Promise<McpLoadAggregate> {
+    const manifest = byId.get(pluginId)
+    if (!manifest || !resolveEnabledIds().includes(pluginId)) {
+      throw new Error(`MCP plugin 未启用：${pluginId}`)
+    }
+    const resources = manifest.contributes?.auth ?? []
+    const authEnforced = resources.length > 0
+    const resolved: ResolvedMcpServer[] = []
+    const expected: Array<{ pluginId: string; serverId: string }> = []
+    for (const contribution of manifest.contributes?.mcp ?? []) {
+      expected.push({ pluginId, serverId: contribution.serverId })
+      const resource = authEnforced
+        ? pickAuthResourceForMcp(resources, contribution.serverId)
+        : undefined
+      const material = resource
+        ? await resolveAuthResourceMaterial(pluginId, resource, true, authOpts)
+        : undefined
+      if (authEnforced && material?.status !== 'connected') continue
+      const server = resolveMcpContribution(pluginId, contribution, env, {
+        authEnforced,
+        authMaterial: material,
+      })
+      if (!server) continue
+      if (resource) {
+        server.resolveAuthMaterial = () =>
+          resolveAuthResourceMaterial(pluginId, resource, true, authOpts)
+      }
+      resolved.push(server)
+    }
+    return loadResolvedMcpServers(resolved, {
+      env,
+      host: options.host,
+      expected,
+    })
+  }
+
   return {
     listManifests: () => [...manifests],
+    listConnectorDescriptors: () => [...connectorDescriptors],
     resolveEnabledIds,
+    refreshAuthStatuses: () =>
+      resolvePluginAuthStatuses(buildAuthItems(), authOpts),
+    loadMcpPlugin,
+    getAuthRuntimeStores: () => ({
+      secretStore: authOpts.store ?? createDefaultSecretStore(env),
+      bindingStore: authOpts.bindingStore,
+    }),
     async load(
       loadOptions: PluginRegistryLoadOptions = {},
     ): Promise<PluginRegistryLoadResult> {
@@ -179,8 +261,11 @@ export function createPluginRegistry(
       const plugins: PluginRuntimeRecord[] = []
       const resolvedServers: ResolvedMcpServer[] = []
       const expected: Array<{ pluginId: string; serverId: string }> = []
-      const skillsItems: Array<{ pluginId: string; contrib: SkillsContribution }> =
-        []
+      const skillsItems: Array<{
+        pluginId: string
+        contrib: SkillsContribution
+        trustedInstalledSource?: boolean
+      }> = []
       const cliItems: Array<{
         pluginId: string
         contrib: CliContribution
@@ -193,13 +278,6 @@ export function createPluginRegistry(
         enabled: boolean
         resources: AuthResourceContribution[]
       }> = []
-
-      const authOpts: ResolvePluginAuthOptions = {
-        env,
-        store: options.secretStore,
-        bindingStore: options.authBindingStore,
-        runner: options.cliRunner,
-      }
 
       for (const manifest of manifests) {
         const isEnabled = enabled.has(manifest.id)
@@ -252,6 +330,9 @@ export function createPluginRegistry(
                 hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
               }
             }
+            if (resource?.kind === 'oauth2' && material?.status !== 'connected') {
+              continue
+            }
             const resolved = resolveMcpContribution(manifest.id, c, env, {
               authEnforced,
               authMaterial: material,
@@ -296,6 +377,7 @@ export function createPluginRegistry(
           skillsItems.push({
             pluginId: manifest.id,
             contrib: manifest.contributes.skills,
+            trustedInstalledSource: manifest.kind === 'builtin',
           })
         }
 
@@ -368,6 +450,7 @@ export function createPluginRegistry(
         workspaceRoot: loadOptions.workspaceRoot,
         packageRoot: loadOptions.packageRoot,
         bundledSkillsDir: loadOptions.bundledSkillsDir,
+        env,
       })
 
       // Only builtin plugins may self-declare free CLI tools; local PLUGIN_PATHS force approval
@@ -379,6 +462,7 @@ export function createPluginRegistry(
         workspaceRoot: loadOptions.workspaceRoot,
         runner: options.cliRunner,
         trustedPluginIds,
+        connectorDescriptors,
       })
 
       const authStatuses = await resolvePluginAuthStatuses(authItems, authOpts)
@@ -432,8 +516,13 @@ export function createPluginRegistry(
 
       return {
         plugins,
+        connectorDescriptors: [...connectorDescriptors],
         tools: [...mcpAgg.tools, ...cliAgg.tools],
         toolNames: [...mcpAgg.toolNames, ...cliAgg.toolNames],
+        toolIdentities: [
+          ...mcpAgg.toolIdentities,
+          ...cliAgg.toolIdentities,
+        ],
         mcpStatuses: mcpAgg.statuses,
         cliStatuses: cliAgg.statuses,
         authStatuses,
@@ -478,6 +567,9 @@ export async function createPluginRegistryFromEnv(
       env,
       rootDir: options.runtimeConfigDir,
     })
+  }
+  if (!authBindingStore) {
+    authBindingStore = createAuthBindingStore()
   }
 
   const secretStore =

@@ -7,7 +7,7 @@ Local **Agent Runtime** process for `@uilab/agent-workbench`’s `VoltAgentRunti
 ## Requirements
 
 - Node 20+
-- Model API key（默认 **DeepSeek** OpenAI 兼容：`https://api.deepseek.com`）
+- Model API key（默认使用 **DeepSeek 专用 Provider**：`https://api.deepseek.com`）
 
 ## Setup
 
@@ -49,10 +49,11 @@ AGENT_PROFILE=office
 
 ```bash
 # .env 内配置，例如：
+# VOLTAGENT_MODEL_PROVIDER=deepseek
 # DEEPSEEK_API_KEY=sk-...
-# OPENAI_BASE_URL=https://api.deepseek.com
+# DEEPSEEK_BASE_URL=https://api.deepseek.com
 # VOLTAGENT_MODEL=deepseek-v4-flash
-# VOLTAGENT_MODEL_API=chat   # default; multi-step tools. Use responses only for flash experiments.
+# VOLTAGENT_MODEL_API=chat
 # AGENT_PROFILE=office
 # WORKSPACE_ROOT=/absolute/path/to/office-folder
 
@@ -61,13 +62,13 @@ pnpm --filter @uilab/workbench-runtime-voltagent dev
 
 | Model id | Notes |
 | --- | --- |
-| **`deepseek-v4-flash`**（默认） | V4 快档；Chat Completions 多步 tool 稳定；Responses 官方也支持 flash |
-| `deepseek-v4-pro` | V4 旗舰；**请用** `VOLTAGENT_MODEL_API=chat`（Responses 尚未支持 Pro） |
+| **`deepseek-v4-flash`**（默认） | V4 快档；专用 Provider 保留并回传多步工具所需的 `reasoning_content` |
+| `deepseek-v4-pro` | V4 旗舰；同样使用 Chat Completions |
 | `deepseek-chat` / `deepseek-reasoner` | Legacy 别名，官方计划停用；勿作新默认 |
 
-**API 表面：** 默认 `VOLTAGENT_MODEL_API=chat`（`/chat/completions`）。AI SDK 的 `provider(modelId)` 会默认打 `/responses`，在 DeepSeek 上会导致多步 tool 400（`No tool call found for tool output with call_id`）；侧车已改为 `provider.chat(modelId)`。
+**API 表面：** DeepSeek 固定使用 `@ai-sdk/deepseek` 的 Chat Completions 路径。该 Provider 把响应中的 reasoning 映射成标准 AI SDK part，并在工具结果后的下一次请求回传 `reasoning_content`。`VOLTAGENT_MODEL_API=responses` 只允许与显式 `VOLTAGENT_MODEL_PROVIDER=openai` 一起使用。
 
-Server default: `http://127.0.0.1:3141`  
+Server default: `http://127.0.0.1:3141`
 Agent id: `workbench`
 
 ## Connect Workbench UI
@@ -122,26 +123,47 @@ office 装配**只经** `createPluginRegistry().load()` 聚合：
 
 | Builtin 插件 | 贡献 | 启用 |
 | --- | --- | --- |
+| `mcp.github` | 产品级 `connector.github`；GitHub 官方远程 MCP；`tools/list` 动态工具以 `github__` 前缀公开 | **默认启用**；用户点击连接后走平台 UI Lab Connector 一键授权；可用 `MCP_GITHUB_URL` 覆盖端点 |
 | `mcp.docs` | 文档/知识库 MCP | `MCP_DOCS_URL` / `FEISHU_DOCS_MCP_URL` 或 `MCP_DOCS_COMMAND` + `MCP_DOCS_ARGS` |
 | `mcp.calendar` | 日历 MCP | `MCP_CALENDAR_URL` / `FEISHU_CALENDAR_MCP_URL` 或 `MCP_CALENDAR_COMMAND` + `MCP_CALENDAR_ARGS` |
 | `skills.office` | `/skills` 下三 skill + output 目录 | 默认启用；`PLUGINS_DISABLED=skills.office` 可关 |
-| `cli.feishu` | 领域 CLI（allowlist 子命令 → `cli.feishu.*` tools） | **默认关闭**；`PLUGINS_ENABLED=cli.feishu` **叠加**默认集（不关掉 skills/mcp）+ `FEISHU_CLI_PATH` |
+| `cli.feishu` | `connector.feishu` metadata；官方 `lark-*` Skills 安装源；`commandScopes=['lark-cli']`；CLI session auth；无飞书业务 wrapper tools | **默认关闭**；`PLUGINS_ENABLED=cli.feishu` **叠加**默认集 + `FEISHU_CLI_PATH` / `FEISHU_SKILLS_ROOT`；Connected=`cli_session`（非宿主 OAuth） |
 
-可选：`MCP_*_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；`MCP_TIMEOUT_MS`；`PLUGINS_ENABLED` / `PLUGINS_DISABLED`；**`PLUGIN_PATHS`**（逗号分隔目录，扫描 `plugin.json` 或子目录包；**不**加载任意外部 JS，禁止 `contributes.tools`）。  
-MCP **默认全部 tools `needsApproval`**；仅 `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 精确免批。  
-**领域 CLI** 用 `execFile(command, argv[])`，禁止 shell 拼接；写操作默认 `needsApproval`；二进制缺失状态 `missing`。  
-stdio/CLI child env 按 `childEnvKeys` 隔离；**模型密钥永不转发**。  
-MCP 连接失败不崩溃；Skills seed 路径越界 fail-closed。密钥只放侧车 `.env`。Renderer 无 MCP SDK。
+产品级 Connector 目录当前只有两项：GitHub（MCP）与飞书（CLI）。`mcp.docs`、
+`mcp.calendar`、`skills.office` 是已有内部能力包，不投影为额外产品 Connector。
 
-启动日志：`mcp=docs=ok(N),calendar=off`；`cli=feishu=ready(2)` 或 `cli=none`；`auth=mcp.docs/bearer=missing,...`。
+其他自托管 MCP 可选：`MCP_*_BEARER_TOKEN` / `MCP_BEARER_TOKEN`；它们不适用于 builtin `mcp.github`。另有 `MCP_TIMEOUT_MS`、`PLUGINS_ENABLED` / `PLUGINS_DISABLED`、**`PLUGIN_PATHS`**（逗号分隔目录，扫描 `plugin.json` 或子目录包；支持 Provider-owned `contributes.connectors`；**不**加载任意外部 JS，禁止 `contributes.tools`）。
+MCP **默认全部 tools `needsApproval`**；仅 `MCP_READ_ONLY_TOOL_NAMES=exact_name,...` 精确免批。
+Office Workspace 同时暴露通用 `execute_command`，**每次**都需 Host 审批。普通命令走“主机只读 + Workspace 可写”OS 隔离（网络默认允许，可用 `WORKSPACE_SANDBOX_ALLOW_NETWORK=0` 关闭）；Provider command scope 还需 Plugin enabled + Connected + active Task selected，并由固定可执行文件、闭合 env、超时/输出上限保护。飞书通过该通用 Shell 执行原生 `lark-cli`，不生成业务 Function Tools。
+MCP 工具登记 canonical identity `(pluginId, channelId, originalName)`；模型名冲突或 normalize 时保留可逆映射。通用 CLI loader 仍可服务其它声明式插件，但不是飞书内置连接器的执行路径。
+stdio/CLI child env 按 `childEnvKeys` 隔离；**模型密钥永不转发**。
+MCP 连接失败不崩溃；Skills seed 路径越界 fail-closed。其他自托管插件的密钥只放 Sidecar SecretStore；builtin GitHub 的 Provider Secret 只在平台 Broker。Renderer 无 MCP SDK。
 
-**Auth（启用 ≠ 登录）：** 插件可声明 `contributes.auth`（`env_ref` / `static_bearer` / `cli_session`；`oauth2` 预留）。缺 env → `auth=missing`；配齐 → `connected`；`cli_session` 可用 `statusCommand` 探测。
+GitHub 产品连接流程不接受终端用户配置 App 凭据或 PAT。Workbench 点击「连接」后，
+Sidecar 向平台 Connector Broker 创建一次性授权会话并打开 UI Lab Connector 的 GitHub
+授权页；平台持有 GitHub App Client Secret 与 hosted callback。Sidecar 只持有短期 claim
+capability，轮询成功后把 access/refresh material 写入 Keychain，并热加载 MCP tools。
+
+`UILAB_CONNECTOR_BROKER_URL` 是平台发行/运维配置，不是终端用户设置。未部署 Broker 时
+连接动作诚实失败为“平台连接服务尚未配置”，不会回退到 PAT 或要求用户创建 GitHub App。
+
+飞书官方 Skills + 原生 Shell 验收（不调用模型）：
+
+```bash
+pnpm --filter @uilab/workbench-runtime-voltagent capability:feishu-shell-smoke
+```
+
+探针会在临时 Workspace 内同步官方 `lark-*` Skills，通过真实 CLI session + Task selection gate 执行 `lark-cli --version` 与 `lark-cli skills list`，并验证只暴露通用 `execute_command`。
+
+启动日志示例：`mcp=github=ok(N),docs=off,calendar=off`；飞书无 CLI tool-loader 状态；`auth=cli.feishu/cli:feishu=connected,...`。
+
+**Auth（启用 ≠ 登录）：** 插件可声明 `contributes.auth`（`env_ref` / `static_bearer` / `cli_session` / `oauth2`）。GitHub builtin 的 `oauth2` 固定为 `managed_broker`；缺平台 Broker 时 fail-closed。`cli_session` 可用 `statusCommand` 探测。
 
 - **#28 inject/revoke：** doctor 状态与 MCP HTTP Bearer / 子进程 secret env **同一 resolve 路径**；`AuthBindingStore.clear` 会 revoke；`expiresAt` → `auth=expired`。
 - **#29 持久绑定：** 非密 AuthBinding 默认落盘 `$UILAB_RUNTIME_DIR` 或 `~/.uilab/runtime/auth-bindings.json`（**不**进 workspace / git）。`UILAB_PERSIST_AUTH=0` 可关。
 - **#30 Keychain：** `SecretRef.backend=keychain` 在 macOS 走 `security`；CI 用 `UILAB_KEYCHAIN_MODE=fake`；`migrateEnvSecretsToKeychain` 可从 `.env` 迁入。
 - **#32 Operator auth：** `pnpm plugin:auth status|login|logout`；login 仅 `--from-env`；logout 与 inject revoke 一致。
-- **#31 OAuth PKCE：** `auth login --oauth-begin` / `--oauth-complete`；token 进 Keychain；过期自动 refresh，失败 → `auth=expired`。doctor 摘要**永不**打印 secret。
+- **#31 OAuth / managed broker：** GitHub Provider App secret、callback 与 refresh 归平台 Broker；Sidecar claim 后 token 进 Keychain，失败 → `auth=expired`。doctor 摘要**永不**打印 secret。
 
 **运维 list/doctor（非 Agent 终端）：**
 
@@ -160,7 +182,7 @@ pnpm --filter @uilab/workbench-runtime-voltagent plugin:doctor -- --json
 | `VOLTAGENT_MEMORY` | **libsql** | `in-memory` / `off` 可选 |
 | `VOLTAGENT_MEMORY_URL` | `file:<workspace>/.voltagent/memory.db` | LibSQL 文件 URL |
 
-Adapter 已将 `conversationId` 对齐 `taskId`，同 Task 多轮可续上下文。  
+Adapter 已将 `conversationId` 对齐 `taskId`，同 Task 多轮可续上下文。
 侧车启动日志打印 `maxSteps` / `summarization` / `memory`。
 
 **披露：** UI 标明「本机 VoltAgent Runtime · 非远程生产集群」（profile 由侧车 `AGENT_PROFILE` 决定）；侧车 log 在 office 时注明 Office；Fake 路径文案不变。
@@ -183,8 +205,8 @@ Fake Runtime / capture 路径**不**加载这些 skills。
 
 ## API used by Adapter
 
-- `POST /agents/workbench/stream` — SSE fullStream events  
-- Optional: `POST /agents/workbench/approvals` — best-effort approval notify  
+- `POST /agents/workbench/stream` — SSE fullStream events
+- Optional: `POST /agents/workbench/approvals` — best-effort approval notify
 
 ## Security
 
@@ -203,7 +225,7 @@ pnpm --filter @uilab/workbench-runtime-voltagent typecheck
 
 ## Related
 
-- Spec: GitHub issue #9 / `docs/plans/voltagent-office-profile-spec.md`  
-- Ticket: #10 O1 · #11 O2 · #15 O3 skills  
-- Adapter tickets: #1–#8  
+- Spec: GitHub issue #9 / `docs/plans/voltagent-office-profile-spec.md`
+- Ticket: #10 O1 · #11 O2 · #15 O3 skills
+- Adapter tickets: #1–#8
 - Domain: `RuntimePort`, `AgentRuntimeEventEnvelope`

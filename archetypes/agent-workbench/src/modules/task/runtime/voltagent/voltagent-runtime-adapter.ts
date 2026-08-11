@@ -103,6 +103,33 @@ function modelInputWithComposerContext(
         .join('、')}`,
     )
   }
+  if (context.connectors?.length) {
+    lines.push(
+      `本 Task 已选连接器：${context.connectors
+        .map((item) => {
+          const flags = [
+            item.connected ? '已连接' : '未连接',
+            item.capabilityEffective ? '能力面已进入' : '能力面未进入',
+          ].join('·')
+          return `${item.label}(${item.id}; ${flags})`
+        })
+        .join('、')}`,
+    )
+    lines.push(
+      '若连接器能力面已进入，GitHub 使用官方 MCP 工具，飞书按官方 lark-* Skill 通过 execute_command 执行原生 lark-cli；未进入时不要假装已调用。',
+    )
+  }
+  if (context.expert) {
+    lines.push(`本 Task 专家配置包：${context.expert.label}(${context.expert.id})`)
+    const instruction = context.expert.instruction?.trim()
+    if (instruction) {
+      lines.push(`专家指令（配置包 overlay，非子 Agent）：\n${instruction}`)
+    } else {
+      lines.push(
+        '专家目录未提供 instruction 时，仅按 id/label 与默认技能偏好工作；勿虚构专家能力。',
+      )
+    }
+  }
   if (context.skills?.length) {
     lines.push(`已选技能：${context.skills.map((item) => item.label).join('、')}`)
   }
@@ -465,6 +492,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       return rejected(command.commandId, 'task_busy', '当前任务已有进行中的 Run')
     }
 
+    // Bind sidecar capability active task BEFORE stream so tool gates see selection.
+    await this.bindCapabilityActiveTask(taskId)
+
     const { turnId, runId } = this.allocateIds(taskId, command)
     state.lastRunId = runId
     state.lastTurnId = turnId
@@ -630,6 +660,19 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       runId,
       turnId,
     })
+  }
+
+  /** Best-effort: tell sidecar which task is active for capability tool gates. */
+  private async bindCapabilityActiveTask(taskId: string): Promise<void> {
+    try {
+      await this.fetchImpl(`${this.baseUrl}/capability/active-task`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ taskId }),
+      })
+    } catch {
+      // Older sidecars may lack the route — tool gate stays transition-open.
+    }
   }
 
   private async streamAgent(args: {

@@ -372,6 +372,71 @@ describe('mapFullStreamChunks', () => {
     ])
   })
 
+  it('preserves a nested Runtime error message instead of showing the generic fallback', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'error',
+          error: { message: '模型在工具结果后失败' },
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes).toHaveLength(1)
+    expect(envelopes[0]?.eventType).toBe('run.failed')
+    expect(envelopes[0]?.payload).toMatchObject({
+      message: '模型在工具结果后失败',
+    })
+  })
+
+  it('extracts the provider message from a structured-cloned AI_APICallError', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'error',
+          error: {
+            name: 'AI_APICallError',
+            data: {
+              error: {
+                message:
+                  'The `reasoning_content` in the thinking mode must be passed back to the API.',
+              },
+            },
+          },
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes[0]?.payload).toMatchObject({
+      message:
+        'The `reasoning_content` in the thinking mode must be passed back to the API.',
+    })
+  })
+
+  it('extracts only the error message from an AI API responseBody', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'error',
+          error: {
+            name: 'AI_APICallError',
+            responseBody: JSON.stringify({
+              error: { message: '模型服务暂时不可用' },
+              request: { authorization: 'must-not-render' },
+            }),
+          },
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes[0]?.payload).toMatchObject({
+      message: '模型服务暂时不可用',
+    })
+  })
+
   it('maps approval-requested chunk', () => {
     const { envelopes } = mapFullStreamChunks(
       [

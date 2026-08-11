@@ -65,6 +65,7 @@ export function authResourceToBinding(
       ? {
           command,
           argv: statusCmd.argv,
+          connectedWhen: statusCmd.connectedWhen,
         }
       : undefined,
   }
@@ -89,6 +90,9 @@ export function resolveEffectiveBinding(
             firstEnv(env, resource.statusCommand?.commandFromEnv) ??
             override.statusCommand.command,
           argv: override.statusCommand.argv,
+          connectedWhen:
+            resource.statusCommand?.connectedWhen ??
+            override.statusCommand.connectedWhen,
         }
       : authResourceToBinding(pluginId, resource, env).statusCommand,
   }

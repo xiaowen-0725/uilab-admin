@@ -7,6 +7,7 @@ import { BUILTIN_CLI_FEISHU_PLUGIN, BUILTIN_PLUGINS } from './builtins.js'
 import {
   assertSafeArgvTemplate,
   buildCliArgv,
+  buildCliPassthroughArgv,
   cliToolName,
   closedChildEnv,
   defaultCliRunner,
@@ -49,6 +50,39 @@ describe('buildCliArgv', () => {
     assert.throws(
       () => buildCliArgv(['--id', '{{documentId}}'], {}),
       /缺少 CLI 参数/,
+    )
+  })
+})
+
+describe('buildCliPassthroughArgv', () => {
+  it('rejects credential-bearing flags and env assignments', () => {
+    assert.throws(
+      () =>
+        buildCliPassthroughArgv('argv', {
+          argv: ['auth', 'login', '--access-token', 'secret-value'],
+        }),
+      /敏感凭证参数/,
+    )
+    assert.throws(
+      () =>
+        buildCliPassthroughArgv('argv', {
+          argv: ['api', 'call', '--app-secret=secret-value'],
+        }),
+      /敏感凭证参数/,
+    )
+    assert.throws(
+      () =>
+        buildCliPassthroughArgv('argv', {
+          argv: ['api', 'call', '--clientSecret=secret-value'],
+        }),
+      /敏感凭证参数/,
+    )
+    assert.throws(
+      () =>
+        buildCliPassthroughArgv('argv', {
+          argv: ['FEISHU_APP_SECRET=secret-value', 'docs', 'get'],
+        }),
+      /敏感凭证参数/,
     )
   })
 })
@@ -110,6 +144,69 @@ describe('closedChildEnv / defaultCliRunner', () => {
 })
 
 describe('loadCliContributions', () => {
+  it('allows trusted Provider argv passthrough with exact argv and forced approval', async () => {
+    const bin = await makeFakeCli()
+    const calls: Array<{ cmd: string; argv: string[] }> = []
+    const agg = await loadCliContributions(
+      [
+        {
+          pluginId: 'cli.acme',
+          contrib: {
+            cliId: 'acme',
+            command: bin,
+            commands: [
+              {
+                name: 'invoke',
+                description: 'Invoke a Provider-native CLI contract',
+                argv: [],
+                passthroughArgvParam: 'argv',
+                parameters: [
+                  {
+                    name: 'argv',
+                    type: 'string_array',
+                    description: 'Exact Provider CLI argv array',
+                  },
+                ],
+                readOnly: true,
+                needsApproval: false,
+              },
+            ],
+          },
+        },
+      ],
+      {
+        trustedPluginIds: new Set(['cli.acme']),
+        runner: async (cmd, argv) => {
+          calls.push({ cmd, argv })
+          return { stdout: '{"ok":true}', stderr: '', exitCode: 0 }
+        },
+      },
+    )
+
+    assert.equal(agg.statuses[0]?.status, 'ready')
+    const invoke = agg.tools.find(
+      (tool) => tool.name === 'cli_acme_invoke',
+    ) as {
+      needsApproval?: boolean
+      execute: (args: unknown) => Promise<unknown>
+    }
+    assert.ok(invoke)
+    assert.equal(invoke.needsApproval, true)
+
+    const execution = (await invoke.execute({
+      argv: ['skills', 'read', 'lark-doc', '--json'],
+    })) as Record<string, unknown>
+    assert.deepEqual(calls[0]?.argv, [
+      'skills',
+      'read',
+      'lark-doc',
+      '--json',
+    ])
+    assert.equal(calls[0]?.cmd, bin)
+    assert.equal(execution.argvCount, 4)
+    assert.equal('argv' in execution, false)
+  })
+
   it('registers allowlisted tools with approval defaults', async () => {
     const bin = await makeFakeCli()
     const calls: Array<{ cmd: string; argv: string[] }> = []
@@ -148,14 +245,14 @@ describe('loadCliContributions', () => {
 
     assert.equal(agg.statuses[0]?.status, 'ready')
     assert.deepEqual(agg.toolNames.sort(), [
-      'cli.demo.mutate',
-      'cli.demo.ping',
+      'cli_demo_mutate',
+      'cli_demo_ping',
     ])
-    const ping = agg.tools.find((t) => t.name === 'cli.demo.ping') as {
+    const ping = agg.tools.find((t) => t.name === 'cli_demo_ping') as {
       needsApproval?: boolean
       execute: (a: unknown) => Promise<unknown>
     }
-    const mutate = agg.tools.find((t) => t.name === 'cli.demo.mutate') as {
+    const mutate = agg.tools.find((t) => t.name === 'cli_demo_mutate') as {
       needsApproval?: boolean
       execute: (a: unknown) => Promise<unknown>
     }
@@ -192,7 +289,38 @@ describe('loadCliContributions', () => {
       { runner: async () => ({ stdout: '', stderr: '', exitCode: 0 }) },
     )
     assert.ok(!agg.toolNames.some((n) => n.includes('rm') || n.includes('shell')))
-    assert.deepEqual(agg.toolNames, ['cli.demo.only_this'])
+    assert.deepEqual(agg.toolNames, ['cli_demo_only_this'])
+  })
+
+  it('rejects argv passthrough when the Provider is not explicitly trusted', async () => {
+    const bin = await makeFakeCli()
+    const agg = await loadCliContributions(
+      [
+        {
+          pluginId: 'cli.local-untrusted',
+          contrib: {
+            cliId: 'local-untrusted',
+            command: bin,
+            commands: [
+              {
+                name: 'invoke',
+                argv: [],
+                passthroughArgvParam: 'argv',
+                parameters: [{ name: 'argv', type: 'string_array' }],
+              },
+            ],
+          },
+        },
+      ],
+      {
+        trustedPluginIds: new Set(),
+        runner: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+      },
+    )
+
+    assert.equal(agg.tools.length, 0)
+    assert.equal(agg.statuses[0]?.status, 'failed')
+    assert.match(agg.statuses[0]?.reason ?? '', /仅允许受信 builtin Provider/)
   })
 
   it('reports missing when binary not on PATH', async () => {
@@ -223,7 +351,7 @@ describe('loadCliContributions', () => {
 })
 
 describe('PluginRegistry + domain CLI', () => {
-  it('enables cli.feishu via PLUGINS_ENABLED additively (skills stay on)', async () => {
+  it('enables cli.feishu metadata without generating Provider wrapper tools', async () => {
     const bin = await makeFakeCli()
     const reg = createPluginRegistry({
       env: {
@@ -241,19 +369,22 @@ describe('PluginRegistry + domain CLI', () => {
     assert.ok(reg.resolveEnabledIds().includes('skills.office'))
     assert.ok(reg.resolveEnabledIds().includes('mcp.docs'))
     const result = await reg.load()
-    assert.ok(result.toolNames.includes(cliToolName('feishu', 'docs_get')))
-    assert.ok(result.toolNames.includes(cliToolName('feishu', 'docs_write')))
-    const write = result.tools.find(
-      (t) => t.name === 'cli.feishu.docs_write',
-    ) as { needsApproval?: boolean }
-    assert.equal(write?.needsApproval, true)
-    const get = result.tools.find(
-      (t) => t.name === 'cli.feishu.docs_get',
-    ) as { needsApproval?: boolean }
-    assert.notEqual(get?.needsApproval, true)
+    assert.deepEqual(result.toolNames, [])
     assert.equal(
-      result.cliStatuses.find((s) => s.cliId === 'feishu')?.status,
-      'ready',
+      result.toolIdentities.some(
+        (identity) => identity.canonical.pluginId === 'cli.feishu',
+      ),
+      false,
+    )
+    assert.equal(
+      result.cliStatuses.some((status) => status.pluginId === 'cli.feishu'),
+      false,
+    )
+    assert.deepEqual(
+      result.connectorDescriptors.find(
+        (connector) => connector.id === 'connector.feishu',
+      )?.commandScopes,
+      ['lark-cli'],
     )
     await result.disconnect()
   })
@@ -302,9 +433,9 @@ describe('formatRegistryCliStatusLine', () => {
       formatRegistryCliStatusLine([
         {
           pluginId: 'a',
-          cliId: 'feishu',
+          cliId: 'acme',
           status: 'ready',
-          toolNames: ['cli.feishu.docs_get', 'cli.feishu.docs_write'],
+          toolNames: ['cli_acme_get', 'cli_acme_put'],
         },
         {
           pluginId: 'b',
@@ -313,7 +444,7 @@ describe('formatRegistryCliStatusLine', () => {
           toolNames: [],
         },
       ]),
-      'feishu=ready(2),gh=missing',
+      'acme=ready(2),gh=missing',
     )
   })
 })

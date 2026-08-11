@@ -58,6 +58,62 @@ describe('parsePluginManifestJson', () => {
     }
   })
 
+  it('keeps Provider-owned default MCP URL and public tool prefix', () => {
+    const r = parsePluginManifestJson(
+      validPluginJson({
+        contributes: {
+          mcp: [
+            {
+              serverId: 'demo',
+              url: 'https://mcp.example/default',
+              urlFromEnv: ['MCP_DEMO_URL'],
+              toolNamePrefix: 'demo__',
+            },
+          ],
+        },
+      }),
+      '/x/plugin.json',
+    )
+    assert.equal(r.ok, true)
+    if (r.ok) {
+      assert.equal(
+        r.manifest.contributes?.mcp?.[0]?.url,
+        'https://mcp.example/default',
+      )
+      assert.equal(r.manifest.contributes?.mcp?.[0]?.toolNamePrefix, 'demo__')
+    }
+  })
+
+  it('keeps provider-owned connector metadata from plugin.json', () => {
+    const r = parsePluginManifestJson(
+      validPluginJson({
+        contributes: {
+          connectors: [
+            {
+              id: 'connector.demo',
+              name: 'Demo',
+              description: 'Demo connector',
+              authResourceId: 'account',
+              authKind: 'oauth2',
+              primaryChannel: 'mcp',
+              capabilities: [],
+              toolScope: ['demo_'],
+              availability: 'sidecar',
+            },
+          ],
+        },
+      }),
+      '/x/plugin.json',
+    )
+    assert.equal(r.ok, true)
+    if (r.ok) {
+      assert.equal(
+        r.manifest.contributes?.connectors?.[0]?.id,
+        'connector.demo',
+      )
+    }
+  })
+
   it('rejects contributes.tools (no arbitrary JS)', () => {
     const r = parsePluginManifestJson(
       validPluginJson({
@@ -69,6 +125,111 @@ describe('parsePluginManifestJson', () => {
     )
     assert.equal(r.ok, false)
     if (!r.ok) assert.match(r.reason, /tools|JS/)
+  })
+
+  it('rejects host installed-Skills sources from external plugin.json', () => {
+    const parsed = parsePluginManifestJson(
+      {
+        schemaVersion: 1,
+        id: 'external.skills',
+        name: 'External Skills',
+        version: '1.0.0',
+        contributes: {
+          skills: {
+            virtualRoot: '/skills',
+            installedSource: {
+              defaultUserRelativeDir: '.agents/skills',
+              includePrefixes: ['lark-'],
+              syncStrategy: 'replace-generated',
+            },
+          },
+        },
+      },
+      '/tmp/external.skills/plugin.json',
+    )
+
+    assert.equal(parsed.ok, false)
+    if (!parsed.ok) assert.match(parsed.reason, /installedSource.*内置插件/)
+  })
+
+  it('rejects argv passthrough from external plugin.json', () => {
+    const r = parsePluginManifestJson(
+      validPluginJson({
+        contributes: {
+          cli: [
+            {
+              cliId: 'unsafe',
+              command: 'unsafe-cli',
+              commands: [
+                {
+                  name: 'invoke',
+                  argv: [],
+                  passthroughArgvParam: 'argv',
+                  parameters: [{ name: 'argv', type: 'string_array' }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      '/x/plugin.json',
+    )
+
+    assert.equal(r.ok, false)
+    if (!r.ok) assert.match(r.reason, /passthrough|受信 builtin/)
+  })
+
+  it('rejects platform-managed OAuth ownership from external plugin.json', () => {
+    const r = parsePluginManifestJson(
+      validPluginJson({
+        contributes: {
+          auth: [
+            {
+              resourceId: 'mcp:demo',
+              kind: 'oauth2',
+              oauth: {
+                strategy: 'managed_broker',
+                mcpServerId: 'demo',
+                providerId: 'demo',
+                brokerBaseUrl: 'https://connectors.example.com',
+              },
+            },
+          ],
+        },
+      }),
+      '/x/plugin.json',
+    )
+
+    assert.equal(r.ok, false)
+    if (!r.ok) assert.match(r.reason, /managed_broker.*builtin/)
+  })
+
+  it('rejects executable CLI auth flows from external plugin.json', () => {
+    const r = parsePluginManifestJson(
+      validPluginJson({
+        contributes: {
+          auth: [
+            {
+              resourceId: 'cli-session',
+              kind: 'cli_session',
+              cliSession: {
+                strategy: 'device_flow',
+                command: 'demo-cli',
+                authorization: {
+                  startArgv: ['auth', 'login'],
+                  completeArgv: ['auth', 'login', '{{deviceCode}}'],
+                  verificationUrlHosts: ['example.com'],
+                },
+              },
+            },
+          ],
+        },
+      }),
+      '/x/plugin.json',
+    )
+
+    assert.equal(r.ok, false)
+    if (!r.ok) assert.match(r.reason, /cliSession.*builtin|受信/)
   })
 
   it('rejects bad schemaVersion', () => {
@@ -121,10 +282,10 @@ describe('discoverLocalPlugins', () => {
 
     const result = await discoverLocalPlugins({ paths: [root] })
     assert.equal(result.failures.length, 0)
-    assert.deepEqual(
-      result.manifests.map((m) => m.id).sort(),
-      ['local.a', 'local.b'],
-    )
+    assert.deepEqual(result.manifests.map((m) => m.id).sort(), [
+      'local.a',
+      'local.b',
+    ])
   })
 
   it('isolates invalid JSON; does not throw', async () => {
@@ -218,7 +379,11 @@ describe('createPluginRegistryFromEnv', () => {
 
   it('discovery failure does not prevent builtin load', async () => {
     const dir = await tempDir('wb-plug-fail-')
-    await writeFile(path.join(dir, 'plugin.json'), '{"schemaVersion":1}', 'utf8')
+    await writeFile(
+      path.join(dir, 'plugin.json'),
+      '{"schemaVersion":1}',
+      'utf8',
+    )
 
     const reg = await createPluginRegistryFromEnv({
       env: { PLUGIN_PATHS: dir },

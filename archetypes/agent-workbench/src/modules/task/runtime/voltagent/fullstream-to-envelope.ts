@@ -36,6 +36,44 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+const MAX_ERROR_DEPTH = 3
+const MAX_ERROR_RESPONSE_BODY_LENGTH = 64 * 1024
+
+function extractResponseBodyErrorMessage(
+  value: unknown,
+  depth: number,
+): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    value.length > MAX_ERROR_RESPONSE_BODY_LENGTH
+  ) {
+    return undefined
+  }
+  try {
+    return extractErrorMessage(JSON.parse(value), depth + 1)
+  } catch {
+    return undefined
+  }
+}
+
+function extractErrorMessage(
+  value: unknown,
+  depth = 0,
+): string | undefined {
+  if (depth > MAX_ERROR_DEPTH) return undefined
+  if (value instanceof Error) return value.message || undefined
+  if (typeof value === 'string') return value || undefined
+  if (typeof value !== 'object' || value === null) return undefined
+  const record = value as Record<string, unknown>
+  return (
+    asString(record.message) ??
+    extractErrorMessage(record.error, depth + 1) ??
+    extractErrorMessage(record.cause, depth + 1) ??
+    extractErrorMessage(record.data, depth + 1) ??
+    extractResponseBodyErrorMessage(record.responseBody, depth)
+  )
+}
+
 function toolName(chunk: FullStreamChunk): string {
   return asString(chunk.toolName) ?? asString(chunk.name) ?? 'tool'
 }
@@ -293,9 +331,8 @@ export function mapFullStreamChunk(
       push('run.failed', {
         message:
           asString(chunk.message) ??
-          (chunk.error instanceof Error
-            ? chunk.error.message
-            : asString(chunk.error) ?? 'runtime error'),
+          extractErrorMessage(chunk.error) ??
+          'runtime error',
         error: chunk.error,
       })
       break

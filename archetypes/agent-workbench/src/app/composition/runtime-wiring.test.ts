@@ -21,6 +21,8 @@ describe('createWorkbenchRuntimePorts', () => {
     expect(ports.fakeRuntime).not.toBeNull()
     expect(ports.runtimePort).toBe(ports.fakeRuntime)
     expect(ports.runStatusIndex.getBusyTaskIds().size).toBe(0)
+    expect(ports.capabilityPort).toBeTruthy()
+    expect(ports.capabilityController).toBeTruthy()
   })
 
   it('creates VoltAgent adapter without Fake clock', () => {
@@ -33,6 +35,7 @@ describe('createWorkbenchRuntimePorts', () => {
     expect(ports.honestyMode).toBe('voltagent')
     expect(ports.fakeRuntime).toBeNull()
     expect(ports.runtimePort).toBeTruthy()
+    expect(ports.capabilityPort).toBeTruthy()
   })
 })
 

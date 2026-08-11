@@ -187,3 +187,17 @@ pnpm uilab-admin set-shell --theme system --sidebar inset --layout default --dir
 详细见 `archetypes/admin/docs/ai/` 与 skill references。
 
 薄模板目录：`archetypes/admin/scaffolds/data-table-list`、`archetypes/admin/scaffolds/settings-section`（复制后替换占位符，再对照 feature 参考补全）。
+
+## Agent skills
+
+### Issue tracker
+
+使用 GitHub Issues 管理 Agent 可执行工单。仓库、默认标签和阻塞关系规则见 [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
+
+### Triage labels
+
+分诊标签及其互斥规则见 [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)。只有标记 `ready-for-agent` 且不存在未完成 blocker 的工单可以进入实施。
+
+### Domain docs
+
+本仓库采用 single-context 模式：领域词汇以根 [`CONTEXT.md`](CONTEXT.md) 为入口，稳定架构决策记录在 [`docs/adr/`](docs/adr/)，详细约定见 [`docs/agents/domain.md`](docs/agents/domain.md)。

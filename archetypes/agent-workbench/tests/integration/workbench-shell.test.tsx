@@ -1,10 +1,11 @@
 import { WorkbenchApp } from '@/app/composition/workbench-app'
+import { flushSync } from 'react-dom'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
-/** Borderless shell: workspace is flush (no floating 8px inset card). */
-const INSET = 0
+/** Shipped Phase 3A contract: wide/medium Workspace uses an 8px inset. */
+const INSET = 8
 const NAV_WIDTH = 306
 const TOOLBAR_HEIGHT = 44
 const GEOMETRY_TOLERANCE = 2
@@ -60,12 +61,28 @@ async function expectPaneSettledInstant(
   await expect.element(shell).toHaveAttribute('data-pane-transition', 'instant')
 }
 
+/**
+ * Pane action metadata is intentionally transient and resets on transitionend.
+ * Observe the discrete React click synchronously so a loaded browser suite cannot
+ * miss the 160–200ms animated window while userEvent is settling.
+ */
+function clickAndExpectPaneAction(
+  trigger: ReturnType<typeof page.getByTestId>,
+  shell: ReturnType<typeof page.getByTestId>,
+  action: 'open' | 'close' | 'maximize' | 'restore'
+) {
+  const element = trigger.element()
+  if (!(element instanceof HTMLElement)) {
+    throw new TypeError('pane action trigger must be an HTMLElement')
+  }
+  flushSync(() => element.click())
+  expect(shell.element().getAttribute('data-pane-motion')).toBe('animated')
+  expect(shell.element().getAttribute('data-pane-transition')).toBe(action)
+}
 
 async function renderWorkbench() {
-  const result = await render(<WorkbenchApp persistence="memory" />)
-  await expect
-    .element(page.getByTestId('workbench-shell'))
-    .toBeInTheDocument()
+  const result = await render(<WorkbenchApp persistence='memory' />)
+  await expect.element(page.getByTestId('workbench-shell')).toBeInTheDocument()
   return result
 }
 
@@ -74,7 +91,7 @@ async function renderWorkbenchWithTask() {
   await renderWorkbench()
   // Workspace CTA works when Navigator is overlay/closed (medium/narrow).
   const emptyCta = document.querySelector(
-    '[data-testid="workspace-empty-new-chat"]',
+    '[data-testid="workspace-empty-new-chat"]'
   )
   if (emptyCta) {
     await userEvent.click(page.getByTestId('workspace-empty-new-chat'))
@@ -103,7 +120,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('navigator-tasks'))
       .toBeInTheDocument()
     expect(
-      document.querySelector('[data-testid="navigator-utilities"]'),
+      document.querySelector('[data-testid="navigator-utilities"]')
     ).toBeNull()
     await expect
       .element(page.getByTestId('workspace-empty-shell'))
@@ -124,12 +141,12 @@ describe('Workbench Shell integration (visible behavior)', () => {
 
     // C — Work drawer closed by default
     expect(
-      document.querySelector('[data-testid="work-surface-host"]'),
+      document.querySelector('[data-testid="work-surface-host"]')
     ).toBeNull()
     const slot = workDrawerSlot()
     expect(slot).toBeTruthy()
     expect(slot.getBoundingClientRect().width).toBeLessThanOrEqual(
-      GEOMETRY_TOLERANCE,
+      GEOMETRY_TOLERANCE
     )
   })
 
@@ -149,7 +166,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(Math.abs(navBox.width - NAV_WIDTH)).toBeLessThanOrEqual(
       GEOMETRY_TOLERANCE
     )
-    // Workspace: full-bleed (no card inset); left sits against Navigator.
+    // Workspace: 8px top/right/bottom; left sits against Navigator.
     expect(Math.abs(wsBox.top - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
     expect(
       Math.abs(window.innerWidth - wsBox.right - INSET)
@@ -227,7 +244,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
-  it('1440 collapsed by pointer: Navigator inert, full-bleed stage, animated motion', async () => {
+  it('1440 collapsed by pointer: Navigator inert, left inset, animated motion', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
 
@@ -245,7 +262,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(nav.hasAttribute('inert')).toBe(true)
     expect(page.getByTestId('navigator-filter').element().tabIndex).toBe(-1)
     const taskRow = document.querySelector(
-      '[data-testid^="task-task-"]',
+      '[data-testid^="task-task-"]'
     ) as HTMLElement | null
     expect(taskRow).toBeTruthy()
     expect(taskRow!.tabIndex).toBe(-1)
@@ -268,9 +285,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .getByTestId('workbench-workspace')
       .element()
       .getBoundingClientRect()
-    // Collapsed: rail gap is 0; workspace is full-bleed to the left edge.
+    // Collapsed: ~8px left inset; workspace expands into remaining viewport.
     expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
-    expect(wsBox.width).toBeGreaterThan(1400 - GEOMETRY_TOLERANCE)
+    expect(wsBox.width).toBeGreaterThan(1400 - INSET * 2 - GEOMETRY_TOLERANCE)
   })
 
   it('Navigator account menu opens upward with settings and sign-out fixtures', async () => {
@@ -291,9 +308,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
     const closedPanel = document.querySelector(
       '[data-testid="navigator-user-menu-panel"]'
     )
-    expect(
-      closedPanel == null || closedPanel.hasAttribute('data-closed')
-    ).toBe(true)
+    expect(closedPanel == null || closedPanel.hasAttribute('data-closed')).toBe(
+      true
+    )
 
     await userEvent.click(trigger)
     await expect.element(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -403,7 +420,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // Runtime path: no honesty chips in product chrome.
     await expect.element(panel).toHaveTextContent('任务上下文')
     expect(panel.element().textContent ?? '').not.toMatch(
-      /Fake Runtime|非生产|Deterministic Fake/,
+      /Fake Runtime|非生产|Deterministic Fake/
     )
 
     await userEvent.click(page.getByTestId('toggle-context'))
@@ -438,12 +455,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
     ) as HTMLElement
     expect(getComputedStyle(hostSlot).viewTransitionName).toBe('none')
 
-    await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
+    clickAndExpectPaneAction(
+      page.getByTestId('toggle-work-surface-chrome'),
+      shell,
+      'open'
+    )
     const host = page.getByTestId('work-surface-host')
     await expect.element(host).toBeInTheDocument()
     // Phase 3B: source stays animated|instant; action is separate.
-    await expect.element(shell).toHaveAttribute('data-pane-motion', 'animated')
-    await expect.element(shell).toHaveAttribute('data-pane-transition', 'open')
     await expect.element(host).toHaveAttribute('data-maximized', 'false')
     await expect
       .element(page.getByTestId('work-surface-panel'))
@@ -485,9 +504,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBe(true)
     await expectPaneSettledInstant(shell)
 
-    await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
-    await expect.element(shell).toHaveAttribute('data-pane-motion', 'animated')
-    await expect.element(shell).toHaveAttribute('data-pane-transition', 'close')
+    clickAndExpectPaneAction(
+      page.getByTestId('toggle-work-surface-chrome'),
+      shell,
+      'close'
+    )
     const closeStyle = getComputedStyle(slot)
     expect(parseDurationMs(closeStyle.transitionDuration)).toBe(160)
     expect(closeStyle.transitionTimingFunction).toBe(
@@ -519,14 +540,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('work-surface-panel'))
       .toHaveTextContent('工作区暂无打开的标签')
 
-    await userEvent.click(page.getByTestId('work-surface-maximize'))
+    clickAndExpectPaneAction(
+      page.getByTestId('work-surface-maximize'),
+      shell,
+      'maximize'
+    )
     await expect
       .element(page.getByTestId('work-surface-host'))
       .toHaveAttribute('data-maximized', 'true')
-    await expect.element(shell).toHaveAttribute('data-pane-motion', 'animated')
-    await expect
-      .element(shell)
-      .toHaveAttribute('data-pane-transition', 'maximize')
     const maxStyle = getComputedStyle(slot)
     expect(parseDurationMs(maxStyle.transitionDuration)).toBe(180)
     expect(maxStyle.transitionTimingFunction).toBe(
@@ -557,14 +578,14 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBe(true)
     await expectPaneSettledInstant(shell)
 
-    await userEvent.click(page.getByTestId('work-surface-maximize'))
+    clickAndExpectPaneAction(
+      page.getByTestId('work-surface-maximize'),
+      shell,
+      'restore'
+    )
     await expect
       .element(page.getByTestId('work-surface-host'))
       .toHaveAttribute('data-maximized', 'false')
-    await expect.element(shell).toHaveAttribute('data-pane-motion', 'animated')
-    await expect
-      .element(shell)
-      .toHaveAttribute('data-pane-transition', 'restore')
     const restoreStyle = getComputedStyle(slot)
     expect(parseDurationMs(restoreStyle.transitionDuration)).toBe(180)
     expect(restoreStyle.transitionTimingFunction).toBe(
@@ -597,9 +618,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBe(true)
     await expectPaneSettledInstant(shell)
 
-    await userEvent.click(page.getByTestId('work-surface-close'))
-    await expect.element(shell).toHaveAttribute('data-pane-motion', 'animated')
-    await expect.element(shell).toHaveAttribute('data-pane-transition', 'close')
+    clickAndExpectPaneAction(
+      page.getByTestId('work-surface-close'),
+      shell,
+      'close'
+    )
     await expect
       .poll(
         () =>
@@ -734,7 +757,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     const navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
     const navToolbar = document.querySelector(
-      '[data-testid="navigator-toolbar"]',
+      '[data-testid="navigator-toolbar"]'
     ) as HTMLElement
     expect(navToolbar).toBeTruthy()
     expect(navToolbar.contains(navToggles[0]!)).toBe(true)
@@ -771,7 +794,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     let navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
     const navToolbar = document.querySelector(
-      '[data-testid="navigator-toolbar"]',
+      '[data-testid="navigator-toolbar"]'
     ) as HTMLElement
     expect(navToolbar.contains(navToggles[0]!)).toBe(true)
 
@@ -789,7 +812,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
     const workToolbar = document.querySelector(
-      '[data-slot="work-surface-toolbar"]',
+      '[data-slot="work-surface-toolbar"]'
     ) as HTMLElement
     expect(workToolbar.contains(navToggles[0]!)).toBe(true)
   })
@@ -831,9 +854,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
       // Pointer open uses animated motion; fall back to keyboard if needed.
       await userEvent.click(workNavToggle)
       try {
-        await expect.poll(() => shell.element().getAttribute('data-nav-open'), {
-          timeout: 2000,
-        }).toBe('true')
+        await expect
+          .poll(() => shell.element().getAttribute('data-nav-open'), {
+            timeout: 2000,
+          })
+          .toBe('true')
       } catch {
         await userEvent.keyboard('{Control>}b{/Control}')
         await expect.element(shell).toHaveAttribute('data-nav-open', 'true')
@@ -874,7 +899,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // Task B defaults: Task-only
     await userEvent.click(page.getByTestId(`task-${taskBId}`))
     expect(
-      document.querySelector('[data-testid="work-surface-host"]'),
+      document.querySelector('[data-testid="work-surface-host"]')
     ).toBeNull()
     await expect
       .element(page.getByTestId('context-panel'))
@@ -986,14 +1011,17 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('composer-context-bar'))
       .toBeInTheDocument()
     expect(
-      page.getByTestId('composer-context-bar').element().getAttribute('data-empty'),
-    ).toBe('true')
+      page.getByTestId('composer-context-bar').element().childElementCount
+    ).toBe(0)
     expect(
-      document.querySelector('[data-testid="composer-chip-project"]'),
+      document.querySelector('[data-testid="composer-chip-project"]')
     ).toBeNull()
     // Notice is sr-only (no visible honesty chrome under Composer)
     expect(
-      page.getByTestId('composer-notice').element().classList.contains('sr-only'),
+      page
+        .getByTestId('composer-notice')
+        .element()
+        .classList.contains('sr-only')
     ).toBe(true)
 
     const composers = document.querySelectorAll('[data-testid="composer"]')

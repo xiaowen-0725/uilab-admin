@@ -6,10 +6,11 @@
  *   pnpm --filter @uilab/workbench-runtime-voltagent dev
  *
  * Env:
- *   DEEPSEEK_API_KEY or OPENAI_API_KEY
- *   OPENAI_BASE_URL — default https://api.deepseek.com (OpenAI-compatible)
+ *   VOLTAGENT_MODEL_PROVIDER — deepseek (default) | openai
+ *   DEEPSEEK_API_KEY or OPENAI_API_KEY (matching the selected provider)
+ *   DEEPSEEK_BASE_URL / OPENAI_BASE_URL — optional provider endpoint override
  *   VOLTAGENT_MODEL — default deepseek-v4-flash (legacy: deepseek-chat)
- *   VOLTAGENT_MODEL_API — chat (default, stable tools) | responses (flash only)
+ *   VOLTAGENT_MODEL_API — chat (default) | responses (OpenAI only)
  *   AGENT_PROFILE — office | minimal (default minimal)
  *   WORKSPACE_ROOT — absolute path tools may read/write
  *   PORT — default 3141
@@ -26,35 +27,40 @@ import {
   createLanguageModel,
   createProvider,
   resolveModelApiSurface,
+  resolveModelConnection,
   resolveModelId,
+  resolveModelProviderKind,
 } from './model.js'
 import { resolveAgentProfile } from './profile.js'
 
 const port = Number(process.env.PORT ?? 3141)
+const modelProviderKind = resolveModelProviderKind(process.env)
 const modelId = resolveModelId(process.env)
 const modelApi = resolveModelApiSurface(process.env)
-const apiKey =
-  process.env.DEEPSEEK_API_KEY ??
-  process.env.OPENAI_API_KEY ??
-  process.env.VOLTAGENT_API_KEY
-const baseURL =
-  process.env.OPENAI_BASE_URL ??
-  process.env.DEEPSEEK_BASE_URL ??
-  'https://api.deepseek.com'
+const { apiKey, baseURL } = resolveModelConnection(
+  modelProviderKind,
+  process.env,
+)
 
 const logger = createPinoLogger({
   name: 'workbench-runtime-voltagent',
-  level: (process.env.LOG_LEVEL as 'info' | 'debug' | 'warn' | 'error' | undefined) ?? 'info',
+  level:
+    (process.env.LOG_LEVEL as
+      | 'info'
+      | 'debug'
+      | 'warn'
+      | 'error'
+      | undefined) ?? 'info',
 })
 
 if (!apiKey) {
   logger.error(
-    'Missing DEEPSEEK_API_KEY or OPENAI_API_KEY. Copy tooling/workbench-runtime-voltagent/.env.example → .env',
+    `Missing API key for model provider ${modelProviderKind}. Copy tooling/workbench-runtime-voltagent/.env.example → .env`,
   )
   process.exit(1)
 }
 
-const provider = createProvider({ apiKey, baseURL })
+const provider = createProvider({ kind: modelProviderKind, apiKey, baseURL })
 const model = createLanguageModel(provider, modelId, modelApi)
 
 const profile = resolveAgentProfile(process.env)
@@ -73,12 +79,24 @@ const {
   cliStatuses,
   authStatusLine,
   authDoctorLine,
+  authStatuses,
   discoveryFailures,
+  enabledPluginIds,
+  connectorDescriptors,
+  discoverableSkillIds,
+  refreshAuthStatuses,
+  beginConnectorOAuth,
+  beginConnectorCliSession,
+  reconcileConnectorAuth,
   disconnectMcp,
 } = await createWorkbenchAgent({
   profile,
   model,
 })
+
+/** Live auth cache for Capability Snapshot (refreshed on /capability/auth/*). */
+let liveAuthStatuses = [...authStatuses]
+const capabilityVersionRef = { current: 1 }
 
 new VoltAgent({
   agents: {
@@ -124,7 +142,12 @@ new VoltAgent({
               reason: result.reason,
               message: result.message,
             },
-            httpStatusForWorkspaceRead(result.reason) as 400 | 403 | 404 | 413 | 500,
+            httpStatusForWorkspaceRead(result.reason) as
+              | 400
+              | 403
+              | 404
+              | 413
+              | 500,
           )
         }
 
@@ -133,8 +156,35 @@ new VoltAgent({
         c.header('X-Workspace-Relative-Path', result.relativePath)
         c.header('X-Byte-Length', String(result.byteLength))
         c.header('Cache-Control', 'no-store')
-        return c.body(result.bytes)
+        return c.body(Uint8Array.from(result.bytes))
       })
+
+      // Capability Surface — status-safe snapshot / selection / startAuth.
+      void import('./capability/http-routes.js').then(
+        async ({ mountCapabilityRoutes, loadExpertsForHttp }) => {
+          const experts = await loadExpertsForHttp()
+          mountCapabilityRoutes(app, {
+            versionRef: capabilityVersionRef,
+            getAuthStatuses: async () => liveAuthStatuses,
+            getEnabledPluginIds: () => enabledPluginIds,
+            getConnectorDescriptors: () => connectorDescriptors,
+            getPackagedToolNames: () => tools,
+            getCliStatuses: () => cliStatuses,
+            getDiscoverableSkillIds: () => discoverableSkillIds,
+            getExperts: () => experts,
+            refreshAuthStatuses: async () => {
+              liveAuthStatuses = await refreshAuthStatuses()
+              return liveAuthStatuses
+            },
+            beginConnectorOAuth,
+            beginConnectorCliSession,
+            reconcileConnectorAuth,
+          })
+          logger.info(
+            `capability routes mounted experts=${experts.map((e) => e.id).join(',') || '(none)'}`,
+          )
+        },
+      )
     },
   }),
   logger,
@@ -165,6 +215,7 @@ logger.info(
     'Workbench VoltAgent sidecar starting',
     `profile=${resolvedProfile}`,
     `port=${port}`,
+    `modelProvider=${modelProviderKind}`,
     `model=${modelId}`,
     `modelApi=${modelApi}`,
     `baseURL=${baseURL}`,
@@ -188,7 +239,9 @@ if (resolvedProfile === 'office' && authDoctorLine !== 'auth=none') {
 }
 
 for (const f of discoveryFailures) {
-  logger.warn(`plugin discovery failed id=${f.id}: ${f.reason} (${f.sourcePath})`)
+  logger.warn(
+    `plugin discovery failed id=${f.id}: ${f.reason} (${f.sourcePath})`,
+  )
 }
 
 const shutdown = async () => {

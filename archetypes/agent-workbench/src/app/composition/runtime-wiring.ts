@@ -15,6 +15,13 @@ import {
   resolveVoltAgentBaseUrl,
   resolveVoltAgentId,
 } from '@/config/runtime-adapter'
+import {
+  createCapabilityController,
+  createFakeCapabilitySnapshotPort,
+  createHttpCapabilitySnapshotPort,
+  type CapabilityController,
+  type CapabilitySnapshotPort,
+} from '@/modules/capabilities'
 import { DEFAULT_PROJECT_ID } from '@/modules/project'
 import type { EventStorePort, RuntimePort } from '@/modules/task'
 import {
@@ -55,6 +62,9 @@ export interface WorkbenchRuntimePorts {
   fakeRuntime: DeterministicFakeRuntime | null
   runStatusIndex: RunStatusIndex
   instantDemo: boolean
+  /** Capability Surface snapshot port (Fake honest / VoltAgent HTTP). */
+  capabilityPort: CapabilitySnapshotPort
+  capabilityController: CapabilityController
 }
 
 /**
@@ -112,6 +122,14 @@ export function createWorkbenchRuntimePorts(
       ? (voltRuntime as RuntimePort)
       : (fakeRuntime as RuntimePort)
 
+  const voltBase =
+    options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl()
+  const capabilityPort: CapabilitySnapshotPort =
+    adapterMode === 'voltagent'
+      ? createHttpCapabilitySnapshotPort({ baseUrl: voltBase })
+      : createFakeCapabilitySnapshotPort()
+  const capabilityController = createCapabilityController(capabilityPort)
+
   return {
     adapterMode,
     honestyMode: adapterMode,
@@ -119,6 +137,8 @@ export function createWorkbenchRuntimePorts(
     fakeRuntime,
     runStatusIndex: createRunStatusIndex(),
     instantDemo,
+    capabilityPort,
+    capabilityController,
   }
 }
 
@@ -251,6 +271,7 @@ export interface WorkbenchRuntimeWiring {
   controller: TaskRuntimeController | null
   runStatusIndex: RunStatusIndex
   runtimePort: RuntimePort
+  capabilityController: CapabilityController
 }
 
 /**
@@ -342,5 +363,6 @@ export function useWorkbenchRuntimeWiring(
     controller,
     runStatusIndex: ports.runStatusIndex,
     runtimePort: ports.runtimePort,
+    capabilityController: ports.capabilityController,
   }
 }

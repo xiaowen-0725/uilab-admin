@@ -3,7 +3,11 @@
  * Declarative only — no I/O.
  */
 
-import type { CredentialKind, SecretRef } from './types.js'
+import type {
+  CliSessionStatusPredicate,
+  CredentialKind,
+  SecretRef,
+} from './types.js'
 
 export type PluginKind = 'builtin' | 'local'
 
@@ -27,6 +31,8 @@ export type McpServerConfigShape =
 export type McpContribution = {
   /** Server key, e.g. docs / calendar / feishu_docs */
   serverId: string
+  /** Optional provider-owned default HTTP endpoint; env aliases override it. */
+  url?: string
   /** First non-empty env wins */
   urlFromEnv?: string[]
   commandFromEnv?: string[]
@@ -37,6 +43,8 @@ export type McpContribution = {
   timeoutMs?: number
   /** Exact tool names free of approval for this server */
   readOnlyToolNames?: string[]
+  /** Stable model-visible prefix while preserving Provider originalName. */
+  toolNamePrefix?: string
 }
 
 /**
@@ -59,15 +67,69 @@ export type SkillsContribution = {
   outputDirs?: string[]
   /** Only `missing-only` is supported (default). */
   seedStrategy?: 'missing-only'
+  /**
+   * Trusted builtin only: synchronize installed Agent Skill packages into a
+   * runtime-managed workspace root. Filesystem plugin.json cannot declare it.
+   */
+  installedSource?: {
+    /** First non-empty environment variable wins. */
+    rootFromEnv?: string[]
+    /** Default directory relative to the current user's home. */
+    defaultUserRelativeDir?: string
+    /** Include skill folder names beginning with one of these prefixes. */
+    includePrefixes: string[]
+    syncStrategy: 'replace-generated'
+  }
+}
+
+/** Provider-owned product metadata projected into the Capability Surface. */
+export type ConnectorCapabilityContribution = {
+  id: string
+  name: string
+  description?: string
+  channel: 'domain_cli' | 'mcp' | 'none'
+  /** Provider-declared public scopes for the current migration slice. */
+  toolNames: string[]
+  available: boolean
 }
 
 /**
- * Domain CLI (feishu-cli style) — not a free terminal.
+ * One product Connector contributed by one Plugin package.
+ * Host projection supplies pluginRefs/auth pluginId from the owning manifest.
+ * Multi-provider aggregation for one connector id is intentionally deferred.
+ */
+export type ConnectorContribution = {
+  id: string
+  name: string
+  description: string
+  authResourceId: string
+  authKind: CredentialKind
+  primaryChannel: 'domain_cli' | 'mcp' | 'hybrid' | 'none'
+  capabilities: ConnectorCapabilityContribution[]
+  /**
+   * Executable basenames owned by this Connector and gated by Task selection
+   * plus Provider auth before the generic Workspace Shell may run them.
+   */
+  commandScopes?: string[]
+  toolScope: string[]
+  availability: 'sidecar' | 'fake-catalog-only' | 'missing-binary'
+  channelAuth?: Array<{
+    channel: 'domain_cli' | 'mcp'
+    authKind: CredentialKind
+    resourceId?: string
+    label: string
+  }>
+  packageHint?: string
+  loginHint?: string
+}
+
+/**
+ * Domain CLI (lark-cli / allowlisted binary style) — not a free terminal.
  * Host invokes via execFile(command, argv[]); no shell string join.
  */
 export type CliArgParam = {
   name: string
-  type?: 'string' | 'number' | 'boolean'
+  type?: 'string' | 'number' | 'boolean' | 'string_array'
   description?: string
   /** Default true when omitted */
   required?: boolean
@@ -78,6 +140,11 @@ export type CliCommandContribution = {
   name: string
   /** Argv template; placeholders `{{param}}` filled from structured args only */
   argv: string[]
+  /**
+   * Trusted builtin Provider only: take the exact string[] from this parameter
+   * as argv for the fixed CLI binary. Always forces Host approval.
+   */
+  passthroughArgvParam?: string
   parameters?: CliArgParam[]
   description?: string
   /** Default true (fail-closed). Explicit false only when readOnly. */
@@ -99,6 +166,62 @@ export type CliContribution = {
   commands: CliCommandContribution[]
 }
 
+export type OAuthContribution =
+  | {
+      /** Platform-owned OAuth App; end users never configure Provider credentials. */
+      strategy: 'managed_broker'
+      /** MCP contribution that consumes the resulting bearer token. */
+      mcpServerId: string
+      /** Stable Provider key understood by the platform Connector Broker. */
+      providerId: string
+      /** Platform deployment configuration, not an end-user setting. */
+      brokerBaseUrl?: string
+      brokerBaseUrlFromEnv?: string[]
+      scopes?: string[]
+    }
+  | {
+      /** Generic self-hosted plugin path; not used by builtin GitHub. */
+      strategy: 'host_credentials'
+      mcpServerId: string
+      clientIdFromEnv: string[]
+      clientSecretFromEnv: string[]
+      redirectUriFromEnv?: string[]
+      scopes?: string[]
+    }
+
+/**
+ * Trusted Provider-owned CLI session authorization contract.
+ * Host executes the declared argv with execFile/spawn; it does not understand
+ * Provider command names, output copy, or browser URLs.
+ */
+export type CliSessionContribution = {
+  strategy: 'device_flow'
+  command?: string
+  commandFromEnv?: string[]
+  /** Closed child environment allowlist; base runtime keys are added by Host. */
+  childEnvKeys?: string[]
+  minimumVersion?: string
+  versionArgv?: string[]
+  bootstrap?: {
+    /** Structured CLI error subtypes that require first-run configuration. */
+    whenErrorSubtypes: string[]
+    /** Long-running command that emits a public verification URL then polls. */
+    argv: string[]
+    verificationUrlHosts: string[]
+    timeoutMs?: number
+  }
+  authorization: {
+    /** Short command returning JSON with verification_url + device_code. */
+    startArgv: string[]
+    /** Long-running completion command; supports {{deviceCode}}. */
+    completeArgv: string[]
+    verificationUrlHosts: string[]
+    defaultDomains?: string[]
+    domainFlag?: string
+    timeoutMs?: number
+  }
+}
+
 /**
  * Auth resource declaration (enable ≠ login).
  * Config stores refs / hints only — never secret values.
@@ -112,6 +235,10 @@ export type AuthResourceContribution = {
   /** Single SecretRef (env name or memory key); no secret value in manifest */
   secretRef?: SecretRef
   loginHint?: string
+  /** OAuth strategy metadata; never contains Provider secret values. */
+  oauth?: OAuthContribution
+  /** Trusted Provider-owned CLI Device Flow; no Provider ids in Host core. */
+  cliSession?: CliSessionContribution
   /**
    * cli_session: optional probe. exitCode === expectExitCode → connected.
    * commandFromEnv overrides bare command when set.
@@ -121,6 +248,8 @@ export type AuthResourceContribution = {
     commandFromEnv?: string[]
     argv?: string[]
     expectExitCode?: number
+    /** Optional Provider-owned structured success condition. */
+    connectedWhen?: CliSessionStatusPredicate
   }
 }
 
@@ -129,6 +258,8 @@ export type PluginContributes = {
   skills?: SkillsContribution
   cli?: CliContribution[]
   auth?: AuthResourceContribution[]
+  /** Product metadata owned by this Plugin; projected generically by Host. */
+  connectors?: ConnectorContribution[]
   /** Later tickets: tools */
 }
 

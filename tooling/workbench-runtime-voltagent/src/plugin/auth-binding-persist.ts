@@ -210,6 +210,7 @@ function parseBindingItem(item: unknown): AuthBinding | null {
       'tokenEndpoint',
       'clientId',
       'refreshAccount',
+      'clientSecretRef',
       'authorizationEndpoint',
       'redirectUri',
       'scopes',
@@ -230,6 +231,10 @@ function parseBindingItem(item: unknown): AuthBinding | null {
       tokenEndpoint: m.tokenEndpoint,
       clientId: m.clientId,
       refreshAccount: m.refreshAccount,
+      clientSecretRef:
+        m.clientSecretRef != null
+          ? parseStrictSecretRef(m.clientSecretRef)
+          : undefined,
       authorizationEndpoint:
         typeof m.authorizationEndpoint === 'string'
           ? m.authorizationEndpoint

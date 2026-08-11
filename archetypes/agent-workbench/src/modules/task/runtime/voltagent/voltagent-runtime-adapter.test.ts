@@ -15,7 +15,7 @@ function sseBody(chunks: object[]): ReadableStream<Uint8Array> {
 
 function collectEvents(
   adapter: ReturnType<typeof createVoltAgentRuntimeAdapter>,
-  taskId: string,
+  taskId: string
 ): RuntimeSubscriptionEvent[] {
   const events: RuntimeSubscriptionEvent[] = []
   adapter.subscribe(taskId, null, (e) => events.push(e))
@@ -51,6 +51,11 @@ describe('VoltAgentRuntimeAdapter', () => {
       composerContext: {
         attachments: [{ name: 'report.pdf', kind: 'file', meta: '本地附件' }],
         skills: [{ id: 'review', label: 'Code Review' }],
+        expert: {
+          id: 'expert.office-meeting',
+          label: '会议纪要专家',
+          instruction: '优先结构化会议纪要（议题、决议、待办）。',
+        },
         mode: 'plan',
       },
     })
@@ -58,21 +63,24 @@ describe('VoltAgentRuntimeAdapter', () => {
     await vi.waitFor(() => expect(requestBody).toContain('report.pdf'))
     expect(requestBody).toContain('未上传文件内容')
     expect(requestBody).toContain('Code Review')
+    expect(requestBody).toContain('专家指令')
+    expect(requestBody).toContain('优先结构化会议纪要')
     expect(requestBody).not.toContain('attachment bytes')
   })
 
   it('treats a DONE-only stream as a completed run', async () => {
     const encoder = new TextEncoder()
-    const fetchImpl = vi.fn(async () =>
-      new Response(
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-            controller.close()
-          },
-        }),
-        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
-      ),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+              controller.close()
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
     )
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',
@@ -100,26 +108,27 @@ describe('VoltAgentRuntimeAdapter', () => {
         events.filter(
           (event) =>
             event.kind === 'event' &&
-            event.envelope.eventType === 'run.completed',
-        ),
+            event.envelope.eventType === 'run.completed'
+        )
       ).toHaveLength(1)
     })
   })
 
   it('flushes a final SSE data line without a trailing newline', async () => {
     const encoder = new TextEncoder()
-    const fetchImpl = vi.fn(async () =>
-      new Response(
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(
-              encoder.encode('data: {"type":"text-delta","delta":"尾帧"}'),
-            )
-            controller.close()
-          },
-        }),
-        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
-      ),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode('data: {"type":"text-delta","delta":"尾帧"}')
+              )
+              controller.close()
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
     )
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',
@@ -144,17 +153,17 @@ describe('VoltAgentRuntimeAdapter', () => {
 
     await vi.waitFor(() => {
       const envelopes = events.flatMap((event) =>
-        event.kind === 'event' ? [event.envelope] : [],
+        event.kind === 'event' ? [event.envelope] : []
       )
       expect(
         envelopes.some(
           (event) =>
             event.eventType === 'output.delta' &&
-            (event.payload as { text?: string }).text === '尾帧',
-        ),
+            (event.payload as { text?: string }).text === '尾帧'
+        )
       ).toBe(true)
       expect(
-        envelopes.filter((event) => event.eventType === 'run.completed'),
+        envelopes.filter((event) => event.eventType === 'run.completed')
       ).toHaveLength(1)
     })
   })
@@ -167,7 +176,7 @@ describe('VoltAgentRuntimeAdapter', () => {
           { type: 'text-delta', delta: ' world' },
           { type: 'finish', finishReason: 'stop' },
         ]),
-        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
       )
     })
 
@@ -330,15 +339,13 @@ describe('VoltAgentRuntimeAdapter', () => {
   })
 
   it('normalizeWorkspaceToolInput maps host paths to virtual', async () => {
-    const { normalizeWorkspaceToolInput } = await import(
-      './voltagent-runtime-adapter'
-    )
+    const { normalizeWorkspaceToolInput } =
+      await import('./voltagent-runtime-adapter')
     expect(
       normalizeWorkspaceToolInput({
-        file_path:
-          '/Users/me/output/office-smoke-workspace/output/a.md',
+        file_path: '/Users/me/output/office-smoke-workspace/output/a.md',
         content: 'x',
-      }),
+      })
     ).toMatchObject({ file_path: '/output/a.md', content: 'x' })
   })
 
@@ -358,7 +365,7 @@ describe('VoltAgentRuntimeAdapter', () => {
           },
           { type: 'finish', finishReason: 'tool-calls' },
         ]),
-        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
       )
     })
     const adapter = createVoltAgentRuntimeAdapter({
@@ -424,7 +431,7 @@ describe('VoltAgentRuntimeAdapter', () => {
               tools: [{ name: 'ls' }, { name: 'write_file' }],
             },
           }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       }
       return new Response('no', { status: 404 })
@@ -442,7 +449,13 @@ describe('VoltAgentRuntimeAdapter', () => {
 
   it('respondToApproval resumes stream with approval-responded UIMessage', async () => {
     let call = 0
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/capability/active-task')) {
+        return new Response(JSON.stringify({ ok: true, taskId: 'task-ap' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       call += 1
       if (call === 1) {
         return new Response(
@@ -465,7 +478,7 @@ describe('VoltAgentRuntimeAdapter', () => {
             },
             { type: 'finish', finishReason: 'tool-calls' },
           ]),
-          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
         )
       }
       // Resume after approve
@@ -499,7 +512,7 @@ describe('VoltAgentRuntimeAdapter', () => {
           { type: 'text-delta', delta: '已写入' },
           { type: 'finish', finishReason: 'stop' },
         ]),
-        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
       )
     })
 
@@ -533,7 +546,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     })
 
     // Let first stream fully settle so activeAbort clears
-    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2))
     await new Promise((r) => setTimeout(r, 20))
 
     const aprAck = await adapter.sendCommand({
@@ -559,16 +572,19 @@ describe('VoltAgentRuntimeAdapter', () => {
       expect(types).toContain('output.delta')
       expect(types).toContain('run.completed')
     })
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
   })
 
   it('subscribe seeds nextSequence from EventStore cursor', async () => {
     const fetchImpl = vi.fn(
       async () =>
-        new Response(sseBody([{ type: 'text-delta', delta: 'ok' }, { type: 'finish' }]), {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        }),
+        new Response(
+          sseBody([{ type: 'text-delta', delta: 'ok' }, { type: 'finish' }]),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream' },
+          }
+        )
     )
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',

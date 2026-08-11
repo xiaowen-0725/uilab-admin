@@ -16,6 +16,11 @@ import {
 } from './mcp-loader.js'
 import { createPluginRegistry, formatRegistryMcpStatusLine } from './registry.js'
 import { decideToolNeedsApproval } from './security-policy.js'
+import { oauthAccessAccount } from './oauth.js'
+import {
+  createAuthBindingStore,
+  createKeychainSecretStore,
+} from './secret-store.js'
 
 function docsContrib() {
   return BUILTIN_MCP_DOCS_PLUGIN.contributes!.mcp![0]
@@ -184,6 +189,113 @@ describe('buildMcpChildEnv (connector-scoped)', () => {
 })
 
 describe('PluginRegistry MCP load', () => {
+  it('discovers official GitHub MCP tools under a stable public prefix after managed authorization', async () => {
+    const github = BUILTIN_PLUGINS.find((plugin) => plugin.id === 'mcp.github')
+    assert.ok(github, 'expected builtin mcp.github')
+
+    const secretStore = createKeychainSecretStore({ mode: 'fake' })
+    const bindingStore = createAuthBindingStore()
+    const accessAccount = oauthAccessAccount('mcp.github', 'mcp:github')
+    await secretStore.set!(
+      { backend: 'keychain', account: accessAccount },
+      'managed-oauth-token',
+    )
+    bindingStore.upsert({
+      pluginId: 'mcp.github',
+      resourceId: 'mcp:github',
+      kind: 'oauth2',
+      secretRef: { backend: 'keychain', account: accessAccount },
+      expiresAt: Date.now() + 60_000,
+    })
+    let capturedServers: Record<string, unknown> | undefined
+    const reg = createPluginRegistry({
+      env: { PLUGINS_ENABLED: 'mcp.github' },
+      secretStore,
+      authBindingStore: bindingStore,
+      host: {
+        getTools: async (servers) => {
+          capturedServers = servers
+          return {
+            tools: [
+              createTool({
+                name: 'search_repositories',
+                description: 'Search repositories',
+                parameters: z.object({ query: z.string() }),
+                execute: async () => ({ ok: true }),
+              }),
+            ] as any[],
+            disconnect: async () => {},
+          }
+        },
+      },
+    })
+
+    const result = await reg.load()
+    assert.equal(
+      (capturedServers?.github as { url?: string } | undefined)?.url,
+      'https://api.githubcopilot.com/mcp/',
+    )
+    assert.equal(
+      (
+        capturedServers?.github as
+          | { requestInit?: { headers?: { Authorization?: string } } }
+          | undefined
+      )?.requestInit?.headers?.Authorization,
+      'Bearer managed-oauth-token',
+    )
+    assert.ok(result.toolNames.includes('github__search_repositories'))
+    assert.deepEqual(
+      result.toolIdentities.find(
+        (identity) => identity.publicName === 'github__search_repositories',
+      )?.canonical,
+      {
+        pluginId: 'mcp.github',
+        channel: 'mcp',
+        channelId: 'github',
+        originalName: 'search_repositories',
+      },
+    )
+    await result.disconnect()
+  })
+
+  it('keeps a reversible provider identity when MCP tool names collide', async () => {
+    const reg = createPluginRegistry({
+      env: {
+        MCP_DOCS_URL: 'https://mcp.example/docs',
+        MCP_CALENDAR_URL: 'https://mcp.example/calendar',
+      },
+      host: {
+        getTools: async () => ({
+          tools: [
+            createTool({
+              name: 'search',
+              description: 'search',
+              parameters: z.object({}),
+              execute: async () => ({ ok: true }),
+            }),
+          ] as any[],
+          disconnect: async () => {},
+        }),
+      },
+    })
+
+    const result = await reg.load()
+    assert.ok(result.toolNames.includes('search'))
+    assert.ok(result.toolNames.includes('calendar__search'))
+    assert.deepEqual(
+      result.toolIdentities.find(
+        (identity) => identity.publicName === 'calendar__search',
+      )?.canonical,
+      {
+        pluginId: 'mcp.calendar',
+        channel: 'mcp',
+        channelId: 'calendar',
+        originalName: 'search',
+      },
+    )
+    await result.disconnect()
+  })
+
   it('disabled when no MCP env; both builtins report disabled', async () => {
     const reg = createPluginRegistry({ env: {}, builtins: BUILTIN_PLUGINS })
     const result = await reg.load()

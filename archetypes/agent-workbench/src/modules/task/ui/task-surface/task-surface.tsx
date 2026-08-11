@@ -56,6 +56,10 @@ export interface TaskSurfaceComposerRuntime {
   honestyMode?: RuntimeHonestyMode
   /** Runtime-owned label; runtime mode does not pretend a local picker is wired. */
   modelLabel?: string
+  /** Capability Surface controller (Composition-owned). */
+  capabilityController?: import('@/modules/capabilities').CapabilityController | null
+  /** Active task id for capability selection persistence. */
+  capabilityTaskId?: string | null
 }
 
 export interface TaskSurfaceProps {
@@ -148,6 +152,10 @@ export function TaskSurface({
               runtimeNotice={composerRuntime?.runtimeNotice}
               honestyMode={honestyMode}
               modelLabel={composerRuntime?.modelLabel}
+              capabilityController={composerRuntime?.capabilityController}
+              capabilityTaskId={
+                composerRuntime?.capabilityTaskId ?? view.taskId
+              }
               // Codex top-rail stack: rail always on for depth; project chip only on empty hub.
               showContextBar
               showProjectChip={view.mode === 'empty'}

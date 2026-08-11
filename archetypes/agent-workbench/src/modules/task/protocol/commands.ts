@@ -49,6 +49,18 @@ export interface TurnComposerContext {
     meta?: string
   }>
   skills?: Array<{ id: string; label: string }>
+  /** Task-selected connectors (Capability Surface); status-safe labels only. */
+  connectors?: Array<{
+    id: string
+    label: string
+    connected?: boolean
+    capabilityEffective?: boolean
+  }>
+  /**
+   * Task-selected expert profile (not a sub-agent).
+   * `instruction` is the config-package overlay from Expert catalog (status-safe).
+   */
+  expert?: { id: string; label: string; instruction?: string } | null
   mode?: 'default' | 'goal' | 'plan' | 'goal+plan'
 }
 

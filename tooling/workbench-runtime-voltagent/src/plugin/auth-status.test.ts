@@ -23,7 +23,7 @@ describe('resolveAuthStatus cli_session probe', () => {
       pluginId: 'cli.feishu',
       resourceId: 'cli:feishu',
       kind: 'cli_session' as const,
-      loginHint: '请先运行 feishu-cli auth login',
+      loginHint: '请先运行 lark-cli auth login',
       statusCommand: { command: '/bin/true', argv: [] as string[] },
     }
     const store = createEnvSecretStore({})
@@ -36,7 +36,7 @@ describe('resolveAuthStatus cli_session probe', () => {
       runner: async () => ({ stdout: '', stderr: 'not logged in', exitCode: 1 }),
     })
     assert.equal(miss.status, 'missing')
-    assert.match(miss.hint ?? '', /feishu-cli|login/)
+    assert.match(miss.hint ?? '', /lark-cli|login/)
     assert.doesNotMatch(miss.hint ?? '', /token|secret/i)
   })
 
@@ -59,6 +59,55 @@ describe('resolveAuthStatus cli_session probe', () => {
     )
     assert.equal(r.status, 'error')
     assert.match(r.hint ?? '', /login please|spawn/)
+  })
+
+  it('requires the Provider-declared user identity instead of accepting a bot-only exit 0', async () => {
+    const binding = {
+      pluginId: 'cli.feishu',
+      resourceId: 'cli:feishu',
+      kind: 'cli_session' as const,
+      loginHint: '请先授权飞书用户账号',
+      statusCommand: {
+        command: '/fake/lark-cli',
+        argv: ['auth', 'status', '--json', '--verify'],
+        connectedWhen: {
+          jsonPath: ['identities', 'user', 'available'],
+          equals: true,
+        },
+      },
+    }
+    const store = createEnvSecretStore({})
+    const botOnly = await resolveAuthStatus(binding, store, {}, {
+      runner: async () => ({
+        stdout: JSON.stringify({
+          identity: 'bot',
+          verified: true,
+          identities: {
+            bot: { status: 'ready', available: true },
+            user: { status: 'missing', available: false },
+          },
+        }),
+        stderr: '',
+        exitCode: 0,
+      }),
+    })
+    assert.equal(botOnly.status, 'missing')
+
+    const userReady = await resolveAuthStatus(binding, store, {}, {
+      runner: async () => ({
+        stdout: JSON.stringify({
+          identity: 'user',
+          verified: true,
+          identities: {
+            bot: { status: 'ready', available: true },
+            user: { status: 'ready', available: true },
+          },
+        }),
+        stderr: '',
+        exitCode: 0,
+      }),
+    })
+    assert.equal(userReady.status, 'connected')
   })
 })
 
@@ -138,13 +187,24 @@ describe('PluginRegistry auth merge', () => {
     const reg = createPluginRegistry({
       env: {
         PLUGINS_ENABLED: 'cli.feishu',
-        FEISHU_CLI_PATH: '/fake/feishu-cli',
+        FEISHU_CLI_PATH: '/fake/lark-cli',
       },
       builtins: BUILTIN_PLUGINS,
       cliRunner: async (cmd, argv) => {
         // status probe and tool exec both use runner
         if (argv[0] === 'auth' && argv[1] === 'status') {
-          return { stdout: 'logged in', stderr: '', exitCode: 0 }
+          return {
+            stdout: JSON.stringify({
+              identity: 'user',
+              verified: true,
+              identities: {
+                bot: { status: 'ready', available: true },
+                user: { status: 'ready', available: true },
+              },
+            }),
+            stderr: '',
+            exitCode: 0,
+          }
         }
         return { stdout: '', stderr: '', exitCode: 0 }
       },

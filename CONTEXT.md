@@ -119,3 +119,35 @@ _Avoid_: Spreadsheet Preview, Data Table
 **Task Context Panel**:
 呈现当前任务关联的环境、变更、来源与子智能体等辅助上下文；空间充足时占据保留位置，空间受限时覆盖 Task Surface。
 _Avoid_: Context Overlay, Inspector, Context Sidebar
+
+**Capability Surface**:
+用户在对话路径可浏览与选用的能力集合，由 Connector、Skill 与 Expert 及其状态摘要构成。
+_Avoid_: Plugin Marketplace, Extension Page, Settings-only catalog
+
+**Plugin**:
+侧车（或等价 Runtime 宿主）中可版本化的**能力包（packaging）**与发现单元，可**同时**贡献 MCP、领域 CLI、Skills 与授权声明等；对齐 ChatGPT/Cursor/Claude/Copilot 的 Plugin 包模型。不是 MCP 协议本身，也不是用户口语里的「连接器」。
+_Avoid_: Connector, MCP Server, Channel Plugin, Extension（Kun 式可执行 UI 包）
+
+**Connector**:
+面向用户的**一等**外部服务接入面（如 GitHub、飞书）：授权状态 + 子能力 + 工具范围。平台同时支持 **MCP** 与**领域 CLI**，但每个 Connector 按 Provider 原生契约选择一种或多种通道，**不要求单个 Connector 默认 Hybrid**；当前内置基准是 GitHub → 官方 MCP、飞书 → 官方 CLI。由 Plugin contribution 投影而来，本身不是第二套插件内核。用户路径对齐主流：目录 → 去登录/授权 → Connected → 会话/Task 选用。
+_Avoid_: Plugin, IM Channel / messaging adapter, Expert, Skill, Work Surface, Timeline 工具行, 按 MCP/CLI 拆成两个用户连接器
+
+**Skill**:
+与主流 Agent 宿主一致的可加载技能包（通常以 `SKILL.md` 为清单的目录/包），向 Agent 提供可复用工作流与操作说明；不是 MCP 工具枚举，也不是 Expert。
+_Avoid_: Tool, Connector, Expert, Prompt snippet, Slash command only
+
+**Expert**:
+可切换的专家配置包：角色说明（persona）+ 默认 Skills + 建议的 Connector/工具范围；改变后续 Turn 的能力偏好，不必然产生子 Agent 或子 Run。
+_Avoid_: Persona（作主名）, Subagent, Supervisor, multi-agent routing, Plugin
+
+**Expert Profile**:
+Expert 的可序列化定义与装载形态（侧车或配置根上的具体 profile）；产品对外主名仍是 Expert。
+_Avoid_: Agent Profile 自动路由表, Subagent Profile
+
+**Enabled**:
+某 Plugin 或其贡献已被装配进当前 Runtime 可用集合；启用不等于用户已完成外部服务登录。
+_Avoid_: Connected, Installed（作唯一用户词）, Authorized
+
+**Connected**:
+某 Connector 所需身份材料可用（授权状态为已连接）；与 Enabled 分立，可出现「已启用但未连接」。
+_Avoid_: Enabled, Installed, Logged in（作全局宿主登录）

@@ -15,6 +15,10 @@ import type { McpContribution, McpServerConfigShape } from './manifest.js'
 import { firstEnv, parseEnvStringList } from './parse-util.js'
 import type { CredentialMaterial, ProfileEnv } from './types.js'
 import { normalizeToolName } from './security-policy.js'
+import {
+  createToolIdentityRegistry,
+  type RegisteredToolIdentity,
+} from './tool-identity.js'
 
 /** Options for MCP resolve/inject path (#28). */
 export type McpResolveAuthOptions = {
@@ -34,6 +38,8 @@ export type ResolvedMcpServer = {
   transport: 'http' | 'stdio'
   server: McpServerConfigShape
   readOnlyToolNames: string[]
+  /** Provider-owned stable namespace for model-visible tool names. */
+  toolNamePrefix?: string
   /** Live re-resolve before each tool execute (revoke-aware gate) */
   resolveAuthMaterial?: () => Promise<CredentialMaterial | undefined>
 }
@@ -56,6 +62,7 @@ export type McpHost = {
 export type McpLoadAggregate = {
   tools: Tool<any, any>[]
   toolNames: string[]
+  toolIdentities: RegisteredToolIdentity[]
   statuses: McpServerLoadStatus[]
   disconnect: () => Promise<void>
 }
@@ -143,7 +150,7 @@ export function resolveMcpContribution(
     contrib.timeoutMs ??
     (Number(env.MCP_TIMEOUT_MS ?? 20_000) || 20_000)
 
-  const url = firstEnv(env, contrib.urlFromEnv)
+  const url = firstEnv(env, contrib.urlFromEnv) ?? contrib.url?.trim()
   if (url) {
     const token = resolveMcpBearerToken(contrib, env, auth)
     const requestInit = token
@@ -154,6 +161,7 @@ export function resolveMcpContribution(
       serverId: contrib.serverId,
       transport: 'http',
       readOnlyToolNames: contrib.readOnlyToolNames ?? [],
+      toolNamePrefix: contrib.toolNamePrefix,
       server: {
         type: 'http',
         url,
@@ -173,6 +181,7 @@ export function resolveMcpContribution(
       serverId: contrib.serverId,
       transport: 'stdio',
       readOnlyToolNames: contrib.readOnlyToolNames ?? [],
+      toolNamePrefix: contrib.toolNamePrefix,
       server: {
         type: 'stdio',
         command,
@@ -298,6 +307,33 @@ export function applyMcpNeedsApproval(
   })
 }
 
+/** Expose a reversible model name without changing Provider call behavior. */
+function exposeMcpToolWithPublicName(
+  tool: Tool<any, any>,
+  publicName: string,
+): Tool<any, any> {
+  if (tool.name === publicName) return tool
+  const source = tool as Tool<any, any> & {
+    parameters?: unknown
+    execute?: (...args: any[]) => any
+    description?: string
+    needsApproval?: unknown
+    hooks?: unknown
+  }
+  if (source.parameters == null || typeof source.execute !== 'function') {
+    throw new Error(`MCP 工具 ${tool.name} 无法安全映射公开名 ${publicName}`)
+  }
+  const execute = source.execute.bind(tool)
+  return createTool({
+    name: publicName,
+    description: source.description ?? tool.name,
+    parameters: source.parameters as any,
+    needsApproval: source.needsApproval as any,
+    ...(source.hooks != null ? { hooks: source.hooks as any } : {}),
+    execute: (...args: any[]) => execute(...args),
+  }) as Tool<any, any>
+}
+
 export function mergeReadOnlyAllowlist(
   env: ProfileEnv,
   pluginNames: string[],
@@ -356,6 +392,7 @@ export async function loadResolvedMcpServers(
   const disconnectors: Array<() => Promise<void>> = []
   const allTools: Tool<any, any>[] = []
   const allNames: string[] = []
+  const identityRegistry = createToolIdentityRegistry()
   const statuses: McpServerLoadStatus[] = []
 
   const resolvedIds = new Set(resolved.map((r) => `${r.pluginId}::${r.serverId}`))
@@ -403,8 +440,22 @@ export async function loadResolvedMcpServers(
         conf.resolveAuthMaterial != null
           ? wrapMcpToolsWithLiveAuthGate(approved, conf.resolveAuthMaterial)
           : approved
-      const names = gated.map((t) => t.name)
-      allTools.push(...gated)
+      const exposed = gated.map((tool) => {
+        const identity = identityRegistry.register(
+          {
+            pluginId: conf.pluginId,
+            channel: 'mcp',
+            channelId: conf.serverId,
+            originalName: tool.name,
+          },
+          conf.toolNamePrefix
+            ? { preferredPublicName: `${conf.toolNamePrefix}${tool.name}` }
+            : undefined,
+        )
+        return exposeMcpToolWithPublicName(tool, identity.publicName)
+      })
+      const names = exposed.map((tool) => tool.name)
+      allTools.push(...exposed)
       allNames.push(...names)
       disconnectors.push(disconnect)
       statuses.push({
@@ -454,6 +505,7 @@ export async function loadResolvedMcpServers(
   return {
     tools: allTools,
     toolNames: allNames,
+    toolIdentities: identityRegistry.list(),
     statuses,
     disconnect: async () => {
       for (const d of disconnectors) await d()

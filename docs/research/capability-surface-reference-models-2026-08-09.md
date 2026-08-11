@@ -1,17 +1,18 @@
 # 研究：参考仓如何建模连接器 / 技能 / 专家
 
-> **调研日**：2026-08-09  
-> **Issue**：[#36](https://github.com/xiaowen-0725/uilab-admin/issues/36) · Map [#34](https://github.com/xiaowen-0725/uilab-admin/issues/34)  
-> **分支**：`research/capability-surface-reference-models`  
-> **非目标**：不改产品代码；不重写 CONTEXT / product specs；不实现 Composer「+」或 Expert UI。  
-> **主源（一手）**：本地参考仓 openworker / Kun / CodePilot；本仓 sidecar plugin 规格与实现；Codex/Claude 公开插件文档（Web 摘要 + openai/plugins README）。  
+> **调研日**：2026-08-09
+> **Issue**：[#36](https://github.com/xiaowen-0725/uilab-admin/issues/36) · Map [#34](https://github.com/xiaowen-0725/uilab-admin/issues/34)
+> **分支**：`research/capability-surface-reference-models`
+> **非目标**：不改产品代码；不重写 CONTEXT / product specs；不实现 Composer「+」或 Expert UI。
+> **主源（一手）**：本地参考仓 openworker / Kun / CodePilot；本仓 sidecar plugin 规格与实现；Codex/Claude 公开插件文档（Web 摘要 + openai/plugins README）。
+> **扩读**：主流 Agent 词表与授权路径见 [`agent-plugin-connector-mainstream-landscape-2026-08-09.md`](./agent-plugin-connector-mainstream-landscape-2026-08-09.md)（ChatGPT Apps、Cursor、Claude、Copilot、Dify 等）。
 > **既定产品决策（不可反）**：Plugin = 打包层；Connector = 外部服务贡献面（MCP / domain CLI）；Skill = 可加载 SOP；Expert = 可切换配置包（persona + 默认 skills + 建议 tools/connectors），**不是**多 Agent supervisor 产品化；侧车装配真实能力；Workbench 经 RuntimePort / capability summary 消费状态；浏览器永不持有 secrets；主 UX = Composer「+」；Fake 诚实展示 catalog/selection、不假外呼。
 
 ---
 
 ## Executive summary
 
-1. **四层概念在参考仓里几乎从不对齐命名，但职责可对齐到我们的 charting：**  
+1. **四层概念在参考仓里几乎从不对齐命名，但职责可对齐到我们的 charting：**
    **打包层（Plugin/Extension）**、**外部服务面（Connector/MCP/Channel）**、**可加载 SOP（Skill）**、**可切换角色包（Persona/Agent Profile/Expert）**。
 2. **openworker** 最接近「连接器 + 人格」一等产品：`ConnectorDescriptor` 驱动目录与 OAuth/token 向导；`PersonaManifest` 声明 tools/skills/mcp/`recommends`；会话内 **Access** 用「账号已连 ∧ persona 默认 ∧ session 覆盖」求 `effective`。Skill 是 Anthropic `SKILL.md` 渐进披露。**Messaging adapter** 与 **integration connector** 共用「connectors」词，需拆开借鉴。
 3. **Kun** 最接近「扩展打包 + 技能 + 子代理 profile」：Extension（`.kunx`）= 可执行打包（UI/tools/providers/agent profiles）；Skill/MCP 独立；**Agent Profile / subagent** 是 `delegate_task` 派发目标，内置 45 角色 + 自动 BM25/LLM 路由——**这是我们明确不抄的 supervisor 产品化**。可抄：Skill 目录约定、project MCP 信任 digest、enable ≠ secret。
@@ -19,6 +20,7 @@
 5. **Codex / Claude 公开模型**一致：**Plugin = packaging**（skills + MCP + apps/connectors 等同装），**不是** MCP 替代；Skill = `SKILL.md` 包；Connector/App = 外部服务绑定。与我们 sidecar 规格已对齐。
 6. **本仓已 ship**：`PluginManifest` 贡献 `mcp | cli | skills | auth`；`enable ≠ login`；SecretRef + doctor；浏览器不装 MCP。**缺口**：一等 **Connector** 产品名、**Expert** 配置包、会话内 catalog/「+」选择、Fake 诚实 catalog、Workbench capability summary 消费。
 7. **规格建议主线**：保留侧车 Plugin 为打包；对外产品词用 Connector / Skill / Expert；对话内「+」只暴露 status-safe 摘要；Expert 只做 profile package，禁止自动 subagent 路由产品化；Fake 只展示本地 catalog。
+8. **工具暴露补充（§3.4）**：**CodePilot/Codex 本地能力 = 通用 Shell**；**Codex Apps = connector_id + MCP tools**；**本仓飞书 CLI-first = 官方 Skills + `lark-cli` command scope + 通用 `execute_command`**。Host 不再逐条转换 Provider 业务命令。
 
 ---
 
@@ -69,7 +71,7 @@
 | Agent Profile | 设置页按 surface 配置；主代理 `list_subagent_profiles` + `delegate_task`；自动 BM25→LLM Top-5 | `docs/kun-architecture.md` § Subagent |
 | 对话内 | MCP/Skills 管理偏 Settings/面板；子代理在右侧面板；**不是** Composer「+ 选专家」主叙事 | renderer `mcp-skills-panel-model.ts` 等 |
 
-**可借鉴：** project MCP 信任 lifecycle；Skill 与 Extension 分轨；secrets 不进 Webview。  
+**可借鉴：** project MCP 信任 lifecycle；Skill 与 Extension 分轨；secrets 不进 Webview。
 **勿抄：** 45 角色自动路由 + `delegate_task` 作为默认 Expert 产品。
 
 ### 2.3 CodePilot
@@ -82,7 +84,7 @@
 | Channel | Bridge 设置页配置 bot token；`ChannelPlugin` start/stop/authorize | `src/lib/channels/types.ts` |
 | 对话内 | **CommandBadge** 多选 `agent_skill`；请求体 `selectedSkills`；CLI badge 独立 | `useCommandBadge.ts`, `types/index.ts` |
 
-**可借鉴：** Composer 旁显式 skill badge；扩展页 Skills/MCP/CLI 三分；marketplace 后置。  
+**可借鉴：** Composer 旁显式 skill badge；扩展页 Skills/MCP/CLI 三分；marketplace 后置。
 **勿抄：** 把 ChannelPlugin 当成办公 Connector；把「Plugins」页与 MCP 混称导致用户以为 Plugin=协议。
 
 ### 2.4 Codex / Claude（公开）
@@ -139,46 +141,97 @@
 3. **Domain CLI ≠ shell**——参考仓多默许 shell/toolkit；我们 allowlist argv。
 4. **Fake**：catalog/selection 可见，**无假外呼**。
 
+### 3.4 工具暴露模型：per-command wrapping vs Bash vs MCP（2026-08-09 补充）
+
+用户质疑点：**把 `lark-cli` 的每个子命令再包成 Provider-specific structured tool，是不是过度设计？CodePilot / Codex 怎么做？**
+
+> 结论更新（2026-08-09g）：是过度封装。最终实现已改为通用 `execute_command` + 官方 `lark-*` Skills + Provider command scope；下方保留的早期推演只记录决策过程，不再是现行规范。
+
+| 系统 | 本地「CLI」怎么进 Agent | 外部 SaaS / Connector 怎么进 Agent | 是否 per-command wrap domain binary |
+| --- | --- | --- | --- |
+| **CodePilot** | 一等 **`Bash`**（`spawn('bash',['-c', command])`）+ permission pattern（allow/ask/deny） | **MCP**（stdio/sse/http）挂成 tool set | **否**。CLI 页是 **工具库 / 安装管理**：`codepilot_cli_tools_{list,install,add,remove,update}`；另有 `buildCliToolsContext()` 把已装 bin **写进 system prompt**，期望模型用 Bash 调用 |
+| **Codex** | 一等 **shell / shell_command**（本地工程操作） | **Apps / Connectors**：`AppDeclaration { name, connector_id }`；工具经 **MCP**（`list_tools_with_connector_ids`，meta 带 `connector_id`） | **否**。插件 `.app.json` 绑定 connector_id，不把第三方 CLI argv 模板化为 function tools |
+| **openworker**（既有） | 封闭 catalog 含 shell 类能力 | **ConnectorDescriptor + 钉死 `tool_defs`** | 近：工具面 **钉死**，不是 free shell 冒充 connector |
+| **uilab sidecar（现状）** | **无**通用 Bash 产品工具（有意） | Connector = **MCP 贡献** 和/或 **domain CLI 贡献** | **是（仅 domain CLI）**：`cli-loader` = 固定 binary + allowlisted `argv[]` 模板 + `{{param}}` → `createTool`（`cli_<id>_<cmd>`）；`execFile`，禁 shell 包装 |
+
+#### 一手源（本机树）
+
+| 路径 | 读出的事实 |
+| --- | --- |
+| `CodePilot/src/lib/tools/bash.ts` | Agent 本地执行 = 自由 bash 字符串 |
+| `CodePilot/src/lib/cli-tools-catalog.ts` + `cli-tools-mcp.ts` / `builtin-tools/cli-tools.ts` | Catalog + 安装/注册/更新；**不是** `ffmpeg_convert` 式 per-op tools |
+| `CodePilot/src/lib/cli-tools-context.ts` | 已装 CLI → `<available_cli_tools>` prompt 块 |
+| `CodePilot/src/lib/agent-tools.ts` + `permission-checker.ts` | Tool assembly + Bash 危险命令/模式门禁 |
+| `codex-rs/plugin/src/lib.rs` | `AppDeclaration` / `AppConnectorId` = packaging 上的 connector 声明 |
+| `codex-rs/tools/src/mcp_tool.rs` | MCP tool → Responses function schema（properties 补齐） |
+| `codex-rs/rmcp-client` + `chatgpt/src/connectors.rs` | connector_id 元数据；Apps 受 ChatGPT auth / features 门控 |
+| `uilab …/runtime-shell/connector-aware-sandbox.ts` | 通用 Shell 下的 Connector Task/Auth gate、可信 executable 与资源上限 |
+| `uilab …/plugin/builtins.ts` (`cli.feishu`) | 只声明官方 Skills 安装源、`lark-cli` command scope 与 CLI session auth |
+
+#### 结论（对架构问题的直接回答）
+
+1. **一等通用 Shell 是合适的 Runtime 抽象。** CodePilot/Codex 都不会把已安装 CLI 的每个子命令再复制成 Function Tool；本仓最终同样只向 Agent 暴露 `execute_command`。
+
+2. **Connector 仍然有独立产品语义。** `cli.feishu` 负责官方 Skills、CLI session、Task 选用和 `lark-cli` command scope；通用 Shell 不等于绕过连接器状态。
+
+3. **per-command wrapping 被否定。** 它会让 Host 与 Provider 业务命令双向耦合，并使官方 Skill 所指向的原生 CLI 契约失真。
+
+4. **安全边界上移到通用执行层。** 所有命令需 Host 审批；普通命令受 Workspace OS 隔离；Provider 命令还需 Enabled + Connected + TaskSelected，固定 executable、闭合 env 并限制超时/输出。
+
+5. **GitHub 与飞书不需要同一执行协议。** GitHub 的官方远程工具集合走 MCP 动态发现；飞书的本机官方 CLI 走 Skills + Shell。产品目录仍各只有一个 Connector 行。
+
+#### 规格措辞建议（写入 capability-surface Spec 时可抄）
+
+- **Domain CLI surface** = 官方 Skills + Provider `commandScopes` + 通用 `execute_command`。
+- **Not** per-command Function Tool wrapping。
+- **Not** Codex App MCP connector（除非该 connector 实际贡献 MCP）。
+- UI Connector 行展示的是 **产品连接器**；底层可有 `primaryChannel: domain_cli | mcp | hybrid`，诚实 note 写清 auth model（`cli_session` vs host OAuth）。
+
 ---
 
 ## 4. 对后续 Spec 的具体建议（3–7）
 
-1. **固定四词表（中英）并写进 capability-surface Spec**  
-   - **Plugin（插件包）**：侧车 `PluginManifest` 打包单位（可同时贡献多个 Connector/Skill）。  
-   - **Connector（连接器）**：用户可理解的外部服务面 = 一个或多个 `contributes.mcp|cli` + `auth` 资源的产品投影（可 1:1 映射 builtin plugin，或 1 插件多 connector）。  
-   - **Skill（技能）**：`SKILL.md` SOP；catalog 摘要 + 按需/显式加载。  
+1. **固定四词表（中英）并写进 capability-surface Spec**
+   - **Plugin（插件包）**：侧车 `PluginManifest` 打包单位（可同时贡献多个 Connector/Skill）。
+   - **Connector（连接器）**：用户可理解的外部服务面 = 一个或多个 `contributes.mcp|cli` + `auth` 资源的产品投影（可 1:1 映射 builtin plugin，或 1 插件多 connector）。
+   - **Skill（技能）**：`SKILL.md` SOP；catalog 摘要 + 按需/显式加载。
    - **Expert（专家）**：可切换配置包 = system/instruction overlay + 默认/建议 skill ids + 建议 connector ids（及可选只读 tool 提示）；**不**创建第二 runtime、**不**自动 supervisor。
 
-2. **对话内主入口 = Composer「+」capability picker（CodePilot badge + openworker Access 的折中）**  
-   - 展示：已启用 Connector（auth status chip）、可选 Skill、可选 Expert。  
-   - 动作：选择/取消选择（session 覆盖）、对 `auth=missing` 给出 loginHint（触发侧车/系统登录，不经浏览器存 secret）。  
+2. **对话内主入口 = Composer「+」capability picker（CodePilot badge + openworker Access 的折中）**
+   - 展示：已启用 Connector（auth status chip）、可选 Skill、可选 Expert。
+   - 动作：选择/取消选择（session 覆盖）、对 `auth=missing` 给出 loginHint（触发侧车/系统登录，不经浏览器存 secret）。
    - Settings 为完整管理面（后置也可），避免只靠 doctor CLI。
 
-3. **采用 openworker 的三层 gate，但映射到我们对象**  
-   - account/auth connected（侧车 AuthStore）  
-   - Expert 默认建议（seed，非硬 allow-list）  
-   - Task/session override（Composer 选择）  
+3. **采用 openworker 的三层 gate，但映射到我们对象**
+   - account/auth connected（侧车 AuthStore）
+   - Expert 默认建议（seed，非硬 allow-list）
+   - Task/session override（Composer 选择）
    - `effective` 只把 **connected 且未 mute** 的 connector 工具挂进 Agent；Skill 用 catalog + 显式 selected / `load_skill`。
 
-4. **Expert 包格式建议（实现前先定 schema，可后做 loader）**  
-   - 文件形态可对标 openworker persona frontmatter **子集**：`id, name, description, instruction, skills[], connectors[] (recommend tier), defaultPermissionHints?`。  
-   - **禁止**字段：`subAgents`, `delegate_task` 路由表, 任意 shell。  
+4. **Expert 包格式建议（实现前先定 schema，可后做 loader）**
+   - 文件形态可对标 openworker persona frontmatter **子集**：`id, name, description, instruction, skills[], connectors[] (recommend tier), defaultPermissionHints?`。
+   - **禁止**字段：`subAgents`, `delegate_task` 路由表, 任意 shell。
    - 工具仍只来自 Registry 已加载 contributes；Expert 不能声明未安装 connector 的幽灵工具为已连接。
 
-5. **Fake Runtime 合同**  
-   - 返回静态 capability catalog（builtin 名单 + auth=none_required/missing 占位）与 selection 状态。  
+5. **Fake Runtime 合同**
+   - 返回静态 capability catalog（builtin 名单 + auth=none_required/missing 占位）与 selection 状态。
    - 禁止模拟成功的外部 MCP/CLI 调用；选择变更只影响 UI/投影诚实字段。
 
-6. **Feishu 产品路径**  
-   - 继续走 **sidecar plugin-auth**（env_ref / cli_session / 后续 OAuth），产品文案称「飞书连接器」，打包可以是 `mcp.feishu.*` + `cli.feishu` hybrid plugin。  
+6. **Feishu 产品路径**
+   - 继续走 **sidecar plugin-auth**（env_ref / cli_session / 后续 OAuth），产品文案称「飞书连接器」，打包可以是 `mcp.feishu.*` + `cli.feishu` hybrid plugin。
    - 不引入 CodePilot ChannelPlugin 作为办公连接器模型；若未来做 IM 入站，单独命名 **Channel**，勿并入 Connector 表。
 
-7. **明确不做的产品化清单（写进 Spec Out of Scope）**  
-   - Kun 式 40+ 子代理自动召回 UI  
-   - openworker 式 Persona=整壳 Surface  
-   - 浏览器插件 SDK / 密钥  
-   - 通用终端  
+7. **明确不做的产品化清单（写进 Spec Out of Scope）**
+   - Kun 式 40+ 子代理自动召回 UI
+   - openworker 式 Persona=整壳 Surface
+   - 浏览器插件 SDK / 密钥
+   - 通用终端
    - 技能/插件市场作为 P0（P1+）
+
+8. **Domain CLI 暴露（对照 §3.4）**
+   - 使用通用 `execute_command`；Plugin 只声明 command scope、Skills 与 auth。
+   - 文档与 UI 诚实区分：GitHub MCP、飞书原生 CLI 与 Fake catalog。
+   - 若未来叠加 MCP，不把 CLI 绿点改称 host OAuth。
 
 ---
 
@@ -219,6 +272,15 @@
 | `/Users/zhoujw/develop/github/CodePilot/src/hooks/useCommandBadge.ts` | 对话内 skill badge |
 | `/Users/zhoujw/develop/github/CodePilot/src/app/plugins/page.tsx` | Skills/MCP/CLI 三分 IA |
 | `/Users/zhoujw/develop/github/CodePilot/apps/site/content/docs/en/skills.mdx` / `mcp.mdx` | 用户文档模型 |
+| `/Users/zhoujw/develop/github/CodePilot/src/lib/tools/bash.ts` | 本地执行 = free Bash（非 domain allowlist） |
+| `/Users/zhoujw/develop/github/CodePilot/src/lib/cli-tools-catalog.ts` | 通用 CLI 库 catalog（ffmpeg/jq…） |
+| `/Users/zhoujw/develop/github/CodePilot/src/lib/cli-tools-mcp.ts` / `builtin-tools/cli-tools.ts` | CLI 安装/注册/更新 tools（非 per-op wrap） |
+| `/Users/zhoujw/develop/github/CodePilot/src/lib/cli-tools-context.ts` | 已装 CLI → system prompt 块 |
+| `/Users/zhoujw/develop/github/CodePilot/src/lib/agent-tools.ts` / `permission-checker.ts` | Tool 装配 + Bash 权限模式 |
+| `/Users/zhoujw/develop/github/codex/codex-rs/plugin/src/lib.rs` | `AppDeclaration` / connector_id packaging |
+| `/Users/zhoujw/develop/github/codex/codex-rs/tools/src/mcp_tool.rs` | MCP → function tool schema |
+| `/Users/zhoujw/develop/github/codex/codex-rs/rmcp-client/src/rmcp_client.rs` | `list_tools_with_connector_ids` |
+| `/Users/zhoujw/develop/github/codex/codex-rs/chatgpt/src/connectors.rs` | Apps/connectors 门控 |
 
 ### 本仓
 
@@ -230,8 +292,11 @@
 | `tooling/workbench-runtime-voltagent/src/plugin/types.ts` | AuthStatus、SecretRef |
 | `tooling/workbench-runtime-voltagent/src/plugin/manifest.ts` | contributes mcp/cli/skills/auth |
 | `tooling/workbench-runtime-voltagent/src/plugin/registry.ts` | load 聚合与 status |
-| `tooling/workbench-runtime-voltagent/src/plugin/builtins.ts` | mcp.docs / calendar 等 |
+| `tooling/workbench-runtime-voltagent/src/plugin/builtins.ts` | mcp.docs / calendar / **cli.feishu** |
+| `tooling/workbench-runtime-voltagent/src/plugin/cli-loader.ts` | domain CLI per-command wrap（argv 模板、execFile、禁 shell） |
+| `tooling/workbench-runtime-voltagent/src/plugin/connector-descriptor.ts` | Connector 产品投影 + toolScope |
 | `docs/research/work-surface-openworker-patterns.md` | 既有 openworker Surface 调研（Agent≠Work Surface） |
+| `docs/research/feishu-mcp-vs-cli-auth-comparison-2026-08-09.md` | 飞书 MCP vs CLI；CLI-first 切片依据 |
 
 ### 公开（Web，2026-08 检索）
 

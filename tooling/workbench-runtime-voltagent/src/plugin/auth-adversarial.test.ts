@@ -1004,7 +1004,7 @@ describe('adversarial P1: keychain login keeps envNames mapping', () => {
 
     const contrib: CliContribution = {
       cliId: 'feishu',
-      command: 'feishu-cli',
+      command: 'lark-cli',
       childEnvKeys: ['FEISHU_APP_SECRET'],
       commands: [{ name: 'x', argv: ['auth', 'status'] }],
     }
