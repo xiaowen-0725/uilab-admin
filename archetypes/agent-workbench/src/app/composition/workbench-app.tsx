@@ -4,14 +4,7 @@
  * Boot / Runtime / Task lifecycle / Surface open channels live in sibling units.
  * This file assembles them into Shell + thin chrome (boot screen, delete dialog).
  */
-
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   putSessionPointer,
   SESSION_ROW_ID,
@@ -29,34 +22,25 @@ import {
   type TaskSummary,
   useProjectCatalog,
 } from '@/modules/project'
-import type {
-  LaunchAction,
-  TaskSurfaceView,
-} from '@/modules/task'
+import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
 import { useTaskRuntime } from '@/modules/task'
+import { useWorkspaceDocumentSource } from '@/modules/work-surface'
 import {
   useWorkbenchSession,
   type WorkbenchSessionSeed,
 } from '@/modules/workbench-session'
-import { useWorkspaceDocumentSource } from '@/modules/work-surface'
 import { ThemeProvider } from '@/shell/theme/theme-provider'
-import { TooltipProvider } from '@/components/ui/tooltip'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
-import {
-  useBusyTaskIds,
-  useWorkbenchRuntimeWiring,
-} from './runtime-wiring'
+import { useBusyTaskIds, useWorkbenchRuntimeWiring } from './runtime-wiring'
 import { useWorkbenchSurfaceAssembly } from './surface-assembly'
 import {
   createNewChatTask,
   decideNewChat,
   hardDeleteTask,
 } from './task-lifecycle-commands'
-import {
-  useWorkbenchBoot,
-  type WorkbenchPersistence,
-} from './workbench-boot'
+import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
 
 const RUNTIME_ADAPTER_MODE = resolveRuntimeAdapterMode()
 
@@ -115,8 +99,7 @@ export function WorkbenchApp({
 
   // --- Document source (module-owned bind UI) ---
   const documentSource = useWorkspaceDocumentSource({
-    runtimeMode:
-      RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
+    runtimeMode: RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
     voltAgentBaseUrl: resolveVoltAgentBaseUrl(),
   })
 
@@ -161,11 +144,7 @@ export function WorkbenchApp({
   })
 
   // Busy projection lives in runtime-wiring (after live runStatus is known).
-  const busyTaskIds = useBusyTaskIds(
-    runStatusIndex,
-    taskId,
-    runtime.runStatus,
-  )
+  const busyTaskIds = useBusyTaskIds(runStatusIndex, taskId, runtime.runStatus)
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
@@ -294,7 +273,7 @@ export function WorkbenchApp({
       persistence,
       capabilityController,
       taskId,
-    ],
+    ]
   )
 
   const onLaunchAction = useCallback(
@@ -302,7 +281,7 @@ export function WorkbenchApp({
       if (!taskId || !action.promptStub) return
       void runtime.submitText(action.promptStub)
     },
-    [runtime, taskId],
+    [runtime, taskId]
   )
 
   // --- Task lifecycle commands ---
@@ -312,7 +291,7 @@ export function WorkbenchApp({
   selectedProjectIdRef.current = session.view.selectedProjectId
   const newTaskCounterRef = useRef(0)
   const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(
-    null,
+    null
   )
 
   const onNewChat = useCallback(async () => {
@@ -348,7 +327,7 @@ export function WorkbenchApp({
       catalogController?.setFocusedProject(nextProjectId)
       session.commands.selectProject(nextProjectId)
     },
-    [catalogController, session.commands],
+    [catalogController, session.commands]
   )
 
   const performDeleteTask = useCallback(
@@ -369,6 +348,9 @@ export function WorkbenchApp({
         lastTaskByProject: session.view.lastTaskByProject,
         navigatorOpen: session.view.navigatorOpen,
         activeRunStatus: runtime.runStatus,
+        onTaskDeleted: (deletedTaskId) => {
+          capabilityController.clearTask(deletedTaskId)
+        },
       })
 
       // Always sync selection + lastTaskByProject into session memory so the
@@ -386,6 +368,7 @@ export function WorkbenchApp({
     },
     [
       catalogController,
+      capabilityController,
       db,
       eventStore,
       persistence,
@@ -398,7 +381,7 @@ export function WorkbenchApp({
       session.view.selectedProjectId,
       session.view.selectedTaskId,
       taskId,
-    ],
+    ]
   )
 
   const onDeleteTask = useCallback((id: string) => {

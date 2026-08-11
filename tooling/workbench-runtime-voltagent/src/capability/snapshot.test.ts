@@ -8,7 +8,10 @@ import {
 } from '../plugin/builtins.js'
 import { createCapabilitySelectionStore } from './selection-store.js'
 import { buildCapabilitySnapshot } from './snapshot.js'
-import { gateConnectorToolInvoke } from './tool-gate.js'
+import {
+  filterToolsForTaskSelection,
+  gateConnectorToolInvoke,
+} from './tool-gate.js'
 
 const AUTH_CONNECTED: PluginAuthStatus = {
   pluginId: 'cli.feishu',
@@ -134,6 +137,29 @@ describe('buildCapabilitySnapshot effective algorithm', () => {
 })
 
 describe('gateConnectorToolInvoke', () => {
+  it('removes unselected connector tools from the model-visible Turn tool set', () => {
+    const tools = [
+      { name: 'read_file' },
+      { name: 'github__search_repositories' },
+    ]
+    assert.deepEqual(
+      filterToolsForTaskSelection(
+        tools,
+        BUILTIN_CONNECTOR_DESCRIPTORS,
+        [],
+      ).map((tool) => tool.name),
+      ['read_file'],
+    )
+    assert.deepEqual(
+      filterToolsForTaskSelection(
+        tools,
+        BUILTIN_CONNECTOR_DESCRIPTORS,
+        [CONNECTOR_GITHUB_ID],
+      ).map((tool) => tool.name),
+      ['read_file', 'github__search_repositories'],
+    )
+  })
+
   it('does not describe missing GitHub MCP bearer as a CLI session problem', () => {
     const store = createCapabilitySelectionStore()
     store.setActiveTaskId('github-task')
@@ -144,6 +170,7 @@ describe('gateConnectorToolInvoke', () => {
     })
     const gate = gateConnectorToolInvoke('github__search_repositories', {
       store,
+      taskId: 'github-task',
       descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
       authLookup: () => ({
         pluginGloballyEnabled: true,
@@ -164,6 +191,7 @@ describe('gateConnectorToolInvoke', () => {
     store.set('t1', { connectorIds: [], skillIds: [], expertId: null })
     const gate = gateConnectorToolInvoke('removed_provider_wrapper', {
       store,
+      taskId: 't1',
       descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
       authLookup: () => ({
         pluginGloballyEnabled: true,
@@ -183,6 +211,7 @@ describe('gateConnectorToolInvoke', () => {
     })
     const gate = gateConnectorToolInvoke('github__search_repositories', {
       store,
+      taskId: 't1',
       descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
       authLookup: () => ({
         pluginGloballyEnabled: true,
@@ -192,16 +221,41 @@ describe('gateConnectorToolInvoke', () => {
     assert.equal(gate.allowed, true)
   })
 
-  it('does not block MCP tools when no active task (operator path)', () => {
+  it('fails closed for connector tools when no Task execution context exists', () => {
     const store = createCapabilitySelectionStore()
     const gate = gateConnectorToolInvoke('github__search_repositories', {
       store,
+      taskId: null,
       descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
       authLookup: () => ({
         pluginGloballyEnabled: true,
         authStatus: 'connected',
       }),
     })
+    assert.equal(gate.allowed, false)
+    if (!gate.allowed) assert.equal(gate.reason, 'missing_task_context')
+  })
+
+  it('uses the immutable Turn selection snapshot instead of later store changes', () => {
+    const store = createCapabilitySelectionStore()
+    store.set('task-a', {
+      connectorIds: [],
+      skillIds: [],
+      expertId: null,
+    })
+    store.setActiveTaskId('task-a')
+
+    const gate = gateConnectorToolInvoke('github__search_repositories', {
+      store,
+      taskId: 'task-a',
+      selectedConnectorIds: [CONNECTOR_GITHUB_ID],
+      descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
+      authLookup: () => ({
+        pluginGloballyEnabled: true,
+        authStatus: 'connected',
+      }),
+    })
+
     assert.equal(gate.allowed, true)
   })
 })

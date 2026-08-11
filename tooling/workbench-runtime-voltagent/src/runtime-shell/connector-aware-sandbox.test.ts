@@ -30,6 +30,48 @@ function recordingSandbox(
 }
 
 describe('createConnectorAwareSandbox', () => {
+  it('passes the immutable Turn selection from operation context to the access resolver', async () => {
+    let received:
+      | { taskId: string | null; selectedConnectorIds: readonly string[] }
+      | undefined
+    const sandbox = createConnectorAwareSandbox({
+      defaultSandbox: recordingSandbox([]),
+      commandRules: [
+        {
+          connectorId: 'connector.feishu',
+          commands: ['lark-cli'],
+          sandbox: recordingSandbox([]),
+        },
+      ],
+      resolveConnectorAccess: async (_connectorId, turnContext) => {
+        received = turnContext
+        return {
+          pluginEnabled: true,
+          connected: true,
+          taskSelected: turnContext.selectedConnectorIds.includes(
+            'connector.feishu',
+          ),
+        }
+      },
+    })
+
+    await sandbox.execute({
+      command: 'lark-cli',
+      args: ['skills', 'list'],
+      operationContext: {
+        conversationId: 'task-a',
+        context: new Map([
+          ['capabilityConnectorIds', ['connector.feishu']],
+        ]),
+      } as any,
+    })
+
+    assert.deepEqual(received, {
+      taskId: 'task-a',
+      selectedConnectorIds: ['connector.feishu'],
+    })
+  })
+
   it('denies a Provider command when the active Task did not select its Connector', async () => {
     const defaultCalls: WorkspaceSandboxExecuteOptions[] = []
     const providerCalls: WorkspaceSandboxExecuteOptions[] = []

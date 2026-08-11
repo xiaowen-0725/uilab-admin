@@ -80,7 +80,7 @@ describe('buildCliPassthroughArgv', () => {
     assert.throws(
       () =>
         buildCliPassthroughArgv('argv', {
-          argv: ['FEISHU_APP_SECRET=secret-value', 'docs', 'get'],
+          argv: ['ACME_API_TOKEN=secret-value', 'records', 'get'],
         }),
       /敏感凭证参数/,
     )
@@ -144,6 +144,60 @@ describe('closedChildEnv / defaultCliRunner', () => {
 })
 
 describe('loadCliContributions', () => {
+  it('keeps the current Turn snapshot but rejects the next Turn after deselection', async () => {
+    const bin = await makeFakeCli()
+    const calls: string[][] = []
+    const agg = await loadCliContributions(
+      [
+        {
+          pluginId: 'cli.demo',
+          contrib: {
+            cliId: 'demo',
+            command: bin,
+            commands: [{ name: 'ping', argv: ['ping'] }],
+          },
+        },
+      ],
+      {
+        runner: async (_command, argv) => {
+          calls.push(argv)
+          return { stdout: 'ok', stderr: '', exitCode: 0 }
+        },
+        connectorDescriptors: [
+          {
+            id: 'connector.demo',
+            name: 'Demo',
+            toolScope: ['cli_demo_'],
+          } as any,
+        ],
+      },
+    )
+    const tool = agg.tools[0] as {
+      execute: (args: unknown, options?: unknown) => Promise<unknown>
+    }
+
+    const currentTurn = await tool.execute(
+      {},
+      {
+        conversationId: 'task-a',
+        context: new Map([
+          ['capabilityConnectorIds', ['connector.demo']],
+        ]),
+      },
+    )
+    assert.equal((currentTurn as { exitCode: number }).exitCode, 0)
+
+    const nextTurn = await tool.execute(
+      {},
+      {
+        conversationId: 'task-a',
+        context: new Map([['capabilityConnectorIds', []]]),
+      },
+    )
+    assert.equal((nextTurn as { error: string }).error, 'not_task_selected')
+    assert.equal(calls.length, 1)
+  })
+
   it('allows trusted Provider argv passthrough with exact argv and forced approval', async () => {
     const bin = await makeFakeCli()
     const calls: Array<{ cmd: string; argv: string[] }> = []

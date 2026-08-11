@@ -25,10 +25,7 @@ import {
   listWorkspaceSkillIds,
 } from './plugin/index.js'
 import { OFFICE_WORKSPACE_README_NAME } from './workspace-root.js'
-import {
-  createCapabilitySelectionStore,
-  setDefaultCapabilitySelectionStore,
-} from './capability/index.js'
+import { setDefaultCapabilitySelectionStore } from './capability/index.js'
 
 /** Stub model — never called; only needed to construct Agent. */
 const stubModel = {
@@ -174,15 +171,6 @@ describe('createWorkbenchAgent', () => {
     )
     await chmod(fakeCli, 0o755)
 
-    const selectionStore = createCapabilitySelectionStore()
-    selectionStore.set('task-feishu', {
-      connectorIds: [CONNECTOR_FEISHU_ID],
-      skillIds: [],
-      expertId: null,
-    })
-    selectionStore.setActiveTaskId('task-feishu')
-    setDefaultCapabilitySelectionStore(selectionStore)
-
     const bundle = await createWorkbenchAgent({
       profile: 'office',
       model: stubModel,
@@ -223,6 +211,12 @@ describe('createWorkbenchAgent', () => {
     const result = await bundle.workspace?.sandbox?.execute({
       command: 'lark-cli',
       args: ['skills', 'list'],
+      operationContext: {
+        conversationId: 'task-feishu',
+        context: new Map([
+          ['capabilityConnectorIds', [CONNECTOR_FEISHU_ID]],
+        ]),
+      } as any,
     })
     assert.equal(result?.exitCode, 0)
     assert.match(result?.stdout ?? '', /lark-doc/)

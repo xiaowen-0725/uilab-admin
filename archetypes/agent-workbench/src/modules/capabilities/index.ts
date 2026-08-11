@@ -27,7 +27,10 @@ export {
   emptyTaskCapabilitySelection,
   mergeTaskCapabilitySelection,
   toggleConnectorSelection,
+  type TaskCapabilitySelectionStore,
 } from './model/task-selection'
+
+export { createBrowserTaskCapabilitySelectionStore } from './adapters/browser-task-selection-store'
 
 export {
   createFakeCapabilitySnapshotPort,
@@ -43,9 +46,13 @@ export {
 export {
   createCapabilityController,
   type CapabilityController,
+  type CapabilityControllerError,
 } from './application/capability-controller'
 
-export { useCapabilitySnapshot } from './application/use-capability-snapshot'
+export {
+  useCapabilitySnapshot,
+  useCapabilitySnapshotError,
+} from './application/use-capability-snapshot'
 export { waitForConnectorAuth } from './application/wait-for-connector-auth'
 
 export {

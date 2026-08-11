@@ -15,6 +15,7 @@ import {
   formatTaskConnectorSelectionNotice,
   waitForConnectorAuth,
   useCapabilitySnapshot,
+  useCapabilitySnapshotError,
   type CapabilityController,
 } from '@/modules/capabilities'
 import {
@@ -407,6 +408,10 @@ export function TaskComposer({
     capabilityController,
     capabilityTaskId
   )
+  const capabilityError = useCapabilitySnapshotError(
+    capabilityController,
+    capabilityTaskId
+  )
 
   const runTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -505,14 +510,13 @@ export function TaskComposer({
         ),
       ]
       const capabilityConnectors =
-        capabilitySnapshot?.connectors
-          .filter((c) => c.taskSelected)
-          .map((c) => ({
-            id: c.id,
-            label: c.name,
-            connected: c.connected,
-            capabilityEffective: c.capabilityEffective,
-          })) ?? []
+        capabilitySnapshot?.connectors.map((c) => ({
+          id: c.id,
+          label: c.name,
+          connected: c.connected,
+          taskSelected: c.taskSelected,
+          capabilityEffective: c.capabilityEffective,
+        })) ?? []
       const selectedExpert = capabilitySnapshot?.experts.find(
         (e) => e.taskSelected
       )
@@ -784,15 +788,14 @@ export function TaskComposer({
     const taskId = capabilityTaskId
     if (!taskId || !capabilityController) return
     const connectorName =
-      capabilitySnapshot?.connectors.find((connector) => connector.id === connectorId)
-        ?.name ?? '连接器'
+      capabilitySnapshot?.connectors.find(
+        (connector) => connector.id === connectorId
+      )?.name ?? '连接器'
     setCapabilityBusy(true)
     void capabilityController
       .toggleConnector(taskId, connectorId, selected)
       .then(() => {
-        setNotice(
-          formatTaskConnectorSelectionNotice(connectorName, selected)
-        )
+        setNotice(formatTaskConnectorSelectionNotice(connectorName, selected))
       })
       .catch((err) => {
         setNotice(err instanceof Error ? err.message : '更新连接器选用失败')
@@ -936,6 +939,19 @@ export function TaskComposer({
       }
       snapshot={capabilitySnapshot}
       busy={capabilityBusy}
+      errorMessage={capabilityError?.message}
+      onRetry={() => {
+        if (!capabilityController || !capabilityTaskId) return
+        setCapabilityBusy(true)
+        void capabilityController
+          .refresh(capabilityTaskId)
+          .catch((error) => {
+            setNotice(
+              error instanceof Error ? error.message : '连接器状态刷新失败'
+            )
+          })
+          .finally(() => setCapabilityBusy(false))
+      }}
       onPickFiles={pickFiles}
       onEnableGoal={() => {
         enableMode('goal')

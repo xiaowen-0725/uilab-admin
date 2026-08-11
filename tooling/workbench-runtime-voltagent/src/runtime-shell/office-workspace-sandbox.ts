@@ -12,6 +12,7 @@ import type { ProfileEnv } from '../plugin/types.js'
 import {
   createConnectorAwareSandbox,
   type ConnectorCommandAccess,
+  type ConnectorCommandTurnContext,
 } from './connector-aware-sandbox.js'
 
 export type CreateOfficeWorkspaceSandboxOptions = {
@@ -21,6 +22,7 @@ export type CreateOfficeWorkspaceSandboxOptions = {
   manifests: readonly PluginManifest[]
   resolveConnectorAccess: (
     connectorId: string,
+    turnContext: ConnectorCommandTurnContext,
   ) => Promise<ConnectorCommandAccess>
 }
 

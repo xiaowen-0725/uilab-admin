@@ -40,7 +40,8 @@ import {
 } from './profile.js'
 import { workbenchTools } from './tools.js'
 import { ensureOfficeWorkspace } from './workspace-root.js'
-import { getDefaultCapabilitySelectionStore } from './capability/index.js'
+import { filterToolsForTaskSelection } from './capability/tool-gate.js'
+import { readCapabilityTurnContext } from './capability/turn-context.js'
 import {
   createConnectorCliAuthRuntime,
   createDefaultCliAuthProcessRunner,
@@ -216,7 +217,6 @@ export async function createWorkbenchAgent(
       liveAuthStatuses = await registry.refreshAuthStatuses()
       return [...liveAuthStatuses]
     }
-    const selectionStore = getDefaultCapabilitySelectionStore()
     const workspaceSandbox =
       options.workspaceSandbox ??
       (await createOfficeWorkspaceSandbox({
@@ -224,7 +224,7 @@ export async function createWorkbenchAgent(
         env,
         connectors: plugins.connectorDescriptors,
         manifests: registry.listManifests(),
-        resolveConnectorAccess: async (connectorId) => {
+        resolveConnectorAccess: async (connectorId, turnContext) => {
           const descriptor = plugins.connectorDescriptors.find(
             (connector) => connector.id === connectorId,
           )
@@ -241,17 +241,14 @@ export async function createWorkbenchAgent(
               status.pluginId === descriptor.authSummarySource.pluginId &&
               status.resourceId === descriptor.authSummarySource.resourceId,
           )
-          const activeTaskId = selectionStore.getActiveTaskId()
           return {
             pluginEnabled: descriptor.pluginRefs.some((pluginId) =>
               enabledPluginIds.includes(pluginId),
             ),
             connected: auth?.status === 'connected',
-            taskSelected: activeTaskId
-              ? selectionStore
-                  .get(activeTaskId)
-                  .connectorIds.includes(connectorId)
-              : false,
+            taskSelected:
+              turnContext.taskId !== null &&
+              turnContext.selectedConnectorIds.includes(connectorId),
           }
         },
       }))
@@ -297,6 +294,7 @@ export async function createWorkbenchAgent(
         ].join(' ')
       : 'Office skills plugins are not enabled in this session; do not invent skill toolkits.'
 
+    const livePluginTools = [...plugins.tools] as Tool<any, any>[]
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
@@ -334,9 +332,14 @@ export async function createWorkbenchAgent(
             },
           }
         : {}),
-      ...(plugins.tools.length > 0
-        ? { tools: plugins.tools as (Tool<any, any> | Toolkit)[] }
-        : {}),
+      tools: ({ context }) => {
+        const turnContext = readCapabilityTurnContext({ context })
+        return filterToolsForTaskSelection(
+          livePluginTools,
+          plugins.connectorDescriptors,
+          turnContext.selectedConnectorIds,
+        )
+      },
       maxSteps: defaults.maxSteps,
       summarization: defaults.summarization,
       memory: defaults.memory,
@@ -361,8 +364,12 @@ export async function createWorkbenchAgent(
       }
       const hot = await registry.loadMcpPlugin(completed.pluginId)
       const previousNames = expandConnectorToolScope(descriptor, honestyTools)
-      if (previousNames.length > 0) agent.removeTools(previousNames)
-      if (hot.tools.length > 0) agent.addTools(hot.tools)
+      const previousNameSet = new Set(previousNames)
+      const retainedTools = livePluginTools.filter(
+        (tool) => !previousNameSet.has(tool.name),
+      )
+      livePluginTools.splice(0, livePluginTools.length, ...retainedTools)
+      livePluginTools.push(...hot.tools)
       const previousSet = new Set(previousNames)
       const nextNames = honestyTools.filter((name) => !previousSet.has(name))
       nextNames.push(...hot.toolNames)

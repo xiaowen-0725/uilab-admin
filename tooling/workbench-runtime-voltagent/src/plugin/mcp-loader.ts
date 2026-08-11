@@ -3,7 +3,15 @@
  * No hard-coded docs/calendar IDs — callers pass resolved servers from manifests.
  */
 
-import { MCPConfiguration, createTool, type Tool } from '@voltagent/core'
+import {
+  MCPConfiguration,
+  createTool,
+  type Tool,
+  type ToolExecuteOptions,
+} from '@voltagent/core'
+import { gateConnectorToolInvoke } from '../capability/tool-gate.js'
+import { readCapabilityTurnContext } from '../capability/turn-context.js'
+import type { ConnectorDescriptor } from './connector-descriptor.js'
 import {
   decideToolNeedsApproval,
   filterChildEnv,
@@ -257,6 +265,76 @@ export function wrapMcpToolsWithLiveAuthGate(
   })
 }
 
+/** Gate public MCP tools with the immutable connector selection for this Turn. */
+export function wrapMcpToolsWithTaskSelectionGate(
+  tools: Tool<any, any>[],
+  descriptors: readonly ConnectorDescriptor[],
+): Tool<any, any>[] {
+  return tools.map((tool) => {
+    const connector = descriptors.find((descriptor) =>
+      descriptor.toolScope.some((scope) =>
+        scope.endsWith('.') || scope.endsWith('_')
+          ? tool.name.startsWith(scope)
+          : tool.name === scope,
+      ),
+    )
+    if (!connector) return tool
+
+    const anyTool = tool as Tool<any, any> & {
+      parameters?: unknown
+      execute?: (...args: any[]) => any
+      description?: string
+      needsApproval?: unknown
+      hooks?: unknown
+    }
+    if (typeof anyTool.execute !== 'function') return tool
+    const original = anyTool.execute.bind(tool)
+    const gated = async (
+      rawArgs: unknown,
+      executeOptions?: ToolExecuteOptions,
+    ) => {
+      const turnContext = readCapabilityTurnContext(executeOptions)
+      const decision = gateConnectorToolInvoke(tool.name, {
+        taskId: turnContext.taskId,
+        selectedConnectorIds: turnContext.selectedConnectorIds,
+        descriptors,
+        authLookup: () => ({
+          pluginGloballyEnabled: true,
+          authStatus: 'connected',
+        }),
+      })
+      if (!decision.allowed) {
+        return {
+          ok: false,
+          error: decision.reason,
+          hint: decision.hint,
+        }
+      }
+      return original(rawArgs, executeOptions)
+    }
+
+    try {
+      const desc = Object.getOwnPropertyDescriptor(tool, 'execute')
+      if (!desc || desc.writable || desc.set) {
+        ;(anyTool as { execute: typeof gated }).execute = gated
+        return tool
+      }
+    } catch {
+      // fall through to reconstruct
+    }
+
+    if (anyTool.parameters == null) return tool
+    return createTool({
+      name: tool.name,
+      description: anyTool.description ?? tool.name,
+      parameters: anyTool.parameters as any,
+      needsApproval: anyTool.needsApproval as any,
+      ...(anyTool.hooks != null ? { hooks: anyTool.hooks as any } : {}),
+      execute: gated,
+    }) as Tool<any, any>
+  })
+}
+
 export function forceToolNeedsApproval(tool: Tool<any, any>): Tool<any, any> {
   const current = (tool as { needsApproval?: unknown }).needsApproval
   if (current === true) return tool
@@ -385,6 +463,8 @@ export async function loadResolvedMcpServers(
     host?: McpHost
     /** All contributions for disabled reporting (optional) */
     expected?: Array<{ pluginId: string; serverId: string }>
+    /** Provider-projected connectors used by the per-Turn execution gate. */
+    connectorDescriptors?: readonly ConnectorDescriptor[]
   },
 ): Promise<McpLoadAggregate> {
   const host = options?.host ?? { getTools: defaultMcpHost }
@@ -454,8 +534,12 @@ export async function loadResolvedMcpServers(
         )
         return exposeMcpToolWithPublicName(tool, identity.publicName)
       })
-      const names = exposed.map((tool) => tool.name)
-      allTools.push(...exposed)
+      const taskGated = wrapMcpToolsWithTaskSelectionGate(
+        exposed,
+        options?.connectorDescriptors ?? [],
+      )
+      const names = taskGated.map((tool) => tool.name)
+      allTools.push(...taskGated)
       allNames.push(...names)
       disconnectors.push(disconnect)
       statuses.push({

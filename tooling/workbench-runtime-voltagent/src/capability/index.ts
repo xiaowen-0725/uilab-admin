@@ -55,11 +55,17 @@ export {
 
 export {
   findConnectorForTool,
+  filterToolsForTaskSelection,
   gateConnectorToolInvoke,
   type ConnectorAuthLookup,
   type ConnectorToolGateOptions,
   type ToolGateResult,
 } from './tool-gate.js'
+export {
+  CAPABILITY_CONNECTOR_IDS_CONTEXT_KEY,
+  readCapabilityTurnContext,
+  type CapabilityTurnContext,
+} from './turn-context.js'
 
 export {
   loadExpertsForHttp,

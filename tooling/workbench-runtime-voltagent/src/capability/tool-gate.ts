@@ -5,7 +5,7 @@
  *   pluginGloballyEnabled (implied by tool presence) ∧ connected (auth material)
  *   ∧ taskSelected for active task
  *
- * Active task is set by Workbench before stream (conversationId = taskId).
+ * Task id and connector selection come from the immutable Turn execution context.
  */
 
 import {
@@ -33,6 +33,10 @@ export type ConnectorAuthLookup = (connectorId: string) => {
 
 export type ConnectorToolGateOptions = {
   store?: CapabilitySelectionStore
+  /** Operation-scoped Task id. Null means the caller has no Task context. */
+  taskId: string | null
+  /** Immutable connector selection captured when the current Turn started. */
+  selectedConnectorIds?: readonly string[]
   descriptors: readonly ConnectorDescriptor[]
   authLookup: ConnectorAuthLookup
 }
@@ -53,8 +57,20 @@ export function findConnectorForTool(
   )
 }
 
+/** Remove unselected connector tools before the model receives its Turn tool set. */
+export function filterToolsForTaskSelection<T extends { name: string }>(
+  tools: readonly T[],
+  descriptors: readonly ConnectorDescriptor[],
+  selectedConnectorIds: readonly string[],
+): T[] {
+  return tools.filter((tool) => {
+    const connector = findConnectorForTool(tool.name, descriptors)
+    return !connector || selectedConnectorIds.includes(connector.id)
+  })
+}
+
 /**
- * Gate one tool invoke for the active task selection + auth.
+ * Gate one tool invoke for the Turn's Task selection + live auth.
  * Non-connector tools always allowed here (other policies apply elsewhere).
  */
 export function gateConnectorToolInvoke(
@@ -66,21 +82,25 @@ export function gateConnectorToolInvoke(
   if (!connector) return { allowed: true }
 
   const store = options.store ?? getDefaultCapabilitySelectionStore()
-  const taskId = store.getActiveTaskId()
-  // Transition: when Workbench has not bound an active task, do not fail-closed on
-  // selection (operator CLI / legacy agent loads still work). Auth material remains
-  // the hard guard in cli-loader. Once active task is set, Spec algorithm applies.
+  const taskId = options.taskId
   if (!taskId) {
-    return { allowed: true }
+    return {
+      allowed: false,
+      reason: 'missing_task_context',
+      hint: '连接器工具缺少当前 Turn 的 Task 上下文，已拒绝执行',
+    }
   }
 
-  const selection = store.get(taskId)
+  const connectorIds =
+    options.selectedConnectorIds !== undefined
+      ? options.selectedConnectorIds
+      : store.get(taskId).connectorIds
   const auth = options.authLookup(connector.id)
   const input: ConnectorEffectiveInput = {
     connectorId: connector.id,
     pluginGloballyEnabled: auth.pluginGloballyEnabled,
     authStatus: auth.authStatus,
-    taskSelected: selection.connectorIds.includes(connector.id),
+    taskSelected: connectorIds.includes(connector.id),
   }
   const decision = isConnectorEffective(input)
   if (decision.capabilityEntersNextTurn) {

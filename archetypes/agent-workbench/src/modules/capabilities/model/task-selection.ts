@@ -2,8 +2,13 @@
  * Task-level capability selection (no secrets).
  * Durable store is Composition-owned; this module defines the pure shape + helpers.
  */
-
 import type { TaskCapabilitySelection } from '../ports/capability-snapshot-port'
+
+export type TaskCapabilitySelectionStore = {
+  get(taskId: string): TaskCapabilitySelection | null
+  set(taskId: string, selection: TaskCapabilitySelection): boolean
+  clear(taskId: string): boolean
+}
 
 export function emptyTaskCapabilitySelection(): TaskCapabilitySelection {
   return {
@@ -15,7 +20,7 @@ export function emptyTaskCapabilitySelection(): TaskCapabilitySelection {
 
 export function mergeTaskCapabilitySelection(
   prev: TaskCapabilitySelection,
-  patch: Partial<TaskCapabilitySelection>,
+  patch: Partial<TaskCapabilitySelection>
 ): TaskCapabilitySelection {
   return {
     connectorIds:
@@ -23,7 +28,9 @@ export function mergeTaskCapabilitySelection(
         ? unique(patch.connectorIds)
         : [...prev.connectorIds],
     skillIds:
-      patch.skillIds !== undefined ? unique(patch.skillIds) : [...prev.skillIds],
+      patch.skillIds !== undefined
+        ? unique(patch.skillIds)
+        : [...prev.skillIds],
     expertId:
       patch.expertId !== undefined
         ? patch.expertId?.trim() || null
@@ -34,7 +41,7 @@ export function mergeTaskCapabilitySelection(
 export function toggleConnectorSelection(
   selection: TaskCapabilitySelection,
   connectorId: string,
-  selected: boolean,
+  selected: boolean
 ): TaskCapabilitySelection {
   const set = new Set(selection.connectorIds)
   if (selected) set.add(connectorId)

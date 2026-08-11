@@ -8,8 +8,10 @@ import { access, constants } from 'node:fs/promises'
 import { execFile as execFileCb } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { createTool, type Tool } from '@voltagent/core'
+import { createTool, type Tool, type ToolExecuteOptions } from '@voltagent/core'
 import { z } from 'zod'
+import { gateConnectorToolInvoke } from '../capability/tool-gate.js'
+import { readCapabilityTurnContext } from '../capability/turn-context.js'
 import type {
   CliArgParam,
   CliCommandContribution,
@@ -137,7 +139,7 @@ const CREDENTIAL_FLAG_KEYS = new Set([
 ])
 
 const CREDENTIAL_ENV_ASSIGNMENT =
-  /^(?:FEISHU_APP_SECRET|LARK_APP_SECRET|APP_SECRET|CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN|TENANT_ACCESS_TOKEN|USER_ACCESS_TOKEN|AUTHORIZATION|BEARER_TOKEN)=/i
+  /^[A-Z_][A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|AUTHORIZATION|CREDENTIAL|API_KEY)[A-Z0-9_]*=/i
 
 /** Credentials belong to the CLI session/closed child env, never model argv. */
 function assertNoCredentialBearingArg(
@@ -424,7 +426,10 @@ function createCliTool(input: {
       `Domain CLI ${input.cliId} · ${input.cmd.name}（allowlisted execFile）`,
     parameters: schema,
     needsApproval,
-    execute: async (rawArgs: Record<string, unknown>) => {
+    execute: async (
+      rawArgs: Record<string, unknown>,
+      executeOptions?: ToolExecuteOptions,
+    ) => {
       const argv = passthroughParam
         ? buildCliPassthroughArgv(passthroughParam, rawArgs ?? {})
         : buildCliArgv(input.cmd.argv, rawArgs ?? {})
@@ -434,40 +439,28 @@ function createCliTool(input: {
 
       // Capability Surface effective gate (taskSelected ∧ connected ∧ enabled).
       // Packaging may load tools; invoke still requires Task 选用 for connector tools.
-      try {
-        const { gateConnectorToolInvoke } = await import(
-          '../capability/tool-gate.js'
-        )
-        const gate = gateConnectorToolInvoke(toolName, {
-          descriptors: input.connectorDescriptors ?? [],
-          authLookup: () => ({
-            // If tool is mounted, packaging enabled the plugin for this process.
-            pluginGloballyEnabled: true,
-            authStatus: 'connected',
-          }),
-        })
-        // Only enforce selection/mute reasons here; auth still handled below.
-        if (
-          !gate.allowed &&
-          (gate.reason === 'not_task_selected' ||
-            gate.reason === 'task_muted' ||
-            gate.reason === 'tool_out_of_scope' ||
-            gate.reason === 'plugin_not_enabled')
-        ) {
-          return {
-            ok: false,
-            error: gate.reason,
-            cliId: input.cliId,
-            command: input.cmd.name,
-            ...argvMetadata,
-            exitCode: 1,
-            stdout: '',
-            stderr: truncateOutput(gate.hint, 20_000),
-          }
+      const turnContext = readCapabilityTurnContext(executeOptions)
+      const gate = gateConnectorToolInvoke(toolName, {
+        taskId: turnContext.taskId,
+        selectedConnectorIds: turnContext.selectedConnectorIds,
+        descriptors: input.connectorDescriptors ?? [],
+        authLookup: () => ({
+          // If tool is mounted, packaging enabled the plugin for this process.
+          pluginGloballyEnabled: true,
+          authStatus: 'connected',
+        }),
+      })
+      if (!gate.allowed) {
+        return {
+          ok: false,
+          error: gate.reason,
+          cliId: input.cliId,
+          command: input.cmd.name,
+          ...argvMetadata,
+          exitCode: 1,
+          stdout: '',
+          stderr: truncateOutput(gate.hint, 20_000),
         }
-      } catch {
-        // Gate module optional at load time — fail open only for import errors
-        // (authEnforced path below remains the secret/session guard).
       }
 
       let env = input.childEnv

@@ -5,11 +5,17 @@ import {
   type WorkspaceSandboxExecuteOptions,
   type WorkspaceSandboxResult,
 } from '@voltagent/core'
+import { readCapabilityTurnContext } from '../capability/turn-context.js'
 
 export type ConnectorCommandAccess = {
   pluginEnabled: boolean
   connected: boolean
   taskSelected: boolean
+}
+
+export type ConnectorCommandTurnContext = {
+  taskId: string | null
+  selectedConnectorIds: readonly string[]
 }
 
 export type ConnectorCommandRule = {
@@ -28,6 +34,7 @@ export type CreateConnectorAwareSandboxOptions = {
   commandRules: readonly ConnectorCommandRule[]
   resolveConnectorAccess: (
     connectorId: string,
+    turnContext: ConnectorCommandTurnContext,
   ) => Promise<ConnectorCommandAccess>
   /** Hard ceiling applied even when the model asks for more. */
   maxTimeoutMs?: number
@@ -97,7 +104,13 @@ export function createConnectorAwareSandbox(
         })
       }
 
-      const access = await options.resolveConnectorAccess(rule.connectorId)
+      const turnContext = readCapabilityTurnContext(
+        executeOptions.operationContext,
+      )
+      const access = await options.resolveConnectorAccess(
+        rule.connectorId,
+        turnContext,
+      )
       if (!access.pluginEnabled) {
         throw new Error(`connector_plugin_not_enabled:${rule.connectorId}`)
       }

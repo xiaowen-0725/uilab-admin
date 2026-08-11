@@ -111,9 +111,11 @@ const snapshot: CapabilitySnapshot = {
 }
 
 function renderMenu(overrides?: {
-  snapshot?: CapabilitySnapshot
+  snapshot?: CapabilitySnapshot | null
   onStartAuth?: (connectorId: string) => void
   onToggleConnector?: (connectorId: string, selected: boolean) => void
+  errorMessage?: string
+  onRetry?: () => void
 }) {
   const onStartAuth = overrides?.onStartAuth ?? vi.fn()
   const onToggleConnector = overrides?.onToggleConnector ?? vi.fn()
@@ -122,7 +124,13 @@ function renderMenu(overrides?: {
       open
       onOpenChange={vi.fn()}
       trigger={<button type='button'>添加</button>}
-      snapshot={overrides?.snapshot ?? snapshot}
+      snapshot={
+        overrides && 'snapshot' in overrides
+          ? (overrides.snapshot ?? null)
+          : snapshot
+      }
+      errorMessage={overrides?.errorMessage}
+      onRetry={overrides?.onRetry}
       onPickFiles={vi.fn()}
       onEnableGoal={vi.fn()}
       onEnablePlan={vi.fn()}
@@ -229,6 +237,18 @@ describe('CapabilityAddMenu WorkBuddy IA', () => {
     await expect
       .element(page.getByTestId('capability-connector-switch-connector.github'))
       .not.toBeInTheDocument()
+  })
+
+  it('shows a recoverable error instead of pretending the connector catalog is empty', async () => {
+    const onRetry = vi.fn()
+    renderMenu({ snapshot: null, errorMessage: '侧车不可用', onRetry })
+
+    await page.getByTestId('composer-add-connectors-nav').click()
+    await expect
+      .element(page.getByTestId('capability-connectors-error'))
+      .toHaveTextContent('侧车不可用')
+    await page.getByTestId('capability-connectors-retry').click()
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
   it('offers reconnection without exposing a Task switch when account authorization expired', async () => {

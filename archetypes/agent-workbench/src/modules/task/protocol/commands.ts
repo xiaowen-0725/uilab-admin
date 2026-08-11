@@ -2,9 +2,14 @@
  * Application Command protocol (design §7).
  * UI only dispatches commands; it must not append Runtime events or mutate Run state.
  */
-
-import type { ProjectId, RunId, RunStatus, TaskId, TurnId } from '../model/lifecycle'
 import type { TaskExecutionContext } from '../model/execution-context'
+import type {
+  ProjectId,
+  RunId,
+  RunStatus,
+  TaskId,
+  TurnId,
+} from '../model/lifecycle'
 
 export type CommandActor = 'user' | 'system' | 'runtime'
 
@@ -49,11 +54,12 @@ export interface TurnComposerContext {
     meta?: string
   }>
   skills?: Array<{ id: string; label: string }>
-  /** Task-selected connectors (Capability Surface); status-safe labels only. */
+  /** Capability Surface snapshot for this Turn; status-safe labels only. */
   connectors?: Array<{
     id: string
     label: string
     connected?: boolean
+    taskSelected: boolean
     capabilityEffective?: boolean
   }>
   /**

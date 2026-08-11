@@ -1,14 +1,14 @@
 /**
  * Subscribe CapabilityController for the selected Task.
  */
-
 import { useEffect, useSyncExternalStore } from 'react'
-import type { CapabilityController } from './capability-controller'
 import type { CapabilitySnapshot } from '../ports/capability-snapshot-port'
+import type { CapabilityController } from './capability-controller'
+import type { CapabilityControllerError } from './capability-controller'
 
 export function useCapabilitySnapshot(
   controller: CapabilityController | null | undefined,
-  taskId: string | null | undefined,
+  taskId: string | null | undefined
 ): CapabilitySnapshot | null {
   const snapshot = useSyncExternalStore(
     (onStoreChange) => {
@@ -16,7 +16,7 @@ export function useCapabilitySnapshot(
       return controller.subscribe(() => onStoreChange())
     },
     () => controller?.getCached() ?? null,
-    () => controller?.getCached() ?? null,
+    () => controller?.getCached() ?? null
   )
 
   useEffect(() => {
@@ -28,4 +28,17 @@ export function useCapabilitySnapshot(
 
   if (!taskId || snapshot?.taskId !== taskId) return null
   return snapshot
+}
+
+export function useCapabilitySnapshotError(
+  controller: CapabilityController | null | undefined,
+  taskId: string | null | undefined
+): CapabilityControllerError | null {
+  const error = useSyncExternalStore(
+    (onStoreChange) =>
+      controller?.subscribe(() => onStoreChange()) ?? (() => {}),
+    () => controller?.getError() ?? null,
+    () => controller?.getError() ?? null
+  )
+  return error?.taskId === taskId ? error : null
 }

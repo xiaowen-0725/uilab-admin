@@ -2,10 +2,7 @@
  * Task lifecycle commands — new chat (blank-draft once) + hard delete cascade.
  * Shell only receives callbacks; this unit owns catalog / EventStore / pointer updates.
  */
-
-import {
-  deleteTaskCascade,
-} from '@/app/persistence/workbench-idb'
+import { deleteTaskCascade } from '@/app/persistence/workbench-idb'
 import {
   isBlankDraftTask,
   NEW_TASK_TITLE,
@@ -52,7 +49,7 @@ export interface CreateNewChatTaskInput {
 }
 
 export async function createNewChatTask(
-  input: CreateNewChatTaskInput,
+  input: CreateNewChatTaskInput
 ): Promise<TaskCatalogRow> {
   const now = input.now ?? Date.now()
   const newTaskId = `task-${now.toString(36)}-${input.sequence}`
@@ -80,6 +77,7 @@ export interface HardDeleteTaskInput {
   /** Live run status when deleting the active task. */
   activeRunStatus?: RunStatus | null
   cancelTimeoutMs?: number
+  onTaskDeleted?: (taskId: string) => void | Promise<void>
 }
 
 export interface HardDeleteTaskResult {
@@ -94,7 +92,7 @@ export interface HardDeleteTaskResult {
  * Cancel timeout/failure does not block hard delete.
  */
 export async function hardDeleteTask(
-  input: HardDeleteTaskInput,
+  input: HardDeleteTaskInput
 ): Promise<HardDeleteTaskResult> {
   const {
     taskId: deleteTaskId,
@@ -149,8 +147,7 @@ export async function hardDeleteTask(
     lastForProject = nextSelected
   } else {
     const selectedStillExists =
-      selectedTaskId != null &&
-      remaining.some((t) => t.id === selectedTaskId)
+      selectedTaskId != null && remaining.some((t) => t.id === selectedTaskId)
     lastForProject = selectedStillExists ? selectedTaskId : nextSelected
   }
 
@@ -164,9 +161,7 @@ export async function hardDeleteTask(
       await deleteTaskCascade(db, {
         taskId: deleteTaskId,
         nextSelectedTaskId:
-          selectedTaskId === deleteTaskId
-            ? nextSelected
-            : selectedTaskId,
+          selectedTaskId === deleteTaskId ? nextSelected : selectedTaskId,
         selectedProjectId,
         lastTaskByProject,
         navigatorOpen,
@@ -182,6 +177,7 @@ export async function hardDeleteTask(
   }
 
   runStatusIndex.clear(deleteTaskId)
+  await input.onTaskDeleted?.(deleteTaskId)
 
   return {
     nextSelectedTaskId: nextSelected,

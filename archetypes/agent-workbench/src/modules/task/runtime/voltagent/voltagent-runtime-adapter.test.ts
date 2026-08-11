@@ -25,7 +25,10 @@ function collectEvents(
 describe('VoltAgentRuntimeAdapter', () => {
   it('forwards safe composer metadata without embedding attachment bytes', async () => {
     let requestBody = ''
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (!String(url).endsWith('/stream')) {
+        return new Response('unexpected route', { status: 500 })
+      }
       requestBody = String(init?.body ?? '')
       return new Response(sseBody([{ type: 'finish', finishReason: 'stop' }]), {
         status: 200,
@@ -51,6 +54,22 @@ describe('VoltAgentRuntimeAdapter', () => {
       composerContext: {
         attachments: [{ name: 'report.pdf', kind: 'file', meta: '本地附件' }],
         skills: [{ id: 'review', label: 'Code Review' }],
+        connectors: [
+          {
+            id: 'connector.feishu',
+            label: '飞书',
+            connected: true,
+            taskSelected: true,
+            capabilityEffective: true,
+          },
+          {
+            id: 'connector.github',
+            label: 'GitHub',
+            connected: true,
+            taskSelected: false,
+            capabilityEffective: false,
+          },
+        ],
         expert: {
           id: 'expert.office-meeting',
           label: '会议纪要专家',
@@ -66,6 +85,14 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(requestBody).toContain('专家指令')
     expect(requestBody).toContain('优先结构化会议纪要')
     expect(requestBody).not.toContain('attachment bytes')
+    const streamPayload = JSON.parse(requestBody) as {
+      options: { context: { capabilityConnectorIds: string[] } }
+    }
+    expect(streamPayload.options.context.capabilityConnectorIds).toEqual([
+      'connector.feishu',
+    ])
+    expect(requestBody).not.toContain('本 Task 已选连接器：GitHub')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
   it('treats a DONE-only stream as a completed run', async () => {
@@ -449,14 +476,18 @@ describe('VoltAgentRuntimeAdapter', () => {
 
   it('respondToApproval resumes stream with approval-responded UIMessage', async () => {
     let call = 0
-    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).endsWith('/capability/active-task')) {
-        return new Response(JSON.stringify({ ok: true, taskId: 'task-ap' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
       call += 1
+      const request = JSON.parse(String(init?.body ?? '{}')) as {
+        input: unknown
+        options?: {
+          maxSteps?: number
+          context?: { capabilityConnectorIds?: string[] }
+        }
+      }
+      expect(request.options?.context?.capabilityConnectorIds).toEqual([
+        'connector.feishu',
+      ])
       if (call === 1) {
         return new Response(
           sseBody([
@@ -482,14 +513,10 @@ describe('VoltAgentRuntimeAdapter', () => {
         )
       }
       // Resume after approve
-      const body = JSON.parse(String(init?.body ?? '{}')) as {
-        input: unknown
-        options?: { maxSteps?: number }
-      }
-      expect(Array.isArray(body.input)).toBe(true)
+      expect(Array.isArray(request.input)).toBe(true)
       // maxSteps omitted by default (sidecar Agent config wins)
-      expect(body.options?.maxSteps).toBeUndefined()
-      const messages = body.input as Array<{
+      expect(request.options?.maxSteps).toBeUndefined()
+      const messages = request.input as Array<{
         role: string
         parts: Array<Record<string, unknown>>
       }>
@@ -534,6 +561,17 @@ describe('VoltAgentRuntimeAdapter', () => {
       schemaVersion: 1,
       taskId: 'task-ap',
       inputText: '写个文件',
+      composerContext: {
+        connectors: [
+          {
+            id: 'connector.feishu',
+            label: '飞书',
+            connected: true,
+            taskSelected: true,
+            capabilityEffective: true,
+          },
+        ],
+      },
       proposedTurnId: 'turn-ap',
       proposedRunId: 'run-ap',
     })
@@ -546,7 +584,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     })
 
     // Let first stream fully settle so activeAbort clears
-    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1))
     await new Promise((r) => setTimeout(r, 20))
 
     const aprAck = await adapter.sendCommand({
@@ -572,7 +610,7 @@ describe('VoltAgentRuntimeAdapter', () => {
       expect(types).toContain('output.delta')
       expect(types).toContain('run.completed')
     })
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('subscribe seeds nextSequence from EventStore cursor', async () => {

@@ -1,8 +1,64 @@
 import { describe, expect, it } from 'vitest'
+import { createCapabilityController } from '../application/capability-controller'
 import { CONNECTOR_FEISHU_ID } from '../model/task-selection'
+import type { TaskCapabilitySelectionStore } from '../model/task-selection'
 import { createFakeCapabilitySnapshotPort } from './fake-capability-snapshot'
 
 describe('createFakeCapabilitySnapshotPort', () => {
+  it('reports when a Task selection cannot be persisted locally', async () => {
+    const controller = createCapabilityController(
+      createFakeCapabilitySnapshotPort(),
+      {
+        selectionStore: {
+          get: () => null,
+          set: () => false,
+          clear: () => false,
+        },
+      }
+    )
+
+    await controller.setSelection('task-a', {
+      connectorIds: [CONNECTOR_FEISHU_ID],
+    })
+
+    expect(controller.getError()?.message).toMatch(/持久化失败|存储/)
+    controller.dispose()
+  })
+
+  it('restores and re-syncs per-Task selection after a page/runtime reload', async () => {
+    const persisted = new Map()
+    const selectionStore: TaskCapabilitySelectionStore = {
+      get: (taskId) => persisted.get(taskId) ?? null,
+      set: (taskId, selection) => {
+        persisted.set(taskId, selection)
+        return true
+      },
+      clear: (taskId) => persisted.delete(taskId),
+    }
+    const first = createCapabilityController(
+      createFakeCapabilitySnapshotPort(),
+      { selectionStore }
+    )
+    await first.setSelection('task-a', {
+      connectorIds: [CONNECTOR_FEISHU_ID],
+    })
+    first.dispose()
+
+    const reloaded = createCapabilityController(
+      createFakeCapabilitySnapshotPort(),
+      { selectionStore }
+    )
+    const restored = await reloaded.refresh('task-a')
+
+    expect(restored.selection.connectorIds).toEqual([CONNECTOR_FEISHU_ID])
+    expect(
+      restored.connectors.find(
+        (connector) => connector.id === CONNECTOR_FEISHU_ID
+      )?.taskSelected
+    ).toBe(true)
+    reloaded.dispose()
+  })
+
   it('allows catalog + selection without faking Connected outbound', async () => {
     const port = createFakeCapabilitySnapshotPort({
       nowIso: () => '2026-08-09T12:00:00.000Z',
@@ -49,15 +105,12 @@ describe('createFakeCapabilitySnapshotPort', () => {
     const taskB = await port.getSnapshot('task-b')
     expect(taskB.selection.connectorIds).toEqual([])
     expect(
-      taskB.connectors.find(
-        (connector) => connector.id === CONNECTOR_FEISHU_ID
-      )?.taskSelected
+      taskB.connectors.find((connector) => connector.id === CONNECTOR_FEISHU_ID)
+        ?.taskSelected
     ).toBe(false)
 
     const restoredTaskA = await port.getSnapshot('task-a')
-    expect(restoredTaskA.selection.connectorIds).toEqual([
-      CONNECTOR_FEISHU_ID,
-    ])
+    expect(restoredTaskA.selection.connectorIds).toEqual([CONNECTOR_FEISHU_ID])
     expect(
       restoredTaskA.connectors.find(
         (connector) => connector.id === CONNECTOR_FEISHU_ID

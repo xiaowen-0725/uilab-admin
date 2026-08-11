@@ -240,6 +240,7 @@ export function createPluginRegistry(
       env,
       host: options.host,
       expected,
+      connectorDescriptors,
     })
   }
 
@@ -444,6 +445,7 @@ export function createPluginRegistry(
         env,
         host: options.host,
         expected,
+        connectorDescriptors,
       })
 
       const skillsAgg = await loadSkillsContributions(skillsItems, {

@@ -4,7 +4,13 @@
  * Browser-safe: only fetch/EventSource-style streaming. No Node built-ins.
  * Fake ≠ this adapter. Requires VITE_RUNTIME_ADAPTER=voltagent + running sidecar.
  */
-
+import type {
+  RuntimeCapabilities,
+  RuntimePort,
+  RuntimeSnapshot,
+  RuntimeSubscriptionEvent,
+  RunStartInput,
+} from '../../ports/runtime-port'
 import type {
   ApplicationCommand,
   CommandAcknowledgement,
@@ -13,13 +19,6 @@ import type {
 } from '../../protocol/commands'
 import type { TurnComposerContext } from '../../protocol/commands'
 import type { AgentRuntimeEventEnvelope } from '../../protocol/events'
-import type {
-  RuntimeCapabilities,
-  RuntimePort,
-  RuntimeSnapshot,
-  RuntimeSubscriptionEvent,
-  RunStartInput,
-} from '../../ports/runtime-port'
 import { accepted, rejected, unsupported } from '../command-acks'
 import {
   mapFullStreamChunk,
@@ -66,6 +65,8 @@ type TaskStreamState = {
   lastTurnId: string | null
   /** Last user text for this task (approval resume). */
   lastUserText: string | null
+  /** Immutable connector selection captured when this Turn started. */
+  lastCapabilityConnectorIds: string[]
   /** Pending tool approvals keyed by approvalId. */
   pendingApprovals: Map<string, PendingApproval>
 }
@@ -92,7 +93,7 @@ type StreamInput =
 
 function modelInputWithComposerContext(
   text: string,
-  context: TurnComposerContext | undefined,
+  context: TurnComposerContext | undefined
 ): string {
   if (!context) return text
   const lines: string[] = []
@@ -100,12 +101,15 @@ function modelInputWithComposerContext(
     lines.push(
       `附件元数据（未上传文件内容）：${context.attachments
         .map((item) => `${item.name} [${item.kind}]`)
-        .join('、')}`,
+        .join('、')}`
     )
   }
-  if (context.connectors?.length) {
+  const selectedConnectors = context.connectors?.filter(
+    (connector) => connector.taskSelected
+  )
+  if (selectedConnectors?.length) {
     lines.push(
-      `本 Task 已选连接器：${context.connectors
+      `本 Task 已选连接器：${selectedConnectors
         .map((item) => {
           const flags = [
             item.connected ? '已连接' : '未连接',
@@ -113,25 +117,29 @@ function modelInputWithComposerContext(
           ].join('·')
           return `${item.label}(${item.id}; ${flags})`
         })
-        .join('、')}`,
+        .join('、')}`
     )
     lines.push(
-      '若连接器能力面已进入，GitHub 使用官方 MCP 工具，飞书按官方 lark-* Skill 通过 execute_command 执行原生 lark-cli；未进入时不要假装已调用。',
+      '只使用当前 Turn 实际暴露的 Connector 工具或命令；能力面未进入时，不要假装已经调用。'
     )
   }
   if (context.expert) {
-    lines.push(`本 Task 专家配置包：${context.expert.label}(${context.expert.id})`)
+    lines.push(
+      `本 Task 专家配置包：${context.expert.label}(${context.expert.id})`
+    )
     const instruction = context.expert.instruction?.trim()
     if (instruction) {
       lines.push(`专家指令（配置包 overlay，非子 Agent）：\n${instruction}`)
     } else {
       lines.push(
-        '专家目录未提供 instruction 时，仅按 id/label 与默认技能偏好工作；勿虚构专家能力。',
+        '专家目录未提供 instruction 时，仅按 id/label 与默认技能偏好工作；勿虚构专家能力。'
       )
     }
   }
   if (context.skills?.length) {
-    lines.push(`已选技能：${context.skills.map((item) => item.label).join('、')}`)
+    lines.push(
+      `已选技能：${context.skills.map((item) => item.label).join('、')}`
+    )
   }
   if (context.mode && context.mode !== 'default') {
     lines.push(`Workbench 模式：${context.mode}`)
@@ -163,7 +171,11 @@ export function normalizeWorkspaceToolInput(input: unknown): unknown {
       continue
     }
     // Fallback: basename under virtual /output/
-    if (v.includes('/Users/') || v.includes('/home/') || /^[A-Za-z]:\\/.test(v)) {
+    if (
+      v.includes('/Users/') ||
+      v.includes('/home/') ||
+      /^[A-Za-z]:\\/.test(v)
+    ) {
       const base = v.split(/[/\\]/).filter(Boolean).pop()
       if (base) rec[key] = `/output/${base}`
     }
@@ -173,7 +185,7 @@ export function normalizeWorkspaceToolInput(input: unknown): unknown {
 
 /** Parse one SSE text line; null = ignore, 'done' = stream end marker. */
 export function parseSseDataLine(
-  line: string,
+  line: string
 ): FullStreamChunk | 'done' | null {
   const trimmed = line.trim()
   if (!trimmed || trimmed.startsWith(':')) return null
@@ -199,7 +211,7 @@ function isTerminalRunEvent(eventType: string): boolean {
 /** Read first non-empty string field from a chunk-like object. */
 function pickString(
   source: Record<string, unknown> | undefined,
-  keys: readonly string[],
+  keys: readonly string[]
 ): string | null {
   if (!source) return null
   for (const key of keys) {
@@ -247,7 +259,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   subscribe(
     taskId: string,
     cursor: number | string | null | undefined,
-    listener: Listener,
+    listener: Listener
   ): () => void {
     // EventStore owns rehydrate; seed live sequences so post-rehydrate appends
     // do not restart at 1 and collide with store checkpoints.
@@ -259,7 +271,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           ? cursor
           : Number(cursor)
     if (cursorNum != null && Number.isFinite(cursorNum) && cursorNum >= 0) {
-      state.nextSequence = Math.max(state.nextSequence, Math.floor(cursorNum) + 1)
+      state.nextSequence = Math.max(
+        state.nextSequence,
+        Math.floor(cursorNum) + 1
+      )
     }
 
     let set = this.listeners.get(taskId)
@@ -274,7 +289,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     }
   }
 
-  async getSnapshot(taskId: string, runId?: string): Promise<RuntimeSnapshot | null> {
+  async getSnapshot(
+    taskId: string,
+    runId?: string
+  ): Promise<RuntimeSnapshot | null> {
     const state = this.taskState.get(taskId)
     if (!state) return null
     return {
@@ -287,7 +305,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
   async getCapabilities(
     _projectId: string,
-    _environmentId: string,
+    _environmentId: string
   ): Promise<RuntimeCapabilities> {
     const tools = await this.resolveActiveTools()
     return {
@@ -312,7 +330,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     try {
       const res = await this.fetchImpl(
         `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}`,
-        { method: 'GET' },
+        { method: 'GET' }
       )
       if (res.ok) {
         const json = (await res.json()) as {
@@ -336,7 +354,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
   async startRun(
     input: RunStartInput,
-    _idempotencyKey: string,
+    _idempotencyKey: string
   ): Promise<CommandAcknowledgement> {
     this.ensureTask(input.taskId)
     const state = this.taskState.get(input.taskId)!
@@ -345,7 +363,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     return accepted(`start-${input.proposedRunId}`, this.nowIso())
   }
 
-  async sendCommand(command: ApplicationCommand): Promise<CommandAcknowledgement> {
+  async sendCommand(
+    command: ApplicationCommand
+  ): Promise<CommandAcknowledgement> {
     switch (command.type) {
       case 'createTask':
         this.ensureTask(command.proposedTaskId)
@@ -360,7 +380,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         return rejected(
           command.commandId,
           'retry_via_submit',
-          '请通过新的 submitTurn 重试（VoltAgent Adapter 首版）',
+          '请通过新的 submitTurn 重试（VoltAgent Adapter 首版）'
         )
       case 'provideRunInput':
       case 'queueFollowUp':
@@ -369,13 +389,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         return unsupported(
           command.commandId,
           `${command.type}_unsupported`,
-          `VoltAgent Adapter 暂不支持 ${command.type}`,
+          `VoltAgent Adapter 暂不支持 ${command.type}`
         )
       default:
         return unsupported(
           (command as ApplicationCommand).commandId,
           'unknown_command',
-          '未知命令',
+          '未知命令'
         )
     }
   }
@@ -389,6 +409,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         lastRunId: null,
         lastTurnId: null,
         lastUserText: null,
+        lastCapabilityConnectorIds: [],
         pendingApprovals: new Map(),
       }
       this.taskState.set(taskId, state)
@@ -402,7 +423,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     for (const listener of set) listener(event)
   }
 
-  private emitEnvelope(taskId: string, envelope: AgentRuntimeEventEnvelope): void {
+  private emitEnvelope(
+    taskId: string,
+    envelope: AgentRuntimeEventEnvelope
+  ): void {
     this.emit(taskId, { kind: 'event', envelope })
   }
 
@@ -416,7 +440,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     idPrefix: string,
     eventType: string,
     payload: unknown,
-    opts?: { freshReceivedAt?: boolean },
+    opts?: { freshReceivedAt?: boolean }
   ): void {
     const state = this.ensureTask(taskId)
     const occurredAt = this.nowIso()
@@ -450,7 +474,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     taskId: string,
     turnId: string,
     runId: string,
-    inputText: string,
+    inputText: string
   ): void {
     const ids = { turnId, runId }
     this.pushTaskEnvelope(taskId, ids, 'va-book', 'turn.created', { turnId })
@@ -470,6 +494,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     turnId: string
     runId: string
     input: StreamInput
+    capabilityConnectorIds: readonly string[]
     completeIfNoTerminal?: boolean
   }): void {
     const state = this.ensureTask(args.taskId)
@@ -484,25 +509,33 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   }
 
   private async handleSubmitTurn(
-    command: SubmitTurnCommand,
+    command: SubmitTurnCommand
   ): Promise<CommandAcknowledgement> {
     const taskId = command.taskId
     const state = this.ensureTask(taskId)
     if (state.activeAbort) {
-      return rejected(command.commandId, 'task_busy', '当前任务已有进行中的 Run')
+      return rejected(
+        command.commandId,
+        'task_busy',
+        '当前任务已有进行中的 Run'
+      )
     }
-
-    // Bind sidecar capability active task BEFORE stream so tool gates see selection.
-    await this.bindCapabilityActiveTask(taskId)
 
     const { turnId, runId } = this.allocateIds(taskId, command)
     state.lastRunId = runId
     state.lastTurnId = turnId
     const modelInput = modelInputWithComposerContext(
       command.inputText,
-      command.composerContext,
+      command.composerContext
     )
     state.lastUserText = modelInput
+    state.lastCapabilityConnectorIds = [
+      ...new Set(
+        command.composerContext?.connectors
+          ?.filter((connector) => connector.taskSelected)
+          .map((connector) => connector.id) ?? []
+      ),
+    ]
     state.pendingApprovals.clear()
 
     this.pushBookkeeping(taskId, turnId, runId, command.inputText)
@@ -511,6 +544,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       turnId,
       runId,
       input: modelInput,
+      capabilityConnectorIds: state.lastCapabilityConnectorIds,
       completeIfNoTerminal: true,
     })
 
@@ -519,7 +553,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
   private async handleCancel(
     commandId: string,
-    taskId: string,
+    taskId: string
   ): Promise<CommandAcknowledgement> {
     const state = this.taskState.get(taskId)
     if (!state) {
@@ -546,13 +580,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       'va-cancelled',
       'run.cancelled',
       { reason: 'user_cancel' },
-      { freshReceivedAt: true },
+      { freshReceivedAt: true }
     )
     return accepted(commandId, this.nowIso())
   }
 
   private async handleApproval(
-    command: RespondToApprovalCommand,
+    command: RespondToApprovalCommand
   ): Promise<CommandAcknowledgement> {
     const taskId = command.taskId
     const state = this.ensureTask(taskId)
@@ -569,14 +603,14 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       return rejected(
         command.commandId,
         'approval_not_found',
-        '未找到待审批请求，或已过期（请重新提交写操作）',
+        '未找到待审批请求，或已过期（请重新提交写操作）'
       )
     }
     if (state.activeAbort) {
       return rejected(
         command.commandId,
         'task_busy',
-        '当前任务仍有进行中的流，请稍后再批准',
+        '当前任务仍有进行中的流，请稍后再批准'
       )
     }
 
@@ -591,7 +625,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         requestId: approvalId,
         decision: command.payload.decision,
         reason: command.payload.reason,
-      },
+      }
     )
 
     // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
@@ -626,6 +660,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       turnId,
       runId,
       input: resumeInput,
+      capabilityConnectorIds: state.lastCapabilityConnectorIds,
       completeIfNoTerminal: true,
     })
 
@@ -636,7 +671,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     taskId: string,
     runId: string,
     turnId: string,
-    chunk: FullStreamChunk,
+    chunk: FullStreamChunk
   ): void {
     if (chunk.type !== 'tool-approval-request') return
     const state = this.ensureTask(taskId)
@@ -647,8 +682,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const chunkRec = chunk as unknown as Record<string, unknown>
     const approvalId = pickString(chunkRec, ['approvalId', 'requestId'])
     if (!approvalId || !nested) return
-    const toolCallId =
-      pickString(nested, ['toolCallId', 'id']) ?? approvalId
+    const toolCallId = pickString(nested, ['toolCallId', 'id']) ?? approvalId
     const toolName = pickString(nested, ['toolName', 'name']) ?? 'tool'
     const input = nested.input ?? nested.args ?? nested.arguments
     state.pendingApprovals.set(approvalId, {
@@ -662,24 +696,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     })
   }
 
-  /** Best-effort: tell sidecar which task is active for capability tool gates. */
-  private async bindCapabilityActiveTask(taskId: string): Promise<void> {
-    try {
-      await this.fetchImpl(`${this.baseUrl}/capability/active-task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ taskId }),
-      })
-    } catch {
-      // Older sidecars may lack the route — tool gate stays transition-open.
-    }
-  }
-
   private async streamAgent(args: {
     taskId: string
     turnId: string
     runId: string
     input: StreamInput
+    capabilityConnectorIds: readonly string[]
     signal: AbortSignal
     completeIfNoTerminal?: boolean
   }): Promise<void> {
@@ -697,6 +719,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         body: JSON.stringify({
           input,
           options: {
+            context: {
+              capabilityConnectorIds: [...args.capabilityConnectorIds],
+            },
             memory: {
               userId: this.userId,
               conversationId: taskId,
@@ -714,7 +739,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           taskId,
           turnId,
           runId,
-          `侧车 HTTP ${response.status}: ${body.slice(0, 200) || response.statusText}`,
+          `侧车 HTTP ${response.status}: ${body.slice(0, 200) || response.statusText}`
         )
         return
       }
@@ -743,7 +768,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           { turnId, runId },
           'va-complete',
           'run.completed',
-          { reason },
+          { reason }
         )
         sawTerminalEvent = true
       }
@@ -818,20 +843,16 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     taskId: string,
     turnId: string,
     runId: string,
-    message: string,
+    message: string
   ): void {
-    this.pushTaskEnvelope(
-      taskId,
-      { turnId, runId },
-      'va-fail',
-      'run.failed',
-      { message },
-    )
+    this.pushTaskEnvelope(taskId, { turnId, runId }, 'va-fail', 'run.failed', {
+      message,
+    })
   }
 }
 
 export function createVoltAgentRuntimeAdapter(
-  options: VoltAgentRuntimeAdapterOptions,
+  options: VoltAgentRuntimeAdapterOptions
 ): VoltAgentRuntimeAdapter {
   return new VoltAgentRuntimeAdapter(options)
 }

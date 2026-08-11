@@ -43,6 +43,8 @@ export type CapabilityAddMenuProps = {
   trigger: React.ReactElement
   snapshot: CapabilitySnapshot | null
   busy?: boolean
+  errorMessage?: string
+  onRetry?: () => void
   onPickFiles: () => void
   onEnableGoal: () => void
   onEnablePlan: () => void
@@ -135,6 +137,8 @@ export function CapabilityAddMenu({
   trigger,
   snapshot,
   busy,
+  errorMessage,
+  onRetry,
   onPickFiles,
   onEnableGoal,
   onEnablePlan,
@@ -388,6 +392,19 @@ export function CapabilityAddMenu({
               placeholder='搜索连接器'
               testId='capability-connector-search'
             />
+            {errorMessage ? (
+              <div className='space-y-2 px-2 py-2 text-[12px] text-muted-foreground'>
+                <p data-testid='capability-connectors-error'>{errorMessage}</p>
+                <button
+                  type='button'
+                  className='font-medium text-violet-600 hover:underline dark:text-violet-400'
+                  data-testid='capability-connectors-retry'
+                  onClick={onRetry}
+                >
+                  重试
+                </button>
+              </div>
+            ) : null}
             <div className='max-h-56 overflow-y-auto'>
               {connectors.length === 0 ? (
                 <p className='px-2 py-2 text-[12px] text-muted-foreground'>
@@ -415,7 +432,7 @@ export function CapabilityAddMenu({
                         }}
                       >
                         <ConnectorGlyph connector={c} />
-                        <span className='min-w-0 flex flex-1 flex-col'>
+                        <span className='flex min-w-0 flex-1 flex-col'>
                           <span className='truncate'>{c.name}</span>
                           <span
                             className='truncate text-[11px] text-muted-foreground'
@@ -445,7 +462,7 @@ export function CapabilityAddMenu({
                       disabled={busy}
                     >
                       <ConnectorGlyph connector={c} />
-                      <span className='min-w-0 flex flex-1 flex-col'>
+                      <span className='flex min-w-0 flex-1 flex-col'>
                         <span className='truncate'>{c.name}</span>
                         <span
                           className='truncate text-[11px] text-muted-foreground'

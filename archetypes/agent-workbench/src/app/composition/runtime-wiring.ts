@@ -2,7 +2,6 @@
  * Workbench Runtime wiring — Fake / VoltAgent adapter + TaskRuntimeController + busy index.
  * Browser-only; no Node/Electron imports.
  */
-
 import {
   useEffect,
   useMemo,
@@ -17,6 +16,7 @@ import {
 } from '@/config/runtime-adapter'
 import {
   createCapabilityController,
+  createBrowserTaskCapabilitySelectionStore,
   createFakeCapabilitySnapshotPort,
   createHttpCapabilitySnapshotPort,
   type CapabilityController,
@@ -71,10 +71,9 @@ export interface WorkbenchRuntimePorts {
  * Create Runtime ports + busy index. Pure factory — no React.
  */
 export function createWorkbenchRuntimePorts(
-  options: CreateWorkbenchRuntimePortsOptions = {},
+  options: CreateWorkbenchRuntimePortsOptions = {}
 ): WorkbenchRuntimePorts {
-  const adapterMode =
-    options.adapterMode ?? resolveRuntimeAdapterMode()
+  const adapterMode = options.adapterMode ?? resolveRuntimeAdapterMode()
   const instantDemo = options.instantDemo ?? INSTANT_DEMO
   const seed = options.seed ?? 'workbench'
   const projectId = options.projectId ?? DEFAULT_PROJECT_ID
@@ -110,8 +109,7 @@ export function createWorkbenchRuntimePorts(
   const voltRuntime =
     adapterMode === 'voltagent'
       ? createVoltAgentRuntimeAdapter({
-          baseUrl:
-            options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl(),
+          baseUrl: options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl(),
           agentId: options.voltAgentId ?? resolveVoltAgentId(),
           projectId,
         })
@@ -122,13 +120,14 @@ export function createWorkbenchRuntimePorts(
       ? (voltRuntime as RuntimePort)
       : (fakeRuntime as RuntimePort)
 
-  const voltBase =
-    options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl()
+  const voltBase = options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl()
   const capabilityPort: CapabilitySnapshotPort =
     adapterMode === 'voltagent'
       ? createHttpCapabilitySnapshotPort({ baseUrl: voltBase })
       : createFakeCapabilitySnapshotPort()
-  const capabilityController = createCapabilityController(capabilityPort)
+  const capabilityController = createCapabilityController(capabilityPort, {
+    selectionStore: createBrowserTaskCapabilitySelectionStore(),
+  })
 
   return {
     adapterMode,
@@ -158,7 +157,7 @@ export interface EnsureTaskRuntimeControllerOptions {
  * Create TaskRuntimeController and bind busy index listener.
  */
 export function createTaskRuntimeController(
-  options: EnsureTaskRuntimeControllerOptions,
+  options: EnsureTaskRuntimeControllerOptions
 ): TaskRuntimeController {
   const controller = new TaskRuntimeController({
     runtime: options.runtimePort,
@@ -167,8 +166,7 @@ export function createTaskRuntimeController(
     seed: options.seed ?? 'workbench',
     honestyMode: options.honestyMode,
     eventStoreKind: options.eventStoreKind,
-    autoFlush:
-      options.instantDemo && options.adapterMode === 'fake',
+    autoFlush: options.instantDemo && options.adapterMode === 'fake',
   })
   controller.setRunStatusListener((id, status) => {
     options.runStatusIndex.set(id, status)
@@ -183,7 +181,7 @@ export function createTaskRuntimeController(
  */
 export function ensureTaskRuntimeController(
   existing: TaskRuntimeController | null,
-  options: EnsureTaskRuntimeControllerOptions,
+  options: EnsureTaskRuntimeControllerOptions
 ): TaskRuntimeController {
   if (existing != null) return existing
   return createTaskRuntimeController(options)
@@ -195,7 +193,7 @@ export function ensureTaskRuntimeController(
  */
 export function setFakeRuntimeClockRealtime(
   fakeRuntime: DeterministicFakeRuntime | null,
-  active: boolean,
+  active: boolean
 ): () => void {
   if (!fakeRuntime) return () => {}
   if (!active) {
@@ -214,13 +212,10 @@ export function setFakeRuntimeClockRealtime(
 export function projectBusyTaskIds(
   runStatusIndex: RunStatusIndex,
   selectedTaskId: string | null,
-  selectedRunStatus: RunStatus | null | undefined,
+  selectedRunStatus: RunStatus | null | undefined
 ): ReadonlySet<string> {
   const base = runStatusIndex.getBusyTaskIds()
-  if (
-    selectedTaskId &&
-    isNavigatorBusyStatus(selectedRunStatus)
-  ) {
+  if (selectedTaskId && isNavigatorBusyStatus(selectedRunStatus)) {
     if (base.has(selectedTaskId)) return base
     const set = new Set(base)
     set.add(selectedTaskId)
@@ -236,23 +231,18 @@ export function projectBusyTaskIds(
 export function useBusyTaskIds(
   runStatusIndex: RunStatusIndex,
   selectedTaskId: string | null,
-  selectedRunStatus: RunStatus | null | undefined,
+  selectedRunStatus: RunStatus | null | undefined
 ): ReadonlySet<string> {
   const busyRevision = useSyncExternalStore(
     (cb) => runStatusIndex.subscribe(cb),
     () => runStatusIndex.getRevision(),
-    () => runStatusIndex.getRevision(),
+    () => runStatusIndex.getRevision()
   )
   return useMemo(
-    () =>
-      projectBusyTaskIds(
-        runStatusIndex,
-        selectedTaskId,
-        selectedRunStatus,
-      ),
+    () => projectBusyTaskIds(runStatusIndex, selectedTaskId, selectedRunStatus),
     // busyRevision invalidates when index mutates
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busyRevision, selectedRunStatus, selectedTaskId, runStatusIndex],
+    [busyRevision, selectedRunStatus, selectedTaskId, runStatusIndex]
   )
 }
 
@@ -283,7 +273,7 @@ export interface WorkbenchRuntimeWiring {
  * `projectId` changes go through `setProjectId` only (no recreate).
  */
 export function useWorkbenchRuntimeWiring(
-  options: UseWorkbenchRuntimeWiringOptions,
+  options: UseWorkbenchRuntimeWiringOptions
 ): WorkbenchRuntimeWiring {
   const {
     eventStore,
@@ -304,8 +294,9 @@ export function useWorkbenchRuntimeWiring(
   const ports = portsRef.current
 
   // Controller: state for re-render; ref for guard + cleanup identity.
-  const [controller, setController] =
-    useState<TaskRuntimeController | null>(null)
+  const [controller, setController] = useState<TaskRuntimeController | null>(
+    null
+  )
   const controllerRef = useRef<TaskRuntimeController | null>(null)
 
   // Create only after boot + store; never during render. projectId not a create dep.

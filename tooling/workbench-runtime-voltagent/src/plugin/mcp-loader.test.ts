@@ -3,9 +3,11 @@ import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import {
+  BUILTIN_CONNECTOR_DESCRIPTORS,
   BUILTIN_MCP_CALENDAR_PLUGIN,
   BUILTIN_MCP_DOCS_PLUGIN,
   BUILTIN_PLUGINS,
+  CONNECTOR_GITHUB_ID,
 } from './builtins.js'
 import {
   applyMcpNeedsApproval,
@@ -13,6 +15,7 @@ import {
   forceToolNeedsApproval,
   mergeReadOnlyAllowlist,
   resolveMcpContribution,
+  wrapMcpToolsWithTaskSelectionGate,
 } from './mcp-loader.js'
 import { createPluginRegistry, formatRegistryMcpStatusLine } from './registry.js'
 import { decideToolNeedsApproval } from './security-policy.js'
@@ -31,6 +34,49 @@ function calendarContrib() {
 }
 
 describe('MCP tool approval (fail-closed)', () => {
+  it('uses the Turn snapshot and rejects a connector omitted from that Turn', async () => {
+    let calls = 0
+    const source = createTool({
+      name: 'github__search_repositories',
+      description: 'search',
+      parameters: z.object({}),
+      execute: async () => {
+        calls += 1
+        return { ok: true }
+      },
+    })
+    const [gated] = wrapMcpToolsWithTaskSelectionGate(
+      [source as any],
+      BUILTIN_CONNECTOR_DESCRIPTORS,
+    )
+
+    const blocked = await gated.execute?.(
+      {},
+      {
+        conversationId: 'task-a',
+        context: new Map([['capabilityConnectorIds', []]]),
+      } as any,
+    )
+    assert.deepEqual(blocked, {
+      ok: false,
+      error: 'not_task_selected',
+      hint: '连接器「GitHub」工具面未进入本 Task；本 Task 未选用该连接器',
+    })
+    assert.equal(calls, 0)
+
+    const allowed = await gated.execute?.(
+      {},
+      {
+        conversationId: 'task-a',
+        context: new Map([
+          ['capabilityConnectorIds', [CONNECTOR_GITHUB_ID]],
+        ]),
+      } as any,
+    )
+    assert.deepEqual(allowed, { ok: true })
+    assert.equal(calls, 1)
+  })
+
   it('requires approval for everything by default', () => {
     const empty = new Set<string>()
     for (const name of [

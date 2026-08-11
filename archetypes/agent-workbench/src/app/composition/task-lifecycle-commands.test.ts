@@ -1,19 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  createNewChatTask,
-  decideNewChat,
-  hardDeleteTask,
-} from './task-lifecycle-commands'
 import {
   createMemoryProjectCatalog,
   DEFAULT_PROJECT_ID,
   NEW_TASK_TITLE,
   ProjectCatalogController,
 } from '@/modules/project'
+import { createMemoryEventStore, createRunStatusIndex } from '@/modules/task'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  createMemoryEventStore,
-  createRunStatusIndex,
-} from '@/modules/task'
+  createNewChatTask,
+  decideNewChat,
+  hardDeleteTask,
+} from './task-lifecycle-commands'
 
 describe('decideNewChat / blank-draft once', () => {
   it('reselects when current task is blank 新对话 draft in same project', () => {
@@ -37,7 +34,7 @@ describe('decideNewChat / blank-draft once', () => {
       decideNewChat({
         selectedProjectId: DEFAULT_PROJECT_ID,
         selectedTask: null,
-      }),
+      })
     ).toEqual({ kind: 'create' })
 
     expect(
@@ -52,7 +49,7 @@ describe('decideNewChat / blank-draft once', () => {
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
-      }),
+      })
     ).toEqual({ kind: 'create' })
   })
 
@@ -69,7 +66,7 @@ describe('decideNewChat / blank-draft once', () => {
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
-      }),
+      })
     ).toEqual({ kind: 'create' })
   })
 })
@@ -110,15 +107,18 @@ describe('hardDeleteTask', () => {
     await catalog.renameTask(b.id, 'B2', 'user')
 
     const eventStore = createMemoryEventStore()
-    await eventStore.append({
-      taskId: a.id,
-      // minimal shape accepted by memory store tests elsewhere
-    } as never).catch(() => {
-      // Some stores require full envelope; delete still exercises cascade path
-    })
+    await eventStore
+      .append({
+        taskId: a.id,
+        // minimal shape accepted by memory store tests elsewhere
+      } as never)
+      .catch(() => {
+        // Some stores require full envelope; delete still exercises cascade path
+      })
 
     const runStatusIndex = createRunStatusIndex()
     runStatusIndex.set(a.id, 'running')
+    const onTaskDeleted = vi.fn()
 
     const result = await hardDeleteTask({
       taskId: a.id,
@@ -135,6 +135,7 @@ describe('hardDeleteTask', () => {
         [DEFAULT_PROJECT_ID]: a.id,
         'other-project': 'task-other',
       },
+      onTaskDeleted,
     })
 
     expect(catalog.getTaskRow(a.id)).toBeNull()
@@ -145,6 +146,7 @@ describe('hardDeleteTask', () => {
     // Other projects' keys preserved
     expect(result.lastTaskByProject['other-project']).toBe('task-other')
     expect(runStatusIndex.get(a.id)).toBeNull()
+    expect(onTaskDeleted).toHaveBeenCalledWith(a.id)
   })
 
   it('delete non-selected while another remains selected → last stays selected', async () => {
@@ -201,7 +203,7 @@ describe('hardDeleteTask', () => {
       () =>
         new Promise<void>((_, reject) => {
           setTimeout(() => reject(new Error('cancel failed')), 10)
-        }),
+        })
     )
     const detach = vi.fn()
     const runtimeController = {
