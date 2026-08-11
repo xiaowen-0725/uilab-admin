@@ -3,7 +3,7 @@
 本项目是 **AI-first Agent Workbench Archetype**（Vite + React 桌面优先工作台）。
 硬规则以本文件为准；平台 monorepo 合同见仓库根 `AGENTS.md`。
 
-## 定位（Phase 3 Shell + Real Task Lifecycle + Fake/侧车 Runtime）
+## 定位（Phase 3 Shell + Real Task Lifecycle + VoltAgent 侧车 Runtime）
 
 - **技术栈（与平台统一）**：Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（**Base UI / base-nova**）+ TanStack Router（小型 code-defined 路由）
 - **UI 装配**：`components.json`（base-nova）→ `@/components/ui/*`（按需 `shadcn add`）→ UI Lab registry 复合块（如 `agent-composer`）→ `@/lib/utils`（`cn`）
@@ -23,9 +23,9 @@
   - 硬删 Task（目录 + events + snapshot；确认文案强调不可恢复）
   - Navigator：**仅**真目录；无 mock utility；busy = RunStatusIndex（queued|running|cancelling）
   - 统一 IndexedDB `uilab-agent-workbench`（目录 + EventStore 一 open）；测试默认 Memory
-- **Runtime path（产品默认）**：Deterministic Fake Runtime 或可选 VoltAgent 侧车 → projection → Timeline
+- **Runtime path（产品默认）**：本机 VoltAgent 侧车 → projection → Timeline（ADR-0018 移除了 Deterministic Fake Runtime）
 - **Phase 4B–4F Kernel**：Commands/Events、RuntimePort、VirtualClock、reasoning/tool/approval、queue/steer、长文折叠/滚动
-- **Fake ≠ 生产 Runtime** — 无远程 Agent、无真实工具副作用（除非本机侧车经审批写文件）
+- **VoltAgent 侧车 ≠ 远程生产集群** — 本机执行；批准后可能写入工作区文件
 
 ### 可选 Local VoltAgent 侧车
 
@@ -80,7 +80,7 @@ components.json        # shadcn 配置（base-nova）
 13. **Document 内容源** — 状态与绑定 UI 归属 `modules/work-surface`（`WorkspaceDocumentSource` / `useWorkspaceDocumentSource` + `WorkspaceDocumentEmptyExtra` / `WorkspaceDocumentToolbarTrailing`）；Composition 只选 `runtimeMode` 并 **挂载** 模块组件，**禁止**在 `workbench-app` 内联绑定 Button / 探测 `showDirectoryPicker`。
 14. **路径策略** — 公开入口优先 `toWorkspaceResourceKey`（`coerceWorkspaceResourceKey` 为同实现别名，新代码勿直接用 coerce 名）；已规范化 key 用 `normalizeWorkspaceResourceKey`。adapter / intent **禁止**自写 peel 或 `includes('..')`（段级 `..` 由 normalize 处理，允许 `v1..v2.md`）。
 15. **IO 失败 vs 渲染失败** — DocumentPanel：Port 失败 / Port throw → `read-failed`（及 not-found 等）；重型渲染/解码失败 → `render-failed`。用 `mapPortFailureToViewState`；禁止把 IO 映射成 `render-failed`。
-16. **Composition 接线层** — `workbench-app.tsx` 只做产品装配接线与薄 chrome（boot 全屏、删除确认等）。**禁止**在 App 内联：冷启动 boot 业务、Fake/Volt Runtime 双路径初始化与 busy 投影、新对话 blank-draft / 硬删级联、Surface Registry 工厂与 open 通道校验。上述能力分别落在 composition 子单元（`workbench-boot` / `runtime-wiring` / `task-lifecycle-commands` / `surface-assembly` 等），保持可单测；目标是主文件可读接线，避免再堆回巨型 Composition。
+16. **Composition 接线层** — `workbench-app.tsx` 只做产品装配接线与薄 chrome（boot 全屏、删除确认等）。**禁止**在 App 内联：冷启动 boot 业务、Runtime 初始化与 busy 投影、新对话 blank-draft / 硬删级联、Surface Registry 工厂与 open 通道校验。上述能力分别落在 composition 子单元（`workbench-boot` / `runtime-wiring` / `task-lifecycle-commands` / `surface-assembly` 等），保持可单测；目标是主文件可读接线，避免再堆回巨型 Composition。
 
 ## 完成定义（包级）
 

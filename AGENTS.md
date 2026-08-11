@@ -3,7 +3,7 @@
 本仓库是 **AI-first Template Platform**。当前可运行 Archetype：
 
 - **Admin Console**：`archetypes/admin`（`@uilab/admin`）
-- **Agent Workbench**：`archetypes/agent-workbench`（`@uilab/agent-workbench`，**Phase 3 Shell + Phase 4 Fake Runtime path**）
+- **Agent Workbench**：`archetypes/agent-workbench`（`@uilab/agent-workbench`，**Phase 3 Shell + Real Task Lifecycle（VoltAgent 侧车，ADR-0018 已移除 Fake Runtime）**）
 
 ## 合同所有权与优先级
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | **平台合同（本文件）** | 根 `AGENTS.md` | monorepo 结构、tooling、skill 前门、跨 Archetype 约定 |
 | **Admin / 派生应用合同** | [`archetypes/admin/AGENTS.md`](archetypes/admin/AGENTS.md) | Admin 源应用与 **所有 `init` 生成应用** 的硬规则 |
-| **Workbench 应用合同** | [`archetypes/agent-workbench/AGENTS.md`](archetypes/agent-workbench/AGENTS.md) | Agent Workbench 源应用硬规则（Shell + Fake Runtime path） |
+| **Workbench 应用合同** | [`archetypes/agent-workbench/AGENTS.md`](archetypes/agent-workbench/AGENTS.md) | Agent Workbench 源应用硬规则（Shell + VoltAgent Runtime path） |
 | **Admin 应用 README** | [`archetypes/admin/README.md`](archetypes/admin/README.md) | 单应用视角的快速开始与结构说明 |
 | **Workbench 应用 README** | [`archetypes/agent-workbench/README.md`](archetypes/agent-workbench/README.md) | Workbench 快速开始与 shipped/planned 边界 |
 
@@ -27,7 +27,7 @@
 - **Template Platform**：根目录承载共享合同、skill 发现入口、兼容 CLI/门禁 wrapper，以及跨 Archetype 文档
 - **统一 UI 栈（全模板）**：后续所有 Archetype / 派生应用均基于 **Vite + React 19 + TypeScript + Tailwind CSS 4 + 官方 shadcn/ui（Base UI / `base-nova`）**。组件按需 `shadcn add` 进应用源码（`components.json` + `@/components/ui/*`）；**Base UI 约束**：`render={...}`，禁止 `asChild` 与 `@radix-ui/*`
 - **Admin Archetype**：`archetypes/admin` — 上述 UI 栈 + TanStack Router / Query / Table 的中后台 Console 场景
-- **Agent Workbench Archetype**：`archetypes/agent-workbench` — **同一 UI 栈**上的独立 Task-first Shell 场景（Phase 3 Shell + Phase 4 **Deterministic Fake** path；**无** production Runtime / 具体 Surface）
+- **Agent Workbench Archetype**：`archetypes/agent-workbench` — **同一 UI 栈**上的独立 Task-first Shell 场景（Phase 3 Shell + Real Task Lifecycle via 本机 VoltAgent 侧车；ADR-0018 已移除 Fake Runtime；**无** production Runtime / 具体 Surface）
 - 中文优先文案，代码标识英文
 - 与 UI Lab **弱连接、强复用**：不依赖 UI Lab runtime / Design Package 主链路；Agent 复合交互优先经 **shadcn registry 安装** UI Lab 组件源码进应用。组件缺陷与能力优化以 **UI Lab 仓库为真源并回流**，模板侧不长期平行 fork
 - **体验保真（尤其 Workbench）**：模板目标是「像真 Runtime 的本地产品体验」；未接远程后端 ≠ UI 只读演示。本地状态与交互应完整；诚实边界仅针对远程/后端未接通
@@ -38,7 +38,7 @@
 ```text
 uilab-templates/
   archetypes/admin/            # Admin 源应用 + Admin-owned docs/ai + scaffolds + AGENTS/README
-  archetypes/agent-workbench/  # Workbench 源应用（Shell + Fake Runtime path）
+  archetypes/agent-workbench/  # Workbench 源应用（Shell + VoltAgent Runtime path）
   packages/foundation/         # Phase 2A 最小 Foundation（Button / Input / tokens）
   tooling/template-cli/        # 规范 CLI 实现
   tooling/quality-gates/       # 规范 check:ai / check:foundation / check:workbench
@@ -76,14 +76,14 @@ uilab-templates/
 - **与 shadcn 的关系**：Foundation 是跨 Archetype 的 **最小共享 primitives / tokens**；应用侧仍通过 `@/components/ui/button|input` **兼容 re-export** 消费（Admin 与 Workbench 同模式），其余 UI 走 shadcn 按需安装。仍**不**宣称完整 Phase 2（无共享 theme provider / 更广 primitives）
 - 门禁：`pnpm check:foundation`（规范实现 `tooling/quality-gates/check-foundation-boundaries.mjs`）
 
-### Agent Workbench（Phase 3 Shell + Phase 4 Fake path template-complete）
+### Agent Workbench（Phase 3 Shell + Real Task Lifecycle；VoltAgent 唯一 Runtime，ADR-0018 移除 Fake）
 
 - 包名：`@uilab/agent-workbench`
 - UI 栈：与 Admin 相同的 shadcn Base UI（`components.json` / `@/components/ui/*` / Foundation re-export）
 - Composition Root + Deep Modules：`workbench-session` / `task` / `work-surface`
 - Shell：Navigator、Task Surface、Composer、Adaptive Context Panel、placeholder Work Surface Host
-- **Dual-path Task**：默认 capture `local-sim`；empty/新对话走 Deterministic Fake Runtime → projection → Timeline（4A–4F）
-- Fake 深度含 reasoning/tool/approval、MemoryEventStore、queue/steer、长文折叠/滚动 — **Fake ≠ production Runtime**
+- **Task Lifecycle**：empty/新对话走本机 VoltAgent 侧车 → projection → Timeline；无侧车时报错条（不伪装本地流，ADR-0018）
+- Runtime 投影含 reasoning/tool/approval、EventStore、queue/steer、长文折叠/滚动；VoltAgent 侧车 ≠ 远程生产集群
 - **无** production Agent Runtime、**无** Surface Registry、**无** Document/Browser/Review、**无** IndexedDB 持久化
 - 门禁：`pnpm check:workbench`
 
