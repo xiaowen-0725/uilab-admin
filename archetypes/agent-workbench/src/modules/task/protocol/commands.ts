@@ -2,9 +2,14 @@
  * Application Command protocol (design §7).
  * UI only dispatches commands; it must not append Runtime events or mutate Run state.
  */
-
-import type { ProjectId, RunId, RunStatus, TaskId, TurnId } from '../model/lifecycle'
 import type { TaskExecutionContext } from '../model/execution-context'
+import type {
+  ProjectId,
+  RunId,
+  RunStatus,
+  TaskId,
+  TurnId,
+} from '../model/lifecycle'
 
 export type CommandActor = 'user' | 'system' | 'runtime'
 
@@ -35,9 +40,34 @@ export interface SubmitTurnCommand extends CommandEnvelope {
   proposedTurnId?: TurnId
   proposedRunId?: RunId
   inputText: string
+  /** Safe composer metadata; attachment bytes are never embedded here. */
+  composerContext?: TurnComposerContext
   turnId?: TurnId
   runId?: RunId
   runtimeCursor?: string
+}
+
+export interface TurnComposerContext {
+  attachments?: Array<{
+    name: string
+    kind: 'file' | 'image'
+    meta?: string
+  }>
+  skills?: Array<{ id: string; label: string }>
+  /** Capability Surface snapshot for this Turn; status-safe labels only. */
+  connectors?: Array<{
+    id: string
+    label: string
+    connected?: boolean
+    taskSelected: boolean
+    capabilityEffective?: boolean
+  }>
+  /**
+   * Task-selected expert profile (not a sub-agent).
+   * `instruction` is the config-package overlay from Expert catalog (status-safe).
+   */
+  expert?: { id: string; label: string; instruction?: string } | null
+  mode?: 'default' | 'goal' | 'plan' | 'goal+plan'
 }
 
 export interface CancelRunCommand extends CommandEnvelope {

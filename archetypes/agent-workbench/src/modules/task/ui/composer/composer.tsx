@@ -8,6 +8,17 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import {
+  CapabilityAddMenu,
+  CapabilityChips,
+  CapabilityToolbarConnectors,
+  formatStartAuthNotice,
+  formatTaskConnectorSelectionNotice,
+  waitForConnectorAuth,
+  useCapabilitySnapshot,
+  useCapabilitySnapshotError,
+  type CapabilityController,
+} from '@/modules/capabilities'
+import {
   Check,
   CircleAlert,
   FileText,
@@ -20,7 +31,6 @@ import {
   Lightbulb,
   ListTodo,
   Mic,
-  Paperclip,
   Plus,
   Search,
   ShieldCheck,
@@ -28,11 +38,16 @@ import {
   Target,
   Zap,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
-  previewText,
-  runtimeHonestyCopy,
-  type RuntimeHonestyMode,
-} from '../../runtime/runtime-honesty'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import {
   Composer,
   ComposerAccessChip,
@@ -57,18 +72,16 @@ import {
   ComposerTextarea,
   ComposerToolbar,
 } from '@/components/motion/agent-composer'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-
 import type { RunStatus } from '../../model/lifecycle'
+import type {
+  CommandAcknowledgement,
+  TurnComposerContext,
+} from '../../protocol/commands'
+import {
+  previewText,
+  runtimeHonestyCopy,
+  type RuntimeHonestyMode,
+} from '../../runtime/runtime-honesty'
 
 export interface ComposerProps {
   /** Context chip — project / workspace name (local fixture state). */
@@ -85,9 +98,10 @@ export interface ComposerProps {
    */
   showContextGauge?: boolean
   /**
-   * Scenario toggles for the context rail. All default on.
-   * Product rule: when no project is selected, env/branch chips stay hidden
-   * even if their flags are true (they only make sense bound to a workspace).
+   * Scenario toggles for the context rail.
+   * Product: project chip defaults on; env/branch chips default **off** until a
+   * real environment / Git port is wired (no fake 「本地」「main」 without backend).
+   * Even when flags are true, env/branch stay hidden if no project is selected.
    */
   showContextBar?: boolean
   showProjectChip?: boolean
@@ -101,7 +115,10 @@ export interface ComposerProps {
   /** Active run status from TaskReadModel (runtime mode). */
   runStatus?: RunStatus | null
   /** Runtime mode: submit user text via controller. */
-  onSubmitText?: (text: string) => void | Promise<void>
+  onSubmitText?: (
+    text: string,
+    composerContext?: TurnComposerContext
+  ) => Promise<CommandAcknowledgement | null>
   /** Runtime mode: cancel active run via controller. */
   onCancelRun?: () => void | Promise<void>
   /** Optional notice override from runtime controller. */
@@ -111,6 +128,10 @@ export interface ComposerProps {
    * Controls interim notices before controller notice arrives.
    */
   honestyMode?: RuntimeHonestyMode
+  /** Capability Surface controller (Composition). */
+  capabilityController?: CapabilityController | null
+  /** Task id for capability selection. */
+  capabilityTaskId?: string | null
 }
 
 const ACCESS_LEVELS = ['只读', '需确认', '作用域自动', '完全访问'] as const
@@ -233,8 +254,12 @@ function indexSlashSections(commands: SlashItem[], skills: SlashItem[]) {
   }
 }
 
-function uniqueProjectNames(...groups: Array<string | null | undefined>): string[] {
-  return Array.from(new Set(groups.filter((n): n is string => Boolean(n && n.trim()))))
+function uniqueProjectNames(
+  ...groups: Array<string | null | undefined>
+): string[] {
+  return Array.from(
+    new Set(groups.filter((n): n is string => Boolean(n && n.trim())))
+  )
 }
 
 function isAbortError(error: unknown): boolean {
@@ -310,14 +335,16 @@ export function TaskComposer({
   showContextGauge = false,
   showContextBar = true,
   showProjectChip = true,
-  showEnvironmentChip = true,
-  showBranchChip = true,
+  showEnvironmentChip = false,
+  showBranchChip = false,
   mode = 'local-sim',
   runStatus = null,
   onSubmitText,
   onCancelRun,
   runtimeNotice = null,
   honestyMode = 'fake',
+  capabilityController = null,
+  capabilityTaskId = null,
 }: ComposerProps) {
   const honesty = runtimeHonestyCopy(honestyMode)
   const noticeId = useId()
@@ -328,7 +355,7 @@ export function TaskComposer({
   /**
    * Send acts as Stop only while the run is actively executing / queued / cancelling.
    * `waiting_for_input` must accept clarification text (→ provideRunInput via submitText).
-   * `waiting_for_approval` is resolved on the timeline, not via Send-as-Stop.
+   * `waiting_for_approval` is resolved on the bottom ApprovalDock (Composer hidden), not via Send-as-Stop.
    */
   const sendActsAsStop =
     isRuntimeMode &&
@@ -375,7 +402,16 @@ export function TaskComposer({
   const [goalMode, setGoalMode] = useState(false)
   const [planMode, setPlanMode] = useState(false)
   const [slashHighlight, setSlashHighlight] = useState(0)
+  const [capabilityBusy, setCapabilityBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const capabilitySnapshot = useCapabilitySnapshot(
+    capabilityController,
+    capabilityTaskId
+  )
+  const capabilityError = useCapabilitySnapshotError(
+    capabilityController,
+    capabilityTaskId
+  )
 
   const runTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -414,6 +450,10 @@ export function TaskComposer({
     }
   }, [])
 
+  useEffect(() => {
+    if (isRuntimeMode && runtimeNotice) setNotice(null)
+  }, [isRuntimeMode, runtimeNotice])
+
   const stopRecording = useCallback(() => {
     if (recordIntervalRef.current) clearInterval(recordIntervalRef.current)
     recordIntervalRef.current = null
@@ -425,17 +465,20 @@ export function TaskComposer({
     setRecording(true)
     setSeconds(0)
     setNotice(null)
-    recordIntervalRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
+    recordIntervalRef.current = setInterval(
+      () => setSeconds((s) => s + 1),
+      1000
+    )
   }, [])
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (recording) stopRecording()
 
     // Runtime path: Application Command → RuntimePort (Fake or VoltAgent).
     if (isRuntimeMode) {
       // Stop only while actively running / queued / cancelling (not HITL waits).
       if (sendActsAsStop) {
-        void onCancelRun?.()
+        await onCancelRun?.()
         setNotice(honesty.cancelRequested)
         return
       }
@@ -446,10 +489,64 @@ export function TaskComposer({
       setNotice(
         clarifying
           ? honesty.clarifyingSubmit(preview)
-          : honesty.submitWithPreview(preview),
+          : honesty.submitWithPreview(preview)
       )
-      setText('')
-      void onSubmitText?.(payload)
+      const mode: TurnComposerContext['mode'] =
+        goalMode && planMode
+          ? 'goal+plan'
+          : goalMode
+            ? 'goal'
+            : planMode
+              ? 'plan'
+              : 'default'
+      const capabilitySkills =
+        capabilitySnapshot?.skills
+          .filter((s) => s.taskSelected)
+          .map((s) => ({ id: s.id, label: s.name })) ?? []
+      const mergedSkills = [
+        ...skillTokens.map(({ id, label }) => ({ id, label })),
+        ...capabilitySkills.filter(
+          (s) => !skillTokens.some((t) => t.id === s.id)
+        ),
+      ]
+      const capabilityConnectors =
+        capabilitySnapshot?.connectors.map((c) => ({
+          id: c.id,
+          label: c.name,
+          connected: c.connected,
+          taskSelected: c.taskSelected,
+          capabilityEffective: c.capabilityEffective,
+        })) ?? []
+      const selectedExpert = capabilitySnapshot?.experts.find(
+        (e) => e.taskSelected
+      )
+      const acknowledgement = await onSubmitText?.(payload, {
+        attachments: attachments.map(({ name, meta, icon }) => ({
+          name,
+          meta,
+          kind: icon,
+        })),
+        skills: mergedSkills,
+        connectors: capabilityConnectors,
+        expert: selectedExpert
+          ? {
+              id: selectedExpert.id,
+              label: selectedExpert.name,
+              instruction: selectedExpert.instruction,
+            }
+          : null,
+        mode,
+      })
+      if (
+        acknowledgement?.status === 'accepted' ||
+        acknowledgement?.status === 'duplicate'
+      ) {
+        setText('')
+        setAttachments([])
+        setSkillTokens([])
+        setGoalMode(false)
+        setPlanMode(false)
+      }
       return
     }
 
@@ -483,13 +580,20 @@ export function TaskComposer({
     onCancelRun,
     onSubmitText,
     honesty,
+    attachments,
+    skillTokens,
+    goalMode,
+    planMode,
+    capabilitySnapshot,
   ])
 
-  // Prefer controller notice when runtime mode surfaces one.
+  // The latest local interaction must be announced even when the Runtime keeps
+  // a historical notice. A new Runtime notice clears the local one above.
   const displayNotice =
-    isRuntimeMode && runtimeNotice != null && runtimeNotice.length > 0
+    notice ??
+    (isRuntimeMode && runtimeNotice != null && runtimeNotice.length > 0
       ? runtimeNotice
-      : notice
+      : null)
 
   const model = MODELS.find((m) => m.id === modelId) ?? MODELS[0]
   const modelTriggerLabel = (
@@ -548,7 +652,8 @@ export function TaskComposer({
   }, [selectProject])
 
   const accessLabel = ACCESS_LEVELS[accessIndex]
-  const accessTone = accessIndex >= ACCESS_LEVELS.length - 1 ? 'warning' : 'default'
+  const accessTone =
+    accessIndex >= ACCESS_LEVELS.length - 1 ? 'warning' : 'default'
 
   const cycleAccess = () => {
     setAccessIndex((i) => (i + 1) % ACCESS_LEVELS.length)
@@ -679,49 +784,201 @@ export function TaskComposer({
     ]
   )
 
-  const addTrigger = (
-    <ComposerIconButton
-      aria-label='添加文件等内容'
-      data-testid='composer-add'
-      aria-expanded={addOpen}
-      aria-haspopup='dialog'
-      onClick={() => {
-        setAddOpen((open) => !open)
-        if (slashQuery) stripTrailingSlash()
-      }}
-    >
-      <Plus className='size-4' />
-    </ComposerIconButton>
-  )
+  const handleToggleConnector = (connectorId: string, selected: boolean) => {
+    const taskId = capabilityTaskId
+    if (!taskId || !capabilityController) return
+    const connectorName =
+      capabilitySnapshot?.connectors.find(
+        (connector) => connector.id === connectorId
+      )?.name ?? '连接器'
+    setCapabilityBusy(true)
+    void capabilityController
+      .toggleConnector(taskId, connectorId, selected)
+      .then(() => {
+        setNotice(formatTaskConnectorSelectionNotice(connectorName, selected))
+      })
+      .catch((err) => {
+        setNotice(err instanceof Error ? err.message : '更新连接器选用失败')
+      })
+      .finally(() => setCapabilityBusy(false))
+  }
 
-  // Dismiss add panel when pointer lands outside trigger + panel.
-  useEffect(() => {
-    if (!addOpen) return
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement
+  const handleToggleSkill = (skillId: string, selected: boolean) => {
+    const taskId = capabilityTaskId
+    if (!taskId || !capabilityController) return
+    const prev = capabilitySnapshot?.selection.skillIds ?? []
+    const next = selected
+      ? [...new Set([...prev, skillId])]
+      : prev.filter((id) => id !== skillId)
+    setCapabilityBusy(true)
+    void capabilityController
+      .setSelection(taskId, { skillIds: next })
+      .finally(() => setCapabilityBusy(false))
+  }
+
+  const handleSelectExpert = (expertId: string | null) => {
+    const taskId = capabilityTaskId
+    if (!taskId || !capabilityController) return
+    setCapabilityBusy(true)
+    void capabilityController
+      .setSelection(taskId, { expertId })
+      .then(() => {
+        setNotice(expertId ? '已选用专家（仅后续 Turn 生效）' : '已清除专家')
+      })
+      .finally(() => setCapabilityBusy(false))
+  }
+
+  const handleStartAuth = async (connectorId: string) => {
+    if (!capabilityController) return
+    const connectorName =
+      capabilitySnapshot?.connectors.find((item) => item.id === connectorId)
+        ?.name ?? '连接器'
+    const authWindow =
+      typeof window !== 'undefined'
+        ? window.open('about:blank', '_blank')
+        : null
+    if (authWindow) authWindow.opener = null
+    setCapabilityBusy(true)
+    try {
+      const result = await capabilityController.startAuth(connectorId)
+      setNotice(formatStartAuthNotice(result))
       if (
-        target.closest('[data-testid="composer-add-panel"]') ||
-        target.closest('[data-testid="composer-add"]')
+        result.ok &&
+        result.phase === 'login_started' &&
+        result.verificationUrl &&
+        typeof window !== 'undefined'
       ) {
-        return
+        if (authWindow) {
+          authWindow.location.replace(result.verificationUrl)
+        } else {
+          window.open(result.verificationUrl, '_blank', 'noopener,noreferrer')
+        }
+        if (capabilityTaskId) {
+          void waitForConnectorAuth({
+            connectorId,
+            refresh: () =>
+              capabilityController.refreshAuth(capabilityTaskId, connectorId),
+            onAuthorizationRequired: (transition) => {
+              if (!transition.verificationUrl) return
+              if (authWindow && !authWindow.closed) {
+                authWindow.location.replace(transition.verificationUrl)
+              } else {
+                window.open(
+                  transition.verificationUrl,
+                  '_blank',
+                  'noopener,noreferrer'
+                )
+              }
+              setNotice(transition.message)
+            },
+          }).then((connected) => {
+            if (connected && authWindow && !authWindow.closed) {
+              authWindow.close()
+            }
+            setNotice(
+              connected
+                ? `「${connectorName}」授权已完成，连接器现在可以选用。`
+                : `尚未检测到「${connectorName}」授权完成；可点击「刷新连接状态」重试。`
+            )
+          })
+        }
+      } else {
+        authWindow?.close()
       }
-      setAddOpen(false)
+    } catch (err) {
+      authWindow?.close()
+      setNotice(err instanceof Error ? err.message : '启动登录失败')
+    } finally {
+      setCapabilityBusy(false)
     }
-    window.addEventListener('pointerdown', onPointerDown)
-    return () => window.removeEventListener('pointerdown', onPointerDown)
-  }, [addOpen])
+  }
+
+  const handleRefreshAuth = async () => {
+    const taskId = capabilityTaskId
+    if (!taskId || !capabilityController) return
+    setCapabilityBusy(true)
+    try {
+      const result = await capabilityController.refreshAuth(taskId)
+      const continuation = result.transitions.find(
+        (transition) =>
+          transition.phase === 'authorization_required' &&
+          transition.verificationUrl
+      )
+      if (continuation?.verificationUrl && typeof window !== 'undefined') {
+        window.open(
+          continuation.verificationUrl,
+          '_blank',
+          'noopener,noreferrer'
+        )
+      }
+      setNotice(continuation?.message ?? '已刷新所有连接器状态')
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : '刷新连接状态失败')
+    } finally {
+      setCapabilityBusy(false)
+    }
+  }
+
+  // WorkBuddy-style compact + menu with lateral submenus (not full-width panel).
+  const addMenu = (
+    <CapabilityAddMenu
+      open={addOpen}
+      onOpenChange={(next) => {
+        setAddOpen(next)
+        if (next && slashQuery) stripTrailingSlash()
+      }}
+      trigger={
+        <ComposerIconButton
+          aria-label='添加文件等内容'
+          data-testid='composer-add'
+          aria-expanded={addOpen}
+          aria-haspopup='menu'
+        >
+          <Plus className='size-4' />
+        </ComposerIconButton>
+      }
+      snapshot={capabilitySnapshot}
+      busy={capabilityBusy}
+      errorMessage={capabilityError?.message}
+      onRetry={() => {
+        if (!capabilityController || !capabilityTaskId) return
+        setCapabilityBusy(true)
+        void capabilityController
+          .refresh(capabilityTaskId)
+          .catch((error) => {
+            setNotice(
+              error instanceof Error ? error.message : '连接器状态刷新失败'
+            )
+          })
+          .finally(() => setCapabilityBusy(false))
+      }}
+      onPickFiles={pickFiles}
+      onEnableGoal={() => {
+        enableMode('goal')
+        setAddOpen(false)
+      }}
+      onEnablePlan={() => {
+        enableMode('plan')
+        setAddOpen(false)
+      }}
+      onToggleConnector={handleToggleConnector}
+      onToggleSkill={handleToggleSkill}
+      onSelectExpert={handleSelectExpert}
+      onStartAuth={handleStartAuth}
+      onRefreshAuth={handleRefreshAuth}
+      onManageConnectors={() => {
+        setNotice(
+          '连接器管理页后置：当前请在「连接器」列表内开关选用或点「连接」完成 CLI 登录。'
+        )
+      }}
+    />
+  )
 
   const sendRunning = isRuntimeMode ? sendActsAsStop : running
   const sendButton = (
     <ComposerSendButton
       running={sendRunning}
-      disabled={
-        !sendRunning &&
-        !recording &&
-        text.trim().length === 0 &&
-        skillTokens.length === 0 &&
-        attachments.length === 0
-      }
+      disabled={!sendRunning && !recording && text.trim().length === 0}
       onClick={handleSend}
       data-testid='composer-submit'
       data-send-mode={sendRunning ? 'stop' : 'send'}
@@ -731,12 +988,11 @@ export function TaskComposer({
   )
 
   // Env/branch only make sense when a workspace is selected.
-  const showEnv =
-    showEnvironmentChip && project !== null
+  const showEnv = showEnvironmentChip && project !== null
   const showBranch = showBranchChip && project !== null
-  const hasContextChips =
-    showProjectChip || showEnv || showBranch
-  const renderContextBar = showContextBar && hasContextChips
+  // Keep the rail after the first Turn even when no chips remain; the project
+  // chip is empty-hub-only, but the two-layer Composer depth is persistent.
+  const renderContextBar = showContextBar
 
   const renderSlashSection = (
     title: string,
@@ -764,7 +1020,7 @@ export function TaskComposer({
 
   return (
     <div
-      className='sticky bottom-0 z-30 shrink-0 px-4 pb-4 pt-2'
+      className='sticky bottom-0 z-30 shrink-0 px-4 pt-2 pb-4'
       data-slot='composer'
       data-testid='composer'
       data-composer-mode={mode}
@@ -964,37 +1220,6 @@ export function TaskComposer({
 
         <Composer data-testid='composer-shell'>
           <ComposerFloatingPanel
-            open={addOpen}
-            data-testid='composer-add-panel'
-          >
-            <ComposerPanelSection title='添加'>
-              <ComposerPanelItem
-                icon={<Paperclip className='size-4' />}
-                data-testid='composer-add-files'
-                onSelect={pickFiles}
-              >
-                文件和文件夹
-              </ComposerPanelItem>
-              <ComposerPanelItem
-                icon={<Target className='size-4' />}
-                description='设置要持续追求的目标'
-                data-testid='composer-add-goal'
-                onSelect={() => enableMode('goal')}
-              >
-                目标
-              </ComposerPanelItem>
-              <ComposerPanelItem
-                icon={<Lightbulb className='size-4' />}
-                description='开启计划模式'
-                data-testid='composer-add-plan'
-                onSelect={() => enableMode('plan')}
-              >
-                计划模式
-              </ComposerPanelItem>
-            </ComposerPanelSection>
-          </ComposerFloatingPanel>
-
-          <ComposerFloatingPanel
             open={slashOpen}
             data-testid='composer-slash-panel'
           >
@@ -1034,6 +1259,28 @@ export function TaskComposer({
             </ComposerAttachments>
           ) : null}
 
+          {/* Expert / skill text chips above input; connectors live next to + (WorkBuddy). */}
+          {capabilityController && capabilityTaskId ? (
+            <CapabilityChips
+              variant='stack'
+              snapshot={capabilitySnapshot}
+              onRemoveConnector={(connectorId) => {
+                handleToggleConnector(connectorId, false)
+              }}
+              onRemoveExpert={() => {
+                void capabilityController.setSelection(capabilityTaskId, {
+                  expertId: null,
+                })
+              }}
+              onRemoveSkill={(skillId) => {
+                const prev = capabilitySnapshot?.selection.skillIds ?? []
+                void capabilityController.setSelection(capabilityTaskId, {
+                  skillIds: prev.filter((id) => id !== skillId),
+                })
+              }}
+            />
+          ) : null}
+
           <ComposerTextarea
             id='workbench-composer-input'
             data-testid='composer-input'
@@ -1069,7 +1316,7 @@ export function TaskComposer({
           <ComposerToolbar>
             {recording ? (
               <>
-                {addTrigger}
+                {addMenu}
                 <ComposerDictation
                   seconds={seconds}
                   onStop={stopRecording}
@@ -1080,7 +1327,19 @@ export function TaskComposer({
               </>
             ) : (
               <>
-                {addTrigger}
+                {addMenu}
+                {/* WorkBuddy: selected connector brand icons sit beside + */}
+                {capabilityController && capabilityTaskId ? (
+                  <CapabilityToolbarConnectors
+                    snapshot={capabilitySnapshot}
+                    onRemoveConnector={(connectorId) => {
+                      handleToggleConnector(connectorId, false)
+                    }}
+                    onOpenConnector={() => {
+                      setAddOpen(true)
+                    }}
+                  />
+                ) : null}
                 {goalMode ? (
                   <ComposerModeBadge
                     data-testid='composer-mode-goal'
@@ -1116,58 +1375,70 @@ export function TaskComposer({
                 {showContextGauge ? (
                   <ComposerContextGauge used={48_000} limit={200_000} />
                 ) : null}
-                <ComposerModelPicker
-                  label={modelTriggerLabel}
-                  open={pickerOpen}
-                  onOpenChange={setPickerOpen}
-                  data-testid='composer-model'
-                  title='模型与推理设置（本地）'
-                >
-                  <div className='flex items-center justify-between px-2 pt-1 text-xs text-muted-foreground'>
-                    <span>模型</span>
-                  </div>
-                  <ComposerMenuSection>
-                    {MODELS.map((m) => (
-                      <ComposerMenuItem
-                        key={m.id}
-                        onSelect={() => {
-                          setModelId(m.id)
-                          setNotice(`模型已切换为 ${m.label}（本地）`)
+                {isRuntimeMode ? (
+                  <span
+                    className='inline-flex min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-violet-500 dark:text-violet-400'
+                    data-testid='composer-model'
+                    title='模型由当前 Runtime 决定'
+                  >
+                    {modelLabel}
+                  </span>
+                ) : (
+                  <ComposerModelPicker
+                    label={modelTriggerLabel}
+                    open={pickerOpen}
+                    onOpenChange={setPickerOpen}
+                    data-testid='composer-model'
+                    title='模型与推理设置（本地）'
+                  >
+                    <div className='flex items-center justify-between px-2 pt-1 text-xs text-muted-foreground'>
+                      <span>模型</span>
+                    </div>
+                    <ComposerMenuSection>
+                      {MODELS.map((m) => (
+                        <ComposerMenuItem
+                          key={m.id}
+                          onSelect={() => {
+                            setModelId(m.id)
+                            setNotice(`模型已切换为 ${m.label}（本地）`)
+                          }}
+                        >
+                          {m.label}
+                          {m.id === modelId ? ' · 当前' : ''}
+                        </ComposerMenuItem>
+                      ))}
+                    </ComposerMenuSection>
+                    <div className='mt-1 flex items-center justify-between border-t border-border/60 px-2 pt-2 text-xs text-muted-foreground'>
+                      <span>推理力度</span>
+                      <Zap className='size-3.5' />
+                    </div>
+                    <div className='px-2 pt-1 pb-2'>
+                      <ComposerEffortSlider
+                        value={effort}
+                        onChange={setEffort}
+                        labels={[...EFFORT_LABELS]}
+                        aria-label='推理力度'
+                      />
+                    </div>
+                    <div className='flex items-center justify-between px-2 text-xs text-muted-foreground'>
+                      <span>自主度</span>
+                      <ShieldCheck className='size-3.5' />
+                    </div>
+                    <div className='px-2 pb-2'>
+                      <ComposerAutonomyDial
+                        value={autonomy}
+                        onChange={(next) => {
+                          setAutonomy(next)
+                          setAccessIndex(
+                            Math.min(next, ACCESS_LEVELS.length - 1)
+                          )
                         }}
-                      >
-                        {m.label}
-                        {m.id === modelId ? ' · 当前' : ''}
-                      </ComposerMenuItem>
-                    ))}
-                  </ComposerMenuSection>
-                  <div className='mt-1 flex items-center justify-between border-t border-border/60 px-2 pt-2 text-xs text-muted-foreground'>
-                    <span>推理力度</span>
-                    <Zap className='size-3.5' />
-                  </div>
-                  <div className='px-2 pt-1 pb-2'>
-                    <ComposerEffortSlider
-                      value={effort}
-                      onChange={setEffort}
-                      labels={[...EFFORT_LABELS]}
-                      aria-label='推理力度'
-                    />
-                  </div>
-                  <div className='flex items-center justify-between px-2 text-xs text-muted-foreground'>
-                    <span>自主度</span>
-                    <ShieldCheck className='size-3.5' />
-                  </div>
-                  <div className='px-2 pb-2'>
-                    <ComposerAutonomyDial
-                      value={autonomy}
-                      onChange={(next) => {
-                        setAutonomy(next)
-                        setAccessIndex(Math.min(next, ACCESS_LEVELS.length - 1))
-                      }}
-                      labels={[...AUTONOMY_LABELS]}
-                      aria-label='自主度'
-                    />
-                  </div>
-                </ComposerModelPicker>
+                        labels={[...AUTONOMY_LABELS]}
+                        aria-label='自主度'
+                      />
+                    </div>
+                  </ComposerModelPicker>
+                )}
                 <ComposerIconButton
                   aria-label='语音输入'
                   data-testid='composer-mic'
@@ -1192,7 +1463,7 @@ export function TaskComposer({
 
         <p
           id={noticeId}
-          className='mt-1.5 min-h-4 px-1 text-center text-[11px] text-muted-foreground'
+          className='sr-only'
           data-testid='composer-notice'
           role='status'
           aria-live='polite'

@@ -13,6 +13,7 @@ import type {
   ProfileEnv,
   SecretRef,
 } from './types.js'
+import { isCliSessionConnected } from './cli-session-status.js'
 /**
  * Length-prefixed segment so pluginId/resourceId containing `:` cannot collide
  * (e.g. a + b:c vs a:b + c).
@@ -793,7 +794,7 @@ async function resolveCliSessionStatus(
 ): Promise<AuthStatusResult> {
   const hint =
     binding.loginHint ??
-    '需先完成领域 CLI 登录（cli_session），例如：feishu-cli auth login'
+    '需先完成领域 CLI 登录（cli_session），例如：lark-cli auth login'
   const cmd = binding.statusCommand?.command?.trim()
   if (!cmd) {
     return { status: 'missing', hint }
@@ -828,7 +829,13 @@ async function resolveCliSessionStatus(
       timeoutMs: 15_000,
     })
     const expect = probe?.expectExitCode ?? 0
-    if (result.exitCode === expect) {
+    if (
+      isCliSessionConnected(
+        result,
+        expect,
+        binding.statusCommand?.connectedWhen,
+      )
+    ) {
       return { status: 'connected' }
     }
     return { status: 'missing', hint }
@@ -1010,6 +1017,9 @@ function sanitizeBindingForPersist(b: AuthBinding): AuthBinding {
           tokenEndpoint: b.oauth.tokenEndpoint,
           clientId: b.oauth.clientId,
           refreshAccount: b.oauth.refreshAccount,
+          clientSecretRef: b.oauth.clientSecretRef
+            ? { ...b.oauth.clientSecretRef }
+            : undefined,
           authorizationEndpoint: b.oauth.authorizationEndpoint,
           redirectUri: b.oauth.redirectUri,
           scopes: b.oauth.scopes ? [...b.oauth.scopes] : undefined,

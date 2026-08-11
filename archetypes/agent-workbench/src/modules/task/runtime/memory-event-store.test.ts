@@ -52,4 +52,30 @@ describe('MemoryEventStore', () => {
     })
     expect((await store.getSnapshot('task-a'))?.lastTaskSequence).toBe(2)
   })
+
+  it('rejects conflicting sequence with different eventId', async () => {
+    const store = createMemoryEventStore()
+    await store.append(envelope('task-a', 1, 'a-1'))
+    const conflict = await store.append(envelope('task-a', 1, 'a-1-other'))
+    expect(conflict.status).toBe('conflict')
+  })
+
+  it('appendWithCheckpoint and deleteTaskData', async () => {
+    const store = createMemoryEventStore()
+    const env = envelope('task-a', 1)
+    const result = await store.appendWithCheckpoint({
+      envelope: env,
+      snapshot: {
+        taskId: 'task-a',
+        protocolVersion: 1,
+        lastTaskSequence: 1,
+      },
+    })
+    expect(result.append.status).toBe('appended')
+    expect((await store.getSnapshot('task-a'))?.lastTaskSequence).toBe(1)
+
+    await store.deleteTaskData('task-a')
+    expect(await store.read({ taskId: 'task-a' })).toHaveLength(0)
+    expect(await store.getSnapshot('task-a')).toBeNull()
+  })
 })

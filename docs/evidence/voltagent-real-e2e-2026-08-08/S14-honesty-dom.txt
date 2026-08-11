@@ -1,0 +1,5 @@
+Honesty strings observed under VITE_RUNTIME_ADAPTER=voltagent:
+- 本机 VoltAgent Runtime · 非远程生产集群 · 本地侧车
+- 本地侧车模型
+- 已提交到本机 VoltAgent Runtime（非远程生产集群）
+NOT present: Deterministic Fake Runtime

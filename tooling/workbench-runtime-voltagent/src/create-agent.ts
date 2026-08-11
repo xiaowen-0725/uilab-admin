@@ -12,6 +12,7 @@ import {
   Workspace,
   type Tool,
   type Toolkit,
+  type WorkspaceSandbox,
 } from '@voltagent/core'
 import type { LanguageModel } from 'ai'
 import {
@@ -20,9 +21,13 @@ import {
 } from './office-runtime-defaults.js'
 import {
   createPluginRegistryFromEnv,
+  defaultCliRunner,
+  expandConnectorToolScope,
   formatRegistryCliStatusLine,
   formatRegistryMcpStatusLine,
+  listWorkspaceSkillIds,
   type CliLoadStatus,
+  type ConnectorDescriptor,
   type CreatePluginRegistryOptions,
   type McpServerLoadStatus,
   type PluginAuthStatus,
@@ -35,6 +40,20 @@ import {
 } from './profile.js'
 import { workbenchTools } from './tools.js'
 import { ensureOfficeWorkspace } from './workspace-root.js'
+import { filterToolsForTaskSelection } from './capability/tool-gate.js'
+import { readCapabilityTurnContext } from './capability/turn-context.js'
+import {
+  createConnectorCliAuthRuntime,
+  createDefaultCliAuthProcessRunner,
+  type CliAuthProcessRunner,
+  type ConnectorCliAuthStart,
+  type ConnectorCliAuthTransition,
+} from './capability/connector-cli-auth.js'
+import {
+  createConnectorOAuthRuntime,
+  type ConnectorOAuthFetch,
+} from './capability/connector-oauth.js'
+import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-sandbox.js'
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
@@ -47,6 +66,12 @@ export type CreateWorkbenchAgentOptions = {
   mcpHost?: CreatePluginRegistryOptions['host']
   /** Inject domain CLI runner (tests). */
   cliRunner?: CreatePluginRegistryOptions['cliRunner']
+  /** Inject the complete Workspace Shell adapter (tests). */
+  workspaceSandbox?: WorkspaceSandbox
+  /** Injectable platform Connector Broker transport (tests). */
+  oauthFetch?: ConnectorOAuthFetch
+  /** Injectable long-running CLI auth process adapter (tests). */
+  cliAuthProcessRunner?: CliAuthProcessRunner
 }
 
 export type WorkbenchAgentBundle = {
@@ -71,6 +96,28 @@ export type WorkbenchAgentBundle = {
   discoveryFailures: PluginDiscoveryFailure[]
   /** Virtual skill roots mounted on Workspace (office). */
   skillRoots: string[]
+  /** Enabled and successfully loaded plugin ids (for Capability Snapshot). */
+  enabledPluginIds: string[]
+  /** Product Connector catalog projected from Provider-owned manifests. */
+  connectorDescriptors: ConnectorDescriptor[]
+  /** Workspace skill folder ids discoverable after seed (office). */
+  discoverableSkillIds: string[]
+  /** Live re-probe auth statuses without full reload (best-effort). */
+  refreshAuthStatuses: () => Promise<PluginAuthStatus[]>
+  /** Product OAuth browser flow; office profile only. */
+  beginConnectorOAuth?: (connectorId: string) => Promise<{
+    authorizationUrl: string
+    expiresIn: number
+  }>
+  /** Provider-declared CLI Device Flow; no Provider id or argv at this seam. */
+  beginConnectorCliSession?: (
+    connectorId: string,
+    domains?: string[],
+  ) => Promise<ConnectorCliAuthStart>
+  /** Reconcile every active auth driver and return safe UI transitions. */
+  reconcileConnectorAuth?: (
+    connectorId?: string,
+  ) => Promise<ConnectorCliAuthTransition[]>
   disconnectMcp: () => Promise<void>
 }
 
@@ -87,6 +134,12 @@ export function officeFilesystemToolConfig() {
         delete_file: { needsApproval: true, requireReadBeforeWrite: true },
         rmdir: { needsApproval: true },
         mkdir: { needsApproval: true },
+      },
+    },
+    sandbox: {
+      defaults: { needsApproval: true },
+      tools: {
+        execute_command: { needsApproval: true },
       },
     },
   }
@@ -115,6 +168,18 @@ export async function createWorkbenchAgent(
       host: options.mcpHost,
       cliRunner: options.cliRunner,
     })
+    const authStores = registry.getAuthRuntimeStores()
+    if (!authStores.bindingStore) {
+      throw new Error('Office OAuth Runtime 缺少 AuthBindingStore')
+    }
+    const connectorOAuth = createConnectorOAuthRuntime({
+      env,
+      descriptors: registry.listConnectorDescriptors(),
+      manifests: registry.listManifests(),
+      secretStore: authStores.secretStore,
+      bindingStore: authStores.bindingStore,
+      fetchImpl: options.oauthFetch,
+    })
     const plugins = await registry.load({ workspaceRoot })
 
     // Soft-fail optional skills plugins; only hard-fail when skills.office itself fails.
@@ -131,6 +196,62 @@ export async function createWorkbenchAgent(
     const skillRoots = plugins.skillRoots
     const skillsEnabled = skillRoots.length > 0
     const honestyTools = [...tools, ...plugins.toolNames]
+    const liveMcpStatuses = [...plugins.mcpStatuses]
+    const dynamicMcpDisconnectors: Array<() => Promise<void>> = []
+    // Capability execution requires both configuration enablement and a
+    // successfully loaded contribution (including any Provider Skills sync).
+    const enabledPluginIds = plugins.plugins
+      .filter((plugin) => plugin.enabled && plugin.loadStatus === 'loaded')
+      .map((plugin) => plugin.id)
+    const connectorCliAuth = createConnectorCliAuthRuntime({
+      env,
+      descriptors: plugins.connectorDescriptors,
+      manifests: registry.listManifests(),
+      enabledPluginIds,
+      runner: options.cliRunner ?? defaultCliRunner,
+      processRunner:
+        options.cliAuthProcessRunner ?? createDefaultCliAuthProcessRunner(),
+    })
+    let liveAuthStatuses = [...plugins.authStatuses]
+    const refreshAuthStatuses = async () => {
+      liveAuthStatuses = await registry.refreshAuthStatuses()
+      return [...liveAuthStatuses]
+    }
+    const workspaceSandbox =
+      options.workspaceSandbox ??
+      (await createOfficeWorkspaceSandbox({
+        workspaceRoot,
+        env,
+        connectors: plugins.connectorDescriptors,
+        manifests: registry.listManifests(),
+        resolveConnectorAccess: async (connectorId, turnContext) => {
+          const descriptor = plugins.connectorDescriptors.find(
+            (connector) => connector.id === connectorId,
+          )
+          if (!descriptor) {
+            return {
+              pluginEnabled: false,
+              connected: false,
+              taskSelected: false,
+            }
+          }
+          const statuses = await refreshAuthStatuses()
+          const auth = statuses.find(
+            (status) =>
+              status.pluginId === descriptor.authSummarySource.pluginId &&
+              status.resourceId === descriptor.authSummarySource.resourceId,
+          )
+          return {
+            pluginEnabled: descriptor.pluginRefs.some((pluginId) =>
+              enabledPluginIds.includes(pluginId),
+            ),
+            connected: auth?.status === 'connected',
+            taskSelected:
+              turnContext.taskId !== null &&
+              turnContext.selectedConnectorIds.includes(connectorId),
+          }
+        },
+      }))
 
     const workspace = new Workspace({
       id: 'workbench-office',
@@ -143,6 +264,7 @@ export async function createWorkbenchAgent(
           contained: true,
         }),
       },
+      sandbox: workspaceSandbox,
       ...(skillsEnabled
         ? {
             skills: {
@@ -157,7 +279,7 @@ export async function createWorkbenchAgent(
     const mcpInstruction =
       plugins.toolNames.length > 0
         ? [
-            'Optional MCP tools may be available for docs/knowledge and calendar (names as listed in tools).',
+            'Optional Provider MCP tools may be available under the names listed in tools.',
             'Prefer read-only MCP tools; write/update/delete MCP tools require user approval.',
             'If MCP is unavailable, continue with local Workspace FS and skills only — do not invent cloud content.',
           ].join(' ')
@@ -166,11 +288,13 @@ export async function createWorkbenchAgent(
     const skillInstruction = skillsEnabled
       ? [
           'Office skills live under /skills (meeting-notes, weekly-report, research-brief).',
+          `Provider-installed Skills may be synchronized under these manifest-declared roots: ${skillRoots.join(', ')}. Search and read the matching package instead of inventing Provider CLI commands.`,
           'When a request matches a skill: workspace_list_skills or workspace_search_skills → workspace_activate_skill → workspace_read_skill → follow SKILL.md → write deliverable under the skill output path.',
           'Deliverable paths: /output/meeting-notes/, /output/weekly-report/, /output/research-brief/.',
         ].join(' ')
       : 'Office skills plugins are not enabled in this session; do not invent skill toolkits.'
 
+    const livePluginTools = [...plugins.tools] as Tool<any, any>[]
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
@@ -182,6 +306,9 @@ export async function createWorkbenchAgent(
         'Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root.',
         skillInstruction,
         mcpInstruction,
+        'A generic Workspace Shell is available as execute_command. Every invocation requires Host approval; prefer command plus an exact args array and never put credentials in command, args, or model-supplied env.',
+        'For a Provider CLI request, first discover and read the matching installed Skill and its required references, then invoke the manifest-scoped native executable with execute_command. There are no Provider-specific Runtime wrapper tools.',
+        'A Provider executable is available only when its plugin is enabled, its declared auth resource is connected, and the active Task selected that Connector.',
         'All file paths must be virtual workspace paths starting with / (e.g. /notes/a.md, /output/meeting-notes/notes.md).',
         'Never use host absolute paths (/Users/..., /home/..., drive letters). Never paste operator host paths into tools.',
         'Prefer planning briefly, then read before write. Writes and deletes require user approval.',
@@ -191,7 +318,7 @@ export async function createWorkbenchAgent(
       workspace,
       workspaceToolkits: {
         filesystem: {},
-        sandbox: false,
+        sandbox: {},
         search: false,
         ...(skillsEnabled ? { skills: {} } : { skills: false as const }),
       },
@@ -205,13 +332,90 @@ export async function createWorkbenchAgent(
             },
           }
         : {}),
-      ...(plugins.tools.length > 0
-        ? { tools: plugins.tools as (Tool<any, any> | Toolkit)[] }
-        : {}),
+      tools: ({ context }) => {
+        const turnContext = readCapabilityTurnContext({ context })
+        return filterToolsForTaskSelection(
+          livePluginTools,
+          plugins.connectorDescriptors,
+          turnContext.selectedConnectorIds,
+        )
+      },
       maxSteps: defaults.maxSteps,
       summarization: defaults.summarization,
       memory: defaults.memory,
     })
+
+    const beginConnectorOAuth = (connectorId: string) =>
+      connectorOAuth.begin(connectorId)
+
+    const pendingOAuthHotLoads = new Map<
+      string,
+      { connectorId: string; pluginId: string }
+    >()
+    const hotLoadOAuthConnector = async (completed: {
+      connectorId: string
+      pluginId: string
+    }) => {
+      const descriptor = plugins.connectorDescriptors.find(
+        (row) => row.id === completed.connectorId,
+      )
+      if (!descriptor) {
+        throw new Error('平台 OAuth 完成后找不到 Connector descriptor')
+      }
+      const hot = await registry.loadMcpPlugin(completed.pluginId)
+      const previousNames = expandConnectorToolScope(descriptor, honestyTools)
+      const previousNameSet = new Set(previousNames)
+      const retainedTools = livePluginTools.filter(
+        (tool) => !previousNameSet.has(tool.name),
+      )
+      livePluginTools.splice(0, livePluginTools.length, ...retainedTools)
+      livePluginTools.push(...hot.tools)
+      const previousSet = new Set(previousNames)
+      const nextNames = honestyTools.filter((name) => !previousSet.has(name))
+      nextNames.push(...hot.toolNames)
+      honestyTools.splice(0, honestyTools.length, ...new Set(nextNames))
+      const statusIndexes: number[] = []
+      for (let i = 0; i < liveMcpStatuses.length; i++) {
+        if (liveMcpStatuses[i]?.pluginId === completed.pluginId) {
+          statusIndexes.push(i)
+        }
+      }
+      for (let i = statusIndexes.length - 1; i >= 0; i--) {
+        liveMcpStatuses.splice(statusIndexes[i]!, 1)
+      }
+      liveMcpStatuses.push(...hot.statuses)
+      dynamicMcpDisconnectors.push(hot.disconnect)
+      if (!hot.statuses.some((row) => row.status === 'connected')) {
+        throw new Error(`「${descriptor.name}」已授权，但 MCP 工具热加载失败`)
+      }
+    }
+    const reconcileConnectorAuth = async (connectorId?: string) => {
+      const newlyAuthorized = await connectorOAuth.reconcile()
+      for (const completed of newlyAuthorized) {
+        pendingOAuthHotLoads.set(completed.pluginId, completed)
+      }
+      for (const [pluginId, completed] of pendingOAuthHotLoads) {
+        await hotLoadOAuthConnector(completed)
+        pendingOAuthHotLoads.delete(pluginId)
+      }
+      const cliTransitions = await connectorCliAuth.reconcile(connectorId)
+      liveAuthStatuses = await refreshAuthStatuses()
+      return cliTransitions
+    }
+
+    let discoverableSkillIds: string[] = []
+    try {
+      const discovered = await Promise.all(
+        plugins.skillsResults
+          .filter((result) => result.status === 'seeded')
+          .map((result) =>
+            listWorkspaceSkillIds(workspaceRoot, result.workspaceDir),
+          ),
+      )
+      discoverableSkillIds = [...new Set(discovered.flat())].sort()
+    } catch {
+      discoverableSkillIds = []
+    }
 
     return {
       profile,
@@ -222,8 +426,8 @@ export async function createWorkbenchAgent(
       maxSteps: defaults.maxSteps,
       summarizationEnabled: defaults.summarization !== false,
       memoryKind: defaults.memoryKind,
-      mcpStatuses: plugins.mcpStatuses,
-      mcpStatusLine: formatRegistryMcpStatusLine(plugins.mcpStatuses),
+      mcpStatuses: liveMcpStatuses,
+      mcpStatusLine: formatRegistryMcpStatusLine(liveMcpStatuses),
       cliStatuses: plugins.cliStatuses,
       cliStatusLine: formatRegistryCliStatusLine(plugins.cliStatuses),
       authStatuses: plugins.authStatuses,
@@ -231,7 +435,19 @@ export async function createWorkbenchAgent(
       authDoctorLine: plugins.authDoctorLine,
       discoveryFailures: plugins.discoveryFailures,
       skillRoots,
-      disconnectMcp: plugins.disconnect,
+      enabledPluginIds,
+      connectorDescriptors: [...plugins.connectorDescriptors],
+      discoverableSkillIds,
+      refreshAuthStatuses,
+      beginConnectorOAuth,
+      beginConnectorCliSession: (connectorId, domains) =>
+        connectorCliAuth.begin(connectorId, domains),
+      reconcileConnectorAuth,
+      disconnectMcp: async () => {
+        await connectorCliAuth.dispose()
+        for (const disconnect of dynamicMcpDisconnectors) await disconnect()
+        await plugins.disconnect()
+      },
     }
   }
 
@@ -273,6 +489,10 @@ export async function createWorkbenchAgent(
     authDoctorLine: 'auth=none',
     discoveryFailures: [],
     skillRoots: [],
+    enabledPluginIds: [],
+    connectorDescriptors: [],
+    discoverableSkillIds: [],
+    refreshAuthStatuses: async () => [],
     disconnectMcp: async () => {},
   }
 }

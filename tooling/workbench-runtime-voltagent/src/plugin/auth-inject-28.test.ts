@@ -232,7 +232,7 @@ describe('#28 MCP inject uses material path', () => {
 describe('#28 CLI child env follows material', () => {
   const contrib: CliContribution = {
     cliId: 'feishu',
-    command: 'feishu-cli',
+    command: 'lark-cli',
     childEnvKeys: ['FEISHU_APP_SECRET', 'FEISHU_APP_ID'],
     commands: [{ name: 'x', argv: ['auth', 'status'] }],
   }

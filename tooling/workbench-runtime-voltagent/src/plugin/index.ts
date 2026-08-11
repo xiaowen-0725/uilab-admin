@@ -19,6 +19,7 @@ export {
   buildAuthorizationUrl,
   completeOAuthAuthorization,
   createFakeAuthorizationServer,
+  createDurableOAuthPendingStore,
   createOAuthPendingStore,
   createPkcePair,
   exchangeAuthorizationCode,
@@ -83,6 +84,9 @@ export type {
   CliArgParam,
   CliCommandContribution,
   CliContribution,
+  CliSessionContribution,
+  ConnectorCapabilityContribution,
+  ConnectorContribution,
   McpContribution,
   McpServerConfigShape,
   PluginContributes,
@@ -92,14 +96,55 @@ export type {
 } from './manifest.js'
 
 export {
+  BUILTIN_CONNECTOR_DESCRIPTORS,
   BUILTIN_PLUGINS,
   BUILTIN_CLI_FEISHU_PLUGIN,
   BUILTIN_MCP_CALENDAR_PLUGIN,
   BUILTIN_MCP_DOCS_PLUGIN,
+  BUILTIN_MCP_GITHUB_PLUGIN,
   BUILTIN_SKILLS_OFFICE_PLUGIN,
+  CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
+  CONNECTOR_GITHUB_DESCRIPTOR,
+  CONNECTOR_GITHUB_ID,
+  CONNECTOR_GITHUB_PLUGIN_ID,
+  CONNECTOR_FEISHU_AUTH_RESOURCE_ID,
+  CONNECTOR_FEISHU_DESCRIPTOR,
+  CONNECTOR_FEISHU_ID,
+  CONNECTOR_FEISHU_PLUGIN_ID,
+  GITHUB_MCP_REMOTE_URL,
+  GITHUB_MCP_SERVER_ID,
+  GITHUB_MCP_TOOL_PREFIX,
+  LARK_CLI_COMMAND,
+  LARK_CLI_PACKAGE,
+  LARK_CLI_PIN,
   OFFICE_BUILTIN_OUTPUT_DIRS,
   OFFICE_BUILTIN_SKILL_IDS,
 } from './builtins.js'
+
+export type {
+  ConnectorAvailability,
+  ConnectorAuthSummarySource,
+  ConnectorDescriptor,
+  ConnectorSubCapability,
+} from './connector-descriptor.js'
+export {
+  derivePrimaryChannel,
+  expandConnectorToolScope,
+  getConnectorDescriptor,
+  projectConnectorDescriptors,
+} from './connector-descriptor.js'
+
+export type {
+  ConnectorEffectiveInput,
+  EffectiveCapabilitySet,
+  EffectiveConnectorDecision,
+  ResolveEffectiveConnectorsOptions,
+} from './effective-capabilities.js'
+export {
+  isConnectorEffective,
+  resolveEffectiveConnectors,
+  resolveEffectiveSkills,
+} from './effective-capabilities.js'
 
 export {
   createPluginRegistry,
@@ -149,10 +194,19 @@ export {
 } from './mcp-loader.js'
 
 export {
+  createToolIdentityRegistry,
+  type RegisteredToolIdentity,
+  type ToolCanonicalIdentity,
+  type ToolChannel,
+  type ToolIdentityRegistry,
+} from './tool-identity.js'
+
+export {
   assertSafeArgvTemplate,
   buildCliArgv,
   buildCliChildEnv,
   cliToolName,
+  defaultCliRunner,
   formatRegistryCliStatusLine,
   loadCliContributions,
   resolveCliExecutable,
@@ -200,4 +254,3 @@ export {
   type AuthStatusRow,
   type RunAuthOptions,
 } from './operator-auth.js'
-

@@ -1,0 +1,297 @@
+
+> uilab-templates@0.0.1 dev:workbench-runtime /Users/zhoujw/develop/github/uilab-admin
+> pnpm --filter @uilab/workbench-runtime-voltagent dev
+
+
+> @uilab/workbench-runtime-voltagent@0.0.1 dev /Users/zhoujw/develop/github/uilab-admin/tooling/workbench-runtime-voltagent
+> tsx watch --env-file=.env src/server.ts
+
+[2026-08-07 17:13:07.614 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36mWorkbench VoltAgent sidecar starting profile=office port=3141 model=deepseek-v4-flash modelApi=chat baseURL=https://api.deepseek.com agentId=workbench workspaceRoot=/Users/zhoujw/develop/github/uilab-admin/output/voltagent-e2e-workspace maxSteps=80 summarization=true memory=libsql mcp=docs=off,calendar=off cli=cli=none auth=mcp.docs/bearer=missing,mcp.calendar/bearer=missing,cli.feishu/cli:feishu=missing tools=ls,read_file,write_file,edit_file,delete_file,stat,mkdir,rmdir,list_tree,list_files,glob,grep,workspace_list_skills,workspace_search_skills,workspace_read_skill,workspace_activate_skill,workspace_deactivate_skill,workspace_read_skill_reference,workspace_read_skill_script,workspace_read_skill_asset note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills+optional MCP/CLI); not remote production cluster[39m
+[2026-08-07 17:13:07.616 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36mplugin auth doctor: mcp.docs/bearer enable=on auth=missing hint=配置 MCP_DOCS_BEARER_TOKEN（或 MCP_DOCS_TOKEN / MCP_BEARER_TOKEN）到侧车 .env；勿提交仓库; mcp.calendar/bearer enable=on auth=missing hint=配置 MCP_CALENDAR_BEARER_TOKEN（或 MCP_CALENDAR_TOKEN / MCP_BEARER_TOKEN）到侧车 .env；勿提交仓库; cli.feishu/cli:feishu enable=off auth=missing hint=请先运行 feishu-cli auth login（领域 CLI 自有登录，非宿主 OAuth）[39m
+
+
+[36m══════════════════════════════════════════════════[0m
+[1m[33m  VOLTAGENT SERVER STARTED SUCCESSFULLY[0m
+[36m══════════════════════════════════════════════════[0m
+[32m  ✓ [1mHTTP Server:  [0m[37mhttp://localhost:3141[0m
+[34m  ↪ [1mShare it:    [0m[37mpnpm volt tunnel 3141[0m [2m(secure HTTPS tunnel for teammates)[0m
+[34m  ↪ [1mDeploy it:   [0m[37mhttps://console.voltagent.dev/deployments[0m
+[32m  ✓ [1mSwagger UI:   [0m[37mhttp://localhost:3141/ui[0m
+
+[1m[33m  [1mTest your agents with VoltOps Console: [0m[37mhttps://console.voltagent.dev[0m
+[36m══════════════════════════════════════════════════[0m
+
+  [33m⚡[0m [1mIntroducing VoltOps Deployments[0m [2m→[0m https://console.voltagent.dev/deployments
+  [33m⚡[0m [1mVoltAgent RAG Is Live[0m [2m→[0m https://voltagent.dev/docs/rag/voltagent/
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 31.13.91.6:443, 2001::c73b:9493:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+AI SDK Warning System: To turn off warning logging, set the AI_SDK_LOG_WARNINGS global to false.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+[2026-08-07 17:20:19.413 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36m[VoltAgent] Received SIGTERM...[39m
+[2026-08-07 17:20:19.414 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36m[VoltAgent] Starting graceful shutdown...[39m
+[2026-08-07 17:20:19.414 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36m[VoltAgent] Stopping server...[39m
+
+> uilab-templates@0.0.1 dev:workbench-runtime /Users/zhoujw/develop/github/uilab-admin
+> pnpm --filter @uilab/workbench-runtime-voltagent dev
+
+
+> @uilab/workbench-runtime-voltagent@0.0.1 dev /Users/zhoujw/develop/github/uilab-admin/tooling/workbench-runtime-voltagent
+> tsx watch --env-file=.env src/server.ts
+
+[2026-08-07 17:21:11.695 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36mWorkbench VoltAgent sidecar starting profile=office port=3141 model=deepseek-v4-flash modelApi=chat baseURL=https://api.deepseek.com agentId=workbench workspaceRoot=/Users/zhoujw/develop/github/uilab-admin/output/voltagent-e2e-workspace maxSteps=80 summarization=true memory=libsql mcp=docs=off,calendar=off cli=cli=none auth=mcp.docs/bearer=missing,mcp.calendar/bearer=missing,cli.feishu/cli:feishu=missing tools=ls,read_file,write_file,edit_file,delete_file,stat,mkdir,rmdir,list_tree,list_files,glob,grep,workspace_list_skills,workspace_search_skills,workspace_read_skill,workspace_activate_skill,workspace_deactivate_skill,workspace_read_skill_reference,workspace_read_skill_script,workspace_read_skill_asset note=local VoltAgent Office Runtime (Agent+Workspace FS+Skills+optional MCP/CLI); not remote production cluster[39m
+[2026-08-07 17:21:11.696 +0000] [32mINFO[39m (workbench-runtime-voltagent): [36mplugin auth doctor: mcp.docs/bearer enable=on auth=missing hint=配置 MCP_DOCS_BEARER_TOKEN（或 MCP_DOCS_TOKEN / MCP_BEARER_TOKEN）到侧车 .env；勿提交仓库; mcp.calendar/bearer enable=on auth=missing hint=配置 MCP_CALENDAR_BEARER_TOKEN（或 MCP_CALENDAR_TOKEN / MCP_BEARER_TOKEN）到侧车 .env；勿提交仓库; cli.feishu/cli:feishu enable=off auth=missing hint=请先运行 feishu-cli auth login（领域 CLI 自有登录，非宿主 OAuth）[39m
+
+
+[36m══════════════════════════════════════════════════[0m
+[1m[33m  VOLTAGENT SERVER STARTED SUCCESSFULLY[0m
+[36m══════════════════════════════════════════════════[0m
+[32m  ✓ [1mHTTP Server:  [0m[37mhttp://localhost:3141[0m
+[34m  ↪ [1mShare it:    [0m[37mpnpm volt tunnel 3141[0m [2m(secure HTTPS tunnel for teammates)[0m
+[34m  ↪ [1mDeploy it:   [0m[37mhttps://console.voltagent.dev/deployments[0m
+[32m  ✓ [1mSwagger UI:   [0m[37mhttp://localhost:3141/ui[0m
+
+[1m[33m  [1mTest your agents with VoltOps Console: [0m[37mhttps://console.voltagent.dev[0m
+[36m══════════════════════════════════════════════════[0m
+
+  [33m⚡[0m [1mIntroducing VoltOps Deployments[0m [2m→[0m https://console.voltagent.dev/deployments
+  [33m⚡[0m [1mVoltAgent RAG Is Live[0m [2m→[0m https://voltagent.dev/docs/rag/voltagent/
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 31.13.91.6:443, 2001::c73b:9493:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+AI SDK Warning System: To turn off warning logging, set the AI_SDK_LOG_WARNINGS global to false.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+AI SDK Warning (openai.chat / deepseek-v4-flash): The feature "specificationVersion" is used in a compatibility mode. Using v2 specification compatibility mode. Some features may not be available.
+AI SDK Warning: System messages in the prompt or messages fields can be a security risk because they may enable prompt injection attacks. Use the system option instead when possible. Set allowSystemInMessages to true to suppress this warning, or false to throw an error.
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 128.121.243.76:443, 2001::76c1:cadb:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 108.160.162.98:443, 2001::9df0:1124:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 104.244.43.231:443, 2001::966b:3b0:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 199.16.156.71:443, 2001::4a56:cad:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 157.240.11.40:443, 2001::44e:8b36:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 108.160.170.39:443, 2001::45a2:86b2:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 108.160.167.156:443, 2001::9df0:308:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 108.160.169.46:443, 2001::80f2:f52b:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 108.160.172.204:443, 2001::8079:f34b:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 192.133.77.189:443, 2001::1f0d:49a9:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 31.13.91.6:443, 2001::c73b:95cc:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 104.244.43.128:443, 2001::6817:7dbd:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 192.133.77.133:443, 2001::451e:1915:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 173.252.88.133:443, 2001::c61b:7cba:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 104.244.43.35:443, 2001::68f4:2bd0:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[ModelProviderRegistry] Auto-refresh failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15422:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async fetchModelsDevRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4007:20)
+    at async _ModelProviderRegistry.refreshRegistry (/Users/zhoujw/develop/github/uilab-admin/node_modules/.pnpm/@voltagent+core@2.9.2_@ai-sdk+provider-utils@4.0.41_zod@4.4.3__@ai-sdk+provider@3.0.14__b10183f89a360a4be6255b7bd82dfc63/node_modules/@voltagent/core/dist/index.mjs:4503:43) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 192.133.77.189:443, 2001::adfc:5843:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1531:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1512:11)
+      at process.processImmediate (node:internal/timers:505:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}

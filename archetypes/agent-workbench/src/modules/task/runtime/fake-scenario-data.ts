@@ -15,6 +15,9 @@ export type FakeScenarioName =
   | 'waiting-input'
   | 'fail-once-retry'
   | 'long-content'
+  | 'work-surface-open-document'
+  | 'work-surface-open-browser'
+  | 'work-surface-open-illegal'
 
 export interface ScenarioStreamStep {
   type: AgentRuntimeEventType
@@ -63,8 +66,74 @@ export function resolveScenarioFromKeywords(
   if (inputText.includes('失败') || inputText.includes('重试')) {
     return 'fail-once-retry'
   }
+  if (inputText.includes('打开文档') || inputText.includes('open-document')) {
+    return 'work-surface-open-document'
+  }
+  if (inputText.includes('打开浏览器') || inputText.includes('open-browser')) {
+    return 'work-surface-open-browser'
+  }
+  if (inputText.includes('非法路径') || inputText.includes('open-illegal')) {
+    return 'work-surface-open-illegal'
+  }
   return null
 }
+
+/** Spec §7 Fake fixtures: open_requested for document / browser / illegal path. */
+export const WORK_SURFACE_OPEN_DOCUMENT_STEPS: readonly ScenarioStreamStep[] = [
+  {
+    type: 'output.delta',
+    payload: { index: 0, text: '将打开文档预览（Runtime 请求）。\n' },
+  },
+  {
+    type: 'output.completed',
+    payload: { text: '将打开文档预览（Runtime 请求）。' },
+  },
+  {
+    type: 'work_surface.open_requested',
+    payload: {
+      kind: 'document',
+      resourceKey: 'fixture/notes/plan.txt',
+      title: 'plan.txt',
+      reason: 'agent',
+    },
+  },
+]
+
+export const WORK_SURFACE_OPEN_BROWSER_STEPS: readonly ScenarioStreamStep[] = [
+  {
+    type: 'output.delta',
+    payload: { index: 0, text: '将打开浏览器预览（Runtime 请求）。\n' },
+  },
+  {
+    type: 'output.completed',
+    payload: { text: '将打开浏览器预览（Runtime 请求）。' },
+  },
+  {
+    type: 'work_surface.open_requested',
+    payload: {
+      kind: 'browser',
+      resourceKey: 'https://example.com/',
+      title: 'example.com',
+      reason: 'agent',
+    },
+  },
+]
+
+export const WORK_SURFACE_OPEN_ILLEGAL_STEPS: readonly ScenarioStreamStep[] = [
+  {
+    type: 'output.completed',
+    payload: { text: '非法 path 不应写入 openTabs。' },
+  },
+  {
+    type: 'work_surface.open_requested',
+    payload: {
+      kind: 'document',
+      resourceKey: '../etc/passwd',
+      title: 'bad',
+      reason: 'agent',
+    },
+  },
+]
 
 /** Fixed event script for reasoning-tools-complete (s02-class). */
 export const REASONING_TOOLS_STEPS: readonly ScenarioStreamStep[] = [

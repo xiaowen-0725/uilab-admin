@@ -37,6 +37,19 @@ export interface TimelineItemSourceRange {
  */
 export type AssistantMessageRole = 'commentary' | 'final'
 
+export type ProcessStepKind =
+  | 'read'
+  | 'write'
+  | 'list'
+  | 'search'
+  | 'command'
+  | 'other'
+
+export interface ProcessSummary {
+  stepCount: number
+  counts: Partial<Record<ProcessStepKind, number>>
+}
+
 /** Optional presentation meta (file diffs, tool children, turn duration). */
 export interface TimelineItemMeta {
   /** File-change: line additions / deletions. */
@@ -48,12 +61,16 @@ export interface TimelineItemMeta {
   children?: string[]
   /** File path when distinct from title. */
   path?: string
-  /** ISO start time for live「已处理 Xs」while run is active. */
+  /** ISO start time for live elapsed duration while run is active. */
   startedAt?: string
   /** Run duration for completed turn chrome (ms). */
   durationMs?: number
   /** Tool kind hint for icon (read / web_search / command / generic). */
   toolKind?: string
+  /** Stable process category for deterministic summary aggregation. */
+  processKind?: ProcessStepKind
+  /** Run-terminal deterministic summary, counted by logical row id. */
+  processSummary?: ProcessSummary
   /**
    * Assistant segment role: mid-turn narration vs final answer.
    * Process fold shows commentary; final renders outside the fold.

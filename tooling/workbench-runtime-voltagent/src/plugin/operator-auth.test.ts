@@ -217,7 +217,7 @@ describe('#32 runAuthLogin / logout', () => {
     })
     try {
       assert.equal(report.ok, true)
-      assert.match(report.text, /cli_session|feishu-cli/)
+      assert.match(report.text, /cli_session|lark-cli/)
     } finally {
       await report.disconnect()
     }

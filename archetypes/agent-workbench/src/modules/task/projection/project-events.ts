@@ -21,6 +21,7 @@ import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
 import {
   classifyToolActivity,
+  extractToolObject,
   formatToolActivityCopy,
   liveStatusForToolActivity,
   toolKindHint,
@@ -33,6 +34,7 @@ import type {
   TimelineItem,
   TimelineItemCategory,
   TimelineItemMeta,
+  ProcessStepKind,
 } from './types'
 
 type MutableState = {
@@ -300,6 +302,9 @@ function isProcessBreakingCategory(category: TimelineItemCategory): boolean {
   return (
     category === 'tool-group' ||
     category === 'command-execution' ||
+    category === 'reasoning-section' ||
+    category === 'plan-update' ||
+    category === 'source-group' ||
     category === 'approval-request' ||
     category === 'file-change' ||
     category === 'input-request'
@@ -343,6 +348,9 @@ function appendAssistantDelta(
     }
     const itemRole = item.meta?.messageRole ?? 'final'
     if (itemRole !== role) break
+    // text-end/output.completed seals a segment. A later text-delta is a new
+    // narrative segment even when no tool row appears between them.
+    if (item.status === 'completed') break
     // Nothing process-breaking after this assistant → keep appending.
     const brokenAfter = timeline
       .slice(i + 1)
@@ -458,6 +466,7 @@ function promoteAssistantRolesOnRunComplete(
 function ensureReasoning(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
+  reasoningKey: string,
   delta: string | null,
   title?: string | null,
   completed = false,
@@ -466,7 +475,10 @@ function ensureReasoning(
   const version = state.readModel.projectionVersion
   const idx = findIndex(
     state.readModel.timeline,
-    (item) => item.category === 'reasoning-section' && item.runId === runId,
+    (item) =>
+      item.category === 'reasoning-section' &&
+      item.runId === runId &&
+      item.id === `reasoning:${runId ?? 'run'}:${reasoningKey}`,
   )
   if (idx >= 0) {
     const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
@@ -474,14 +486,14 @@ function ensureReasoning(
       ...base,
       title: title || base.title || '思考过程',
       body: delta ? `${base.body ?? ''}${delta}` : base.body,
-      status: completed ? 'completed' : base.status ?? 'streaming',
+      status: completed ? 'completed' : 'streaming',
     })
     return
   }
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `reasoning:${runId ?? envelope.eventId}`,
+      id: `reasoning:${runId ?? 'run'}:${reasoningKey}`,
       category: 'reasoning-section',
       title: title || '思考过程',
       body: delta ?? '',
@@ -489,6 +501,38 @@ function ensureReasoning(
       runId,
     }),
   )
+}
+
+function syncProcessSummary(
+  state: MutableState,
+  runId: RunId | undefined,
+): void {
+  const terminalIdx = findIndex(
+    state.readModel.timeline,
+    (item) =>
+      item.category === 'run-terminal' &&
+      (!runId || item.runId === runId),
+  )
+  if (terminalIdx < 0) return
+
+  const steps = state.readModel.timeline.filter(
+    (item) =>
+      (!runId || item.runId === runId) &&
+      (item.category === 'tool-group' ||
+        item.category === 'command-execution'),
+  )
+  const counts: Partial<Record<ProcessStepKind, number>> = {}
+  for (const step of steps) {
+    const kind = step.meta?.processKind ?? 'other'
+    counts[kind] = (counts[kind] ?? 0) + 1
+  }
+  const terminal = state.readModel.timeline[terminalIdx]!
+  replaceItem(state, terminalIdx, {
+    ...terminal,
+    meta: mergeMeta(terminal.meta, {
+      processSummary: { stepCount: steps.length, counts },
+    }),
+  })
 }
 
 function upsertByKey(
@@ -708,7 +752,8 @@ export function applyRuntimeEvent(
       setRunStatus(next, 'running', envelope)
       const startedAt =
         typeof envelope.occurredAt === 'string' ? envelope.occurredAt : null
-      ensureRunTerminal(next, envelope, 'running', '已处理', {
+      // Present-tense title while running (not 「已处理」— that is completed-only Chinese).
+      ensureRunTerminal(next, envelope, 'running', '正在思考', {
         startedAt: startedAt ?? undefined,
         // Legacy stamp for older duration readers.
         path: startedAt ? `startedAt:${startedAt}` : undefined,
@@ -809,6 +854,7 @@ export function applyRuntimeEvent(
       ensureReasoning(
         next,
         envelope,
+        payloadString(envelope.payload, 'id') ?? 'default',
         null,
         payloadString(envelope.payload, 'title') ?? '思考过程',
         false,
@@ -818,7 +864,14 @@ export function applyRuntimeEvent(
     }
     case 'reasoning.delta': {
       const delta = payloadText(envelope.payload, ['text', 'delta']) ?? ''
-      ensureReasoning(next, envelope, delta, null, false)
+      ensureReasoning(
+        next,
+        envelope,
+        payloadString(envelope.payload, 'id') ?? 'default',
+        delta,
+        null,
+        false,
+      )
       setLiveStatus(next, '正在思考')
       break
     }
@@ -826,6 +879,9 @@ export function applyRuntimeEvent(
       ensureReasoning(
         next,
         envelope,
+        payloadString(envelope.payload, 'id') ??
+          payloadString(envelope.payload, 'sectionId') ??
+          'default',
         null,
         payloadString(envelope.payload, 'title'),
         false,
@@ -836,6 +892,7 @@ export function applyRuntimeEvent(
       ensureReasoning(
         next,
         envelope,
+        payloadString(envelope.payload, 'id') ?? 'default',
         null,
         payloadString(envelope.payload, 'summary') ??
           payloadString(envelope.payload, 'title'),
@@ -880,9 +937,13 @@ export function applyRuntimeEvent(
         status: 'running',
         meta: {
           toolKind: toolKindHint(kind),
+          processKind: kind === 'skill' || kind === 'plan' || kind === 'generic'
+            ? 'other'
+            : kind,
           children,
         },
       })
+      syncProcessSummary(next, envelope.runId as RunId | undefined)
       setLiveStatus(next, liveStatusForToolActivity(activity))
       break
     }
@@ -903,6 +964,7 @@ export function applyRuntimeEvent(
         status: 'running',
         meta: children ? { children } : undefined,
       })
+      syncProcessSummary(next, envelope.runId as RunId | undefined)
       setLiveStatus(next, liveStatusForToolActivity(activity))
       break
     }
@@ -935,9 +997,13 @@ export function applyRuntimeEvent(
         status: isError ? 'error' : 'completed',
         meta: {
           toolKind: toolKindHint(kind),
+          processKind: kind === 'skill' || kind === 'plan' || kind === 'generic'
+            ? 'other'
+            : kind,
           children,
         },
       })
+      syncProcessSummary(next, envelope.runId as RunId | undefined)
       break
     }
     case 'command.started': {
@@ -955,8 +1021,9 @@ export function applyRuntimeEvent(
       upsertByKey(next, envelope, 'command-execution', commandId, {
         title,
         status: 'running',
-        meta: { toolKind: 'command' },
+        meta: { toolKind: 'command', processKind: 'command' },
       })
+      syncProcessSummary(next, envelope.runId as RunId | undefined)
       setLiveStatus(
         next,
         liveStatusForToolActivity({
@@ -973,6 +1040,7 @@ export function applyRuntimeEvent(
         body: text,
         status: 'running',
       })
+      syncProcessSummary(next, envelope.runId as RunId | undefined)
       break
     }
     case 'command.completed': {
@@ -990,16 +1058,23 @@ export function applyRuntimeEvent(
               : 'completed',
           })
         : undefined
+      const summary = payloadString(envelope.payload, 'summary')
+      const completionBody = [
+        summary,
+        typeof exitCode === 'number' ? `exit ${exitCode}` : null,
+      ]
+        .filter((part): part is string => Boolean(part))
+        .join('\n')
       upsertByKey(next, envelope, 'command-execution', commandId, {
         title,
-        body:
-          typeof exitCode === 'number' ? `\nexit ${exitCode}` : undefined,
+        body: completionBody ? `\n${completionBody}` : undefined,
         status:
           rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
             ? 'error'
             : 'completed',
-        meta: { toolKind: 'command' },
+        meta: { toolKind: 'command', processKind: 'command' },
       })
+      syncProcessSummary(next, envelope.runId as RunId | undefined)
       break
     }
     case 'file.changed': {
@@ -1058,8 +1133,22 @@ export function applyRuntimeEvent(
     }
     case 'approval.requested': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
-      const title = payloadString(envelope.payload, 'title') ?? '需要审批'
-      const detail = payloadString(envelope.payload, 'detail') ?? ''
+      const toolName =
+        payloadString(envelope.payload, 'toolName') ??
+        payloadString(envelope.payload, 'name')
+      const args = rec.args ?? rec.input ?? rec.arguments
+      const action = formatToolActivityCopy({
+        name: toolName,
+        args,
+        status: 'running',
+      }).replace(/^正在/, '')
+      const target = extractToolObject({ name: toolName, args })
+      const title =
+        payloadString(envelope.payload, 'title') ??
+        (action && action !== '思考' ? `请求${action}` : '需要审批')
+      const detail =
+        payloadString(envelope.payload, 'detail') ??
+        (target ? `目标：${target}` : toolName ? `工具：${toolName}` : '')
       setRunStatus(next, 'waiting_for_approval', envelope)
       ensureRunTerminal(next, envelope, 'waiting_for_approval', '等待审批')
       setLiveStatus(next, '等待审批')
@@ -1133,6 +1222,8 @@ export function applyRuntimeEvent(
     case 'artifact.created':
     case 'artifact.updated':
     case 'artifact.linked':
+    // Work Surface open is Session/Composition concern — never a timeline row / openTabs fact.
+    case 'work_surface.open_requested':
       break
     default: {
       pushUnsupported(next, envelope)

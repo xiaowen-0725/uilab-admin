@@ -1,0 +1,13 @@
+
+> uilab-templates@0.0.1 check:workbench /Users/zhoujw/develop/github/uilab-admin
+> node scripts/check-workbench.mjs
+
+check-workbench
+  platformRoot:  /Users/zhoujw/develop/github/uilab-admin
+  workbenchRoot: /Users/zhoujw/develop/github/uilab-admin/archetypes/agent-workbench
+
+check-workbench OK
+  Module boundaries: root Interfaces only
+  Foundation: button + input + tokens
+  Forbidden: radix/asChild, desktop host, node builtins in src
+check_workbench_exit=0

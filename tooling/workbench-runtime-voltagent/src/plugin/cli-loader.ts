@@ -8,13 +8,16 @@ import { access, constants } from 'node:fs/promises'
 import { execFile as execFileCb } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { createTool, type Tool } from '@voltagent/core'
+import { createTool, type Tool, type ToolExecuteOptions } from '@voltagent/core'
 import { z } from 'zod'
+import { gateConnectorToolInvoke } from '../capability/tool-gate.js'
+import { readCapabilityTurnContext } from '../capability/turn-context.js'
 import type {
   CliArgParam,
   CliCommandContribution,
   CliContribution,
 } from './manifest.js'
+import type { ConnectorDescriptor } from './connector-descriptor.js'
 import { firstEnv } from './parse-util.js'
 import {
   decideCliCommandNeedsApproval,
@@ -24,6 +27,10 @@ import {
   stripModelProviderSecrets,
 } from './security-policy.js'
 import type { CredentialMaterial, ProfileEnv } from './types.js'
+import {
+  createToolIdentityRegistry,
+  type RegisteredToolIdentity,
+} from './tool-identity.js'
 
 const execFileAsync = promisify(execFileCb)
 
@@ -49,6 +56,7 @@ export type CliRunner = (
 export type CliLoadAggregate = {
   tools: Tool<any, any>[]
   toolNames: string[]
+  toolIdentities: RegisteredToolIdentity[]
   statuses: CliLoadStatus[]
 }
 
@@ -61,10 +69,17 @@ export type LoadCliOptions = {
    * Local PLUGIN_PATHS plugins always force needsApproval.
    */
   trustedPluginIds?: ReadonlySet<string>
+  /** Provider-projected connectors used by the Task invoke gate. */
+  connectorDescriptors?: readonly ConnectorDescriptor[]
 }
 
+/**
+ * OpenAI/DeepSeek tool names must match `^[a-zA-Z0-9_-]+$` — no dots.
+ * Format: `cli_<cliId>_<commandName>` (e.g. cli_acme_records_list).
+ */
 export function cliToolName(cliId: string, commandName: string): string {
-  return `cli.${cliId}.${commandName}`
+  const safe = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `cli_${safe(cliId)}_${safe(commandName)}`
 }
 
 /**
@@ -76,6 +91,78 @@ export function buildCliArgv(
   args: Record<string, unknown>,
 ): string[] {
   return template.map((segment) => expandArgvSegment(segment, args))
+}
+
+/** Exact argv passthrough for a fixed, trusted Provider binary. Never a shell. */
+export function buildCliPassthroughArgv(
+  paramName: string,
+  args: Record<string, unknown>,
+): string[] {
+  const value = args[paramName]
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`CLI passthrough 参数必须是非空字符串数组：${paramName}`)
+  }
+  if (value.length > 128) {
+    throw new Error(`CLI passthrough 参数过多：${paramName}`)
+  }
+  let totalLength = 0
+  const argv = value.map((item, index) => {
+    if (typeof item !== 'string' || item.length === 0) {
+      throw new Error(`CLI passthrough 参数无效：${paramName}[${index}]`)
+    }
+    if (item.includes('\0')) {
+      throw new Error(`CLI passthrough 参数含 NUL：${paramName}[${index}]`)
+    }
+    if (item.length > 32_768) {
+      throw new Error(`CLI passthrough 单参数过长：${paramName}[${index}]`)
+    }
+    assertNoCredentialBearingArg(item, paramName, index)
+    totalLength += item.length
+    return item
+  })
+  if (totalLength > 128 * 1024) {
+    throw new Error(`CLI passthrough 参数总长度过大：${paramName}`)
+  }
+  return argv
+}
+
+const CREDENTIAL_FLAG_KEYS = new Set([
+  'accesstoken',
+  'appsecret',
+  'authorization',
+  'bearertoken',
+  'clientsecret',
+  'password',
+  'refreshtoken',
+  'tenantaccesstoken',
+  'useraccesstoken',
+])
+
+const CREDENTIAL_ENV_ASSIGNMENT =
+  /^[A-Z_][A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|AUTHORIZATION|CREDENTIAL|API_KEY)[A-Z0-9_]*=/i
+
+/** Credentials belong to the CLI session/closed child env, never model argv. */
+function assertNoCredentialBearingArg(
+  value: string,
+  paramName: string,
+  index: number,
+): void {
+  const flagKey = value.startsWith('-')
+    ? value
+        .split('=', 1)[0]!
+        .replace(/^-+/, '')
+        .replaceAll('-', '')
+        .replaceAll('_', '')
+        .toLowerCase()
+    : ''
+  if (
+    CREDENTIAL_FLAG_KEYS.has(flagKey) ||
+    CREDENTIAL_ENV_ASSIGNMENT.test(value)
+  ) {
+    throw new Error(
+      `CLI passthrough 禁止敏感凭证参数：${paramName}[${index}]`,
+    )
+  }
 }
 
 function expandArgvSegment(
@@ -154,6 +241,8 @@ export function parametersToZodSchema(
         ? z.number()
         : p.type === 'boolean'
           ? z.boolean()
+          : p.type === 'string_array'
+            ? z.array(z.string().min(1).max(32_768)).min(1).max(128)
           : z.string()
     if (p.description) t = t.describe(p.description)
     const required = p.required !== false
@@ -279,6 +368,7 @@ function truncateOutput(text: string, max: number): string {
 
 function createCliTool(input: {
   cliId: string
+  publicName?: string
   commandPath: string
   cmd: CliCommandContribution
   cwd: string | undefined
@@ -287,6 +377,8 @@ function createCliTool(input: {
   runner: CliRunner
   /** Local/discovered plugins cannot self-certify free tools */
   forceApproval?: boolean
+  /** Explicit trust grant for fixed-binary Provider argv passthrough. */
+  allowPassthrough?: boolean
   /**
    * Live auth: re-resolve material each invoke. When status !== connected,
    * refuse to dispatch runner (cli_session may still hold domain credentials
@@ -296,11 +388,31 @@ function createCliTool(input: {
   contrib?: CliContribution
   env?: ProfileEnv
   authEnforced?: boolean
+  connectorDescriptors?: readonly ConnectorDescriptor[]
 }): Tool<any, any> {
-  const toolName = cliToolName(input.cliId, input.cmd.name)
-  assertSafeArgvTemplate(input.cmd.argv)
+  const toolName = input.publicName ?? cliToolName(input.cliId, input.cmd.name)
+  const passthroughParam = input.cmd.passthroughArgvParam?.trim()
+  if (passthroughParam) {
+    if (!input.allowPassthrough) {
+      throw new Error('CLI argv passthrough 仅允许受信 builtin Provider')
+    }
+    if (
+      !input.cmd.parameters?.some(
+        (param) =>
+          param.name === passthroughParam && param.type === 'string_array',
+      )
+    ) {
+      throw new Error(
+        `CLI argv passthrough 缺少 string_array 参数：${passthroughParam}`,
+      )
+    }
+  } else {
+    assertSafeArgvTemplate(input.cmd.argv)
+  }
   const schema = parametersToZodSchema(input.cmd.parameters)
-  const needsApproval = input.forceApproval
+  const needsApproval = passthroughParam
+    ? true
+    : input.forceApproval
     ? true
     : decideCliCommandNeedsApproval({
         needsApproval: input.cmd.needsApproval,
@@ -314,8 +426,43 @@ function createCliTool(input: {
       `Domain CLI ${input.cliId} · ${input.cmd.name}（allowlisted execFile）`,
     parameters: schema,
     needsApproval,
-    execute: async (rawArgs: Record<string, unknown>) => {
-      const argv = buildCliArgv(input.cmd.argv, rawArgs ?? {})
+    execute: async (
+      rawArgs: Record<string, unknown>,
+      executeOptions?: ToolExecuteOptions,
+    ) => {
+      const argv = passthroughParam
+        ? buildCliPassthroughArgv(passthroughParam, rawArgs ?? {})
+        : buildCliArgv(input.cmd.argv, rawArgs ?? {})
+      const argvMetadata = passthroughParam
+        ? { argvCount: argv.length }
+        : { argv }
+
+      // Capability Surface effective gate (taskSelected ∧ connected ∧ enabled).
+      // Packaging may load tools; invoke still requires Task 选用 for connector tools.
+      const turnContext = readCapabilityTurnContext(executeOptions)
+      const gate = gateConnectorToolInvoke(toolName, {
+        taskId: turnContext.taskId,
+        selectedConnectorIds: turnContext.selectedConnectorIds,
+        descriptors: input.connectorDescriptors ?? [],
+        authLookup: () => ({
+          // If tool is mounted, packaging enabled the plugin for this process.
+          pluginGloballyEnabled: true,
+          authStatus: 'connected',
+        }),
+      })
+      if (!gate.allowed) {
+        return {
+          ok: false,
+          error: gate.reason,
+          cliId: input.cliId,
+          command: input.cmd.name,
+          ...argvMetadata,
+          exitCode: 1,
+          stdout: '',
+          stderr: truncateOutput(gate.hint, 20_000),
+        }
+      }
+
       let env = input.childEnv
       if (input.resolveAuthMaterial && input.contrib) {
         const material = await input.resolveAuthMaterial()
@@ -325,7 +472,7 @@ function createCliTool(input: {
             error: 'auth_revoked',
             cliId: input.cliId,
             command: input.cmd.name,
-            argv,
+            ...argvMetadata,
             exitCode: 1,
             stdout: '',
             stderr: truncateOutput(
@@ -348,7 +495,7 @@ function createCliTool(input: {
       return {
         cliId: input.cliId,
         command: input.cmd.name,
-        argv,
+        ...argvMetadata,
         exitCode: result.exitCode,
         stdout: truncateOutput(result.stdout, 50_000),
         stderr: truncateOutput(result.stderr, 20_000),
@@ -406,6 +553,7 @@ export async function loadCliContributions(
   const trusted = options.trustedPluginIds
   const tools: Tool<any, any>[] = []
   const toolNames: string[] = []
+  const identityRegistry = createToolIdentityRegistry()
   const statuses: CliLoadStatus[] = []
 
   for (const {
@@ -416,6 +564,7 @@ export async function loadCliContributions(
     resolveAuthMaterial,
   } of items) {
     const forceApproval = trusted ? !trusted.has(pluginId) : false
+    const allowPassthrough = trusted?.has(pluginId) === true
     if (!contrib.cliId?.trim()) {
       statuses.push({
         pluginId,
@@ -489,23 +638,38 @@ export async function loadCliContributions(
     try {
       const seen = new Set<string>()
       for (const cmd of contrib.commands) {
-        if (!cmd.name?.trim() || !cmd.argv?.length) {
+        if (
+          !cmd.name?.trim() ||
+          (!cmd.passthroughArgvParam?.trim() && !cmd.argv?.length)
+        ) {
           throw new Error(`无效 CLI 命令声明：${cmd.name}`)
         }
         if (seen.has(cmd.name)) continue
         seen.add(cmd.name)
+        const identity = identityRegistry.register(
+          {
+            pluginId,
+            channel: 'domain_cli',
+            channelId: contrib.cliId,
+            originalName: cmd.name,
+          },
+          { preferredPublicName: cliToolName(contrib.cliId, cmd.name) },
+        )
         const tool = createCliTool({
           cliId: contrib.cliId,
+          publicName: identity.publicName,
           commandPath: resolved.resolved,
           cmd,
           cwd,
           childEnv,
           runner,
           forceApproval,
+          allowPassthrough,
           resolveAuthMaterial: liveResolve,
           contrib,
           env,
           authEnforced,
+          connectorDescriptors: options.connectorDescriptors,
         })
         pendingTools.push(tool)
         names.push(tool.name)
@@ -531,10 +695,15 @@ export async function loadCliContributions(
     }
   }
 
-  return { tools, toolNames, statuses }
+  return {
+    tools,
+    toolNames,
+    toolIdentities: identityRegistry.list(),
+    statuses,
+  }
 }
 
-/** Compact log line: feishu=ready(2),gh=missing */
+/** Compact log line: acme=ready(2),gh=missing */
 export function formatRegistryCliStatusLine(statuses: CliLoadStatus[]): string {
   if (statuses.length === 0) return 'cli=none'
   return statuses

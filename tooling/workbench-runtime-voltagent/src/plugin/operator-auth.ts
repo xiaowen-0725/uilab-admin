@@ -290,7 +290,7 @@ export async function runAuthLogin(
         text: [
           `插件 ${pluginId}/${resource.resourceId} 为 cli_session。`,
           resource.loginHint ??
-            '请在终端完成领域 CLI 自有登录（例如 feishu-cli auth login），然后运行：auth status',
+            '请在终端完成领域 CLI 自有登录（例如 lark-cli auth login），然后运行：auth status',
           '',
         ].join('\n'),
         json: {

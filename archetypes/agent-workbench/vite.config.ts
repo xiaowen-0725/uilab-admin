@@ -2,7 +2,7 @@
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { playwright } from '@vitest/browser-playwright'
@@ -12,8 +12,31 @@ const require = createRequire(import.meta.url)
 const reactRoot = path.dirname(require.resolve('react/package.json'))
 const reactDomRoot = path.dirname(require.resolve('react-dom/package.json'))
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+function browserTestFixtures(): Plugin {
+  return {
+    name: 'workbench-browser-test-fixtures',
+    configureServer(server) {
+      server.middlewares.use(
+        '/__vitest__/browser-frame-pending',
+        (_request, response) => {
+          response.statusCode = 200
+          response.setHeader('Content-Type', 'text/html; charset=utf-8')
+          response.setHeader('Cache-Control', 'no-store')
+          response.write('<!doctype html><title>pending</title>')
+          // Deliberately leave the response open. Removing the test iframe
+          // closes the response and gives BrowserPanel no native load signal.
+        },
+      )
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(mode === 'test' ? [browserTestFixtures()] : []),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -66,4 +89,4 @@ export default defineConfig({
       ],
     },
   },
-})
+}))

@@ -32,11 +32,41 @@ export function FileReferenceChip({
     .filter(Boolean)
     .join(':')
 
+  const content = (
+    <>
+      <FileText
+        className='relative top-0.5 size-[14px] shrink-0 opacity-90'
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <span className='min-w-0 break-words whitespace-normal'>{label}</span>
+    </>
+  )
+
+  if (!onOpen) {
+    return (
+      <span
+        title={title || label}
+        data-file-reference='true'
+        data-testid='file-reference-chip'
+        data-path={path}
+        data-line={line != null ? String(line) : undefined}
+        className={cn(
+          'codex-file-ref inline-flex max-w-full items-baseline gap-0.5',
+          'align-baseline rounded-sm px-0.5 py-0',
+          'text-[14px] font-medium leading-[22px]',
+          className,
+        )}
+        style={{ color: CODEX_FILE_LINK_COLOR }}
+      >
+        {content}
+      </span>
+    )
+  }
+
   return (
     <button
       type='button'
-      role='button'
-      tabIndex={0}
       title={title || label}
       data-file-reference='true'
       data-testid='file-reference-chip'
@@ -53,15 +83,10 @@ export function FileReferenceChip({
       style={{ color: CODEX_FILE_LINK_COLOR }}
       onClick={(e) => {
         e.preventDefault()
-        onOpen?.({ path, line, label })
+        onOpen({ path, line, label })
       }}
     >
-      <FileText
-        className='relative top-0.5 size-[14px] shrink-0 opacity-90'
-        strokeWidth={1.75}
-        aria-hidden
-      />
-      <span className='min-w-0 break-words whitespace-normal'>{label}</span>
+      {content}
     </button>
   )
 }

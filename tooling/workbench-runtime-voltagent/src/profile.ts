@@ -91,6 +91,7 @@ export const MINIMAL_TOOL_NAMES = [
 export const OFFICE_TOOL_NAMES = [
   ...OFFICE_FS_TOOL_NAMES,
   ...OFFICE_SKILL_TOOL_NAMES,
+  'execute_command',
 ] as const
 
 export function toolsForProfile(profile: AgentProfile): readonly string[] {

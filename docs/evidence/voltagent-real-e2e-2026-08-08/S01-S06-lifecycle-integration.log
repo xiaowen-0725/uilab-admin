@@ -1,0 +1,10 @@
+
+ RUN  v4.1.4 /Users/zhoujw/develop/github/uilab-admin/archetypes/agent-workbench
+
+ ✓ |chromium| tests/integration/workbench-runtime-slice.test.tsx (7 tests) 963ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  01:15:09
+   Duration  2.40s (transform 0ms, setup 90ms, import 812ms, tests 963ms, environment 0ms)
+

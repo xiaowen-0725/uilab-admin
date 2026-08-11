@@ -1,0 +1,155 @@
+{
+  "adjudicator_id": "independent-adjudicator-rejudge-20260808",
+  "evidence_dir": "docs/evidence/voltagent-real-e2e-2026-08-08",
+  "commit_sha": "fbfe7ab2c336aa37a9e67496ce2e151189725d9c",
+  "scenarios": [
+    {
+      "id": "S01",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S01-new-chat-runtime-hub.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S01-new-chat-dom.txt",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S01-S06-lifecycle-integration.log"
+      ],
+      "notes": "DOM: Navigator listitem 新对话; hub「要在 默认项目 内开发什么？」; Composer「本地侧车模型」; not capture seed. PNG present."
+    },
+    {
+      "id": "S02",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S02-switch-task-a.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S02-switch-task-b.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S02-switch-notes.md"
+      ],
+      "notes": "≥2 Navigator tasks; selection moves A↔B; notes document switch; PNGs present."
+    },
+    {
+      "id": "S03",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S03-before-delete.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S03-after-delete.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S03-delete-notes.md"
+      ],
+      "notes": "Before 2 tasks → after 1 task; deleted row gone; selection on remaining task."
+    },
+    {
+      "id": "S04",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S04-navigator-items.txt",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S04-navigator.png"
+      ],
+      "notes": "Items enum: workspace/project/新对话/filter/task only; explicitly no 拉取请求/站点/已安排/插件 mock utilities."
+    },
+    {
+      "id": "S05",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S05-cold-start-empty.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S05-cold-start-dom.txt"
+      ],
+      "notes": "Empty shell「还没有对话」+ 新对话 CTA; no task-a / capture seed; no Deterministic Fake Runtime."
+    },
+    {
+      "id": "S06",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S06-default-path.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S06-default-path-notes.md"
+      ],
+      "notes": "voltagent default path; 本地侧车模型; no phase3 capture task-a auto-load."
+    },
+    {
+      "id": "S07",
+      "verdict": "deferred",
+      "evidence_paths": [],
+      "notes": "Catalog deferred-with-reason: multi-Project UI automation cost; not required for mainstream agent E2E this run."
+    },
+    {
+      "id": "S08",
+      "verdict": "deferred",
+      "evidence_paths": [],
+      "notes": "Catalog deferred-with-reason: IDB refresh loop flaky under headless; non-deferrable axes not deferred."
+    },
+    {
+      "id": "S10",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S10-text-stream.sse",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S10-text-stream-summary.json",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S10-text-ui.png"
+      ],
+      "notes": "summary: ok=true text=办公就绪; text-delta only; finishReason=stop; has_tool_call=false; UI PNG present."
+    },
+    {
+      "id": "S11",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S11-ls-stream.sse",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S11-ls-summary.json",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S11-ls-timeline.png"
+      ],
+      "notes": "tool-call toolName=ls; tool-result includes notes/; ok=true finish stop; timeline PNG present."
+    },
+    {
+      "id": "S12",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-write-approval.sse",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-write-summary.json",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-approval-chunk.json",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-write-after-approve.sse",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-write-after-approve-summary.json",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-workspace-file.txt",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-waiting-approval.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-after-approve.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S12-workspace-ui-file.txt"
+      ],
+      "notes": "write_file tool-approval-request; after approve Successfully wrote; workspace e2e-ok + ui-ok; waiting/after PNGs present."
+    },
+    {
+      "id": "S13",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S13-cancel-notes.md",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S13-cancel-ui.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S13-cancel-unit-test.log",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S13-cancel-partial.sse",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S13-cancel-stream-notes.json"
+      ],
+      "notes": "UI 已取消 + Composer re-submittable; adapter unit 12/12 pass; partial SSE abort notes."
+    },
+    {
+      "id": "S14",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S14-honesty.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S14-honesty-dom.txt"
+      ],
+      "notes": "「本机 VoltAgent Runtime · 非远程生产集群 · 本地侧车」; NOT Deterministic Fake Runtime."
+    },
+    {
+      "id": "S15",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S15-sidecar-down.png",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/S15-sidecar-down-notes.md"
+      ],
+      "notes": "UI 运行失败 / 侧车 HTTP 502: Bad Gateway after stop+submit; not fake success."
+    },
+    {
+      "id": "S20",
+      "verdict": "pass",
+      "evidence_paths": [
+        "docs/evidence/voltagent-real-e2e-2026-08-08/gate-typecheck.log",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/gate-test.log",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/gate-build.log",
+        "docs/evidence/voltagent-real-e2e-2026-08-08/gate-check-workbench.log"
+      ],
+      "notes": "All four required gate logs present and green: typecheck_exit=0; test_exit=0 (29 files / 193 tests); build_exit=0 (vite production build OK; chunk-size warning only); check_workbench_exit=0 (module boundaries / Foundation / forbidden imports OK). Prior fail (missing gate-build.log + gate-check-workbench.log) is resolved."
+    }
+  ],
+  "overall": "pass",
+  "generated_at": "2026-08-08T12:00:00Z"
+}

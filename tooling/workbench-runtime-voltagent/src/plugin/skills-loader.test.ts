@@ -68,6 +68,94 @@ describe('seedSkillsContribution (missing-only)', () => {
 })
 
 describe('PluginRegistry skills aggregation', () => {
+  it('syncs trusted installed lark-* Skills into a generated Workspace root', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-lark-skills-'))
+    const source = await mkdtemp(path.join(os.tmpdir(), 'wb-lark-source-'))
+    tempRoots.push(root, source)
+    await mkdir(path.join(source, 'lark-doc', 'references'), {
+      recursive: true,
+    })
+    await writeFile(
+      path.join(source, 'lark-doc', 'SKILL.md'),
+      '---\nname: lark-doc\n---\nUse native lark-cli.\n',
+      'utf8',
+    )
+    await writeFile(
+      path.join(source, 'lark-doc', 'references', 'fetch.md'),
+      'lark-cli docs +fetch\n',
+      'utf8',
+    )
+    await mkdir(path.join(source, 'unrelated-skill'), { recursive: true })
+    await writeFile(
+      path.join(source, 'unrelated-skill', 'SKILL.md'),
+      '---\nname: unrelated-skill\n---\n',
+      'utf8',
+    )
+
+    const reg = createPluginRegistry({
+      env: {
+        PLUGINS_ENABLED: 'cli.feishu',
+        FEISHU_SKILLS_ROOT: source,
+      },
+    })
+    const result = await reg.load({ workspaceRoot: root })
+
+    assert.ok(result.skillRoots.includes('/.runtime-skills/feishu'))
+    const feishu = result.skillsResults.find(
+      (candidate) => candidate.pluginId === 'cli.feishu',
+    )
+    assert.equal(feishu?.status, 'seeded')
+    assert.deepEqual(feishu?.seededSkillIds, ['lark-doc'])
+    assert.match(
+      await readFile(
+        path.join(
+          root,
+          '.runtime-skills',
+          'feishu',
+          'lark-doc',
+          'references',
+          'fetch.md',
+        ),
+        'utf8',
+      ),
+      /lark-cli docs/,
+    )
+    await assert.rejects(() =>
+      readFile(
+        path.join(
+          root,
+          '.runtime-skills',
+          'feishu',
+          'unrelated-skill',
+          'SKILL.md',
+        ),
+        'utf8',
+      ),
+    )
+    await result.disconnect()
+  })
+
+  it('does not mount a failed installed Skills root or mark its plugin ready', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-lark-missing-'))
+    tempRoots.push(root)
+    const reg = createPluginRegistry({
+      env: {
+        PLUGINS_ENABLED: 'cli.feishu',
+        FEISHU_SKILLS_ROOT: path.join(root, 'missing-source'),
+      },
+      cliRunner: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+    })
+
+    const result = await reg.load({ workspaceRoot: root })
+
+    assert.equal(
+      result.plugins.find((plugin) => plugin.id === 'cli.feishu')?.loadStatus,
+      'failed',
+    )
+    assert.equal(result.skillRoots.includes('/.runtime-skills/feishu'), false)
+    await result.disconnect()
+  })
+
   it('aggregates virtual skill roots without workspaceRoot (skip seed)', async () => {
     const reg = createPluginRegistry({ env: {} })
     const result = await reg.load()
@@ -123,6 +211,7 @@ describe('PluginRegistry skills aggregation', () => {
     tempRoots.push(root)
     const reg = createPluginRegistry({
       env: { PLUGINS_DISABLED: 'skills.office' },
+      builtins: [BUILTIN_SKILLS_OFFICE_PLUGIN],
     })
     const result = await reg.load({ workspaceRoot: root })
     assert.equal(result.skillRoots.length, 0)

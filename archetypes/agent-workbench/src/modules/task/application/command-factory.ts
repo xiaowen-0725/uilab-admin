@@ -14,6 +14,7 @@ import type {
   RetryTurnCommand,
   SteerRunCommand,
   SubmitTurnCommand,
+  TurnComposerContext,
 } from '../protocol/commands'
 
 export interface CommandClock {
@@ -93,6 +94,7 @@ export class CommandFactory {
     inputText: string
     proposedTurnId?: string
     proposedRunId?: string
+    composerContext?: TurnComposerContext
   }): SubmitTurnCommand {
     return {
       type: 'submitTurn',
@@ -101,6 +103,7 @@ export class CommandFactory {
       inputText: input.inputText,
       proposedTurnId: input.proposedTurnId,
       proposedRunId: input.proposedRunId,
+      composerContext: input.composerContext,
     }
   }
 

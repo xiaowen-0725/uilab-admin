@@ -1,18 +1,31 @@
 import assert from 'node:assert/strict'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import {
+  access,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { after, describe, it } from 'node:test'
+import { createTool } from '@voltagent/core'
+import { z } from 'zod'
 import {
   createWorkbenchAgent,
   officeFilesystemToolConfig,
 } from './create-agent.js'
 import {
+  CONNECTOR_FEISHU_ID,
+  CONNECTOR_GITHUB_ID,
   OFFICE_BUILTIN_OUTPUT_DIRS,
   OFFICE_BUILTIN_SKILL_IDS,
   listWorkspaceSkillIds,
 } from './plugin/index.js'
 import { OFFICE_WORKSPACE_README_NAME } from './workspace-root.js'
+import { setDefaultCapabilitySelectionStore } from './capability/index.js'
 
 /** Stub model — never called; only needed to construct Agent. */
 const stubModel = {
@@ -31,13 +44,14 @@ const stubModel = {
 const tempRoots: string[] = []
 
 after(async () => {
+  setDefaultCapabilitySelectionStore(null)
   await Promise.all(
     tempRoots.map((dir) => rm(dir, { recursive: true, force: true })),
   )
 })
 
 describe('officeFilesystemToolConfig', () => {
-  it('requires approval for write/edit/delete/mkdir, not for default reads', () => {
+  it('requires approval for writes and every generic Shell invocation', () => {
     const cfg = officeFilesystemToolConfig()
     assert.equal(cfg.filesystem.defaults.needsApproval, false)
     assert.equal(cfg.filesystem.tools.write_file.needsApproval, true)
@@ -45,10 +59,172 @@ describe('officeFilesystemToolConfig', () => {
     assert.equal(cfg.filesystem.tools.delete_file.needsApproval, true)
     assert.equal(cfg.filesystem.tools.rmdir.needsApproval, true)
     assert.equal(cfg.filesystem.tools.mkdir.needsApproval, true)
+    assert.equal(cfg.sandbox.defaults.needsApproval, true)
+    assert.equal(cfg.sandbox.tools.execute_command.needsApproval, true)
   })
 })
 
 describe('createWorkbenchAgent', () => {
+  it('one-click GitHub authorization claims through the platform broker and hot-loads MCP tools', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-github-'))
+    tempRoots.push(root)
+    let claimed = false
+    const bundle = await createWorkbenchAgent({
+      profile: 'office',
+      model: stubModel,
+      workspaceRoot: root,
+      env: {
+        PLUGINS_ENABLED: 'mcp.github',
+        UILAB_CONNECTOR_BROKER_URL: 'https://connectors.uilab.test',
+        UILAB_KEYCHAIN_MODE: 'fake',
+        UILAB_PERSIST_AUTH: '0',
+        VOLTAGENT_MEMORY: 'in-memory',
+      },
+      oauthFetch: async (input, init) => {
+        if (input === 'https://connectors.uilab.test/v1/oauth/sessions') {
+          return jsonResponse(201, {
+            session_id: 'session-1',
+            authorization_url:
+              'https://github.com/login/oauth/authorize?client_id=uilab-connector',
+            claim_token: 'claim-token-for-sidecar-only',
+            token_endpoint: 'https://connectors.uilab.test/v1/oauth/token',
+            client_id: 'uilab-agent-workbench',
+            expires_in: 900,
+            poll_interval: 1,
+          })
+        }
+        assert.equal(
+          new Headers(init?.headers).get('authorization'),
+          'Bearer claim-token-for-sidecar-only',
+        )
+        claimed = true
+        return jsonResponse(200, {
+          status: 'authorized',
+          access_token: 'github-user-token',
+          refresh_token: 'broker-refresh-handle',
+          expires_in: 28_800,
+        })
+      },
+      mcpHost: {
+        getTools: async (servers) => {
+          const headers = (
+            servers.github as {
+              requestInit?: { headers?: Record<string, string> }
+            }
+          ).requestInit?.headers
+          assert.equal(headers?.Authorization, 'Bearer github-user-token')
+          return {
+            tools: [
+              createTool({
+                name: 'search_repositories',
+                description: 'Search repositories',
+                parameters: z.object({}),
+                execute: async () => ({ ok: true }),
+              }),
+            ] as any[],
+            disconnect: async () => {},
+          }
+        },
+      },
+    })
+
+    assert.ok(!bundle.tools.includes('github__search_repositories'))
+    const started = await bundle.beginConnectorOAuth?.(CONNECTOR_GITHUB_ID)
+    assert.match(started?.authorizationUrl ?? '', /github\.com\/login\/oauth/)
+    await bundle.reconcileConnectorAuth?.()
+    assert.equal(claimed, true)
+    assert.ok(bundle.tools.includes('github__search_repositories'))
+    const statuses = await bundle.refreshAuthStatuses()
+    assert.equal(
+      statuses.find(
+        (row) =>
+          row.pluginId === 'mcp.github' && row.resourceId === 'mcp:github',
+      )?.status,
+      'connected',
+    )
+    await bundle.disconnectMcp()
+  })
+
+  it('uses official lark-* Skills plus generic execute_command, never Provider-specific wrappers', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-feishu-'))
+    const source = await mkdtemp(path.join(os.tmpdir(), 'wb-feishu-source-'))
+    const binDir = await mkdtemp(path.join(os.tmpdir(), 'wb-feishu-bin-'))
+    tempRoots.push(root, source, binDir)
+    await mkdir(path.join(source, 'lark-doc', 'references'), {
+      recursive: true,
+    })
+    await writeFile(
+      path.join(source, 'lark-doc', 'SKILL.md'),
+      '---\nname: lark-doc\n---\nRun native lark-cli.\n',
+      'utf8',
+    )
+    await writeFile(
+      path.join(source, 'lark-doc', 'references', 'fetch.md'),
+      'lark-cli docs +fetch\n',
+      'utf8',
+    )
+    const fakeCli = path.join(binDir, 'lark-cli')
+    await writeFile(
+      fakeCli,
+      "#!/bin/sh\nprintf 'lark-doc\\nlark-base\\n'\n",
+      'utf8',
+    )
+    await chmod(fakeCli, 0o755)
+
+    const bundle = await createWorkbenchAgent({
+      profile: 'office',
+      model: stubModel,
+      workspaceRoot: root,
+      env: {
+        PLUGINS_ENABLED: 'cli.feishu',
+        FEISHU_CLI_PATH: fakeCli,
+        FEISHU_SKILLS_ROOT: source,
+        VOLTAGENT_MEMORY: 'in-memory',
+        UILAB_PERSIST_AUTH: '0',
+      },
+      cliRunner: async (_command, argv) => ({
+        stdout:
+          argv[0] === 'auth' && argv[1] === 'status'
+            ? JSON.stringify({
+                identity: 'user',
+                verified: true,
+                identities: {
+                  bot: { status: 'ready', available: true },
+                  user: { status: 'ready', available: true },
+                },
+              })
+            : '',
+        stderr: '',
+        exitCode: 0,
+      }),
+    })
+
+    assert.ok(bundle.skillRoots.includes('/.runtime-skills/feishu'))
+    assert.ok(bundle.discoverableSkillIds.includes('lark-doc'))
+    assert.ok(bundle.tools.includes('execute_command'))
+    assert.deepEqual(
+      bundle.connectorDescriptors.find(
+        (connector) => connector.id === CONNECTOR_FEISHU_ID,
+      )?.toolScope,
+      [],
+    )
+    const result = await bundle.workspace?.sandbox?.execute({
+      command: 'lark-cli',
+      args: ['skills', 'list'],
+      operationContext: {
+        conversationId: 'task-feishu',
+        context: new Map([
+          ['capabilityConnectorIds', [CONNECTOR_FEISHU_ID]],
+        ]),
+      } as any,
+    })
+    assert.equal(result?.exitCode, 0)
+    assert.match(result?.stdout ?? '', /lark-doc/)
+
+    await bundle.disconnectMcp()
+    setDefaultCapabilitySelectionStore(null)
+  })
+
   it('office profile mounts Workspace FS and does not use DIY run_command', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-'))
     tempRoots.push(root)
@@ -71,6 +247,7 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.workspace, 'workspace instance present')
     assert.ok(bundle.tools.includes('ls'))
     assert.ok(bundle.tools.includes('write_file'))
+    assert.ok(bundle.tools.includes('execute_command'))
     assert.ok(!bundle.tools.includes('run_command'))
 
     // O2 first-run bootstrap
@@ -86,6 +263,11 @@ describe('createWorkbenchAgent', () => {
       await access(path.join(root, rel))
     }
     assert.ok(bundle.skillRoots.includes('/skills'))
+    assert.ok(
+      bundle.connectorDescriptors.some(
+        (connector) => connector.id === CONNECTOR_FEISHU_ID,
+      ),
+    )
 
     // Agent carries workspace identity; tool names come from Workspace toolkit.
     assert.equal(bundle.agent.id, 'workbench')
@@ -105,6 +287,10 @@ describe('createWorkbenchAgent', () => {
     assert.ok(
       !toolNames.includes('run_command'),
       'DIY run_command must not be primary tools in office profile',
+    )
+    assert.ok(
+      toolNames.includes('execute_command'),
+      `expected generic Workspace Shell, got: ${toolNames.join(',')}`,
     )
 
     // Discover skills via Workspace API (no LLM).
@@ -127,11 +313,7 @@ describe('createWorkbenchAgent', () => {
     const loaded = await bundle.workspace!.skills!.loadSkill('meeting-notes')
     assert.ok(loaded?.instructions.includes('output/meeting-notes'))
 
-    const deliverable = path.join(
-      root,
-      'output/meeting-notes',
-      'test-notes.md',
-    )
+    const deliverable = path.join(root, 'output/meeting-notes', 'test-notes.md')
     await writeFile(
       deliverable,
       '# 测试纪要\n\n- 决议：O3 skills 可用\n',
@@ -177,11 +359,11 @@ describe('createWorkbenchAgent', () => {
     assert.equal(bundle.workspace, undefined)
     assert.equal(bundle.maxSteps, 8)
     assert.equal(bundle.summarizationEnabled, false)
-    assert.deepEqual([...bundle.tools], [
-      'read_file',
-      'write_file',
-      'run_command',
-    ])
+    assert.deepEqual(bundle.connectorDescriptors, [])
+    assert.deepEqual(
+      [...bundle.tools],
+      ['read_file', 'write_file', 'run_command'],
+    )
 
     const fullState = await bundle.agent.getFullState()
     const toolNames = (fullState.tools ?? []).map(
@@ -192,3 +374,13 @@ describe('createWorkbenchAgent', () => {
     assert.ok(toolNames.includes('run_command'))
   })
 })
+
+function jsonResponse(status: number, body: unknown) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    text: async () => JSON.stringify(body),
+    json: async () => body,
+  }
+}

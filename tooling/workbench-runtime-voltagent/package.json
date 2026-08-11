@@ -8,18 +8,23 @@
     "dev": "tsx watch --env-file=.env src/server.ts",
     "start": "tsx --env-file=.env src/server.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test 'src/**/*.test.ts'",
+    "test": "node scripts/run-tests.mjs",
     "plugin:list": "tsx --env-file-if-exists=.env src/operator-cli.ts list",
     "plugin:doctor": "tsx --env-file-if-exists=.env src/operator-cli.ts doctor",
-    "plugin:auth": "tsx --env-file-if-exists=.env src/operator-cli.ts auth"
+    "plugin:auth": "tsx --env-file-if-exists=.env src/operator-cli.ts auth",
+    "capability:golden": "node scripts/capability-surface-golden-path.mjs",
+    "capability:feishu-shell-smoke": "tsx --env-file-if-exists=.env src/live-smoke/feishu-shell-smoke.ts"
   },
   "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.51",
     "@ai-sdk/openai": "^2.0.0",
+    "@larksuite/cli": "1.0.85",
     "@voltagent/core": "^2.9.2",
     "@voltagent/libsql": "^2.1.2",
     "@voltagent/logger": "^2.0.0",
     "@voltagent/server-hono": "^2.0.0",
     "ai": "^6.0.0",
+    "hono": "^4.12.33",
     "zod": "^4.0.0"
   },
   "devDependencies": {

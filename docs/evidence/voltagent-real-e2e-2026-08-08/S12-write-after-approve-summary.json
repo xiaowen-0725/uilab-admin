@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "elapsed_s": 1.14,
+  "text": "已确认：已在 /output/e2e-hitl.txt 写入内容，正好一行 `e2e-ok`。",
+  "events": [
+    {
+      "type": "start"
+    },
+    {
+      "type": "tool-result",
+      "output": "Successfully wrote to '/output/e2e-hitl.txt'"
+    },
+    {
+      "type": "finish",
+      "finishReason": "stop"
+    }
+  ],
+  "event_types": [
+    "start",
+    "tool-result",
+    "finish"
+  ]
+}

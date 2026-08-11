@@ -1,0 +1,6 @@
+Cold start body:
+- 还没有对话 (empty shell)
+- 新对话 CTA
+- No task list items
+- No task-a / capture seed
+- No Deterministic Fake Runtime

@@ -1,23 +1,25 @@
 /**
  * Workbench Session Module — public Interface only.
- * Owns static fixture selection and task-scoped layout state.
- *
- * Public surface: controller hook + view/command/seed/tab/task/project types.
- * Reducer, selectors, createInitialState, and layout constants stay Implementation.
+ * Owns selection pointers (project + task|null) and per-task layout chrome.
+ * Does not own project/task directory arrays.
  */
 
 export { useWorkbenchSession } from './application/use-workbench-session'
+export { workSurfaceTabIdFor } from './application/reducer'
 
 export type {
-  ProjectSummary,
+  ProjectId,
+  SurfaceKind,
   TaskId,
   TaskLayoutState,
-  TaskSummary,
   WorkbenchSessionCommand,
   WorkbenchSessionCommands,
   WorkbenchSessionController,
   WorkbenchSessionSeed,
   WorkbenchSessionView,
+  WorkSurfaceOpenFocus,
+  WorkSurfaceOpenSource,
   WorkSurfaceTab,
   WorkSurfaceTabId,
+  WorkSurfaceTabRecord,
 } from './model/types'

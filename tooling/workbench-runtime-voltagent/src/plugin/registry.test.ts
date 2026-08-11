@@ -3,10 +3,50 @@ import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import { BUILTIN_PLUGINS } from './builtins.js'
+import { oauthAccessAccount } from './oauth.js'
 import { createPluginRegistry } from './registry.js'
+import {
+  createAuthBindingStore,
+  createKeychainSecretStore,
+} from './secret-store.js'
 import type { PluginManifest } from './manifest.js'
 
 describe('createPluginRegistry', () => {
+  it('lists connector projections from provider manifests without a core enum', () => {
+    const extra: PluginManifest = {
+      schemaVersion: 1,
+      id: 'provider.dynamic',
+      name: 'Dynamic Provider',
+      version: '1.0.0',
+      kind: 'local',
+      contributes: {
+        connectors: [
+          {
+            id: 'connector.dynamic',
+            name: 'Dynamic',
+            description: 'Dynamic connector',
+            authResourceId: 'account',
+            authKind: 'oauth2',
+            primaryChannel: 'mcp',
+            capabilities: [],
+            toolScope: ['dynamic_'],
+            availability: 'sidecar',
+          },
+        ],
+      },
+    }
+    const reg = createPluginRegistry({
+      env: {},
+      builtins: [],
+      extra: [extra],
+    })
+
+    assert.deepEqual(
+      reg.listConnectorDescriptors().map((connector) => connector.id),
+      ['connector.dynamic'],
+    )
+  })
+
   it('lists builtin manifests without hard-coded connector enum in API', () => {
     const reg = createPluginRegistry({ env: {} })
     const ids = reg.listManifests().map((m) => m.id).sort()
@@ -14,12 +54,15 @@ describe('createPluginRegistry', () => {
       'cli.feishu',
       'mcp.calendar',
       'mcp.docs',
+      'mcp.github',
       'skills.office',
     ])
     assert.ok(reg.resolveEnabledIds().includes('mcp.docs'))
     assert.ok(reg.resolveEnabledIds().includes('skills.office'))
-    // domain CLI opt-in
-    assert.ok(!reg.resolveEnabledIds().includes('cli.feishu'))
+    // Bundled Feishu CLI is enabled by default; Connected still requires user auth.
+    assert.ok(reg.resolveEnabledIds().includes('cli.feishu'))
+    // GitHub is a packaged Connector by default; enabled still means auth=missing.
+    assert.ok(reg.resolveEnabledIds().includes('mcp.github'))
   })
 
   it('loads disabled MCP when env empty', async () => {
@@ -28,6 +71,97 @@ describe('createPluginRegistry', () => {
     assert.equal(result.tools.length, 0)
     assert.ok(result.mcpStatuses.every((s) => s.status === 'disabled'))
     await result.disconnect()
+  })
+
+  it('does not connect an enabled OAuth MCP before the user authorizes it', async () => {
+    let hostCalls = 0
+    const reg = createPluginRegistry({
+      env: {},
+      enabledIds: ['mcp.github'],
+      host: {
+        getTools: async () => {
+          hostCalls += 1
+          throw new Error('must not connect without OAuth')
+        },
+      },
+    })
+
+    const result = await reg.load()
+    assert.equal(hostCalls, 0)
+    assert.equal(
+      result.plugins.find((plugin) => plugin.id === 'mcp.github')?.loadStatus,
+      'loaded',
+    )
+    assert.equal(
+      result.mcpStatuses.find((status) => status.serverId === 'github')?.status,
+      'disabled',
+    )
+    await result.disconnect()
+  })
+
+  it('hot-loads an OAuth MCP after managed authorization without restarting the registry', async () => {
+    let hostCalls = 0
+    const secretStore = createKeychainSecretStore({ mode: 'fake' })
+    const bindingStore = createAuthBindingStore()
+    const reg = createPluginRegistry({
+      env: {},
+      enabledIds: ['mcp.github'],
+      secretStore,
+      authBindingStore: bindingStore,
+      host: {
+        getTools: async (servers) => {
+          hostCalls += 1
+          const requestInit = (servers.github as { requestInit?: RequestInit })
+            .requestInit
+          assert.deepEqual(requestInit?.headers, {
+            Authorization: 'Bearer oauth-user-token',
+          })
+          return {
+            tools: [
+              createTool({
+                name: 'search_repositories',
+                description: 'search',
+                parameters: z.object({}),
+                execute: async () => ({ ok: true }),
+              }),
+            ] as any[],
+            disconnect: async () => {},
+          }
+        },
+      },
+    })
+
+    const initial = await reg.load()
+    assert.equal(hostCalls, 0)
+    await secretStore.set!(
+      {
+        backend: 'keychain',
+        account: oauthAccessAccount('mcp.github', 'mcp:github'),
+      },
+      'oauth-user-token',
+    )
+    bindingStore.upsert({
+      pluginId: 'mcp.github',
+      resourceId: 'mcp:github',
+      kind: 'oauth2',
+      secretRef: {
+        backend: 'keychain',
+        account: oauthAccessAccount('mcp.github', 'mcp:github'),
+      },
+      expiresAt: Date.now() + 60_000,
+      oauth: {
+        tokenEndpoint: 'https://github.test/token',
+        clientId: 'client',
+        refreshAccount: 'oauth-refresh',
+      },
+    })
+
+    const hot = await reg.loadMcpPlugin('mcp.github')
+    assert.equal(hostCalls, 1)
+    assert.deepEqual(hot.toolNames, ['github__search_repositories'])
+    assert.equal(hot.statuses[0]?.status, 'connected')
+    await hot.disconnect()
+    await initial.disconnect()
   })
 
   it('connects docs via mock host when MCP_DOCS_URL set; tools need approval', async () => {

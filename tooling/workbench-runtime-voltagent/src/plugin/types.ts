@@ -31,6 +31,13 @@ export type AuthStatus =
   | 'expired'
   | 'error'
 
+export type CliSessionStatusPredicate = {
+  /** Provider-owned JSON object path evaluated only after the expected exit code. */
+  jsonPath: string[]
+  /** Scalar value required for the CLI session to count as connected. */
+  equals: string | number | boolean | null
+}
+
 /**
  * Non-secret OAuth session metadata for bindings (#31).
  * Tokens live only in SecretStore (keychain); never embed token values here.
@@ -40,6 +47,8 @@ export type OAuthBindingMeta = {
   clientId: string
   /** Keychain/memory account holding refresh_token */
   refreshAccount: string
+  /** Non-secret pointer to the OAuth client secret used for token refresh. */
+  clientSecretRef?: SecretRef
   authorizationEndpoint?: string
   redirectUri?: string
   scopes?: string[]
@@ -67,6 +76,7 @@ export type AuthBinding = {
   statusCommand?: {
     command: string
     argv?: string[]
+    connectedWhen?: CliSessionStatusPredicate
   }
 }
 

@@ -35,6 +35,8 @@ export type OAuthPending = {
   authorizationEndpoint: string
   tokenEndpoint: string
   clientId: string
+  /** Non-secret env/keychain pointer; never the client-secret value. */
+  clientSecretRef?: SecretRef
   redirectUri: string
   scopes: string[]
   createdAt: number
@@ -359,6 +361,7 @@ export function beginOAuthAuthorization(params: {
   authorizationEndpoint: string
   tokenEndpoint: string
   clientId: string
+  clientSecretRef?: SecretRef
   redirectUri: string
   scopes?: string[]
   resource?: string
@@ -376,6 +379,7 @@ export function beginOAuthAuthorization(params: {
     authorizationEndpoint: params.authorizationEndpoint,
     tokenEndpoint: params.tokenEndpoint,
     clientId: params.clientId,
+    clientSecretRef: params.clientSecretRef,
     redirectUri: params.redirectUri,
     scopes: params.scopes ?? [],
     createdAt: Date.now(),
@@ -419,6 +423,9 @@ export async function completeOAuthAuthorization(params: {
       code: params.code,
       redirectUri: pending.redirectUri,
       codeVerifier: pending.codeVerifier,
+      clientSecret: pending.clientSecretRef
+        ? ((await params.secretStore.resolve(pending.clientSecretRef)) ?? undefined)
+        : undefined,
     },
     params.fetchImpl,
   )
@@ -429,6 +436,7 @@ export async function completeOAuthAuthorization(params: {
     tokens,
     tokenEndpoint: pending.tokenEndpoint,
     clientId: pending.clientId,
+    clientSecretRef: pending.clientSecretRef,
     authorizationEndpoint: pending.authorizationEndpoint,
     redirectUri: pending.redirectUri,
     scopes: pending.scopes,
@@ -445,6 +453,7 @@ export async function persistOAuthTokens(params: {
   tokens: OAuthTokenResponse
   tokenEndpoint: string
   clientId: string
+  clientSecretRef?: SecretRef
   authorizationEndpoint?: string
   redirectUri?: string
   scopes?: string[]
@@ -476,6 +485,7 @@ export async function persistOAuthTokens(params: {
   const oauth: OAuthBindingMeta = {
     tokenEndpoint: params.tokenEndpoint,
     clientId: params.clientId,
+    clientSecretRef: params.clientSecretRef,
     refreshAccount,
     authorizationEndpoint: params.authorizationEndpoint,
     redirectUri: params.redirectUri,
@@ -520,6 +530,9 @@ export async function refreshOAuthBinding(params: {
         tokenEndpoint: meta.tokenEndpoint,
         clientId: meta.clientId,
         refreshToken: refresh,
+        clientSecret: meta.clientSecretRef
+          ? ((await params.secretStore.resolve(meta.clientSecretRef)) ?? undefined)
+          : undefined,
       },
       params.fetchImpl,
     )
@@ -583,6 +596,7 @@ export function createFakeAuthorizationServer(options?: {
   expiresIn?: number
   failRefresh?: boolean
   failExchange?: boolean
+  requiredClientSecret?: string
 }): {
   authorizationEndpoint: string
   tokenEndpoint: string
@@ -640,6 +654,17 @@ export function createFakeAuthorizationServer(options?: {
         }
         const code = body.get('code') ?? ''
         const verifier = body.get('code_verifier') ?? ''
+        if (
+          options?.requiredClientSecret &&
+          body.get('client_secret') !== options.requiredClientSecret
+        ) {
+          return {
+            ok: false,
+            status: 401,
+            text: async () => JSON.stringify({ error: 'bad_client_secret' }),
+            json: async () => ({ error: 'bad_client_secret' }),
+          }
+        }
         lastVerifier = verifier
         const expectedChallenge = codes.get(code)
         const actualChallenge = base64Url(

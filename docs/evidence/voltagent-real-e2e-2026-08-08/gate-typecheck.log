@@ -1,0 +1,5 @@
+
+> @uilab/agent-workbench@0.0.1 typecheck /Users/zhoujw/develop/github/uilab-admin/archetypes/agent-workbench
+> tsc -b
+
+typecheck_exit=0

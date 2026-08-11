@@ -1,24 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, TransitionEvent } from 'react'
+import type { CSSProperties, ReactNode, TransitionEvent } from 'react'
 import {
   FolderIcon,
   PanelBottom,
   PanelLeftIcon,
   SlidersHorizontal,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
-import type {
-  NavigatorUtility,
-  ProjectFolder,
-  TaskNavMeta,
-} from '@/config/fixtures'
+import type { ProjectSummary, TaskSummary } from '@/modules/project'
 import type {
   LaunchAction,
   TaskSurfaceComposerRuntime,
   TaskSurfaceView,
+  TimelineOpenFileRef,
 } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
-import { WorkSurfaceHost } from '@/modules/work-surface'
+import {
+  WorkSurfaceHost,
+  type SurfaceRegistry,
+} from '@/modules/work-surface'
 import type {
   WorkbenchSessionCommands,
   WorkbenchSessionView,
@@ -86,15 +87,38 @@ function workDrawerWidth(
 export interface WorkbenchShellProps {
   view: WorkbenchSessionView
   commands: WorkbenchSessionCommands
-  /** Assembled Task view from Composition Root (Shell does not load fixtures). */
-  taskView: TaskSurfaceView
-  navigatorUtilities: NavigatorUtility[]
-  projectFolders: ProjectFolder[]
-  taskNavMeta: Record<string, TaskNavMeta>
+  /** Assembled Task view from Composition Root; null when no selected task. */
+  taskView: TaskSurfaceView | null
+  /** Catalog projection from Project Module. */
+  project: ProjectSummary | null
+  projects: ProjectSummary[]
+  tasks: TaskSummary[]
+  busyTaskIds?: ReadonlySet<string>
   onLaunchAction?: (action: LaunchAction) => void
   onNewChat?: () => void
-  /** Phase 4C dual-path: runtime composer props for empty/new-chat Fake path. */
+  onDeleteTask?: (taskId: string) => void
+  onSelectProject?: (projectId: string) => void
+  /** Runtime composer props for product Runtime path. */
   composerRuntime?: TaskSurfaceComposerRuntime
+  /**
+   * Surface Registry from Composition Root only.
+   * Shell/Host never register; Host only resolves render by kind.
+   */
+  surfaceRegistry: SurfaceRegistry
+  /**
+   * User channel: Timeline file chip/card → Composition → Session openWorkSurfaceTab.
+   */
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  /**
+   * Composition-owned empty Work Surface actions (e.g. bind local folder).
+   * Shell/Host only pass-through; no folder policy in Shell.
+   */
+  workSurfaceEmptyExtra?: ReactNode
+  /**
+   * Composition-owned Work toolbar trailing chrome (e.g. restore demo docs when bound).
+   * Shell/Host only pass-through.
+   */
+  workSurfaceToolbarTrailing?: ReactNode
 }
 
 /**
@@ -106,12 +130,19 @@ export function WorkbenchShell({
   view,
   commands,
   taskView,
-  navigatorUtilities,
-  projectFolders,
-  taskNavMeta,
+  project,
+  projects,
+  tasks,
+  busyTaskIds,
   onLaunchAction,
   onNewChat,
+  onDeleteTask,
+  onSelectProject,
   composerRuntime,
+  surfaceRegistry,
+  onOpenFileRef,
+  workSurfaceEmptyExtra,
+  workSurfaceToolbarTrailing,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
@@ -281,15 +312,17 @@ export function WorkbenchShell({
   const widthAnimating = paneMotionSource === 'animated'
 
   const navigatorShared = {
-    project: view.project,
-    tasks: view.tasks,
+    project,
+    projects,
+    tasks,
     selectedTaskId: view.selectedTaskId,
+    busyTaskIds,
     open: view.navigatorOpen,
-    utilities: navigatorUtilities,
-    projectFolders,
-    taskNavMeta,
     onNewChat,
+    onDeleteTask,
+    onSelectProject,
     onOpenSettings: openSettings,
+    onToggleNavigator: toggleNavigatorFromPointer,
   }
 
   return (
@@ -350,14 +383,20 @@ export function WorkbenchShell({
               data-testid='workspace-top-bar'
               data-slot='task-pane-toolbar'
             >
-              <ToolbarIconButton
-                testId={workFullStage ? undefined : 'toggle-navigator'}
-                pressed={view.navigatorOpen}
-                label='切换导航'
-                onClick={toggleNavigatorFromPointer}
-              >
-                <PanelLeftIcon className='size-4' aria-hidden />
-              </ToolbarIconButton>
+              {/*
+                Nav toggle lives on the left rail (WorkBuddy-style) when open.
+                Only re-open here when the rail is collapsed (reserved gap is 0).
+              */}
+              {!view.navigatorOpen && !workFullStage ? (
+                <ToolbarIconButton
+                  testId='toggle-navigator'
+                  pressed={false}
+                  label='打开导航'
+                  onClick={toggleNavigatorFromPointer}
+                >
+                  <PanelLeftIcon className='size-4' aria-hidden />
+                </ToolbarIconButton>
+              ) : null}
 
               <FolderIcon
                 className='size-4 shrink-0 text-muted-foreground'
@@ -366,7 +405,7 @@ export function WorkbenchShell({
 
               <div className='min-w-0 flex-1'>
                 <h1 className='truncate text-sm leading-none font-semibold'>
-                  {taskView.title}
+                  {taskView?.title ?? '还没有任务'}
                 </h1>
               </div>
 
@@ -391,19 +430,37 @@ export function WorkbenchShell({
             </header>
 
             <div className='flex min-h-0 min-w-0 flex-1'>
-              <TaskSurface
-                view={taskView}
-                onLaunchAction={onLaunchAction}
-                composerRuntime={composerRuntime}
-                onCloseContextPanel={
-                  taskView.contextPanelOpen
-                    ? () => {
-                        setContextMotion('instant')
-                        commands.toggleContextPanel()
-                      }
-                    : undefined
-                }
-              />
+              {taskView ? (
+                <TaskSurface
+                  view={taskView}
+                  onLaunchAction={onLaunchAction}
+                  composerRuntime={composerRuntime}
+                  onOpenFileRef={onOpenFileRef}
+                  onCloseContextPanel={
+                    taskView.contextPanelOpen
+                      ? () => {
+                          setContextMotion('instant')
+                          commands.toggleContextPanel()
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <div
+                  className='flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
+                  data-testid='workspace-empty-shell'
+                >
+                  <p className='text-sm text-muted-foreground'>还没有任务</p>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    data-testid='workspace-empty-new-chat'
+                    onClick={() => onNewChat?.()}
+                  >
+                    新对话
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -422,23 +479,37 @@ export function WorkbenchShell({
                 width: effectiveWorkWidth,
                 minWidth: view.workSurfaceMinWidth,
                 maxWidth: effectiveWorkMax,
-                tabs: view.workSurfaceTabs,
-                activeTabId: view.layout.activeTabId,
+                tabs: view.layout.openTabs.map((t) => ({
+                  tabId: t.tabId,
+                  kind: t.kind,
+                  resourceKey: t.resourceKey,
+                  title: t.title,
+                })),
+                activeTabId: view.layout.activeTabId ?? null,
               }}
               callbacks={{
                 onClose: closeWorkFromPointer,
+                onCloseTab: commands.closeWorkSurfaceTab,
                 onActivateTab: commands.activateTab,
                 onResize: resizeWorkFromPointer,
                 onToggleMaximize: toggleMaximizeFromPointer,
                 onExitMaximize: exitMaximizeFromKeyboard,
               }}
+              registry={surfaceRegistry}
+              taskId={view.selectedTaskId}
               fullStage={workFullStage}
+              emptyExtra={workSurfaceEmptyExtra}
+              toolbarTrailing={workSurfaceToolbarTrailing}
               toolbarLeading={
-                workFullStage && view.layout.workSurfaceVisible ? (
+                // Re-open only: when Work is full-stage and the rail is already open,
+                // the toggle lives on the Navigator toolbar (not duplicated here).
+                workFullStage &&
+                view.layout.workSurfaceVisible &&
+                !view.navigatorOpen ? (
                   <ToolbarIconButton
                     testId='toggle-navigator'
-                    pressed={view.navigatorOpen}
-                    label='切换导航'
+                    pressed={false}
+                    label='打开导航'
                     onClick={toggleNavigatorFromPointer}
                   >
                     <PanelLeftIcon className='size-4' aria-hidden />

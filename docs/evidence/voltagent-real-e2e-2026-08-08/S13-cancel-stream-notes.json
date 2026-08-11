@@ -1,0 +1,8 @@
+{
+  "partial_text_len": 108,
+  "partial_text_preview": "好的，我不会调用任何工具，下面用中文一步步、分很多段落来详细解释什么是分布式系统。\n\n## 一、从一个问题开始：为什么要\"分布\"\n\n在计算机发展的早期，一台计算机就是一台\"单机\"。它自己拥有 CPU、内存、硬盘，程序",
+  "sse_lines": 120,
+  "client_abort_requested": true,
+  "error": null,
+  "note": "Sidecar stream client-abort demonstrates in-flight stream can be stopped by consumer; UI cancel maps to AbortController in VoltAgentRuntimeAdapter.handleCancel (see unit tests)."
+}

@@ -1,11 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   ChevronDown,
-  FileText,
-  Globe,
-  Info,
   LoaderCircle,
-  Terminal,
 } from 'lucide-react'
 import {
   Collapsible,
@@ -21,6 +17,7 @@ import {
   parsePlusMinus,
 } from '../markdown/file-change-summary-card'
 import { SimpleMarkdown } from '../markdown/simple-markdown'
+import { ToolActivityIcon } from '../tool-activity-icon'
 
 export interface ExecutionStreamProps {
   stream: StreamViewModel
@@ -404,20 +401,6 @@ function ToolRow({
   )
 }
 
-function ToolKindIcon({ kind }: { kind: ToolRowView['toolKind'] }) {
-  const cls = 'size-3.5 shrink-0 opacity-80'
-  switch (kind) {
-    case 'web_search':
-      return <Globe className={cls} aria-hidden />
-    case 'read':
-      return <FileText className={cls} aria-hidden />
-    case 'command':
-      return <Terminal className={cls} aria-hidden />
-    default:
-      return <Info className={cls} aria-hidden />
-  }
-}
-
 function ToolRowLabel({
   row,
   chevron,
@@ -428,7 +411,7 @@ function ToolRowLabel({
   return (
     <>
       {chevron}
-      <ToolKindIcon kind={row.toolKind} />
+      <ToolActivityIcon kind={row.toolKind} />
       <span
         className={cn(
           'min-w-0 flex-1 truncate',

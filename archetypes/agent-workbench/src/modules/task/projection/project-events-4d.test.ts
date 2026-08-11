@@ -163,6 +163,37 @@ describe('projectEvents (Phase 4D)', () => {
     ).toBe('provided')
   })
 
+  it('shows the real tool and a safe target summary on approval cards', () => {
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = applyRuntimeEvent(
+      state,
+      {
+        eventId: 'approval-real',
+        eventType: 'approval.requested',
+        schemaVersion: 1,
+        projectId: 'p',
+        taskId: 't',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        taskSequence: 1,
+        occurredAt: '2026-08-06T12:00:00.000Z',
+        receivedAt: '2026-08-06T12:00:00.000Z',
+        payload: {
+          requestId: 'approval-real',
+          toolName: 'write_file',
+          args: { path: '/notes/result.md', content: 'secret body' },
+        },
+      },
+    )
+
+    const approval = state.readModel.timeline.find(
+      (item) => item.category === 'approval-request',
+    )
+    expect(approval?.title).toContain('写入')
+    expect(approval?.body).toContain('/notes/result.md')
+    expect(approval?.body).not.toContain('secret body')
+  })
+
   it('run.failed projects error item + failed terminal', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = applyRuntimeEvent(state, {

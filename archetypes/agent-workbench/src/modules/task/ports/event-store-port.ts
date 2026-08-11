@@ -1,6 +1,6 @@
 /**
- * EventStorePort — type stub only (Phase 4E implements IndexedDB adapter).
- * Owned by Task Module; no global src/ports.
+ * EventStorePort — Task Module owned durable event stream contract.
+ * Memory (tests) and IndexedDB (product) share this interface.
  */
 
 import type { CommandAcknowledgement } from '../protocol/commands'
@@ -8,9 +8,10 @@ import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import type { RuntimeSnapshot } from './runtime-port'
 
 export interface EventStoreAppendResult {
-  status: 'appended' | 'duplicate'
+  status: 'appended' | 'duplicate' | 'conflict'
   eventId: string
   taskSequence?: number
+  message?: string
 }
 
 export interface EventStoreReadOptions {
@@ -22,17 +23,60 @@ export interface EventStoreReadOptions {
   limit?: number
 }
 
+export interface EventStoreCheckpointInput {
+  envelope: AgentRuntimeEventEnvelope
+  snapshot: RuntimeSnapshot
+}
+
+export interface EventStoreCheckpointResult {
+  append: EventStoreAppendResult
+}
+
+/** Diagnostic error shape for store failures (quota, blocked, open). */
+export interface EventStoreError {
+  code:
+    | 'quota_exceeded'
+    | 'transaction_failed'
+    | 'blocked'
+    | 'open_failed'
+    | 'conflict'
+    | 'unknown'
+  message: string
+  retriable: boolean
+}
+
+export class EventStorePortError extends Error {
+  readonly code: EventStoreError['code']
+  readonly retriable: boolean
+
+  constructor(error: EventStoreError) {
+    super(error.message)
+    this.name = 'EventStorePortError'
+    this.code = error.code
+    this.retriable = error.retriable
+  }
+}
+
 /**
- * Browser EventStore contract (types only for 4B).
- * Default production adapter will use IndexedDB (4E).
+ * Browser EventStore contract.
+ * Open/ready is owned by Composition (D12); Port methods assume a ready store.
  */
 export interface EventStorePort {
   append(envelope: AgentRuntimeEventEnvelope): Promise<EventStoreAppendResult>
+
+  /**
+   * Atomic append + snapshot put (D2). Failures must not advance durable cursor.
+   * Adapters without multi-store TX may still implement as best-effort ordered writes.
+   */
+  appendWithCheckpoint(
+    input: EventStoreCheckpointInput,
+  ): Promise<EventStoreCheckpointResult>
 
   read(
     options: EventStoreReadOptions,
   ): Promise<readonly AgentRuntimeEventEnvelope[]>
 
+  /** Latest checkpoint for task (D5: one row per taskId). */
   getSnapshot(taskId: string, runId?: string): Promise<RuntimeSnapshot | null>
 
   putSnapshot(snapshot: RuntimeSnapshot): Promise<void>
@@ -45,16 +89,10 @@ export interface EventStorePort {
     commandId: string,
     acknowledgement: CommandAcknowledgement,
   ): Promise<void>
-}
 
-/** Diagnostic error shape for store failures (quota, blocked, open). */
-export interface EventStoreError {
-  code:
-    | 'quota_exceeded'
-    | 'transaction_failed'
-    | 'blocked'
-    | 'open_failed'
-    | 'unknown'
-  message: string
-  retriable: boolean
+  /**
+   * Delete events + snapshot for a task (D7). Commands are not task-scanned.
+   * Full catalog+session cascade is Composition/shell TX when using shared IDB.
+   */
+  deleteTaskData(taskId: string): Promise<void>
 }

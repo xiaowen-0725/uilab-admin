@@ -10,13 +10,17 @@ import type {
   CliArgParam,
   CliCommandContribution,
   CliContribution,
+  ConnectorContribution,
   McpContribution,
   PluginContributes,
   PluginManifest,
   SkillsContribution,
 } from './manifest.js'
 import { parseEnvStringList } from './parse-util.js'
-import { isAllowedAuthEnvName, isModelProviderSecretKey } from './security-policy.js'
+import {
+  isAllowedAuthEnvName,
+  isModelProviderSecretKey,
+} from './security-policy.js'
 import type { ProfileEnv } from './types.js'
 
 export type PluginDiscoveryFailure = {
@@ -50,7 +54,8 @@ function asString(v: unknown): string | undefined {
 }
 
 function asStringArray(v: unknown): string[] | undefined {
-  if (!Array.isArray(v) || !v.every((x) => typeof x === 'string')) return undefined
+  if (!Array.isArray(v) || !v.every((x) => typeof x === 'string'))
+    return undefined
   return v as string[]
 }
 
@@ -61,7 +66,9 @@ function asStringArray(v: unknown): string[] | undefined {
 export function parsePluginManifestJson(
   raw: unknown,
   sourcePath: string,
-): { ok: true; manifest: PluginManifest } | { ok: false; reason: string; id: string } {
+):
+  | { ok: true; manifest: PluginManifest }
+  | { ok: false; reason: string; id: string } {
   const fallbackId = path.basename(path.dirname(sourcePath)) || 'unknown'
 
   if (!isRecord(raw)) {
@@ -108,7 +115,7 @@ export function parsePluginManifestJson(
       ok: false,
       id,
       reason:
-        '外部 plugin.json 禁止 contributes.tools（不可加载任意 JS）；仅允许 mcp / cli / skills / auth',
+        '外部 plugin.json 禁止 contributes.tools（不可加载任意 JS）；仅允许 connectors / mcp / cli / skills / auth',
     }
   }
 
@@ -134,9 +141,7 @@ export function parsePluginManifestJson(
   return { ok: true, manifest }
 }
 
-type ParseResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; reason: string }
+type ParseResult<T> = { ok: true; value: T } | { ok: false; reason: string }
 
 function parseMcpContributions(raw: unknown): ParseResult<McpContribution[]> {
   if (!Array.isArray(raw)) {
@@ -162,21 +167,32 @@ function parseMcpContributions(raw: unknown): ParseResult<McpContribution[]> {
     }
     mcp.push({
       serverId,
+      url: asString(item.url),
       urlFromEnv: asStringArray(item.urlFromEnv),
       commandFromEnv: asStringArray(item.commandFromEnv),
       argsFromEnv: asStringArray(item.argsFromEnv),
       bearerTokenFromEnv,
       childEnvKeys: asStringArray(item.childEnvKeys),
-      timeoutMs: typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
+      timeoutMs:
+        typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
       readOnlyToolNames: asStringArray(item.readOnlyToolNames),
+      toolNamePrefix: asString(item.toolNamePrefix),
     })
   }
   return { ok: true, value: mcp }
 }
 
-function parseSkillsContribution(raw: unknown): ParseResult<SkillsContribution> {
+function parseSkillsContribution(
+  raw: unknown,
+): ParseResult<SkillsContribution> {
   if (!isRecord(raw)) {
     return { ok: false, reason: 'contributes.skills 必须是对象' }
+  }
+  if (raw.installedSource != null) {
+    return {
+      ok: false,
+      reason: 'contributes.skills.installedSource 仅允许受信任内置插件使用',
+    }
   }
   return {
     ok: true,
@@ -192,6 +208,140 @@ function parseSkillsContribution(raw: unknown): ParseResult<SkillsContribution> 
   }
 }
 
+function parseConnectorContributions(
+  raw: unknown,
+): ParseResult<ConnectorContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'contributes.connectors 必须是数组' }
+  }
+  const connectors: ConnectorContribution[] = []
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'connector 项必须是对象' }
+    }
+    const id = asString(item.id)
+    const name = asString(item.name)
+    const description = asString(item.description)
+    const authResourceId = asString(item.authResourceId)
+    const authKind = asString(item.authKind)
+    const primaryChannel = asString(item.primaryChannel)
+    const availability = asString(item.availability)
+    const toolScope = asStringArray(item.toolScope)
+    const commandScopes =
+      item.commandScopes == null ? [] : asStringArray(item.commandScopes)
+    if (!id || !name || !description || !authResourceId) {
+      return {
+        ok: false,
+        reason: 'connector 需要 id / name / description / authResourceId',
+      }
+    }
+    if (!authKind || !CREDENTIAL_KINDS.has(authKind)) {
+      return { ok: false, reason: `connector ${id} authKind 无效` }
+    }
+    if (
+      primaryChannel !== 'domain_cli' &&
+      primaryChannel !== 'mcp' &&
+      primaryChannel !== 'hybrid' &&
+      primaryChannel !== 'none'
+    ) {
+      return { ok: false, reason: `connector ${id} primaryChannel 无效` }
+    }
+    if (
+      availability !== 'sidecar' &&
+      availability !== 'fake-catalog-only' &&
+      availability !== 'missing-binary'
+    ) {
+      return { ok: false, reason: `connector ${id} availability 无效` }
+    }
+    if (!toolScope) {
+      return { ok: false, reason: `connector ${id} toolScope 必须是字符串数组` }
+    }
+    if (!commandScopes) {
+      return {
+        ok: false,
+        reason: `connector ${id} commandScopes 必须是字符串数组`,
+      }
+    }
+    if (!Array.isArray(item.capabilities)) {
+      return { ok: false, reason: `connector ${id} capabilities 必须是数组` }
+    }
+    const capabilities: ConnectorContribution['capabilities'] = []
+    for (const rawCapability of item.capabilities) {
+      if (!isRecord(rawCapability)) {
+        return { ok: false, reason: `connector ${id} capability 必须是对象` }
+      }
+      const capabilityId = asString(rawCapability.id)
+      const capabilityName = asString(rawCapability.name)
+      const channel = asString(rawCapability.channel)
+      const toolNames = asStringArray(rawCapability.toolNames)
+      if (
+        !capabilityId ||
+        !capabilityName ||
+        (channel !== 'domain_cli' && channel !== 'mcp' && channel !== 'none') ||
+        !toolNames ||
+        typeof rawCapability.available !== 'boolean'
+      ) {
+        return { ok: false, reason: `connector ${id} capability 字段无效` }
+      }
+      capabilities.push({
+        id: capabilityId,
+        name: capabilityName,
+        description: asString(rawCapability.description),
+        channel,
+        toolNames,
+        available: rawCapability.available,
+      })
+    }
+
+    let channelAuth: ConnectorContribution['channelAuth']
+    if (item.channelAuth != null) {
+      if (!Array.isArray(item.channelAuth)) {
+        return { ok: false, reason: `connector ${id} channelAuth 必须是数组` }
+      }
+      channelAuth = []
+      for (const rawAuth of item.channelAuth) {
+        if (!isRecord(rawAuth)) {
+          return { ok: false, reason: `connector ${id} channelAuth 项无效` }
+        }
+        const channel = asString(rawAuth.channel)
+        const rowAuthKind = asString(rawAuth.authKind)
+        const label = asString(rawAuth.label)
+        if (
+          (channel !== 'domain_cli' && channel !== 'mcp') ||
+          !rowAuthKind ||
+          !CREDENTIAL_KINDS.has(rowAuthKind) ||
+          !label
+        ) {
+          return { ok: false, reason: `connector ${id} channelAuth 字段无效` }
+        }
+        channelAuth.push({
+          channel,
+          authKind: rowAuthKind as ConnectorContribution['authKind'],
+          resourceId: asString(rawAuth.resourceId),
+          label,
+        })
+      }
+    }
+
+    connectors.push({
+      id,
+      name,
+      description,
+      authResourceId,
+      authKind: authKind as ConnectorContribution['authKind'],
+      primaryChannel,
+      capabilities,
+      commandScopes,
+      toolScope,
+      availability,
+      channelAuth,
+      packageHint: asString(item.packageHint),
+      loginHint: asString(item.loginHint),
+    })
+  }
+  return { ok: true, value: connectors }
+}
+
 function parseCliCommand(
   cmd: unknown,
   cliId: string,
@@ -201,6 +351,12 @@ function parseCliCommand(
   }
   const name = asString(cmd.name)
   const argv = asStringArray(cmd.argv)
+  if (cmd.passthroughArgvParam != null) {
+    return {
+      ok: false,
+      reason: `cli ${cliId} argv passthrough 仅允许仓库内受信 builtin Provider`,
+    }
+  }
   if (!name || !argv?.length) {
     return {
       ok: false,
@@ -329,12 +485,72 @@ function parseAuthContributions(
     }
     const secretRef = parseSecretRef(item.secretRef)
     if (!secretRef.ok) return secretRef
+    if (item.cliSession != null) {
+      return {
+        ok: false,
+        reason: 'auth.cliSession 仅允许仓库内受信 builtin Provider 使用',
+      }
+    }
+    let oauth: AuthResourceContribution['oauth']
+    if (item.oauth != null) {
+      if (!isRecord(item.oauth) || kind !== 'oauth2') {
+        return {
+          ok: false,
+          reason: `auth.oauth 仅允许 kind=oauth2（插件 ${pluginId}）`,
+        }
+      }
+      const strategy = asString(item.oauth.strategy)
+      if (strategy === 'managed_broker') {
+        return {
+          ok: false,
+          reason:
+            'auth.oauth.strategy=managed_broker 仅允许平台受信 builtin 使用',
+        }
+      }
+      if (strategy != null && strategy !== 'host_credentials') {
+        return {
+          ok: false,
+          reason: `auth.oauth.strategy 无效：${strategy}`,
+        }
+      }
+      const mcpServerId = asString(item.oauth.mcpServerId)
+      const clientIdFromEnv = asStringArray(item.oauth.clientIdFromEnv)
+      const clientSecretFromEnv = asStringArray(item.oauth.clientSecretFromEnv)
+      if (
+        !mcpServerId ||
+        !clientIdFromEnv?.length ||
+        !clientSecretFromEnv?.length
+      ) {
+        return {
+          ok: false,
+          reason:
+            'auth.oauth 需要 mcpServerId / clientIdFromEnv / clientSecretFromEnv',
+        }
+      }
+      for (const name of [...clientIdFromEnv, ...clientSecretFromEnv]) {
+        if (!isAllowedAuthEnvName(name)) {
+          return {
+            ok: false,
+            reason: `auth.oauth 禁止模型密钥环境变量：${name}`,
+          }
+        }
+      }
+      oauth = {
+        strategy: 'host_credentials',
+        mcpServerId,
+        clientIdFromEnv,
+        clientSecretFromEnv,
+        redirectUriFromEnv: asStringArray(item.oauth.redirectUriFromEnv),
+        scopes: asStringArray(item.oauth.scopes),
+      }
+    }
     auth.push({
       resourceId,
       kind: kind as AuthResourceContribution['kind'],
       envNames: asStringArray(item.envNames),
       secretRef: secretRef.value,
       loginHint: asString(item.loginHint),
+      oauth,
       statusCommand: isRecord(item.statusCommand)
         ? {
             command: asString(item.statusCommand.command),
@@ -362,6 +578,12 @@ function parseContributes(
   }
 
   const contributes: PluginContributes = {}
+
+  if (raw.connectors != null) {
+    const connectors = parseConnectorContributions(raw.connectors)
+    if (!connectors.ok) return connectors
+    contributes.connectors = connectors.value
+  }
 
   if (raw.mcp != null) {
     const mcp = parseMcpContributions(raw.mcp)

@@ -13,6 +13,32 @@ const baseCtx = (): MapFullStreamContext => ({
 })
 
 describe('mapFullStreamChunks', () => {
+  it('keeps tool-error on the original tool call id', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        { type: 'tool-call', toolCallId: 'call-err', toolName: 'read_file' },
+        {
+          type: 'tool-error',
+          toolCallId: 'call-err',
+          toolName: 'read_file',
+          error: 'not found',
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'tool.called',
+      'tool.completed',
+    ])
+    expect(envelopes[1]?.payload).toMatchObject({
+      toolId: 'call-err',
+      toolCallId: 'call-err',
+      isError: true,
+      summary: 'not found',
+    })
+  })
+
   it('maps text stream to output deltas and run.completed', () => {
     const { envelopes, nextSequence } = mapFullStreamChunks(
       [
@@ -324,6 +350,11 @@ describe('mapFullStreamChunks', () => {
       'command.started',
       'command.completed',
     ])
+    expect(envelopes[0]?.payload).toMatchObject({ commandId: 'b1' })
+    expect(envelopes[1]?.payload).toMatchObject({
+      commandId: 'b1',
+      summary: 'file.txt',
+    })
   })
 
   it('maps abort and error; ignores unknown types', () => {
@@ -339,6 +370,71 @@ describe('mapFullStreamChunks', () => {
       'run.cancelled',
       'run.failed',
     ])
+  })
+
+  it('preserves a nested Runtime error message instead of showing the generic fallback', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'error',
+          error: { message: '模型在工具结果后失败' },
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes).toHaveLength(1)
+    expect(envelopes[0]?.eventType).toBe('run.failed')
+    expect(envelopes[0]?.payload).toMatchObject({
+      message: '模型在工具结果后失败',
+    })
+  })
+
+  it('extracts the provider message from a structured-cloned AI_APICallError', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'error',
+          error: {
+            name: 'AI_APICallError',
+            data: {
+              error: {
+                message:
+                  'The `reasoning_content` in the thinking mode must be passed back to the API.',
+              },
+            },
+          },
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes[0]?.payload).toMatchObject({
+      message:
+        'The `reasoning_content` in the thinking mode must be passed back to the API.',
+    })
+  })
+
+  it('extracts only the error message from an AI API responseBody', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'error',
+          error: {
+            name: 'AI_APICallError',
+            responseBody: JSON.stringify({
+              error: { message: '模型服务暂时不可用' },
+              request: { authorization: 'must-not-render' },
+            }),
+          },
+        },
+      ],
+      baseCtx(),
+    )
+
+    expect(envelopes[0]?.payload).toMatchObject({
+      message: '模型服务暂时不可用',
+    })
   })
 
   it('maps approval-requested chunk', () => {

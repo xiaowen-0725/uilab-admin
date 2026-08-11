@@ -2,14 +2,14 @@
  * Task Module — public Interface.
  *
  * Owns:
- * - Capture-driven Task Surface / Composer / Context Panel
+ * - RuntimePort / EventStorePort / projection / TaskSurface
  * - Phase 4B Runtime Kernel + Deterministic Fake
- * - Phase 4C–4F Task Pane (projection, Fake scenarios, MemoryEventStore, fold/scroll)
+ * - Phase 4C–4F Task Pane (projection, Fake scenarios, fold/scroll)
+ * - Capture path only via test harness / explicit demo (not product default)
  *
- * Dual-path honesty:
- * - Capture / default seed stream: local-sim Composer, no RuntimePort
- * - Empty / new-chat: RuntimePort (Fake default, optional VoltAgent sidecar Adapter)
- * - VoltAgent Adapter is a local sidecar client — not a remote multi-tenant production Runtime
+ * Product default: Runtime path (Fake or local VoltAgent sidecar).
+ * VoltAgent Adapter is a local sidecar client — not a remote multi-tenant production Runtime.
+ * Does not own Project/Task directory (see modules/project).
  */
 
 // --- Capture + Task Surface UI ---
@@ -21,7 +21,10 @@ export type {
 } from './ui/task-surface/task-surface'
 
 export { Timeline, TIMELINE_FOLD_THRESHOLD } from './ui/timeline/timeline'
-export type { TimelineProps } from './ui/timeline/timeline'
+export type {
+  TimelineProps,
+  TimelineOpenFileRef,
+} from './ui/timeline/timeline'
 
 export { LiveStatusLine } from './ui/live-status-line'
 export type { LiveStatusLineProps } from './ui/live-status-line'
@@ -92,6 +95,7 @@ export type {
   CommandActor,
   CommandAcknowledgement,
   CommandAcknowledgementStatus,
+  TurnComposerContext,
   CreateTaskCommand,
   SubmitTurnCommand,
   CancelRunCommand,
@@ -127,7 +131,10 @@ export type {
   EventStoreAppendResult,
   EventStoreReadOptions,
   EventStoreError,
+  EventStoreCheckpointInput,
+  EventStoreCheckpointResult,
 } from './ports/event-store-port'
+export { EventStorePortError } from './ports/event-store-port'
 
 // --- Phase 4B Kernel: runtime ---
 export { VirtualClock } from './runtime/virtual-clock'
@@ -146,6 +153,11 @@ export {
   MemoryEventStore,
   createMemoryEventStore,
 } from './runtime/memory-event-store'
+
+export {
+  IdbEventStore,
+  createIdbEventStore,
+} from './runtime/idb-event-store'
 
 export {
   mapFullStreamChunk,
@@ -181,6 +193,8 @@ export type {
   TimelineItem,
   TimelineItemMeta,
   TimelineItemSourceRange,
+  ProcessStepKind,
+  ProcessSummary,
   TimelineFollowMode,
   TaskScrollMeta,
   TaskReadModel,
@@ -212,6 +226,16 @@ export { TaskRuntimeController } from './application/task-runtime-controller'
 export type {
   TaskRuntimeControllerOptions,
   TaskRuntimeListener,
+  EventStoreHonestyKind,
+  WorkSurfaceOpenRequestedListener,
+  WorkSurfaceOpenRequestedPayload,
 } from './application/task-runtime-controller'
 export { useTaskRuntime } from './application/use-task-runtime'
 export type { UseTaskRuntimeResult } from './application/use-task-runtime'
+
+export {
+  RunStatusIndex,
+  createRunStatusIndex,
+  isNavigatorBusyStatus,
+} from './application/run-status-index'
+export type { RunStatusIndexListener } from './application/run-status-index'

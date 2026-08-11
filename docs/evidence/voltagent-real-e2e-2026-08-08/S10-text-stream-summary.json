@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "elapsed_s": 0.91,
+  "text": "办公就绪",
+  "events": [
+    {
+      "type": "start"
+    },
+    {
+      "type": "text-start"
+    },
+    {
+      "type": "text-delta",
+      "text": "办公就绪"
+    },
+    {
+      "type": "text-end"
+    },
+    {
+      "type": "finish-step"
+    },
+    {
+      "type": "finish",
+      "finishReason": "stop"
+    }
+  ],
+  "event_types": [
+    "start",
+    "text-start",
+    "text-delta",
+    "text-end",
+    "finish-step",
+    "finish"
+  ],
+  "has_tool_call": false,
+  "has_approval": false,
+  "has_error": false
+}

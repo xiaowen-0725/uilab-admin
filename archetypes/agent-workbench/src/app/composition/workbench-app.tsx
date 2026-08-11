@@ -1,215 +1,235 @@
+/**
+ * Composition Root — product wiring only.
+ *
+ * Boot / Runtime / Task lifecycle / Surface open channels live in sibling units.
+ * This file assembles them into Shell + thin chrome (boot screen, delete dialog).
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { getEventStreamCapture } from '@/config/captures'
 import {
-  getTaskFixture,
-  launchActions,
-  navigatorUtilities,
-  phase3SessionSeed,
-  projectFolders,
-  taskNavMeta,
-} from '@/config/fixtures'
+  putSessionPointer,
+  SESSION_ROW_ID,
+  type SessionPointerRecord,
+} from '@/app/persistence/workbench-idb'
+import { launchActions } from '@/config/fixtures'
 import {
   resolveRuntimeAdapterMode,
   resolveVoltAgentBaseUrl,
-  resolveVoltAgentId,
 } from '@/config/runtime-adapter'
-import type { LaunchAction, RuntimePort, TaskSurfaceView } from '@/modules/task'
 import {
-  createDeterministicFakeRuntime,
-  createMemoryEventStore,
-  createVoltAgentRuntimeAdapter,
-  runtimeHonestyCopy,
-  TaskRuntimeController,
-  useCapturePlayback,
-  useTaskRuntime,
-} from '@/modules/task'
-import { useWorkbenchSession } from '@/modules/workbench-session'
+  DEFAULT_PROJECT_ID,
+  NEW_TASK_TITLE,
+  type ProjectSummary,
+  type TaskSummary,
+  useProjectCatalog,
+} from '@/modules/project'
+import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
+import { useTaskRuntime } from '@/modules/task'
+import { useWorkspaceDocumentSource } from '@/modules/work-surface'
+import {
+  useWorkbenchSession,
+  type WorkbenchSessionSeed,
+} from '@/modules/workbench-session'
 import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
-
-/**
- * Composition Root — session + fixtures + dual-path Task Surface.
- *
- * Dual path (Phase 4C–4F + VoltAgent Adapter):
- * - Capture / stream tasks (default seed `task-a`): ExecutionStream + local-sim Composer
- * - Empty / new-chat (`task-empty` without capture override): RuntimePort + Timeline
- *   - default: Deterministic Fake Runtime
- *   - VITE_RUNTIME_ADAPTER=voltagent: local VoltAgent sidecar client
- *
- * Default selectedTaskId is a capture task so existing local-sim composer tests stay green.
- * Keyword demos on Fake path: 审批 / 工具 / 澄清 / 长文 / 失败.
- */
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
+import { useBusyTaskIds, useWorkbenchRuntimeWiring } from './runtime-wiring'
+import { useWorkbenchSurfaceAssembly } from './surface-assembly'
+import {
+  createNewChatTask,
+  decideNewChat,
+  hardDeleteTask,
+} from './task-lifecycle-commands'
+import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
 
 const RUNTIME_ADAPTER_MODE = resolveRuntimeAdapterMode()
-/**
- * Vitest (node + browser) needs instant projection / full capture fold.
- * Interactive `pnpm dev:workbench` uses wall-clock progressive stream.
- */
+
 const INSTANT_DEMO =
   import.meta.env.MODE === 'test' ||
   import.meta.env.VITEST === true ||
   import.meta.env.VITEST === 'true'
 
-export function WorkbenchApp() {
-  const session = useWorkbenchSession(phase3SessionSeed)
-  const [captureOverride, setCaptureOverride] = useState<
-    Record<string, string>
-  >({})
-  const [forceStream, setForceStream] = useState<Record<string, boolean>>({})
+export type { WorkbenchPersistence }
 
-  const taskId = session.view.selectedTaskId
-  const fixture = getTaskFixture(taskId)
-  const overrideId = captureOverride[taskId]
-  const showCaptureStream =
-    Boolean(forceStream[taskId]) || fixture.contentMode === 'stream'
-
+export interface WorkbenchAppProps {
   /**
-   * Runtime path only for empty hub tasks that have not been forced into
-   * capture stream (launch cards still use golden capture).
+   * Durable store backend.
+   * Tests default to memory for isolation; product default is idb.
    */
-  const isRuntimePath =
-    fixture.contentMode === 'empty' && !showCaptureStream
+  persistence?: WorkbenchPersistence
+  /** Optional unique IDB name for parallel browser tests. */
+  idbName?: string
+}
 
-  const projectId = session.view.project.id
+const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
+  selectedProjectId: DEFAULT_PROJECT_ID,
+  selectedTaskId: null,
+}
 
-  const storeRef = useRef(createMemoryEventStore())
-  const fakeRuntimeRef = useRef(
-    createDeterministicFakeRuntime({
-      seed: 'workbench',
-      /** Visible streaming steps (wall clock advances virtual time). */
-      stepMs: INSTANT_DEMO ? 0 : 48,
-      keywordScenarios: true,
-      buildOutputDeltas: (inputText) => {
-        const prompt = inputText.trim() || '（空输入）'
-        const short =
-          prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt
-        // Chunked for visible streaming deltas (not one dump).
-        return [
-          `已收到你的消息：\n\n`,
-          `> ${short}\n\n`,
-          `## 本轮说明\n\n`,
-          `这是 **Deterministic Fake Runtime** 的本地**流式**投影（非远程 Agent）。\n\n`,
-          `### 已接通链路\n\n`,
-          `1. Composer → \`submitTurn\`\n`,
-          `2. Fake 按 stepMs 发出事件\n`,
-          `3. 纯函数投影 → Timeline\n\n`,
-          `试关键词：「工具」「审批」「澄清」「长文」「失败」。\n`,
-        ]
-      },
-    }),
-  )
-  const voltRuntimeRef = useRef(
-    createVoltAgentRuntimeAdapter({
-      baseUrl: resolveVoltAgentBaseUrl(),
-      agentId: resolveVoltAgentId(),
-      projectId,
-    }),
-  )
-  const runtimePort: RuntimePort =
-    RUNTIME_ADAPTER_MODE === 'voltagent'
-      ? voltRuntimeRef.current
-      : fakeRuntimeRef.current
+function resolveDefaultPersistence(): WorkbenchPersistence {
+  if (INSTANT_DEMO) return 'memory'
+  return 'idb'
+}
 
-  const honestyMode: 'fake' | 'voltagent' =
-    RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake'
+/** Runtime path: no honesty chips in product chrome (data-honesty-mode / a11y only). */
+function runtimeContext(_mode: 'fake' | 'voltagent') {
+  return []
+}
 
-  const controllerRef = useRef<TaskRuntimeController | null>(null)
-  if (controllerRef.current == null) {
-    controllerRef.current = new TaskRuntimeController({
-      runtime: runtimePort,
-      projectId,
-      eventStore: storeRef.current,
-      seed: 'workbench',
-      honestyMode,
-      /** Demo: wall clock drives Fake steps. Tests: autoFlush instant. VoltAgent ignores. */
-      autoFlush: INSTANT_DEMO && RUNTIME_ADAPTER_MODE === 'fake',
-    })
-  }
+export function WorkbenchApp({
+  persistence: persistenceProp,
+  idbName,
+}: WorkbenchAppProps = {}) {
+  const persistence = persistenceProp ?? resolveDefaultPersistence()
+  const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
 
-  // Wall-clock drive for Fake streaming (interactive demo only).
+  // --- Boot ---
+  const boot = useWorkbenchBoot({
+    persistence,
+    idbName,
+    onHydratePointers: session.commands.hydratePointers,
+  })
+  const {
+    ready: bootReady,
+    error: bootError,
+    db,
+    catalogController,
+    eventStore,
+  } = boot
+
+  // --- Document source (module-owned bind UI) ---
+  const documentSource = useWorkspaceDocumentSource({
+    runtimeMode: RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
+    voltAgentBaseUrl: resolveVoltAgentBaseUrl(),
+  })
+
+  // --- Catalog + selection ---
+  const catalogView = useProjectCatalog(catalogController)
+  const projectId = session.view.selectedProjectId
+
   useEffect(() => {
-    if (RUNTIME_ADAPTER_MODE !== 'fake') return
-    if (INSTANT_DEMO || !isRuntimePath) {
-      fakeRuntimeRef.current.clock.stopRealtime()
-      return
-    }
-    fakeRuntimeRef.current.clock.startRealtime({ intervalMs: 32, scale: 1 })
-    return () => {
-      fakeRuntimeRef.current.clock.stopRealtime()
-    }
-  }, [isRuntimePath])
+    catalogController?.setFocusedProject(projectId)
+  }, [catalogController, projectId, catalogView.ready])
 
-  const runtime = useTaskRuntime(controllerRef.current, taskId, {
-    enabled: isRuntimePath,
-    title: session.view.selectedTask.title,
+  const currentProject: ProjectSummary | null =
+    catalogView.projects.find((p) => p.id === projectId) ??
+    catalogView.projects[0] ??
+    null
+
+  const tasks: TaskSummary[] = catalogView.tasks
+  const taskId = session.view.selectedTaskId
+  const selectedTaskRow = taskId
+    ? (catalogController?.getTaskRow(taskId) ?? null)
+    : null
+
+  // --- Runtime wiring ---
+  const runtimeWiring = useWorkbenchRuntimeWiring({
+    eventStore,
+    projectId,
+    persistence,
+    bootReady,
+    selectedTaskId: taskId,
+  })
+  const {
+    honestyMode,
+    controller: runtimeController,
+    runStatusIndex,
+    capabilityController,
+  } = runtimeWiring
+
+  const isRuntimePath = Boolean(taskId)
+  const runtime = useTaskRuntime(runtimeController, taskId ?? '', {
+    enabled: isRuntimePath && bootReady && Boolean(runtimeController),
+    title: selectedTaskRow?.title ?? NEW_TASK_TITLE,
   })
 
-  // Capture progressive replay (true timed fold by event.ts).
-  const captureIdForStream = showCaptureStream
-    ? overrideId ?? fixture.captureId
-    : undefined
-  const capture = useMemo(() => {
-    if (!captureIdForStream) return null
-    try {
-      return getEventStreamCapture(captureIdForStream)
-    } catch {
-      return null
-    }
-  }, [captureIdForStream])
+  // Busy projection lives in runtime-wiring (after live runStatus is known).
+  const busyTaskIds = useBusyTaskIds(runStatusIndex, taskId, runtime.runStatus)
 
-  const playback = useCapturePlayback(capture, {
-    enabled: showCaptureStream && capture != null && !INSTANT_DEMO,
-    // Interactive: ~3.5× recorded ts. Tests skip progressive path (full fold).
-    playbackRate: 3.5,
+  // --- Surface registry + open channels ---
+  const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
+  const surface = useWorkbenchSurfaceAssembly({
+    documentSource,
+    hasOpenWorkTabs,
+    sessionCommands: session.commands,
+    runtimeController,
+    selectedTaskId: taskId,
+    bootReady,
   })
 
-  const stream = showCaptureStream ? (playback?.view ?? null) : null
+  // Persist session pointers (IDB product path).
+  useEffect(() => {
+    if (!bootReady || persistence !== 'idb' || !db) return
+    const record: SessionPointerRecord = {
+      id: SESSION_ROW_ID,
+      selectedProjectId: session.view.selectedProjectId,
+      selectedTaskId: session.view.selectedTaskId,
+      lastTaskByProject: session.view.lastTaskByProject,
+      navigatorOpen: session.view.navigatorOpen,
+      updatedAt: new Date().toISOString(),
+    }
+    void putSessionPointer(db, record).catch(() => {
+      // Non-fatal; catalog is still durable.
+    })
+  }, [
+    bootReady,
+    db,
+    persistence,
+    session.view.selectedProjectId,
+    session.view.selectedTaskId,
+    session.view.lastTaskByProject,
+    session.view.navigatorOpen,
+  ])
+
+  // Title write-back from Runtime → catalog.
+  useEffect(() => {
+    if (!isRuntimePath || !taskId) return
+    const title = runtime.readModel.title.trim()
+    if (!title || title === selectedTaskRow?.title) return
+    void catalogController?.renameTask(taskId, title, 'runtime')
+  }, [
+    catalogController,
+    isRuntimePath,
+    runtime.readModel.title,
+    selectedTaskRow?.title,
+    taskId,
+  ])
 
   const hasRuntimeTimeline = runtime.readModel.timeline.length > 0
-  const mode = showCaptureStream
-    ? ('stream' as const)
-    : isRuntimePath && hasRuntimeTimeline
+  const mode =
+    isRuntimePath && hasRuntimeTimeline
       ? ('runtime' as const)
       : ('empty' as const)
 
   const displayTitle =
     isRuntimePath && runtime.readModel.title
       ? runtime.readModel.title
-      : session.view.selectedTask.title
+      : (selectedTaskRow?.title ?? '还没有对话')
 
-  const taskView: TaskSurfaceView = useMemo(
-    () => ({
+  const taskView: TaskSurfaceView | null = useMemo(() => {
+    if (!taskId) return null
+    return {
       taskId,
       title: displayTitle,
-      subtitle: session.view.selectedTask.subtitle,
-      projectName: session.view.project.name,
+      projectName: currentProject?.name ?? '默认项目',
       mode,
-      stream,
-      streamPlaying: playback?.playing ?? false,
-      streamProgress: playback?.progress,
+      stream: null,
+      streamPlaying: false,
       readModel: isRuntimePath ? runtime.readModel : null,
       launchActions,
-      contextSections: isRuntimePath
-        ? runtimeContext()
-        : fixture.context,
+      contextSections: runtimeContext(honestyMode),
       contextPanelOpen: session.view.layout.contextPanelOpen,
-    }),
-    [
-      taskId,
-      displayTitle,
-      session.view.selectedTask.subtitle,
-      session.view.project.name,
-      session.view.layout.contextPanelOpen,
-      mode,
-      stream,
-      playback?.playing,
-      playback?.progress,
-      isRuntimePath,
-      runtime.readModel,
-      fixture.context,
-    ],
-  )
+    }
+  }, [
+    taskId,
+    displayTitle,
+    currentProject?.name,
+    mode,
+    isRuntimePath,
+    runtime.readModel,
+    honestyMode,
+    session.view.layout.contextPanelOpen,
+  ])
 
   const composerRuntime = useMemo(
     () =>
@@ -217,10 +237,15 @@ export function WorkbenchApp() {
         ? {
             mode: 'runtime' as const,
             honestyMode,
+            modelLabel:
+              honestyMode === 'voltagent' ? '本地侧车模型' : 'Fake Runtime',
             runStatus: runtime.runStatus,
             onSubmitText: runtime.submitText,
             onCancelRun: runtime.cancelActiveRun,
-            runtimeNotice: runtime.notice,
+            runtimeNotice:
+              bootError && persistence === 'idb'
+                ? `${runtime.notice ?? ''} · 本地存储降级：${bootError}`.trim()
+                : runtime.notice,
             onApprove: (requestId: string) =>
               runtime.respondToApproval(requestId, 'approved'),
             onReject: (requestId: string) =>
@@ -228,10 +253,11 @@ export function WorkbenchApp() {
             onProvideInput: (requestId: string, text: string) =>
               runtime.provideRunInput(text, requestId),
             onRetryTurn: () => runtime.retryTurn(),
+            onFollowModeChange: runtime.setFollowMode,
+            capabilityController,
+            capabilityTaskId: taskId,
           }
-        : {
-            mode: 'local-sim' as const,
-          },
+        : undefined,
     [
       isRuntimePath,
       honestyMode,
@@ -242,29 +268,138 @@ export function WorkbenchApp() {
       runtime.respondToApproval,
       runtime.provideRunInput,
       runtime.retryTurn,
-    ],
+      runtime.setFollowMode,
+      bootError,
+      persistence,
+      capabilityController,
+      taskId,
+    ]
   )
 
   const onLaunchAction = useCallback(
     (action: LaunchAction) => {
-      if (!action.captureId) return
-      const captureId = action.captureId
-      setCaptureOverride((prev) => ({ ...prev, [taskId]: captureId }))
-      setForceStream((prev) => ({ ...prev, [taskId]: true }))
+      if (!taskId || !action.promptStub) return
+      void runtime.submitText(action.promptStub)
     },
-    [taskId],
+    [runtime, taskId]
   )
 
-  const onNewChat = useCallback(() => {
-    // New chat → empty task on Fake Runtime path (not default seed).
-    session.commands.selectTask('task-empty')
-    setForceStream((prev) => ({ ...prev, 'task-empty': false }))
-    setCaptureOverride((prev) => {
-      const next = { ...prev }
-      delete next['task-empty']
-      return next
+  // --- Task lifecycle commands ---
+  const selectedTaskIdRef = useRef(session.view.selectedTaskId)
+  selectedTaskIdRef.current = session.view.selectedTaskId
+  const selectedProjectIdRef = useRef(session.view.selectedProjectId)
+  selectedProjectIdRef.current = session.view.selectedProjectId
+  const newTaskCounterRef = useRef(0)
+  const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(
+    null
+  )
+
+  const onNewChat = useCallback(async () => {
+    if (!catalogController) return
+
+    const projectIdNow = selectedProjectIdRef.current
+    const selectedId = selectedTaskIdRef.current
+    const selected = selectedId
+      ? catalogController.getTaskRow(selectedId)
+      : null
+
+    const decision = decideNewChat({
+      selectedProjectId: projectIdNow,
+      selectedTask: selected,
     })
-  }, [session.commands])
+    if (decision.kind === 'reselect') {
+      session.commands.selectTask(decision.taskId)
+      return
+    }
+
+    newTaskCounterRef.current += 1
+    const row = await createNewChatTask({
+      catalog: catalogController,
+      projectId: projectIdNow,
+      sequence: newTaskCounterRef.current,
+    })
+    session.commands.ensureTaskLayout(row.id)
+    session.commands.selectTask(row.id)
+  }, [catalogController, session.commands])
+
+  const onSelectProject = useCallback(
+    (nextProjectId: string) => {
+      catalogController?.setFocusedProject(nextProjectId)
+      session.commands.selectProject(nextProjectId)
+    },
+    [catalogController, session.commands]
+  )
+
+  const performDeleteTask = useCallback(
+    async (deleteTaskId: string) => {
+      if (!catalogController) return
+
+      const result = await hardDeleteTask({
+        taskId: deleteTaskId,
+        catalog: catalogController,
+        eventStore,
+        db,
+        persistence,
+        runStatusIndex,
+        runtimeController,
+        activeTaskId: taskId,
+        selectedTaskId: session.view.selectedTaskId,
+        selectedProjectId: session.view.selectedProjectId,
+        lastTaskByProject: session.view.lastTaskByProject,
+        navigatorOpen: session.view.navigatorOpen,
+        activeRunStatus: runtime.runStatus,
+        onTaskDeleted: (deletedTaskId) => {
+          capabilityController.clearTask(deletedTaskId)
+        },
+      })
+
+      // Always sync selection + lastTaskByProject into session memory so the
+      // putSessionPointer effect cannot overwrite IDB with a stale map.
+      session.commands.removeTaskLayout(deleteTaskId)
+      session.commands.hydratePointers({
+        selectedProjectId: session.view.selectedProjectId,
+        selectedTaskId: result.selectionChanged
+          ? result.nextSelectedTaskId
+          : session.view.selectedTaskId,
+        lastTaskByProject: result.lastTaskByProject,
+        navigatorOpen: session.view.navigatorOpen,
+      })
+      setDeleteConfirmTaskId(null)
+    },
+    [
+      catalogController,
+      capabilityController,
+      db,
+      eventStore,
+      persistence,
+      runStatusIndex,
+      runtime.runStatus,
+      runtimeController,
+      session.commands,
+      session.view.lastTaskByProject,
+      session.view.navigatorOpen,
+      session.view.selectedProjectId,
+      session.view.selectedTaskId,
+      taskId,
+    ]
+  )
+
+  const onDeleteTask = useCallback((id: string) => {
+    setDeleteConfirmTaskId(id)
+  }, [])
+
+  if (!bootReady) {
+    return (
+      <ThemeProvider>
+        <div
+          className='flex h-svh items-center justify-center text-sm text-muted-foreground'
+          data-testid='workbench-booting'
+        >
+          正在加载工作台…
+        </div>
+      </ThemeProvider>
+    )
+  }
 
   return (
     <ThemeProvider>
@@ -273,27 +408,30 @@ export function WorkbenchApp() {
           view={session.view}
           commands={session.commands}
           taskView={taskView}
-          navigatorUtilities={navigatorUtilities}
-          projectFolders={projectFolders}
-          taskNavMeta={taskNavMeta}
+          project={currentProject}
+          projects={catalogView.projects}
+          tasks={tasks}
+          busyTaskIds={busyTaskIds}
           onLaunchAction={onLaunchAction}
-          onNewChat={onNewChat}
+          onNewChat={() => void onNewChat()}
+          onDeleteTask={onDeleteTask}
+          onSelectProject={onSelectProject}
           composerRuntime={composerRuntime}
+          surfaceRegistry={surface.surfaceRegistry}
+          onOpenFileRef={surface.onOpenFileRef}
+          workSurfaceEmptyExtra={surface.workSurfaceEmptyExtra}
+          workSurfaceToolbarTrailing={surface.workSurfaceToolbarTrailing}
+        />
+        <DeleteTaskConfirmDialog
+          open={deleteConfirmTaskId != null}
+          onCancel={() => setDeleteConfirmTaskId(null)}
+          onConfirm={() => {
+            if (deleteConfirmTaskId) {
+              void performDeleteTask(deleteConfirmTaskId)
+            }
+          }}
         />
       </TooltipProvider>
     </ThemeProvider>
   )
-}
-
-function runtimeContext() {
-  const honesty = runtimeHonestyCopy(
-    RUNTIME_ADAPTER_MODE === 'voltagent' ? 'voltagent' : 'fake',
-  )
-  return [
-    {
-      id: 'env',
-      title: '环境',
-      items: honesty.contextItems,
-    },
-  ]
 }

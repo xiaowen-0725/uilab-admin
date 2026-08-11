@@ -46,6 +46,63 @@ describe('#31 PKCE helpers', () => {
 })
 
 describe('#31 Fake AS exchange + refresh', () => {
+  it('uses a client-secret env reference for exchange without persisting the secret value', async () => {
+    const as = createFakeAuthorizationServer({
+      accessToken: 'access-secret-flow',
+      refreshToken: 'refresh-secret-flow',
+      requiredClientSecret: 'github-app-secret',
+    })
+    const pendingStore = createOAuthPendingStore()
+    const values = new Map<string, string>()
+    const secretStore = {
+      async resolve(ref: { backend: string; envName?: string; account?: string }) {
+        if (ref.backend === 'env' && ref.envName === 'GITHUB_APP_CLIENT_SECRET') {
+          return 'github-app-secret'
+        }
+        return ref.account ? (values.get(ref.account) ?? null) : null
+      },
+      async set(ref: { backend: string; account?: string }, value: string) {
+        if (ref.account) values.set(ref.account, value)
+      },
+      async clear(ref: { backend: string; account?: string }) {
+        if (ref.account) values.delete(ref.account)
+      },
+    }
+    const bindingStore = createAuthBindingStore()
+
+    const started = beginOAuthAuthorization({
+      pluginId: 'mcp.github',
+      resourceId: 'mcp:github',
+      authorizationEndpoint: as.authorizationEndpoint,
+      tokenEndpoint: as.tokenEndpoint,
+      clientId: as.clientId,
+      clientSecretRef: {
+        backend: 'env',
+        envName: 'GITHUB_APP_CLIENT_SECRET',
+      },
+      redirectUri: as.redirectUri,
+      pendingStore,
+    })
+    const challenge = new URL(started.authorizationUrl).searchParams.get(
+      'code_challenge',
+    )!
+
+    const binding = await completeOAuthAuthorization({
+      code: as.issueCodeForChallenge(challenge),
+      state: started.state,
+      pendingStore,
+      secretStore,
+      bindingStore,
+      fetchImpl: as.fetchImpl,
+    })
+
+    assert.deepEqual(binding.oauth?.clientSecretRef, {
+      backend: 'env',
+      envName: 'GITHUB_APP_CLIENT_SECRET',
+    })
+    assert.doesNotMatch(JSON.stringify(binding), /github-app-secret/)
+  })
+
   it('begin → complete stores tokens; inject uses bearer; refresh on expiry', async () => {
     const as = createFakeAuthorizationServer({
       accessToken: 'access-aaa',

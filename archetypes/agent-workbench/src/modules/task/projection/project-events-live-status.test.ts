@@ -256,4 +256,122 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(terminal?.title).toBe('已处理')
     expect(terminal?.meta?.startedAt || terminal?.meta?.path).toBeTruthy()
   })
+
+  it('keeps text-end segments separate even when no tool occurs between them', () => {
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'run.started', {}),
+        mk(2, 'output.delta', { text: '过程说明。', phase: 'commentary' }),
+        mk(3, 'output.completed', { text: '过程说明。' }),
+        mk(4, 'output.delta', { text: '最终回答。', phase: 'commentary' }),
+        mk(5, 'output.completed', { text: '最终回答。' }),
+        mk(6, 'run.completed', {}),
+      ],
+    )
+    const assistants = state.readModel.timeline.filter(
+      (item) => item.category === 'assistant-message',
+    )
+    expect(assistants).toHaveLength(2)
+    expect(assistants[0]).toMatchObject({
+      body: '过程说明。',
+      meta: { messageRole: 'commentary' },
+    })
+    expect(assistants[1]).toMatchObject({
+      body: '最终回答。',
+      meta: { messageRole: 'final' },
+    })
+  })
+
+  it('keeps commentary chronological across plan, reasoning, and source boundaries', () => {
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'run.started', {}),
+        mk(2, 'output.delta', { text: '先制定计划。', phase: 'commentary' }),
+        mk(3, 'plan.updated', { steps: ['检查目录'] }),
+        mk(4, 'output.delta', { text: '计划已就绪。', phase: 'commentary' }),
+        mk(5, 'reasoning.started', { id: 'reason-1' }),
+        mk(6, 'reasoning.delta', { id: 'reason-1', text: '分析中' }),
+        mk(7, 'reasoning.completed', { id: 'reason-1' }),
+        mk(8, 'source.grouped', { title: '来源', sources: ['/notes/a.md'] }),
+        mk(9, 'output.delta', { text: '开始执行。', phase: 'commentary' }),
+      ],
+    )
+
+    expect(
+      state.readModel.timeline.map((item) => [item.category, item.body]),
+    ).toEqual(
+      expect.arrayContaining([
+        ['assistant-message', '先制定计划。'],
+        ['assistant-message', '计划已就绪。'],
+        ['assistant-message', '开始执行。'],
+      ]),
+    )
+    const categories = state.readModel.timeline.map((item) => item.category)
+    expect(categories).toEqual([
+      'run-terminal',
+      'assistant-message',
+      'plan-update',
+      'assistant-message',
+      'reasoning-section',
+      'source-group',
+      'assistant-message',
+    ])
+  })
+
+  it('projects one reasoning row per provider reasoning id', () => {
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'run.started', {}),
+        mk(2, 'reasoning.started', { id: 'reason-1' }),
+        mk(3, 'reasoning.delta', { id: 'reason-1', text: '第一段' }),
+        mk(4, 'reasoning.completed', { id: 'reason-1' }),
+        mk(5, 'reasoning.started', { id: 'reason-2' }),
+        mk(6, 'reasoning.delta', { id: 'reason-2', text: '第二段' }),
+      ],
+    )
+    const reasoning = state.readModel.timeline.filter(
+      (item) => item.category === 'reasoning-section',
+    )
+    expect(reasoning).toHaveLength(2)
+    expect(reasoning[0]).toMatchObject({ body: '第一段', status: 'completed' })
+    expect(reasoning[1]).toMatchObject({ body: '第二段', status: 'streaming' })
+  })
+
+  it('projects a deterministic process summary from logical tool calls', () => {
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'run.started', {}),
+        mk(2, 'tool.called', {
+          toolId: 'read-1',
+          name: 'read_file',
+          args: { path: '/notes/a.md' },
+        }),
+        mk(3, 'tool.completed', {
+          toolId: 'read-1',
+          name: 'read_file',
+          args: { path: '/notes/a.md' },
+        }),
+        mk(4, 'tool.called', {
+          toolId: 'search-1',
+          name: 'web_search',
+          args: { query: 'agent ui' },
+        }),
+        mk(5, 'command.started', {
+          commandId: 'cmd-1',
+          command: 'pnpm test',
+        }),
+      ],
+    )
+    const terminal = state.readModel.timeline.find(
+      (item) => item.category === 'run-terminal',
+    )
+    expect(terminal?.meta?.processSummary).toEqual({
+      stepCount: 3,
+      counts: { read: 1, search: 1, command: 1 },
+    })
+  })
 })
