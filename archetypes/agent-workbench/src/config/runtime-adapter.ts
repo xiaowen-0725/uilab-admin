@@ -1,19 +1,7 @@
 /**
- * Runtime adapter selection (Composition Root).
- * VoltAgent is the only runtime (ADR-0018 removed the Deterministic Fake Runtime).
- *
- * VITE_RUNTIME_ADAPTER=voltagent
- * VITE_VOLTAGENT_BASE_URL=http://127.0.0.1:3141 (sidecar)
+ * Runtime adapter config (Composition Root).
+ * VoltAgent is the only runtime (ADR-0018).
  */
-
-export type RuntimeAdapterMode = 'voltagent'
-
-export function resolveRuntimeAdapterMode(
-  env: Record<string, unknown> = import.meta.env as Record<string, unknown>,
-): RuntimeAdapterMode {
-  void env
-  return 'voltagent'
-}
 
 /**
  * Base URL for the VoltAgent sidecar.

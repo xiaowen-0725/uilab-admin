@@ -34,22 +34,15 @@ import {
 import { createVoltAgentRuntimeAdapter } from '@/modules/task-runtime'
 import type { WorkbenchPersistence } from './workbench-boot'
 
-const INSTANT_DEMO =
-  import.meta.env.MODE === 'test' ||
-  import.meta.env.VITEST === true ||
-  import.meta.env.VITEST === 'true'
-
 export interface CreateWorkbenchRuntimePortsOptions {
   voltAgentBaseUrl?: string
   voltAgentId?: string
   projectId?: string
-  seed?: string
 }
 
 export interface WorkbenchRuntimePorts {
   runtimePort: RuntimePort
   runStatusIndex: RunStatusIndex
-  instantDemo: boolean
   /** Capability Surface snapshot port (VoltAgent HTTP). */
   capabilityPort: CapabilitySnapshotPort
   capabilityController: CapabilityController
@@ -61,10 +54,7 @@ export interface WorkbenchRuntimePorts {
 export function createWorkbenchRuntimePorts(
   options: CreateWorkbenchRuntimePortsOptions = {}
 ): WorkbenchRuntimePorts {
-  const seed = options.seed ?? 'workbench'
   const projectId = options.projectId ?? DEFAULT_PROJECT_ID
-  void seed
-  void projectId
 
   const voltBase = options.voltAgentBaseUrl ?? resolveVoltAgentBaseUrl()
   const runtimePort: RuntimePort = createVoltAgentRuntimeAdapter({
@@ -82,7 +72,6 @@ export function createWorkbenchRuntimePorts(
   return {
     runtimePort,
     runStatusIndex: createRunStatusIndex(),
-    instantDemo: INSTANT_DEMO,
     capabilityPort,
     capabilityController,
   }

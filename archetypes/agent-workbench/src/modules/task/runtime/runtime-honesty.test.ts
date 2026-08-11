@@ -3,7 +3,7 @@ import { previewText, runtimeHonestyCopy } from './runtime-honesty'
 
 describe('runtimeHonestyCopy', () => {
   it('discloses local sidecar Runtime and never claims Fake', () => {
-    const c = runtimeHonestyCopy()
+    const c = runtimeHonestyCopy
     expect(c.banner).toMatch(/本机 VoltAgent/)
     expect(c.banner).toMatch(/非远程生产集群/)
     expect(c.banner).not.toMatch(/Fake/)
@@ -23,7 +23,6 @@ describe('runtimeHonestyCopy', () => {
       expect(c[key]).not.toMatch(/Fake/i)
       expect(c[key]).toMatch(/本机|VoltAgent/)
     }
-    expect(c.cancelRequested).toBe(c.cancelAccepted)
   })
 
   it('previewText truncates with ellipsis', () => {

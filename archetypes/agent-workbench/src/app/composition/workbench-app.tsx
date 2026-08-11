@@ -66,11 +66,6 @@ function resolveDefaultPersistence(): WorkbenchPersistence {
   return 'idb'
 }
 
-/** Runtime context chips are empty in product chrome (data-honesty-mode / a11y only). */
-function runtimeContext(): [] {
-  return []
-}
-
 export function WorkbenchApp({
   persistence: persistenceProp,
   idbName,
@@ -210,7 +205,7 @@ export function WorkbenchApp({
       streamPlaying: false,
       readModel: isRuntimePath ? runtime.readModel : null,
       launchActions,
-      contextSections: runtimeContext(),
+      contextSections: [],
       contextPanelOpen: session.view.layout.contextPanelOpen,
     }
   }, [

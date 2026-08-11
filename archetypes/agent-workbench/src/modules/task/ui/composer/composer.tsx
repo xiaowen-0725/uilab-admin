@@ -105,7 +105,7 @@ export interface ComposerProps {
   showBranchChip?: boolean
   /**
    * `local-sim` (default): local timer feedback; notice contains「不会调用 Agent Runtime」.
-   * `runtime`: Application Command → Fake Runtime; no local timer as domain authority.
+   * `runtime`: Application Command → RuntimePort; no local timer as domain authority.
    */
   mode?: 'local-sim' | 'runtime'
   /** Active run status from TaskReadModel (runtime mode). */
@@ -339,7 +339,7 @@ export function TaskComposer({
   capabilityTaskId = null,
   onManageCapabilities,
 }: ComposerProps) {
-  const honesty = runtimeHonestyCopy()
+  const honesty = runtimeHonestyCopy
   const noticeId = useId()
   const [text, setText] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -467,12 +467,12 @@ export function TaskComposer({
   const handleSend = useCallback(async () => {
     if (recording) stopRecording()
 
-    // Runtime path: Application Command → RuntimePort (Fake or VoltAgent).
+    // Runtime path: Application Command → RuntimePort (VoltAgent sidecar).
     if (isRuntimeMode) {
       // Stop only while actively running / queued / cancelling (not HITL waits).
       if (sendActsAsStop) {
         await onCancelRun?.()
-        setNotice(honesty.cancelRequested)
+        setNotice(honesty.cancelAccepted)
         return
       }
       if (!text.trim()) return

@@ -25,7 +25,7 @@ import type {
 } from '../projection/types'
 import type { CommandAcknowledgement } from '../protocol/commands'
 import type { TurnComposerContext } from '../protocol/commands'
-import { runtimeHonestyCopy } from '../runtime/runtime-honesty'
+import { runtimeHonestyCopy, type RuntimeHonestyCopy } from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
 
@@ -97,7 +97,7 @@ export class TaskRuntimeController {
   private readonly runtime: RuntimePort
   private projectId: string
   private readonly eventStore: EventStorePort | null
-  private readonly honesty: ReturnType<typeof runtimeHonestyCopy>
+  private readonly honesty: RuntimeHonestyCopy
   private readonly eventStoreKind: EventStoreHonestyKind
   private readonly commands: CommandFactory
   private readonly listeners = new Set<TaskRuntimeListener>()
@@ -130,7 +130,7 @@ export class TaskRuntimeController {
     this.runtime = options.runtime
     this.projectId = options.projectId
     this.eventStore = options.eventStore ?? null
-    this.honesty = runtimeHonestyCopy()
+    this.honesty = runtimeHonestyCopy
     this.eventStoreKind = options.eventStoreKind ?? 'memory'
     const clock: CommandClock =
       options.clock ?? { nowIso: () => new Date().toISOString() }
@@ -224,7 +224,6 @@ export class TaskRuntimeController {
           projectId: this.projectId,
           title: options?.title,
         })
-        let fromSequence = 1
 
         if (snapshot && snapshot.lastTaskSequence > 0) {
           // Snapshot accelerates tail read; projection still needs events for full timeline.
@@ -264,7 +263,6 @@ export class TaskRuntimeController {
         await this.ensureInterruptedOnRehydrate(taskId, generation)
         if (generation !== this.attachGeneration || this.taskId !== taskId) return
         cursor = this.projection.readModel.lastTaskSequence
-        void fromSequence
       } catch {
         this.persistenceDegraded = true
         this.notice =

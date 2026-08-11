@@ -89,7 +89,7 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
     const timeline = page.getByTestId('task-timeline').element()
     expect(timeline.getAttribute('data-runtime-run')).toBe('completed')
     expect(timeline.getAttribute('data-run-status')).toBe('completed')
-    expect(timeline.getAttribute('data-honesty-mode')).toMatch(/fake|voltagent/)
+    expect(timeline.getAttribute('data-honesty-mode')).toBe('voltagent')
 
     expect(
       document.querySelectorAll('[data-category="user-message"]').length,

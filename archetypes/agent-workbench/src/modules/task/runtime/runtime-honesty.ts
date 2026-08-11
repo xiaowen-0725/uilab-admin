@@ -15,8 +15,6 @@ export interface RuntimeHonestyCopy {
   contextItems: string[]
   submitAccepted: string
   cancelAccepted: string
-  /** Alias of cancelAccepted (historical dual keys); keep for callers. */
-  cancelRequested: string
   clarifyingSubmit: (preview: string) => string
   submitWithPreview: (preview: string) => string
   waitingApproval: string
@@ -55,12 +53,9 @@ const VOLTAGENT: RuntimeHonestyCopy = {
   queueAccepted: '已排队后续消息（本机 VoltAgent Runtime）',
   steerAccepted: '已发送转向（本机 VoltAgent Runtime）',
   reconcileAccepted: '已对账中断 Run（本机 Runtime）',
-  cancelRequested: '已请求取消（本机 VoltAgent Runtime，非远程生产集群）',
 }
 
-export function runtimeHonestyCopy(): RuntimeHonestyCopy {
-  return VOLTAGENT
-}
+export const runtimeHonestyCopy: RuntimeHonestyCopy = VOLTAGENT
 
 export function previewText(text: string, max = 40): string {
   const t = text.trim()

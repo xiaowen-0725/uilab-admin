@@ -282,7 +282,7 @@ export function Timeline({
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [setMode])
 
-  const honesty = runtimeHonestyCopy()
+  const honesty = runtimeHonestyCopy
 
   return (
     <div
@@ -372,7 +372,7 @@ export function Timeline({
             className='py-6 text-center text-sm text-muted-foreground'
             data-testid='timeline-empty'
           >
-            暂无时间线条目。发送消息后将显示用户消息与 Fake 运行结果。
+            暂无时间线条目。发送消息后将显示用户消息与运行结果。
           </p>
         ) : (
           <>
