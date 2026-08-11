@@ -1031,7 +1031,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toHaveTextContent('默认项目')
     await expect
       .element(page.getByTestId('composer-model'))
-      .toHaveTextContent('Fake Runtime')
+      .toHaveTextContent('本地侧车模型')
 
     await userEvent.fill(input, 'hello composer')
     await userEvent.click(submit)
