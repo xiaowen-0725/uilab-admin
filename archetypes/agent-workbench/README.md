@@ -12,6 +12,7 @@
 | Task/Work pane chrome + right-anchored drawer             | **shipped**（Phase 3B；Playwright/动效证据已落盘） |
 | Task Surface + Composer + Adaptive Context Panel          | **shipped**（静态 fixture）                        |
 | Work Surface Host（Single-pane + Tabs，显隐/调宽/最大化） | **shipped**（占位内容）                            |
+| Capability Surface（连接器/技能/专家管理 + 视觉回归矩阵）| **shipped**（#53–#59；视觉回归基线见 `tests/visual/`） |
 | Agent Runtime / 流式投影                                  | **planned**（Phase 4，当前暂停）                   |
 | Surface Registry                                          | **planned**（Phase 5）                             |
 | Document / Browser / Review Surfaces                      | **planned**（Phase 6）                             |

@@ -42,7 +42,8 @@
 | Sidecar Plugin System (#17–#25) | **Done (local MVP)** | PluginRegistry + MCP/Skills/CLI/auth/discovery/doctor；office 装配仅经 Registry；证据 `docs/evidence/sidecar-plugin-system-closeout-2026-08-06.md`；**非**远程生产 Runtime / OAuth 产品化 |
 | Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
 | Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
-| Browser test suite | **Green** | Workbench **83** tests（含 4B–4F unit + integration）；Foundation/Admin 基线见既有证据 |
+| Browser test suite | **Green** | Workbench 单元 + 集成 + 视觉矩阵测试；Foundation/Admin 基线见既有证据 |
+| Capability Surface 可复现基线 (#56) | **Done** | 7 状态确定性 fixture + 视觉矩阵截图（`tests/visual/baselines/`）+ 键盘路径回归；从干净 checkout 可重现 |
 | 模板“产品打磨/去 demo 化” | **In progress** | Workbench Composer 本地产品体验已推进；Admin 去 demo 仍 planned |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
