@@ -402,16 +402,13 @@ describe('TaskComposer connector selection', () => {
       },
       effectiveCommandScopes: [],
     }
-    const pendingRefreshes: Array<
-      (value: { snapshot: CapabilitySnapshot; transitions: [] }) => void
-    > = []
+    type RefreshResult = { snapshot: CapabilitySnapshot; transitions: [] }
+    const pendingRefreshes: Array<(value: RefreshResult) => void> = []
     const refreshAuth = vi.fn(
       () =>
-        new Promise<{ snapshot: CapabilitySnapshot; transitions: [] }>(
-          (resolve) => {
-            pendingRefreshes.push(resolve)
-          }
-        )
+        new Promise<RefreshResult>((resolve) => {
+          pendingRefreshes.push(resolve)
+        })
     )
     const port: CapabilitySnapshotPort = {
       getSnapshot: vi.fn(async () => disconnectedSnapshot),
@@ -451,20 +448,18 @@ describe('TaskComposer connector selection', () => {
 
     await page.getByTestId('composer-add').click()
     await page.getByTestId('composer-add-connectors-nav').click()
-    await page.getByTestId('capability-connector-connector.feishu').click()
+    const feishuItem = page.getByTestId('capability-connector-connector.feishu')
+    await feishuItem.click()
 
     await expect
       .element(page.getByTestId('composer-auth-waiting'))
       .toBeInTheDocument()
     await expect.poll(() => pendingRefreshes.length).toBeGreaterThanOrEqual(1)
 
-    // Submenu keeps the connector item (closeOnClick=false) — click again while
-    // the first wait's refresh is still pending to supersede that wait.
-    await page.getByTestId('capability-connector-connector.feishu').click()
-
+    // Submenu stays open (closeOnClick=false); second click supersedes the wait.
+    await feishuItem.click()
     await expect.poll(() => pendingRefreshes.length).toBeGreaterThanOrEqual(2)
 
-    // Finish the superseded wait's in-flight refresh — must not clear the new wait UI.
     pendingRefreshes[0]!({
       snapshot: disconnectedSnapshot,
       transitions: [],

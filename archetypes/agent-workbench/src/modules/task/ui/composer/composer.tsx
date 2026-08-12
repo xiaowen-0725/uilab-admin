@@ -851,10 +851,21 @@ export function TaskComposer({
       .finally(() => setCapabilityBusy(false))
   }
 
-  const handleCancelAuth = () => {
-    authAbortRef.current?.abort()
+  const clearAuthWait = () => {
     authAbortRef.current = null
     setAuthWaitingConnectorId(null)
+  }
+
+  /** True only for the active wait; superseded waits must not touch waiting UI. */
+  const takeAuthWait = (abort: AbortController): boolean => {
+    if (authAbortRef.current !== abort) return false
+    clearAuthWait()
+    return true
+  }
+
+  const handleCancelAuth = () => {
+    authAbortRef.current?.abort()
+    clearAuthWait()
     setNotice('已取消登录')
   }
 
@@ -863,7 +874,7 @@ export function TaskComposer({
     const connectorName =
       capabilitySnapshot?.connectors.find((item) => item.id === connectorId)
         ?.name ?? '连接器'
-    // Cancel any previous wait; do not treat auth-window close as cancel.
+    // Cancel any previous wait; closing the auth window is not cancel.
     authAbortRef.current?.abort()
     const abort = new AbortController()
     authAbortRef.current = abort
@@ -896,8 +907,6 @@ export function TaskComposer({
               capabilityController.refreshAuth(capabilityTaskId, connectorId),
             onAuthorizationRequired: (transition) => {
               if (!transition.verificationUrl) return
-              // Window may be closed by the user after completing authorize —
-              // that is NOT a cancel signal; open a fresh tab if needed.
               if (authWindow && !authWindow.closed) {
                 authWindow.location.replace(transition.verificationUrl)
               } else {
@@ -910,22 +919,19 @@ export function TaskComposer({
               setNotice('需要继续完成账号授权。请在新打开的页面中操作。')
             },
           }).then((outcome: WaitForConnectorAuthOutcome) => {
-            // Only the active wait may clear waiting UI — a superseded wait can
-            // still finish after abort once its in-flight refresh returns.
-            if (authAbortRef.current !== abort) return
-            authAbortRef.current = null
-            setAuthWaitingConnectorId(null)
-            if (outcome === 'cancelled') {
-              // Notice already set by handleCancelAuth; keep disconnected.
-              return
-            }
+            if (!takeAuthWait(abort)) return
+            if (outcome === 'cancelled') return
             if (outcome === 'connected' && authWindow && !authWindow.closed) {
               authWindow.close()
             }
+            if (outcome === 'connected') {
+              setNotice(
+                `「${connectorName}」授权已完成，连接器现在可以选用。`
+              )
+              return
+            }
             setNotice(
-              outcome === 'connected'
-                ? `「${connectorName}」授权已完成，连接器现在可以选用。`
-                : `尚未检测到「${connectorName}」授权完成；可点击「刷新连接状态」重试。`
+              `尚未检测到「${connectorName}」授权完成；可点击「刷新连接状态」重试。`
             )
           })
         }
@@ -937,9 +943,7 @@ export function TaskComposer({
       }
     } catch {
       authWindow?.close()
-      if (authAbortRef.current === abort) {
-        authAbortRef.current = null
-        setAuthWaitingConnectorId(null)
+      if (takeAuthWait(abort)) {
         setNotice('暂时无法打开账号连接。请重试。')
       }
     } finally {

@@ -62,6 +62,22 @@ export function CapabilityManagementSurface({
   >(null)
   const authAbortRef = useRef<AbortController | null>(null)
 
+  const clearAuthWait = () => {
+    authAbortRef.current = null
+    setAuthWaitingConnectorId(null)
+  }
+
+  /** True only for the active wait; superseded waits must not touch waiting UI. */
+  const takeAuthWait = (abort: AbortController): boolean => {
+    if (authAbortRef.current !== abort) return false
+    clearAuthWait()
+    return true
+  }
+
+  const clearPendingIf = (ownerId: string) => {
+    setPendingConnectorId((current) => (current === ownerId ? null : current))
+  }
+
   useEffect(() => {
     return () => {
       authAbortRef.current?.abort()
@@ -71,7 +87,8 @@ export function CapabilityManagementSurface({
 
   const refresh = async (connectorId?: string) => {
     if (!controller) return
-    setPendingConnectorId(connectorId ?? '__catalog__')
+    const pendingId = connectorId ?? '__catalog__'
+    setPendingConnectorId(pendingId)
     setActionNotice(null)
     try {
       await controller.refreshAuth(taskId, connectorId)
@@ -82,16 +99,13 @@ export function CapabilityManagementSurface({
           cause instanceof Error ? cause.message : '刷新连接器状态失败，请重试',
       })
     } finally {
-      setPendingConnectorId((current) =>
-        current === (connectorId ?? '__catalog__') ? null : current
-      )
+      clearPendingIf(pendingId)
     }
   }
 
   const cancelAuthWait = () => {
     authAbortRef.current?.abort()
-    authAbortRef.current = null
-    setAuthWaitingConnectorId(null)
+    clearAuthWait()
     setActionNotice({ tone: 'info', message: '已取消登录' })
   }
 
@@ -125,8 +139,7 @@ export function CapabilityManagementSurface({
           tone: 'info',
           message: result.message || '已打开授权页面，完成授权后状态会自动刷新。',
         })
-        // Waiting is tracked by authWaitingConnectorId; release catalog pending
-        // so refresh / revoke / other connects stay usable during the long poll.
+        // Long poll uses authWaitingConnectorId; free catalog pending now.
         setPendingConnectorId(null)
         setAuthWaitingConnectorId(connectorId)
         const outcome = await waitForConnectorAuth({
@@ -146,20 +159,21 @@ export function CapabilityManagementSurface({
             })
           },
         })
-        // Only the active wait may clear waiting UI / notices.
-        if (authAbortRef.current !== abort) return
-        authAbortRef.current = null
-        setAuthWaitingConnectorId(null)
+        if (!takeAuthWait(abort)) return
         if (outcome === 'cancelled') return
         const connectorName =
           snapshot?.connectors.find((item) => item.id === connectorId)?.name ??
           '连接器'
+        if (outcome === 'connected') {
+          setActionNotice({
+            tone: 'success',
+            message: `「${connectorName}」授权已完成。`,
+          })
+          return
+        }
         setActionNotice({
-          tone: outcome === 'connected' ? 'success' : 'info',
-          message:
-            outcome === 'connected'
-              ? `「${connectorName}」授权已完成。`
-              : `尚未检测到「${connectorName}」授权完成；可点击「刷新状态」重试。`,
+          tone: 'info',
+          message: `尚未检测到「${connectorName}」授权完成；可点击「刷新状态」重试。`,
         })
         return
       }
@@ -176,9 +190,7 @@ export function CapabilityManagementSurface({
         })
       }
     } finally {
-      setPendingConnectorId((current) =>
-        current === connectorId ? null : current
-      )
+      clearPendingIf(connectorId)
     }
   }
 

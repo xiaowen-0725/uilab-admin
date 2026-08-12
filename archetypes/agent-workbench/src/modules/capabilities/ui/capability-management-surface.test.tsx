@@ -317,9 +317,6 @@ describe('CapabilityManagementSurface', () => {
           : connector
       ),
     }
-    const pendingRefreshes: Array<
-      (value: { snapshot: CapabilitySnapshot; transitions: [] }) => void
-    > = []
     const startAuth = vi.fn(async () => ({
       ok: true as const,
       connectorId: 'connector.feishu',
@@ -329,20 +326,12 @@ describe('CapabilityManagementSurface', () => {
       message: '已打开授权页面，完成授权后状态会自动刷新。',
       loginHint: '飞书 CLI',
     }))
+    // Hang wait-for-auth refresh so we stay in the waiting UI.
     const refreshAuth = vi.fn(
-      () =>
-        new Promise<{ snapshot: CapabilitySnapshot; transitions: [] }>(
-          (resolve) => {
-            pendingRefreshes.push(resolve)
-          }
-        )
-    )
+      () => new Promise<never>(() => {})
+    ) as CapabilitySnapshotPort['refreshAuth']
     const controller = createController(disconnected, { startAuth, refreshAuth })
     await controller.refresh('task-a')
-    // Unblock the initial catalog refresh used by the hook / controller cache.
-    for (const release of pendingRefreshes.splice(0)) {
-      release({ snapshot: disconnected, transitions: [] })
-    }
     const openWindow = vi.spyOn(window, 'open').mockReturnValue(null)
     render(
       <CapabilityManagementSurface

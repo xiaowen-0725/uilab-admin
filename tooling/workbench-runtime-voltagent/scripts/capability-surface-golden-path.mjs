@@ -105,8 +105,7 @@ async function main() {
         } else {
           pass('G.1b', 'cli_session honesty label present')
         }
-        if (String(body.honesty?.note ?? '').includes('不进入 Renderer') === false) {
-          // note must deny host/renderer contact with credentials (matches snapshot.ts)
+        if (!String(body.honesty?.note ?? '').includes('不进入 Renderer')) {
           fail('G.1c', 'honesty note should deny credentials reaching Renderer')
         } else {
           pass('G.1c', 'honesty note denies credentials reaching Renderer')
