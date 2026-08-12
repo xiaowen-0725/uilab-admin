@@ -151,3 +151,7 @@ _Avoid_: Connected, Installed（作唯一用户词）, Authorized
 **Connected**:
 某 Connector 所需身份材料可用（授权状态为已连接）；与 Enabled 分立，可出现「已启用但未连接」。
 _Avoid_: Enabled, Installed, Logged in（作全局宿主登录）
+
+**Permission Preset**:
+Task 级默认权限档位，决定渲染端如何自动应答 Runtime 审批请求（`approval.requested`）；两档：`auto-approve`「帮我批准」（文件写白名单自动批准，命令与未知工具弹 Dock）与 `full-access`「完全访问」（一律自动批准）。侧车门闸保持 fail-closed，预设只自动化用户同意动作。
+_Avoid_: Permission Mode（作实现词）, 权限策略引擎, Role
