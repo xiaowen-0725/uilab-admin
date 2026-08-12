@@ -1,0 +1,18 @@
+{
+  "connected": true,
+  "taskSelected": true,
+  "capabilityEffective": true,
+  "effectiveCommandScopes": [
+    "lark-cli"
+  ],
+  "snapshotEffectiveCommandScopes": [
+    "lark-cli"
+  ],
+  "selection": {
+    "connectorIds": [
+      "connector.feishu"
+    ],
+    "skillIds": [],
+    "expertId": "expert.office-meeting"
+  }
+}

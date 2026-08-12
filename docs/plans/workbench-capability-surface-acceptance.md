@@ -87,9 +87,9 @@
 
 | #   | 步骤           | 期望                                                 | Pass? |
 | --- | -------------- | ---------------------------------------------------- | ----- |
-| 2.1 | 取消登录流     | 未连接；中文已取消                                   | ☐     |
+| 2.1 | 取消登录流     | 未连接；中文已取消                                   | ☑ 2026-08-12 Composer/管理面显式「取消登录」→「已取消登录」且保持未连接；关窗≠取消（composer-capability-selection 单测） |
 | 2.2 | CLI 未安装     | 明确 missing binary 提示；不绿点                     | ☑ startAuth missing-binary 单测 + 中文 notice |
-| 2.3 | 解绑/logout 后 | 保留 Task 选用芯片；显示未连接；调用失败可区分未登录 | ☐     |
+| 2.3 | 解绑/logout 后 | 保留 Task 选用芯片；显示未连接；调用失败可区分未登录 | ☑ 2026-08-12 revoke→CLI 真 logout；chip 保留 + not_connected；Timeline 保留「需先完成 CLI 登录」hint（projection/normalize 单测 + 验收证据） |
 | 2.4 | 安全抽查       | Renderer 无 CLI token；不把 CLI 成功写成宿主 OAuth   | ☑ snapshot 白名单 + sidecar 安全套件           |
 | 2.5 | GitHub 连接    | 点击连接打开 UI Lab Connector；Broker callback 后 Sidecar claim/自动刷新 | ☑ startAuth/reconcile/polling + Fake/Sidecar tests |
 

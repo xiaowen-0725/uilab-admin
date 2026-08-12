@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "phase": "login_started",
+  "step": "authorize",
+  "kind": "cli_session",
+  "connectorId": "connector.feishu",
+  "message": "请在浏览器授权「飞书」账号。",
+  "verificationUrlHost": "accounts.feishu.cn",
+  "leakCheck": true
+}

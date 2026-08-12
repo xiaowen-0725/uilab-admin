@@ -1,0 +1,15 @@
+{
+  "afterDeselect": {
+    "connected": true,
+    "taskSelected": false,
+    "effectiveCommandScopes": [],
+    "snapshotEffectiveCommandScopes": []
+  },
+  "afterReselect": {
+    "connected": true,
+    "taskSelected": true,
+    "effectiveCommandScopes": [
+      "lark-cli"
+    ]
+  }
+}

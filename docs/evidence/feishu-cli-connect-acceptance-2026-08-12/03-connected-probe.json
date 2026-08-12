@@ -1,0 +1,6 @@
+{
+  "connected": true,
+  "connectionState": "connected",
+  "transition": {},
+  "userProbeNote": "lark-cli auth status --verify in Workbench session dir: user.available=true, userName=周家文 (not written with secrets)"
+}

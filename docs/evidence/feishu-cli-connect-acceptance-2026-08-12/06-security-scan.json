@@ -1,0 +1,12 @@
+[
+  {
+    "endpoint": "snapshot",
+    "leak": false,
+    "bytes": 6637
+  },
+  {
+    "endpoint": "refresh",
+    "leak": false,
+    "bytes": 6677
+  }
+]
