@@ -4,7 +4,7 @@
  * Carved from secret-store.ts for locality: credential resolution branches
  * (cli_session / oauth2 / env_ref / static_bearer / app_client) depend on
  * secret backends (injected) and keychain account encoders, but not on
- * AuthBindingStore. Depends on ./secret-store.js for isHostOwnedKeychainAccount.
+ * AuthBindingStore. Depends on ./keychain-account.js for isHostOwnedKeychainAccount.
  */
 
 import { isAllowedAuthEnvName } from './security-policy.js'
@@ -16,7 +16,7 @@ import type {
   SecretRef,
 } from './types.js'
 import { isCliSessionConnected } from './cli-session-status.js'
-import { isHostOwnedKeychainAccount } from './secret-store.js'
+import { isHostOwnedKeychainAccount } from './keychain-account.js'
 import type { AuthBindingStore } from './auth-binding-store.js'
 import type { SecretStore } from './secret-store.js'
 

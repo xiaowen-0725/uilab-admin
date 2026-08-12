@@ -15,57 +15,14 @@ import type {
   SecretRef,
 } from './types.js'
 import { isCliSessionConnected } from './cli-session-status.js'
-/**
- * Length-prefixed segment so pluginId/resourceId containing `:` cannot collide
- * (e.g. a + b:c vs a:b + c).
- */
-export function encodeAuthScopeSegment(value: string): string {
-  const s = String(value ?? '')
-  return `${s.length}.${s}`
-}
-
-/**
- * Host-owned Keychain account for operator-stored plugin secrets.
- * Local plugin.json must never invent arbitrary accounts (cross-plugin theft).
- * Format: uilab:v1:{len.pluginId}:{len.resourceId}:{role}
- */
-export function pluginAuthKeychainAccount(
-  pluginId: string,
-  resourceId: string,
-  role: 'env' | 'access' = 'env',
-): string {
-  return `uilab:v1:${encodeAuthScopeSegment(pluginId)}:${encodeAuthScopeSegment(resourceId)}:${role}`
-}
-
-/**
- * OAuth Keychain accounts (same unambiguous encoding).
- * Format: oauth:v1:{len.pluginId}:{len.resourceId}:{access|refresh}
- */
-export function oauthKeychainAccount(
-  pluginId: string,
-  resourceId: string,
-  role: 'access' | 'refresh',
-): string {
-  return `oauth:v1:${encodeAuthScopeSegment(pluginId)}:${encodeAuthScopeSegment(resourceId)}:${role}`
-}
-
-/**
- * True when account is exactly the host-owned account for this plugin resource.
- * Exact match only — no prefix checks (prevents encoding collisions).
- */
-export function isHostOwnedKeychainAccount(
-  pluginId: string,
-  resourceId: string,
-  account: string,
-): boolean {
-  if (!account || !pluginId || !resourceId) return false
-  return (
-    account === pluginAuthKeychainAccount(pluginId, resourceId, 'env') ||
-    account === pluginAuthKeychainAccount(pluginId, resourceId, 'access') ||
-    account === oauthKeychainAccount(pluginId, resourceId, 'access') ||
-    account === oauthKeychainAccount(pluginId, resourceId, 'refresh')
-  )
-}
+// Keychain account encoders — re-exported from keychain-account.ts (pure leaf).
+// Moved to break the credential-resolver ↔ secret-store circular dependency.
+export {
+  encodeAuthScopeSegment,
+  isHostOwnedKeychainAccount,
+  oauthKeychainAccount,
+  pluginAuthKeychainAccount,
+} from './keychain-account.js'
 
 export type SecretStore = {
   /** Resolve secret value; never logs the value. */
