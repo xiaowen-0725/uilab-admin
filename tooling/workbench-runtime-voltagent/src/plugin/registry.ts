@@ -53,7 +53,10 @@ import {
   type ResolvedMcpServer,
 } from './mcp-loader.js'
 import type { CredentialMaterial } from './types.js'
-import type { RegisteredToolIdentity } from './tool-identity.js'
+import {
+  createToolIdentityRegistry,
+  type RegisteredToolIdentity,
+} from './tool-identity.js'
 import { parseEnvStringList } from './parse-util.js'
 import {
   loadSkillsContributions,
@@ -85,6 +88,8 @@ export type PluginRegistryLoadResult = {
   toolNames: string[]
   /** Reversible model-visible name → Provider identity records. */
   toolIdentities: RegisteredToolIdentity[]
+  /** Resolve a model-visible public name back to Provider canonical identity. */
+  resolveToolIdentity: (publicName: string) => RegisteredToolIdentity | undefined
   mcpStatuses: McpServerLoadStatus[]
   cliStatuses: CliLoadStatus[]
   authStatuses: PluginAuthStatus[]
@@ -221,6 +226,11 @@ export function createPluginRegistry(
     }))
   }
 
+  // Shared identity registry across all loads (initial + hot-reload).
+  // Single instance so cross-channel name collisions are detected and
+  // resolveToolIdentity works for tools added after initial load.
+  const sharedIdentityRegistry = createToolIdentityRegistry()
+
   async function loadMcpPlugin(pluginId: string): Promise<McpLoadAggregate> {
     const manifest = byId.get(pluginId)
     if (!manifest || !resolveEnabledIds().includes(pluginId)) {
@@ -255,6 +265,7 @@ export function createPluginRegistry(
       host: options.host,
       expected,
       connectorDescriptors,
+      identityRegistry: sharedIdentityRegistry,
     })
   }
 
@@ -461,6 +472,7 @@ export function createPluginRegistry(
         host: options.host,
         expected,
         connectorDescriptors,
+        identityRegistry: sharedIdentityRegistry,
       })
 
       const skillsAgg = await loadSkillsContributions(skillsItems, {
@@ -480,6 +492,7 @@ export function createPluginRegistry(
         runner: options.cliRunner,
         trustedPluginIds,
         connectorDescriptors,
+        identityRegistry: sharedIdentityRegistry,
       })
 
       const authStatuses = await resolvePluginAuthStatuses(authItems, authOpts)
@@ -536,10 +549,9 @@ export function createPluginRegistry(
         connectorDescriptors: [...connectorDescriptors],
         tools: [...mcpAgg.tools, ...cliAgg.tools],
         toolNames: [...mcpAgg.toolNames, ...cliAgg.toolNames],
-        toolIdentities: [
-          ...mcpAgg.toolIdentities,
-          ...cliAgg.toolIdentities,
-        ],
+        toolIdentities: sharedIdentityRegistry.list(),
+        resolveToolIdentity: (publicName: string) =>
+          sharedIdentityRegistry.resolve(publicName),
         mcpStatuses: mcpAgg.statuses,
         cliStatuses: cliAgg.statuses,
         authStatuses,
