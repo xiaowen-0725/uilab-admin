@@ -21,9 +21,8 @@ describe('createOfficeWorkspaceSandbox', () => {
           connectors: [],
           manifests: [],
           resolveConnectorAccess: async () => ({
-            pluginEnabled: false,
-            connected: false,
-            taskSelected: false,
+            allowed: false as const,
+            reason: 'test_deny',
           }),
         })
 
