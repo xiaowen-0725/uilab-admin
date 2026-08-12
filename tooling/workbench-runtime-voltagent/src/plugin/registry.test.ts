@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
-import { BUILTIN_PLUGINS } from './builtins.js'
+import {
+  BUILTIN_MCP_GITHUB_PLUGIN,
+  BUILTIN_PLUGINS,
+} from './builtins.js'
 import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
+import { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
 import type { BuiltinPluginPackage } from './plugin-package.js'
 import { oauthAccessAccount } from './oauth.js'
 import { createPluginRegistry } from './registry.js'
@@ -427,5 +431,37 @@ describe('createPluginRegistry — BuiltinPluginPackage seam (#49)', () => {
       builtins: [],
     })
     assert.deepEqual(reg.listFakeCatalog(), [])
+  })
+})
+
+describe('createPluginRegistry — GitHub package migration (#50)', () => {
+  it('GITHUB_PLUGIN_PACKAGE registers via packages with brandIconKey + fakeCatalog', () => {
+    const reg = createPluginRegistry({
+      env: {},
+      builtins: [],
+      packages: [GITHUB_PLUGIN_PACKAGE],
+    })
+
+    const github = reg
+      .listConnectorDescriptors()
+      .find((c) => c.id === 'connector.github')
+    assert.ok(github, 'GitHub connector must be registered via package')
+    assert.equal(github?.brandIconKey, 'github')
+    assert.equal(github?.pluginRefs[0], 'mcp.github')
+
+    const catalog = reg.listFakeCatalog()
+    const githubEntry = catalog.find(
+      (e) => e.connectorId === 'connector.github',
+    )
+    assert.ok(githubEntry, 'GitHub fakeCatalog entry must be present')
+    assert.equal(githubEntry?.connectionState, 'missing')
+  })
+
+  it('GITHUB_PLUGIN_PACKAGE manifest is identical to BUILTIN_MCP_GITHUB_PLUGIN', () => {
+    // The alias export must be the same object — migration preserves identity.
+    assert.equal(
+      GITHUB_PLUGIN_PACKAGE.manifests[0],
+      BUILTIN_MCP_GITHUB_PLUGIN,
+    )
   })
 })
