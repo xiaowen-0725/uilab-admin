@@ -139,6 +139,7 @@ export function buildCapabilitySnapshot(
         label: row.label,
       })),
       availability: c.availability,
+      brandIconKey: c.descriptor.brandIconKey,
     }
   })
 

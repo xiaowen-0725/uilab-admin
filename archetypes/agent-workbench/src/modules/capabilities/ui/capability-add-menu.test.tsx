@@ -51,6 +51,7 @@ const snapshot: CapabilitySnapshot = {
         },
       ],
       availability: 'sidecar',
+      brandIconKey: 'github',
     },
     {
       id: 'connector.feishu',
@@ -84,6 +85,7 @@ const snapshot: CapabilitySnapshot = {
         },
       ],
       availability: 'sidecar',
+      brandIconKey: 'feishu',
     },
   ],
   skills: [
@@ -255,7 +257,7 @@ describe('CapabilityAddMenu WorkBuddy IA', () => {
       .toBeInTheDocument()
 
     const brandIcon = document.querySelector(
-      '[data-brand-id="connector.feishu"]'
+      '[data-brand-id="feishu"]'
     )
     expect(brandIcon?.tagName).toBe('IMG')
     expect(brandIcon?.getAttribute('alt')).toBe('飞书')
@@ -380,7 +382,7 @@ describe('CapabilityAddMenu WorkBuddy IA', () => {
       .toBeInTheDocument()
 
     const githubIcon = document.querySelector(
-      '[data-brand-id="connector.github"]'
+      '[data-brand-id="github"]'
     )
     expect(githubIcon?.tagName).toBe('svg')
     expect(githubIcon?.getAttribute('aria-label')).toBe('GitHub')
