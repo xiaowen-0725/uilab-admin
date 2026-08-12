@@ -66,4 +66,21 @@ describe('normalizeToolOutput', () => {
     expect(normalizeToolOutput(null)).toEqual({})
     expect(normalizeToolOutput('')).toEqual({})
   })
+
+  it('prefers Chinese auth hint over machine error codes for unauthenticated tools', () => {
+    const n = normalizeToolOutput({
+      ok: false,
+      error: 'auth_revoked',
+      hint: '需先完成领域 CLI 登录（cli_session），例如：lark-cli auth login',
+    })
+    expect(n.summary).toMatch(/需先完成领域 CLI 登录/)
+    expect(n.summary).not.toBe('auth_revoked')
+  })
+
+  it('keeps not_connected machine codes distinguishable when no hint is present', () => {
+    const n = normalizeToolOutput(
+      'connector_access_denied:connector.feishu:not_connected',
+    )
+    expect(n.summary).toMatch(/not_connected/)
+  })
 })

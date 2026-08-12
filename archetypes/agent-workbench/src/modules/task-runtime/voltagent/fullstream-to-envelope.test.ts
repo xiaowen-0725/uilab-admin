@@ -281,6 +281,36 @@ describe('mapFullStreamChunks', () => {
     })
   })
 
+  it('keeps Chinese CLI login hints on auth_revoked tool results for Timeline', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'auth1',
+          toolName: 'github__search',
+          args: { q: 'uilab' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'auth1',
+          toolName: 'github__search',
+          isError: true,
+          output: {
+            ok: false,
+            error: 'auth_revoked',
+            hint: '需先完成领域 CLI 登录（cli_session），例如：lark-cli auth login',
+          },
+        },
+      ],
+      baseCtx(),
+    )
+    const completed = envelopes.find((e) => e.eventType === 'tool.completed')
+    expect(completed?.payload).toMatchObject({
+      isError: true,
+      summary: expect.stringMatching(/需先完成领域 CLI 登录/),
+    })
+  })
+
   it('maps Workspace FS read tools (ls / list_tree) as expandable tool rows', () => {
     const { envelopes } = mapFullStreamChunks(
       [

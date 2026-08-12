@@ -146,7 +146,10 @@ function normalizeRecord(rec: Record<string, unknown>): NormalizedToolOutput {
     return asItemList([redactSecrets(line)])
   }
 
-  const message = asNonEmptyString(rec.message) ?? asNonEmptyString(rec.error)
+  const message =
+    asNonEmptyString(rec.message) ??
+    asNonEmptyString(rec.hint) ??
+    asNonEmptyString(rec.error)
   if (message) return { summary: cleanText(message) }
 
   return { summary: jsonSummary(rec) }
@@ -184,7 +187,7 @@ export function sanitizeToolOutputForEnvelope(output: unknown): unknown {
   }
   if (typeof output === 'object') {
     const next: Record<string, unknown> = { ...(output as Record<string, unknown>) }
-    for (const key of [...CONTENT_KEYS, 'message', 'error'] as const) {
+    for (const key of [...CONTENT_KEYS, 'message', 'error', 'hint'] as const) {
       if (typeof next[key] === 'string') {
         next[key] = cleanText(next[key] as string)
       }

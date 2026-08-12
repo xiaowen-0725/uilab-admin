@@ -50,6 +50,10 @@ export type CapabilityAddMenuProps = {
   onToggleSkill: (skillId: string, selected: boolean) => void
   onSelectExpert: (expertId: string | null) => void
   onStartAuth: (connectorId: string) => void | Promise<void>
+  /** Explicit cancel while Renderer is waiting for authorization (not window-close). */
+  onCancelAuth?: () => void
+  /** Connector currently waiting for auth completion; enables cancel affordance. */
+  authWaitingConnectorId?: string | null
   onRefreshAuth: () => void | Promise<void>
   onManageConnectors?: () => void
 }
@@ -129,6 +133,8 @@ export function CapabilityAddMenu({
   onToggleSkill,
   onSelectExpert,
   onStartAuth,
+  onCancelAuth,
+  authWaitingConnectorId = null,
   onRefreshAuth,
   onManageConnectors,
 }: CapabilityAddMenuProps) {
@@ -564,6 +570,18 @@ export function CapabilityAddMenu({
             >
               刷新连接状态
             </DropdownMenuItem>
+            {authWaitingConnectorId && onCancelAuth ? (
+              <DropdownMenuItem
+                className='min-h-10 gap-2 rounded-lg px-2 py-2 text-xs text-muted-foreground'
+                data-testid='capability-connector-cancel-auth'
+                closeOnClick={true}
+                onClick={() => {
+                  onCancelAuth()
+                }}
+              >
+                取消登录
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       </DropdownMenuContent>

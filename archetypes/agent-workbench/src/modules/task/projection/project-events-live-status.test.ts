@@ -161,6 +161,32 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(tool?.body).toBeTruthy()
   })
 
+  it('preserves unauthenticated CLI login hint on tool failure rows (acceptance 2.3)', () => {
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = projectEvents(state, [
+      mk(1, 'run.started', {}),
+      mk(2, 'tool.called', {
+        toolId: 'cmd1',
+        name: 'execute_command',
+        label: 'execute_command',
+      }),
+      mk(3, 'tool.completed', {
+        toolId: 'cmd1',
+        name: 'execute_command',
+        isError: true,
+        output: {
+          ok: false,
+          error: 'auth_revoked',
+          hint: '需先完成领域 CLI 登录（cli_session），例如：lark-cli auth login',
+        },
+      }),
+    ])
+    const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
+    expect(tool?.status).toBe('error')
+    expect(tool?.body ?? '').toMatch(/需先完成领域 CLI 登录/)
+    expect(tool?.body ?? '').not.toMatch(/Runtime|adapter/i)
+  })
+
   it('ls tool output projects to expandable tool-group children', () => {
     const envelopes: AgentRuntimeEventEnvelope[] = [
       mk(1, 'run.started', {}),

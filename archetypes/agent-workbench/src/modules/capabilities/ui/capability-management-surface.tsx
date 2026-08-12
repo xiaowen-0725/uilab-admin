@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
   BookOpen,
@@ -25,6 +25,7 @@ import {
   useCapabilitySnapshot,
   useCapabilitySnapshotError,
 } from '../application/use-capability-snapshot'
+import { waitForConnectorAuth } from '../application/wait-for-connector-auth'
 import type {
   CapabilityConnectionState,
   CapabilitySnapshotConnector,
@@ -53,9 +54,20 @@ export function CapabilityManagementSurface({
   const [revokeTarget, setRevokeTarget] =
     useState<CapabilitySnapshotConnector | null>(null)
   const [actionNotice, setActionNotice] = useState<{
-    tone: 'success' | 'error'
+    tone: 'success' | 'error' | 'info'
     message: string
   } | null>(null)
+  const [authWaitingConnectorId, setAuthWaitingConnectorId] = useState<
+    string | null
+  >(null)
+  const authAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => {
+      authAbortRef.current?.abort()
+      authAbortRef.current = null
+    }
+  }, [])
 
   const refresh = async (connectorId?: string) => {
     if (!controller) return
@@ -70,12 +82,24 @@ export function CapabilityManagementSurface({
           cause instanceof Error ? cause.message : '刷新连接器状态失败，请重试',
       })
     } finally {
-      setPendingConnectorId(null)
+      setPendingConnectorId((current) =>
+        current === (connectorId ?? '__catalog__') ? null : current
+      )
     }
+  }
+
+  const cancelAuthWait = () => {
+    authAbortRef.current?.abort()
+    authAbortRef.current = null
+    setAuthWaitingConnectorId(null)
+    setActionNotice({ tone: 'info', message: '已取消登录' })
   }
 
   const connect = async (connectorId: string) => {
     if (!controller) return
+    authAbortRef.current?.abort()
+    const abort = new AbortController()
+    authAbortRef.current = abort
     setPendingConnectorId(connectorId)
     setActionNotice(null)
     try {
@@ -85,18 +109,76 @@ export function CapabilityManagementSurface({
       }
       if (result && !result.ok) {
         setActionNotice({ tone: 'error', message: result.message })
-      } else if (result?.message) {
-        setActionNotice({ tone: 'success', message: result.message })
+        await controller.refreshAuth(taskId, connectorId)
+        return
+      }
+      if (result?.phase === 'already_connected') {
+        setActionNotice({
+          tone: 'success',
+          message: result.message || '账号已连接。',
+        })
+        await controller.refreshAuth(taskId, connectorId)
+        return
+      }
+      if (result?.phase === 'login_started' && result.verificationUrl) {
+        setActionNotice({
+          tone: 'info',
+          message: result.message || '已打开授权页面，完成授权后状态会自动刷新。',
+        })
+        // Waiting is tracked by authWaitingConnectorId; release catalog pending
+        // so refresh / revoke / other connects stay usable during the long poll.
+        setPendingConnectorId(null)
+        setAuthWaitingConnectorId(connectorId)
+        const outcome = await waitForConnectorAuth({
+          connectorId,
+          signal: abort.signal,
+          refresh: () => controller.refreshAuth(taskId, connectorId),
+          onAuthorizationRequired: (transition) => {
+            if (!transition.verificationUrl) return
+            window.open(
+              transition.verificationUrl,
+              '_blank',
+              'noopener,noreferrer'
+            )
+            setActionNotice({
+              tone: 'info',
+              message: '需要继续完成账号授权。请在新打开的页面中操作。',
+            })
+          },
+        })
+        // Only the active wait may clear waiting UI / notices.
+        if (authAbortRef.current !== abort) return
+        authAbortRef.current = null
+        setAuthWaitingConnectorId(null)
+        if (outcome === 'cancelled') return
+        const connectorName =
+          snapshot?.connectors.find((item) => item.id === connectorId)?.name ??
+          '连接器'
+        setActionNotice({
+          tone: outcome === 'connected' ? 'success' : 'info',
+          message:
+            outcome === 'connected'
+              ? `「${connectorName}」授权已完成。`
+              : `尚未检测到「${connectorName}」授权完成；可点击「刷新状态」重试。`,
+        })
+        return
+      }
+      if (result?.message) {
+        setActionNotice({ tone: 'info', message: result.message })
       }
       await controller.refreshAuth(taskId, connectorId)
     } catch (cause) {
-      setActionNotice({
-        tone: 'error',
-        message:
-          cause instanceof Error ? cause.message : '启动连接器授权失败，请重试',
-      })
+      if (authAbortRef.current === abort) {
+        setActionNotice({
+          tone: 'error',
+          message:
+            cause instanceof Error ? cause.message : '启动连接器授权失败，请重试',
+        })
+      }
     } finally {
-      setPendingConnectorId(null)
+      setPendingConnectorId((current) =>
+        current === connectorId ? null : current
+      )
     }
   }
 
@@ -237,13 +319,32 @@ export function CapabilityManagementSurface({
             >
               {actionNotice.tone === 'error' ? (
                 <CircleX className='mt-0.5 size-4 shrink-0' aria-hidden />
-              ) : (
+              ) : actionNotice.tone === 'success' ? (
                 <CircleCheck
                   className='mt-0.5 size-4 shrink-0 text-emerald-600'
                   aria-hidden
                 />
+              ) : (
+                <LoaderCircle
+                  className='mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground'
+                  aria-hidden
+                />
               )}
-              <span className='leading-5'>{actionNotice.message}</span>
+              <span className='min-w-0 flex-1 leading-5'>
+                {actionNotice.message}
+              </span>
+              {authWaitingConnectorId ? (
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='ghost'
+                  className='shrink-0'
+                  data-testid='capability-management-cancel-auth'
+                  onClick={cancelAuthWait}
+                >
+                  取消登录
+                </Button>
+              ) : null}
             </div>
           ) : null}
 

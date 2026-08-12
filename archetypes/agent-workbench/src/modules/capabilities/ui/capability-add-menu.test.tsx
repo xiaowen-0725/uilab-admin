@@ -116,12 +116,15 @@ const snapshot: CapabilitySnapshot = {
 function renderMenu(overrides?: {
   snapshot?: CapabilitySnapshot | null
   onStartAuth?: (connectorId: string) => void
+  onCancelAuth?: () => void
+  authWaitingConnectorId?: string | null
   onToggleConnector?: (connectorId: string, selected: boolean) => void
   errorMessage?: string
   onRetry?: () => void
   onManageConnectors?: () => void
 }) {
   const onStartAuth = overrides?.onStartAuth ?? vi.fn()
+  const onCancelAuth = overrides?.onCancelAuth ?? vi.fn()
   const onToggleConnector = overrides?.onToggleConnector ?? vi.fn()
   render(
     <CapabilityAddMenu
@@ -142,11 +145,13 @@ function renderMenu(overrides?: {
       onToggleSkill={vi.fn()}
       onSelectExpert={vi.fn()}
       onStartAuth={onStartAuth}
+      onCancelAuth={onCancelAuth}
+      authWaitingConnectorId={overrides?.authWaitingConnectorId}
       onRefreshAuth={vi.fn()}
       onManageConnectors={overrides?.onManageConnectors}
     />
   )
-  return { onStartAuth, onToggleConnector }
+  return { onStartAuth, onCancelAuth, onToggleConnector }
 }
 
 function KeyboardMenuHarness() {
@@ -540,5 +545,19 @@ describe('formatStartAuthNotice', () => {
     expect(formatTaskConnectorSelectionNotice('飞书', false)).toBe(
       '已停止为当前任务启用「飞书」；账号仍保持连接。'
     )
+  })
+
+  it('offers explicit cancel-login while authorization is waiting', async () => {
+    const onCancelAuth = vi.fn()
+    renderMenu({
+      authWaitingConnectorId: 'connector.feishu',
+      onCancelAuth,
+    })
+
+    await page.getByTestId('composer-add-connectors-nav').click()
+    const cancel = page.getByTestId('capability-connector-cancel-auth')
+    await expect.element(cancel).toHaveTextContent('取消登录')
+    await cancel.click()
+    expect(onCancelAuth).toHaveBeenCalledTimes(1)
   })
 })

@@ -307,4 +307,175 @@ describe('TaskComposer connector selection', () => {
     await expect.element(notice).not.toHaveTextContent(/Runtime|adapter/)
     openWindow.mockRestore()
   })
+
+  it('cancels an in-flight login wait with an explicit 取消登录 control', async () => {
+    const disconnectedSnapshot: CapabilitySnapshot = {
+      ...selectedSnapshot,
+      connectors: selectedSnapshot.connectors.map((connector) => ({
+        ...connector,
+        connected: false,
+        connectionState: 'missing',
+        taskSelected: false,
+        capabilityEffective: false,
+        effectiveCommandScopes: [],
+      })),
+      selection: {
+        ...selectedSnapshot.selection,
+        connectorIds: [],
+      },
+      effectiveCommandScopes: [],
+    }
+    const refreshAuth = vi.fn(async () => ({
+      snapshot: disconnectedSnapshot,
+      transitions: [],
+    }))
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => disconnectedSnapshot),
+      setSelection: vi.fn(),
+      startAuth: vi.fn(async () => ({
+        ok: true as const,
+        connectorId: 'connector.feishu',
+        kind: 'cli_session' as const,
+        phase: 'login_started' as const,
+        verificationUrl: 'https://accounts.example.test/device',
+        message: '请在浏览器完成授权',
+        loginHint: '请完成授权',
+      })),
+      refreshAuth,
+      revokeAuth: vi.fn(),
+      subscribe: () => () => {},
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    const fakeWindow = {
+      closed: false,
+      opener: null as Window | null,
+      location: { replace: vi.fn() },
+      close: vi.fn(),
+    }
+    const openWindow = vi
+      .spyOn(window, 'open')
+      .mockReturnValue(fakeWindow as unknown as Window)
+
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+      />
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-connectors-nav').click()
+    await page.getByTestId('capability-connector-connector.feishu').click()
+
+    await expect
+      .element(page.getByTestId('composer-auth-waiting'))
+      .toBeInTheDocument()
+    await page.getByTestId('composer-cancel-auth').click()
+
+    await expect
+      .element(page.getByTestId('composer-notice'))
+      .toHaveTextContent('已取消登录')
+    await expect
+      .element(page.getByTestId('composer-auth-waiting'))
+      .not.toBeInTheDocument()
+    // Cancel must not invent Connected.
+    expect(controller.getCached()?.connectors[0]?.connected).toBe(false)
+    openWindow.mockRestore()
+  })
+
+  it('keeps waiting UI when a superseded wait finishes after a second connect', async () => {
+    const disconnectedSnapshot: CapabilitySnapshot = {
+      ...selectedSnapshot,
+      connectors: selectedSnapshot.connectors.map((connector) => ({
+        ...connector,
+        connected: false,
+        connectionState: 'missing',
+        taskSelected: false,
+        capabilityEffective: false,
+        effectiveCommandScopes: [],
+      })),
+      selection: {
+        ...selectedSnapshot.selection,
+        connectorIds: [],
+      },
+      effectiveCommandScopes: [],
+    }
+    const pendingRefreshes: Array<
+      (value: { snapshot: CapabilitySnapshot; transitions: [] }) => void
+    > = []
+    const refreshAuth = vi.fn(
+      () =>
+        new Promise<{ snapshot: CapabilitySnapshot; transitions: [] }>(
+          (resolve) => {
+            pendingRefreshes.push(resolve)
+          }
+        )
+    )
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => disconnectedSnapshot),
+      setSelection: vi.fn(),
+      startAuth: vi.fn(async () => ({
+        ok: true as const,
+        connectorId: 'connector.feishu',
+        kind: 'cli_session' as const,
+        phase: 'login_started' as const,
+        verificationUrl: 'https://accounts.example.test/device',
+        message: '请在浏览器完成授权',
+        loginHint: '请完成授权',
+      })),
+      refreshAuth,
+      revokeAuth: vi.fn(),
+      subscribe: () => () => {},
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    const fakeWindow = {
+      closed: false,
+      opener: null as Window | null,
+      location: { replace: vi.fn() },
+      close: vi.fn(),
+    }
+    const openWindow = vi
+      .spyOn(window, 'open')
+      .mockReturnValue(fakeWindow as unknown as Window)
+
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+      />
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-connectors-nav').click()
+    await page.getByTestId('capability-connector-connector.feishu').click()
+
+    await expect
+      .element(page.getByTestId('composer-auth-waiting'))
+      .toBeInTheDocument()
+    await expect.poll(() => pendingRefreshes.length).toBeGreaterThanOrEqual(1)
+
+    // Submenu keeps the connector item (closeOnClick=false) — click again while
+    // the first wait's refresh is still pending to supersede that wait.
+    await page.getByTestId('capability-connector-connector.feishu').click()
+
+    await expect.poll(() => pendingRefreshes.length).toBeGreaterThanOrEqual(2)
+
+    // Finish the superseded wait's in-flight refresh — must not clear the new wait UI.
+    pendingRefreshes[0]!({
+      snapshot: disconnectedSnapshot,
+      transitions: [],
+    })
+
+    await expect
+      .element(page.getByTestId('composer-auth-waiting'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('composer-cancel-auth'))
+      .toBeInTheDocument()
+    openWindow.mockRestore()
+  })
 })

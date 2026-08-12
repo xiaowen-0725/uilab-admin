@@ -54,7 +54,13 @@ export {
   useCapabilitySnapshot,
   useCapabilitySnapshotError,
 } from './application/use-capability-snapshot'
-export { waitForConnectorAuth } from './application/wait-for-connector-auth'
+export {
+  waitForConnectorAuth,
+  CONNECTOR_AUTH_POLL_INTERVAL_MS,
+  CONNECTOR_AUTH_MAX_ATTEMPTS,
+  CONNECTOR_AUTH_OVERALL_TIMEOUT_MS,
+  type WaitForConnectorAuthOutcome,
+} from './application/wait-for-connector-auth'
 
 export {
   formatStartAuthNotice,

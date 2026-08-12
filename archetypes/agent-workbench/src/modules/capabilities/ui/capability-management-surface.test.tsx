@@ -303,4 +303,139 @@ describe('CapabilityManagementSurface', () => {
       )
       .toHaveTextContent('尚未连接')
   })
+
+  it('releases catalog pending while waiting for login so 刷新状态 stays enabled', async () => {
+    const disconnected: CapabilitySnapshot = {
+      ...snapshot,
+      connectors: snapshot.connectors.map((connector) =>
+        connector.id === 'connector.feishu'
+          ? {
+              ...connector,
+              connected: false,
+              connectionState: 'missing' as const,
+            }
+          : connector
+      ),
+    }
+    const pendingRefreshes: Array<
+      (value: { snapshot: CapabilitySnapshot; transitions: [] }) => void
+    > = []
+    const startAuth = vi.fn(async () => ({
+      ok: true as const,
+      connectorId: 'connector.feishu',
+      kind: 'cli_session' as const,
+      phase: 'login_started' as const,
+      verificationUrl: 'https://accounts.example.test/device',
+      message: '已打开授权页面，完成授权后状态会自动刷新。',
+      loginHint: '飞书 CLI',
+    }))
+    const refreshAuth = vi.fn(
+      () =>
+        new Promise<{ snapshot: CapabilitySnapshot; transitions: [] }>(
+          (resolve) => {
+            pendingRefreshes.push(resolve)
+          }
+        )
+    )
+    const controller = createController(disconnected, { startAuth, refreshAuth })
+    await controller.refresh('task-a')
+    // Unblock the initial catalog refresh used by the hook / controller cache.
+    for (const release of pendingRefreshes.splice(0)) {
+      release({ snapshot: disconnected, transitions: [] })
+    }
+    const openWindow = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(
+      <CapabilityManagementSurface
+        controller={controller}
+        taskId='task-a'
+        onBack={vi.fn()}
+      />
+    )
+
+    await page.getByRole('button', { name: '连接飞书' }).click()
+
+    await expect
+      .element(page.getByTestId('capability-management-cancel-auth'))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByRole('button', { name: '刷新状态' }))
+      .not.toHaveAttribute('disabled')
+    openWindow.mockRestore()
+  })
+
+  it('treats already_connected startAuth as success and refreshes card state', async () => {
+    let current: CapabilitySnapshot = {
+      ...snapshot,
+      connectors: snapshot.connectors.map((connector) =>
+        connector.id === 'connector.feishu'
+          ? {
+              ...connector,
+              connected: false,
+              connectionState: 'missing' as const,
+            }
+          : connector
+      ),
+    }
+    const listeners = new Set<(snapshot: CapabilitySnapshot) => void>()
+    const startAuth = vi.fn(async () => ({
+      ok: true as const,
+      connectorId: 'connector.feishu',
+      kind: 'cli_session' as const,
+      phase: 'already_connected' as const,
+      step: 'connected' as const,
+      message: '「飞书」CLI session 已连接。',
+      loginHint: '飞书 CLI',
+    }))
+    const refreshAuth = vi.fn(async () => {
+      current = {
+        ...current,
+        version: current.version + 1,
+        connectors: current.connectors.map((connector) =>
+          connector.id === 'connector.feishu'
+            ? {
+                ...connector,
+                connected: true,
+                connectionState: 'connected' as const,
+              }
+            : connector
+        ),
+      }
+      for (const listener of listeners) listener(current)
+      return { snapshot: current, transitions: [] }
+    })
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => current),
+      setSelection: vi.fn(),
+      startAuth,
+      refreshAuth,
+      revokeAuth: vi.fn(),
+      subscribe(listener) {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    const openWindow = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(
+      <CapabilityManagementSurface
+        controller={controller}
+        taskId='task-a'
+        onBack={vi.fn()}
+      />
+    )
+
+    await page.getByRole('button', { name: '连接飞书' }).click()
+    await expect
+      .element(page.getByTestId('capability-management-action-notice'))
+      .toHaveTextContent('「飞书」CLI session 已连接。')
+    await expect
+      .element(
+        page.getByTestId('capability-management-status-connector.feishu')
+      )
+      .toHaveTextContent('已连接')
+    expect(startAuth).toHaveBeenCalledWith('connector.feishu', undefined)
+    expect(refreshAuth).toHaveBeenCalled()
+    openWindow.mockRestore()
+  })
 })
