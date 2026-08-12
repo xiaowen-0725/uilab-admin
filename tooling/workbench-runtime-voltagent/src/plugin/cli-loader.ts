@@ -29,6 +29,7 @@ import {
 import type { CredentialMaterial, ProfileEnv } from './types.js'
 import {
   createToolIdentityRegistry,
+  type ToolIdentityRegistry,
   type RegisteredToolIdentity,
 } from './tool-identity.js'
 
@@ -71,6 +72,7 @@ export type LoadCliOptions = {
   trustedPluginIds?: ReadonlySet<string>
   /** Provider-projected connectors used by the Task invoke gate. */
   connectorDescriptors?: readonly ConnectorDescriptor[]
+  identityRegistry?: ToolIdentityRegistry
 }
 
 /**
@@ -389,6 +391,7 @@ function createCliTool(input: {
   env?: ProfileEnv
   authEnforced?: boolean
   connectorDescriptors?: readonly ConnectorDescriptor[]
+  identityRegistry?: ToolIdentityRegistry
 }): Tool<any, any> {
   const toolName = input.publicName ?? cliToolName(input.cliId, input.cmd.name)
   const passthroughParam = input.cmd.passthroughArgvParam?.trim()
@@ -553,7 +556,7 @@ export async function loadCliContributions(
   const trusted = options.trustedPluginIds
   const tools: Tool<any, any>[] = []
   const toolNames: string[] = []
-  const identityRegistry = createToolIdentityRegistry()
+  const identityRegistry = options.identityRegistry ?? createToolIdentityRegistry()
   const statuses: CliLoadStatus[] = []
 
   for (const {

@@ -101,20 +101,23 @@ GitHub Plugin                 Feishu Plugin
       │ tools/list                  │ lark-* Skills + command scope
       └──────────────┬──────────────┘
                      ▼
-             PluginProvider interface
+             PluginRegistry.load()
                      │
-                     ├── ToolIdentityRegistry
-                     ├── PolicyEngine (allow | ask | deny)
+                     ├── ToolIdentityRegistry (unified, cross-channel)
+                     ├── security-policy decide*NeedsApproval (boolean)
+                     ├── tool-gate gateConnectorToolInvoke (allow|deny)
                      └── ConnectorProjection
                      ▼
        Agent Tool Registry + WorkspaceSandbox + Capability Snapshot
 ```
 
-三个外部测试 seam：
+三个外部测试 seam 的**当前实现状态**（2026-08-12 修订）：
 
-1. `PluginProvider.list/call`：新增上游工具无需修改 Host core 即可发现和调用。
-2. `ToolIdentityRegistry`：任何 normalize/prefix 后都可恢复原始 Provider 身份。
-3. `PolicyEngine`：策略只过滤/审批发现结果，不复制 Provider schema。
+1. **`PluginProvider.list/call`** — **目标态，未实现**。ADR 原文命名了 `PluginProvider.list/call`，但实际发现接缝是 `PluginRegistry.load()`（返回扁平快照含 `toolNames` + `toolIdentities`），调用委托给 VoltAgent 的 `Tool.execute` 分发。Host 不按 public name 调用工具。未来是否引入真正的 `list()`/`call()` 取决于是否出现第二个 Agent Runtime（目前只有 VoltAgent）。
+2. **`ToolIdentityRegistry`** — **已实现（统一实例）**。MCP loader 和 CLI loader 共用一个 `sharedIdentityRegistry`（在 `createPluginRegistry` 闭包内创建，传递给初始加载和 `loadMcpPlugin` 热加载）。`PluginRegistryLoadResult.resolveToolIdentity(publicName)` 可反查任何模型可见名到 Provider canonical identity。跨通道重名在注册时检测。
+3. **`PolicyEngine (allow | ask | deny)`** — **目标态，未实现**。当前策略是 `security-policy.ts` 中的 standalone 纯函数（`decideToolNeedsApproval` 返回 boolean，`decideCliCommandNeedsApproval` 返回 boolean）+ `tool-gate.ts` 的 `gateConnectorToolInvoke`（binary allow/deny）+ sandbox 的 `ConnectorCommandAccess` 判别联合（`{ allowed: true } | { allowed: false; reason }`）。没有统一的 `decide(context) → PolicyDecision` 入口，也没有 `ask` 状态。"不复制 Provider schema" 的不变量是 emergent property（gates 只操作 tool name 和 connector scope），不是 engine 强制的合约。
+
+**不再添加无行为的命名别名**（如 `PluginProvider = PluginRegistry` 或未接线的 `PolicyEngine` 接口）。ADR 合同只能通过行为、接口和测试满足，不能通过 grep 满足。当真正需要 `list()`/`call()` 或 `decide()` 时，再以行为 PR 实现。
 
 ## Consequences
 
