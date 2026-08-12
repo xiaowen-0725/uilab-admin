@@ -205,6 +205,12 @@ export type CliSessionContribution = {
   commandFromEnv?: string[]
   /** Closed child environment allowlist; base runtime keys are added by Host. */
   childEnvKeys?: string[]
+  /**
+   * Env keys that Host sets to an app-scoped state dir for CLI session
+   * isolation (#44). The Host injects <runtimeConfigDir>/cli-sessions/<pluginId>
+   * for each key, unless the operator already set it (operator override wins).
+   */
+  sessionStateEnv?: string[]
   minimumVersion?: string
   versionArgv?: string[]
   bootstrap?: {

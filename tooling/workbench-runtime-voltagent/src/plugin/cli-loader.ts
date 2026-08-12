@@ -26,6 +26,7 @@ import {
   isModelProviderSecretKey,
   stripModelProviderSecrets,
 } from './security-policy.js'
+import { defaultRuntimeConfigDir } from './auth-binding-persist.js'
 import type { CredentialMaterial, ProfileEnv } from './types.js'
 import {
   createToolIdentityRegistry,
@@ -390,6 +391,8 @@ function createCliTool(input: {
   contrib?: CliContribution
   env?: ProfileEnv
   authEnforced?: boolean
+  /** CLI session state env for isolation (#44). */
+  sessionStateEnv?: { keys: string[]; pluginId: string }
   connectorDescriptors?: readonly ConnectorDescriptor[]
   identityRegistry?: ToolIdentityRegistry
 }): Tool<any, any> {
@@ -488,7 +491,7 @@ function createCliTool(input: {
         env = buildCliChildEnv(input.contrib, input.env ?? {}, {
           authEnforced: true,
           authMaterial: material,
-        })
+        }, input.sessionStateEnv)
       }
       const result = await input.runner(input.commandPath, argv, {
         cwd: input.cwd,
@@ -514,9 +517,17 @@ export function buildCliChildEnv(
   contrib: CliContribution,
   env: ProfileEnv,
   auth?: { authEnforced?: boolean; authMaterial?: CredentialMaterial },
+  /** Optional sessionStateEnv for CLI session isolation (#44). */
+  sessionStateEnv?: { keys: string[]; pluginId: string },
 ): Record<string, string> {
   const keys = contrib.childEnvKeys ?? []
   const filtered = filterChildEnv(env, keys, { includeBaseKeys: true })
+  if (sessionStateEnv) {
+    const sessionDir = path.join(defaultRuntimeConfigDir(env), 'cli-sessions', sessionStateEnv.pluginId)
+    for (const key of sessionStateEnv.keys) {
+      if (!env[key]) filtered[key] = sessionDir
+    }
+  }
   if (!auth?.authEnforced) return filtered
 
   const material = auth.authMaterial
@@ -548,6 +559,8 @@ export async function loadCliContributions(
      * When provided, static authMaterial is only used for load-time diagnostics.
      */
     resolveAuthMaterial?: () => Promise<CredentialMaterial | undefined>
+    /** CLI session state env keys for session isolation (#44). */
+    sessionStateEnvKeys?: string[]
   }>,
   options: LoadCliOptions = {},
 ): Promise<CliLoadAggregate> {
@@ -565,6 +578,7 @@ export async function loadCliContributions(
     authEnforced,
     authMaterial,
     resolveAuthMaterial,
+    sessionStateEnvKeys,
   } of items) {
     const forceApproval = trusted ? !trusted.has(pluginId) : false
     const allowPassthrough = trusted?.has(pluginId) === true
@@ -629,10 +643,14 @@ export async function loadCliContributions(
           }))
         : undefined
 
+    const sessionStateEnv =
+      sessionStateEnvKeys && sessionStateEnvKeys.length > 0
+        ? { keys: sessionStateEnvKeys, pluginId }
+        : undefined
     const childEnv = buildCliChildEnv(contrib, env, {
       authEnforced,
       authMaterial,
-    })
+    }, sessionStateEnv)
     const cwd = resolveCliCwd(contrib, options.workspaceRoot)
     // Only commit tools after all commands validate (no partial mount on failure)
     const pendingTools: Tool<any, any>[] = []
@@ -672,6 +690,7 @@ export async function loadCliContributions(
           contrib,
           env,
           authEnforced,
+          sessionStateEnv,
           connectorDescriptors: options.connectorDescriptors,
         })
         pendingTools.push(tool)

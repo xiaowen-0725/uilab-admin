@@ -121,6 +121,7 @@ const FEISHU_MANIFEST: PluginManifest = {
           strategy: 'device_flow',
           command: LARK_CLI_COMMAND,
           commandFromEnv: ['FEISHU_CLI_PATH'],
+          sessionStateEnv: ['LARKSUITE_CLI_CONFIG_DIR'],
           childEnvKeys: [
             'USER',
             'TMPDIR',

@@ -8,6 +8,8 @@
 
 import type { CliRunner } from '../plugin/cli-loader.js'
 import { spawn } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+import path from 'node:path'
 import type { ConnectorDescriptor } from '../plugin/connector-descriptor.js'
 import type {
   AuthResourceContribution,
@@ -18,6 +20,7 @@ import { firstEnv } from '../plugin/parse-util.js'
 import type { ProfileEnv } from '../plugin/types.js'
 import { filterChildEnv } from '../plugin/security-policy.js'
 import { isCliSessionConnected } from '../plugin/cli-session-status.js'
+import { defaultRuntimeConfigDir } from '../plugin/auth-binding-persist.js'
 
 export type CliAuthProcessResult = {
   stdout: string
@@ -681,7 +684,23 @@ function flowProcessEnv(
   flow: ResolvedCliFlow,
   env: ProfileEnv,
 ): Record<string, string> {
-  return filterChildEnv(env, flow.contribution.childEnvKeys ?? [], {
+  const base = filterChildEnv(env, flow.contribution.childEnvKeys ?? [], {
     includeBaseKeys: true,
   })
+  const stateKeys = flow.contribution.sessionStateEnv ?? []
+  if (stateKeys.length === 0) return base
+  const sessionDir = path.join(
+    defaultRuntimeConfigDir(env),
+    'cli-sessions',
+    flow.manifest.id,
+  )
+  try {
+    mkdirSync(sessionDir, { recursive: true })
+  } catch {
+    // Best-effort; the CLI may create it itself.
+  }
+  for (const key of stateKeys) {
+    if (!env[key]) base[key] = sessionDir
+  }
+  return base
 }
