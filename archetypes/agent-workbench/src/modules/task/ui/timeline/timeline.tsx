@@ -1033,9 +1033,31 @@ function TimelineRow({
           <div className='whitespace-pre-wrap ps-5 font-mono'>{item.body}</div>
         </div>
       )
-    case 'approval-request':
-      // Approval HITL is only the bottom ApprovalDock — never mirror in the stream.
-      return null
+    case 'approval-request': {
+      // Waiting HITL stays in ApprovalDock only; resolved rows show reason in Timeline.
+      if (item.status === 'waiting') return null
+      const requestId = requestIdFromItem(item, 'approval-request:')
+      const approved = item.status === 'approved'
+      return (
+        <div
+          className='mb-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm'
+          data-kind='approval-request'
+          data-testid={`timeline-item-${item.id}`}
+          data-category='approval-request'
+          data-status={item.status}
+          data-request-id={requestId}
+        >
+          <div className='font-medium'>
+            {approved ? '已批准' : item.title ?? '审批'}
+          </div>
+          {item.body ? (
+            <div className='mt-1 whitespace-pre-wrap text-xs text-muted-foreground'>
+              {item.body}
+            </div>
+          ) : null}
+        </div>
+      )
+    }
     case 'input-request': {
       const requestId = requestIdFromItem(item, 'input-request:')
       const waiting = item.status === 'waiting'

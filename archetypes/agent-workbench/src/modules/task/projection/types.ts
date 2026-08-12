@@ -65,8 +65,12 @@ export interface TimelineItemMeta {
   startedAt?: string
   /** Run duration for completed turn chrome (ms). */
   durationMs?: number
-  /** Tool kind hint for icon (read / web_search / command / generic). */
+  /**
+   * Tool kind hint for icon (read / web_search / command / generic).
+   */
   toolKind?: string
+  /** Concrete tool name for approval-request rows (exact match for presets). */
+  toolName?: string
   /** Stable process category for deterministic summary aggregation. */
   processKind?: ProcessStepKind
   /** Run-terminal deterministic summary, counted by logical row id. */

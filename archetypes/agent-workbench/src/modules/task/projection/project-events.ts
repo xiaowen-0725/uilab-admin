@@ -1156,12 +1156,14 @@ export function applyRuntimeEvent(
         title,
         body: detail,
         status: 'waiting',
+        meta: toolName ? { toolName } : undefined,
       })
       break
     }
     case 'approval.resolved': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
       const decision = payloadString(envelope.payload, 'decision')
+      const reason = payloadString(envelope.payload, 'reason')
       const status =
         decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'resolved'
       if (decision === 'approved') {
@@ -1169,9 +1171,19 @@ export function applyRuntimeEvent(
         ensureRunTerminal(next, envelope, 'running', '正在思考')
         setLiveStatus(next, '正在思考')
       }
+      const decisionLabel =
+        decision === 'approved'
+          ? reason
+            ? '自动批准'
+            : '允许一次'
+          : decision === 'rejected'
+            ? '拒绝'
+            : ''
+      let extra = decisionLabel ? `\n决定：${decisionLabel}` : ''
+      if (reason) extra += `\n${reason}`
       upsertByKey(next, envelope, 'approval-request', requestId, {
         status,
-        body: decision ? `\n决定：${decision === 'approved' ? '允许一次' : '拒绝'}` : undefined,
+        body: extra || undefined,
       })
       break
     }

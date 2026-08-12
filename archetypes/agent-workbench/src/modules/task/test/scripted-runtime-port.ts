@@ -92,6 +92,28 @@ export function approvalScenario(taskId: string, runId: string, turnId: string, 
   }
 }
 
+/** `approval.requested` pause — used by permission-preset auto-respond tests. */
+export function approvalRequestedScenario(
+  taskId: string,
+  runId: string,
+  turnId: string,
+  requestId: string,
+  toolName: string,
+): ScriptedScenario {
+  return {
+    events: [
+      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
+      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
+      envelope(taskId, 'approval.requested', {
+        taskSequence: 3,
+        runId,
+        turnId,
+        payload: { requestId, toolName },
+      }),
+    ],
+  }
+}
+
 export type CreateScriptedRuntimePortOptions = {
   /** Default scenario producer; called per startRun if no per-task scenario is set. */
   defaultScenario?: (taskId: string, runId: string, turnId: string) => ScriptedScenario
@@ -109,6 +131,8 @@ export function createScriptedRuntimePort(
 ): RuntimePort & {
   /** Set a per-task scenario (overrides default). */
   setScenario: (taskId: string, scenario: ScriptedScenario) => void
+  /** Push envelopes to subscribers (tests that skip startRun). */
+  pushEvents: (taskId: string, events: AgentRuntimeEventEnvelope[]) => void
   /** Recorded commands received via sendCommand. */
   receivedCommands: ApplicationCommand[]
 } {
@@ -118,9 +142,15 @@ export function createScriptedRuntimePort(
   const listeners = new Map<string, Set<(event: RuntimeSubscriptionEvent) => void>>()
   const snapshots = new Map<string, RuntimeSnapshot>()
   const receivedCommands: ApplicationCommand[] = []
+  const lastSeq = new Map<string, number>()
+
+  function rememberSeq(taskId: string, seq: number): void {
+    lastSeq.set(taskId, Math.max(lastSeq.get(taskId) ?? 0, seq))
+  }
 
   function emit(taskId: string, events: AgentRuntimeEventEnvelope[]): void {
     const subs = listeners.get(taskId)
+    for (const env of events) rememberSeq(taskId, env.taskSequence)
     if (!subs) return
     for (const env of events) {
       if (eventDelayMs > 0) {
@@ -138,9 +168,28 @@ export function createScriptedRuntimePort(
     setScenario(taskId, scenario) {
       perTaskScenarios.set(taskId, scenario)
     },
+    pushEvents(taskId, events) {
+      emit(taskId, events)
+    },
 
     async sendCommand(command: ApplicationCommand): Promise<CommandAcknowledgement> {
       receivedCommands.push(command)
+      if (command.type === 'respondToApproval') {
+        const taskId = command.taskId
+        const seq = (lastSeq.get(taskId) ?? 0) + 1
+        emit(taskId, [
+          envelope(taskId, 'approval.resolved', {
+            taskSequence: seq,
+            runId: command.runId,
+            turnId: command.turnId,
+            payload: {
+              requestId: command.payload.requestId,
+              decision: command.payload.decision,
+              reason: command.payload.reason,
+            },
+          }),
+        ])
+      }
       return {
         status: 'accepted',
         commandId: command.commandId,

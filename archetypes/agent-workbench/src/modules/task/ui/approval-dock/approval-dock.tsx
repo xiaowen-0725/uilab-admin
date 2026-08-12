@@ -27,6 +27,7 @@ export interface PendingApproval {
   title: string
   body?: string
   toolLabel: string
+  toolName: string | null
   command?: string
 }
 
@@ -50,12 +51,15 @@ export function findPendingApproval(
   const command =
     commandMatch?.[1]?.trim() ||
     (body && body.includes('/') && body.length < 240 ? body : undefined)
+  // toolName is projection meta only — never parse model-controlled body text.
+  const toolName = item.meta?.toolName?.trim() || null
 
   return {
     requestId,
     title: item.title ?? '需要审批',
     body,
     toolLabel: '终端',
+    toolName,
     command,
   }
 }

@@ -236,8 +236,8 @@ export function WorkbenchApp({
               bootError && persistence === 'idb'
                 ? `${runtime.notice ?? ''} · 本地存储降级：${bootError}`.trim()
                 : runtime.notice,
-            onApprove: (requestId: string) =>
-              runtime.respondToApproval(requestId, 'approved'),
+            onApprove: (requestId: string, reason?: string) =>
+              runtime.respondToApproval(requestId, 'approved', reason),
             onReject: (requestId: string) =>
               runtime.respondToApproval(requestId, 'rejected'),
             onProvideInput: (requestId: string, text: string) =>

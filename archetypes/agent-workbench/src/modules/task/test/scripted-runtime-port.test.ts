@@ -4,6 +4,7 @@ import {
   cancelledRunScenario,
   failedRunScenario,
   createScriptedRuntimePort,
+  envelope,
 } from './scripted-runtime-port'
 
 describe('ScriptedRuntimePort', () => {
@@ -168,5 +169,45 @@ describe('ScriptedRuntimePort', () => {
     for (let i = 1; i < seqs.length; i++) {
       expect(seqs[i]).toBeGreaterThan(seqs[i - 1]!)
     }
+  })
+
+  it('respondToApproval emits approval.resolved with reason', async () => {
+    const runtime = createScriptedRuntimePort()
+    const received: Array<{ type: string; reason?: string }> = []
+    runtime.subscribe('task-ap', null, (event) => {
+      if (event.kind !== 'event') return
+      const payload = event.envelope.payload as { reason?: string }
+      received.push({
+        type: event.envelope.eventType,
+        reason: payload.reason,
+      })
+    })
+    runtime.pushEvents('task-ap', [
+      envelope('task-ap', 'approval.requested', {
+        taskSequence: 1,
+        payload: { requestId: 'req-1', toolName: 'write_file' },
+      }),
+    ])
+
+    await runtime.sendCommand({
+      type: 'respondToApproval',
+      commandId: 'cmd-1',
+      issuedAt: '1970-01-01T00:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-1',
+      schemaVersion: 1,
+      taskId: 'task-ap',
+      payload: {
+        requestId: 'req-1',
+        decision: 'approved',
+        reason: '已按「帮我批准」预设自动批准',
+      },
+    } as never)
+
+    expect(received.map((e) => e.type)).toEqual([
+      'approval.requested',
+      'approval.resolved',
+    ])
+    expect(received[1]?.reason).toBe('已按「帮我批准」预设自动批准')
   })
 })

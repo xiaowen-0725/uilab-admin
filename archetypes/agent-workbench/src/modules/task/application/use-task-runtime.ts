@@ -25,7 +25,8 @@ export interface UseTaskRuntimeResult {
   respondToApproval: (
     requestId: string,
     decision: 'approved' | 'rejected',
-  ) => Promise<void>
+    reason?: string,
+  ) => Promise<CommandAcknowledgement | null>
   provideRunInput: (text: string, requestId?: string) => Promise<void>
   retryTurn: () => Promise<void>
   setFollowMode: (mode: TimelineFollowMode) => void
@@ -111,9 +112,13 @@ export function useTaskRuntime(
   }, [controller, enabled])
 
   const respondToApproval = useCallback(
-    async (requestId: string, decision: 'approved' | 'rejected') => {
-      if (!controller || !enabled) return
-      await controller.respondToApproval(requestId, decision)
+    async (
+      requestId: string,
+      decision: 'approved' | 'rejected',
+      reason?: string,
+    ) => {
+      if (!controller || !enabled) return null
+      return controller.respondToApproval(requestId, decision, reason)
     },
     [controller, enabled],
   )

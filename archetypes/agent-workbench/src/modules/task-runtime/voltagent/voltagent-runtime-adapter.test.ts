@@ -2,6 +2,33 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeSubscriptionEvent } from '@/modules/task'
 import { createVoltAgentRuntimeAdapter } from './voltagent-runtime-adapter'
 
+function hangingSse(
+  chunks: object[],
+  signal?: AbortSignal | null,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  const lines = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(lines))
+      const abort = () => {
+        try {
+          controller.error(
+            Object.assign(new Error('aborted'), { name: 'AbortError' }),
+          )
+        } catch {
+          // already closed / errored
+        }
+      }
+      if (signal?.aborted) {
+        abort()
+        return
+      }
+      signal?.addEventListener('abort', abort, { once: true })
+    },
+  })
+}
+
 function sseBody(chunks: object[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
   const lines = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')
@@ -428,7 +455,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(types).not.toContain('run.completed')
   })
 
-  it('respondToApproval rejects when pending missing or stream busy', async () => {
+  it('respondToApproval rejects when pending approval is missing', async () => {
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',
       agentId: 'workbench',
@@ -447,6 +474,102 @@ describe('VoltAgentRuntimeAdapter', () => {
       payload: { requestId: 'nope', decision: 'approved' },
     })
     expect(missing.status).toBe('rejected')
+  })
+
+  it('respondToApproval aborts a draining stream and resumes immediately', async () => {
+    let call = 0
+    let resumeBody = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        return new Response(
+          hangingSse(
+            [
+              {
+                type: 'tool-call',
+                toolCallId: 'call_hang',
+                toolName: 'write_file',
+                args: { file_path: '/output/a.md', content: 'hi' },
+              },
+              {
+                type: 'tool-approval-request',
+                approvalId: 'apr-hang',
+                toolCall: {
+                  type: 'tool-call',
+                  toolCallId: 'call_hang',
+                  toolName: 'write_file',
+                  input: { file_path: '/output/a.md', content: 'hi' },
+                },
+              },
+            ],
+            init?.signal,
+          ),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      resumeBody = String(init?.body ?? '')
+      return new Response(
+        sseBody([
+          { type: 'text-delta', delta: '已写入' },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-hang')
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-hang-s',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-hang-s',
+      schemaVersion: 1,
+      taskId: 'task-hang',
+      inputText: '写个文件',
+      proposedTurnId: 'turn-hang',
+      proposedRunId: 'run-hang',
+    })
+
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('approval.requested')
+    })
+
+    const aprAck = await adapter.sendCommand({
+      type: 'respondToApproval',
+      commandId: 'cmd-hang-a',
+      issuedAt: '2026-08-05T12:00:01.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-hang-a',
+      schemaVersion: 1,
+      taskId: 'task-hang',
+      runId: 'run-hang',
+      turnId: 'turn-hang',
+      payload: { requestId: 'apr-hang', decision: 'approved' },
+    })
+    expect(aprAck.status).toBe('accepted')
+
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2))
+    expect(resumeBody).toContain('approval-responded')
+    expect(resumeBody).toContain('tool-write_file')
+
+    await new Promise((r) => setTimeout(r, 20))
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).not.toContain('run.failed')
+    expect(types).not.toContain('run.cancelled')
   })
 
   it('getCapabilities loads tools from sidecar agent metadata', async () => {

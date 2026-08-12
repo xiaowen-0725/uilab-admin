@@ -606,12 +606,15 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         '未找到待审批请求，或已过期（请重新提交写操作）'
       )
     }
+    // A pending approval arrives while the SSE is still draining (finish/done).
+    // Abort the paused stream so resume can start immediately — required for
+    // renderer-side auto-approve (humans are slow enough that this rarely races).
+    // Known limitation: aborting here may cut off a previous resume stream if
+    // multiple approvals are pending in parallel (VoltAgent usually suspends
+    // on the first approval, so this is rare).
     if (state.activeAbort) {
-      return rejected(
-        command.commandId,
-        'task_busy',
-        '当前任务仍有进行中的流，请稍后再批准'
-      )
+      state.activeAbort.abort('approval_resume')
+      state.activeAbort = null
     }
 
     state.pendingApprovals.delete(approvalId)

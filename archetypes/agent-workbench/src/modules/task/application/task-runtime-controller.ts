@@ -388,6 +388,7 @@ export class TaskRuntimeController {
   async respondToApproval(
     requestId: string,
     decision: 'approved' | 'rejected',
+    reason?: string,
   ): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
@@ -398,6 +399,7 @@ export class TaskRuntimeController {
         taskId,
         requestId,
         decision,
+        reason,
         runId: this.projection.readModel.activeRunId ?? undefined,
         turnId: this.projection.readModel.activeTurnId ?? undefined,
       })
