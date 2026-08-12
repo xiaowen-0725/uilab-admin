@@ -299,6 +299,7 @@ export function createPluginRegistry(
         authMaterial?: CredentialMaterial
         authEnforced?: boolean
         resolveAuthMaterial?: () => Promise<CredentialMaterial | undefined>
+        sessionStateEnvKeys?: string[]
       }> = []
       const authItems: Array<{
         pluginId: string
@@ -443,12 +444,16 @@ export function createPluginRegistry(
               material = await resolveAuthMaterial()
             }
           }
+          const sessionStateEnvKeys = authResources
+            .flatMap((r) => r.cliSession?.sessionStateEnv ?? [])
           cliItems.push({
             pluginId: manifest.id,
             contrib: c,
             authEnforced,
             authMaterial: material,
             resolveAuthMaterial,
+            sessionStateEnvKeys:
+              sessionStateEnvKeys.length > 0 ? sessionStateEnvKeys : undefined,
           })
         }
 

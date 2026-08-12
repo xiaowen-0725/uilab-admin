@@ -384,3 +384,33 @@ describe('#28 PluginRegistry end-to-end inject', () => {
     await result.disconnect()
   })
 })
+
+
+describe('#44 CLI session isolation via sessionStateEnv', () => {
+  const contrib: CliContribution = {
+    cliId: 'feishu',
+    command: 'lark-cli',
+    childEnvKeys: ['LARKSUITE_CLI_CONFIG_DIR'],
+    commands: [{ name: 'x', argv: ['auth', 'status'] }],
+  }
+
+  it('injects app-scoped sessionStateEnv dir for CLI isolation', () => {
+    const child = buildCliChildEnv(contrib, {}, undefined, {
+      keys: ['LARKSUITE_CLI_CONFIG_DIR'],
+      pluginId: 'cli.feishu',
+    })
+    assert.ok(child.LARKSUITE_CLI_CONFIG_DIR)
+    assert.ok(child.LARKSUITE_CLI_CONFIG_DIR.includes('cli-sessions'))
+    assert.ok(child.LARKSUITE_CLI_CONFIG_DIR.includes('cli.feishu'))
+  })
+
+  it('operator override wins over sessionStateEnv injection', () => {
+    const child = buildCliChildEnv(
+      contrib,
+      { LARKSUITE_CLI_CONFIG_DIR: '/operator/custom' },
+      undefined,
+      { keys: ['LARKSUITE_CLI_CONFIG_DIR'], pluginId: 'cli.feishu' },
+    )
+    assert.equal(child.LARKSUITE_CLI_CONFIG_DIR, '/operator/custom')
+  })
+})

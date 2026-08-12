@@ -8,6 +8,7 @@ import {
 import type { ConnectorDescriptor } from '../plugin/connector-descriptor.js'
 import type { PluginManifest } from '../plugin/manifest.js'
 import { filterChildEnv } from '../plugin/security-policy.js'
+import { defaultRuntimeConfigDir } from '../plugin/auth-binding-persist.js'
 import type { ProfileEnv } from '../plugin/types.js'
 import {
   createConnectorAwareSandbox,
@@ -146,6 +147,7 @@ function pickProviderProcessEnv(
   env: ProfileEnv,
 ): Record<string, string> {
   const allowedNames = new Set<string>()
+  let sessionStateEnv: { keys: string[]; pluginId: string } | null = null
   for (const pluginId of connector.pluginRefs) {
     const manifest = manifests.find((candidate) => candidate.id === pluginId)
     const resource = manifest?.contributes?.auth?.find(
@@ -155,6 +157,21 @@ function pickProviderProcessEnv(
     for (const name of resource?.cliSession?.childEnvKeys ?? []) {
       allowedNames.add(name)
     }
+    const stateKeys = resource?.cliSession?.sessionStateEnv
+    if (stateKeys && stateKeys.length > 0 && !sessionStateEnv) {
+      sessionStateEnv = { keys: stateKeys, pluginId }
+    }
   }
-  return filterChildEnv(env, [...allowedNames], { includeBaseKeys: true })
+  const base = filterChildEnv(env, [...allowedNames], { includeBaseKeys: true })
+  if (sessionStateEnv) {
+    const sessionDir = path.join(
+      defaultRuntimeConfigDir(env),
+      'cli-sessions',
+      sessionStateEnv.pluginId,
+    )
+    for (const key of sessionStateEnv.keys) {
+      if (!env[key]) base[key] = sessionDir
+    }
+  }
+  return base
 }
