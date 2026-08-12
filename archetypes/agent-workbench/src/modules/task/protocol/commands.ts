@@ -47,26 +47,45 @@ export interface SubmitTurnCommand extends CommandEnvelope {
   runtimeCursor?: string
 }
 
+/**
+ * Slim ref types for capability data carried in a Turn submission.
+ *
+ * These are task-owned command DTOs — NOT imported from the capabilities
+ * module. The task command protocol must not depend on the capabilities
+ * read-model module (Codex review: "the stable execution protocol should
+ * not depend on the volatile UI/read-model module").
+ *
+ * The composition layer (composer.tsx) imports both modules and projects
+ * CapabilitySnapshot → these refs at the seam, including the name→label
+ * field rename. This keeps the rename in one place (the composition call site)
+ * without creating a cross-module type dependency.
+ */
+export type TurnSkillRef = { id: string; label: string }
+
+export type TurnConnectorRef = {
+  id: string
+  label: string
+  connected?: boolean
+  taskSelected: boolean
+  capabilityEffective?: boolean
+}
+
+export type TurnExpertRef = { id: string; label: string; instruction?: string }
+
 export interface TurnComposerContext {
   attachments?: Array<{
     name: string
     kind: 'file' | 'image'
     meta?: string
   }>
-  skills?: Array<{ id: string; label: string }>
+  skills?: TurnSkillRef[]
   /** Capability Surface snapshot for this Turn; status-safe labels only. */
-  connectors?: Array<{
-    id: string
-    label: string
-    connected?: boolean
-    taskSelected: boolean
-    capabilityEffective?: boolean
-  }>
+  connectors?: TurnConnectorRef[]
   /**
    * Task-selected expert profile (not a sub-agent).
    * `instruction` is the config-package overlay from Expert catalog (status-safe).
    */
-  expert?: { id: string; label: string; instruction?: string } | null
+  expert?: TurnExpertRef | null
   mode?: 'default' | 'goal' | 'plan' | 'goal+plan'
 }
 
