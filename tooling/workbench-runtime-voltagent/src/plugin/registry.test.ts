@@ -3,10 +3,12 @@ import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import {
+  BUILTIN_CLI_FEISHU_PLUGIN,
   BUILTIN_MCP_GITHUB_PLUGIN,
   BUILTIN_PLUGINS,
 } from './builtins.js'
 import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
+import { FEISHU_PLUGIN_PACKAGE } from './feishu-package.js'
 import { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
 import type { BuiltinPluginPackage } from './plugin-package.js'
 import { oauthAccessAccount } from './oauth.js'
@@ -462,6 +464,37 @@ describe('createPluginRegistry — GitHub package migration (#50)', () => {
     assert.equal(
       GITHUB_PLUGIN_PACKAGE.manifests[0],
       BUILTIN_MCP_GITHUB_PLUGIN,
+    )
+  })
+})
+
+describe('createPluginRegistry — Feishu package migration (#51)', () => {
+  it('FEISHU_PLUGIN_PACKAGE registers via packages with brandIconKey + fakeCatalog', () => {
+    const reg = createPluginRegistry({
+      env: {},
+      builtins: [],
+      packages: [FEISHU_PLUGIN_PACKAGE],
+    })
+
+    const feishu = reg
+      .listConnectorDescriptors()
+      .find((c) => c.id === 'connector.feishu')
+    assert.ok(feishu, 'Feishu connector must be registered via package')
+    assert.equal(feishu?.brandIconKey, 'feishu')
+    assert.equal(feishu?.pluginRefs[0], 'cli.feishu')
+
+    const catalog = reg.listFakeCatalog()
+    const feishuEntry = catalog.find(
+      (e) => e.connectorId === 'connector.feishu',
+    )
+    assert.ok(feishuEntry, 'Feishu fakeCatalog entry must be present')
+    assert.equal(feishuEntry?.connectionState, 'missing')
+  })
+
+  it('FEISHU_PLUGIN_PACKAGE manifest is identical to BUILTIN_CLI_FEISHU_PLUGIN', () => {
+    assert.equal(
+      FEISHU_PLUGIN_PACKAGE.manifests[0],
+      BUILTIN_CLI_FEISHU_PLUGIN,
     )
   })
 })
