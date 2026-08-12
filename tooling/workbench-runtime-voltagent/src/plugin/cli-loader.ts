@@ -29,6 +29,7 @@ import {
 import type { CredentialMaterial, ProfileEnv } from './types.js'
 import {
   createToolIdentityRegistry,
+  type ToolIdentityRegistry,
   type RegisteredToolIdentity,
 } from './tool-identity.js'
 
@@ -71,6 +72,8 @@ export type LoadCliOptions = {
   trustedPluginIds?: ReadonlySet<string>
   /** Provider-projected connectors used by the Task invoke gate. */
   connectorDescriptors?: readonly ConnectorDescriptor[]
+  /** Shared identity registry (ADR-0017 seam). When omitted, a local one is created. */
+  identityRegistry?: ToolIdentityRegistry
 }
 
 /**
@@ -553,7 +556,7 @@ export async function loadCliContributions(
   const trusted = options.trustedPluginIds
   const tools: Tool<any, any>[] = []
   const toolNames: string[] = []
-  const identityRegistry = createToolIdentityRegistry()
+  const identityRegistry = options.identityRegistry ?? createToolIdentityRegistry()
   const statuses: CliLoadStatus[] = []
 
   for (const {

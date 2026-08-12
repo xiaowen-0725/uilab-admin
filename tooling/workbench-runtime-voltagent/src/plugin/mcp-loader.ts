@@ -25,6 +25,7 @@ import type { CredentialMaterial, ProfileEnv } from './types.js'
 import { normalizeToolName } from './security-policy.js'
 import {
   createToolIdentityRegistry,
+  type ToolIdentityRegistry,
   type RegisteredToolIdentity,
 } from './tool-identity.js'
 
@@ -465,6 +466,8 @@ export async function loadResolvedMcpServers(
     expected?: Array<{ pluginId: string; serverId: string }>
     /** Provider-projected connectors used by the per-Turn execution gate. */
     connectorDescriptors?: readonly ConnectorDescriptor[]
+    /** Shared identity registry (ADR-0017 seam). When omitted, a local one is created. */
+    identityRegistry?: ToolIdentityRegistry
   },
 ): Promise<McpLoadAggregate> {
   const host = options?.host ?? { getTools: defaultMcpHost }
@@ -472,7 +475,7 @@ export async function loadResolvedMcpServers(
   const disconnectors: Array<() => Promise<void>> = []
   const allTools: Tool<any, any>[] = []
   const allNames: string[] = []
-  const identityRegistry = createToolIdentityRegistry()
+  const identityRegistry = options?.identityRegistry ?? createToolIdentityRegistry()
   const statuses: McpServerLoadStatus[] = []
 
   const resolvedIds = new Set(resolved.map((r) => `${r.pluginId}::${r.serverId}`))

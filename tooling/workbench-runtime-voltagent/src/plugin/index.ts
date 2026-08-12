@@ -38,12 +38,15 @@ export {
   CHILD_ENV_BASE_KEYS,
   decideCliCommandNeedsApproval,
   decideToolNeedsApproval,
+  defaultPolicyEngine,
   filterChildEnv,
   formatSafeStatusLine,
   isModelProviderSecretKey,
   normalizeToolName,
   redactSecretValues,
   type CliApprovalInput,
+  type PolicyDecision,
+  type PolicyEngine,
   type ToolApprovalInput,
 } from './security-policy.js'
 
@@ -158,6 +161,7 @@ export {
   formatRegistryMcpStatusLine,
   type CreatePluginRegistryOptions,
   type PluginLoadStatus,
+  type PluginProvider,
   type PluginRegistry,
   type PluginRegistryLoadOptions,
   type PluginRegistryLoadResult,

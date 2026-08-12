@@ -193,3 +193,49 @@ export function redactSecretValues(
   }
   return out
 }
+
+
+/**
+ * PolicyDecision — the ADR-0017 `allow | ask | deny` tri-state.
+ *
+ * - `allow`: tool/command may proceed without user action.
+ * - `ask`: tool/command requires explicit user approval before executing.
+ * - `deny`: tool/command is blocked; no approval can override.
+ *
+ * Today the code uses boolean `needsApproval` (allow vs ask) and binary
+ * `gateConnectorToolInvoke` (allow vs deny). This tri-state is the target
+ * vocabulary named by ADR-0017's PolicyEngine seam.
+ */
+export type PolicyDecision = 'allow' | 'ask' | 'deny'
+
+/**
+ * PolicyEngine — ADR-0017 test seam name for the Host's tool/command policy.
+ *
+ * The ADR names `PolicyEngine` with `allow | ask | deny` as the seam that
+ * "only filters/approves discovery results, never copies Provider schema."
+ *
+ * Today policy is implemented as standalone pure functions (decideToolNeedsApproval,
+ * decideCliCommandNeedsApproval) plus binary gates (gateConnectorToolInvoke).
+ * This interface aggregates them behind a named entry point so the ADR's seam
+ * is grep-able and future policy changes have one contract surface.
+ *
+ * The functions implementing this interface operate on tool names and connector
+ * scope only — they never re-declare Provider tool parameters (the "no schema
+ * duplication" invariant from ADR-0017 §3).
+ */
+export type PolicyEngine = {
+  /** Whether a discovered MCP tool needs user approval before execution. */
+  decideToolNeedsApproval(input: ToolApprovalInput): boolean
+  /** Whether a discovered CLI command needs user approval before execution. */
+  decideCliCommandNeedsApproval(input: CliApprovalInput): boolean
+}
+
+/**
+ * The default PolicyEngine — delegates to the standalone decision functions.
+ * Callers that already import decideToolNeedsApproval / decideCliCommandNeedsApproval
+ * directly are unaffected; this object gives the ADR-0017 seam a named handle.
+ */
+export const defaultPolicyEngine: PolicyEngine = {
+  decideToolNeedsApproval,
+  decideCliCommandNeedsApproval,
+}

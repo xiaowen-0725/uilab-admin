@@ -51,7 +51,11 @@ import {
   type ResolvedMcpServer,
 } from './mcp-loader.js'
 import type { CredentialMaterial } from './types.js'
-import type { RegisteredToolIdentity } from './tool-identity.js'
+import {
+  createToolIdentityRegistry,
+  type RegisteredToolIdentity,
+  type ToolIdentityRegistry,
+} from './tool-identity.js'
 import { parseEnvStringList } from './parse-util.js'
 import {
   loadSkillsContributions,
@@ -83,6 +87,8 @@ export type PluginRegistryLoadResult = {
   toolNames: string[]
   /** Reversible model-visible name → Provider identity records. */
   toolIdentities: RegisteredToolIdentity[]
+  /** Resolve a model-visible public name back to Provider canonical identity (ADR-0017 seam). */
+  resolveToolIdentity: (publicName: string) => RegisteredToolIdentity | undefined
   mcpStatuses: McpServerLoadStatus[]
   cliStatuses: CliLoadStatus[]
   authStatuses: PluginAuthStatus[]
@@ -122,6 +128,17 @@ export type PluginRegistry = {
   }
   load(options?: PluginRegistryLoadOptions): Promise<PluginRegistryLoadResult>
 }
+
+/**
+ * PluginProvider — ADR-0017 test seam name for PluginRegistry.
+ *
+ * The ADR names `PluginProvider.list/call` as the discovery+invocation seam.
+ * Today discovery is `load()` (returns a flat snapshot including toolNames +
+ * toolIdentities); invocation is delegated to VoltAgent's Tool.execute dispatch.
+ * This alias makes the ADR's named seam grep-able and gives future Providers
+ * a single type to implement.
+ */
+export type PluginProvider = PluginRegistry
 
 export type CreatePluginRegistryOptions = {
   env?: ProfileEnv
@@ -454,11 +471,16 @@ export function createPluginRegistry(
         }
       }
 
+      // Shared identity registry across MCP + CLI channels (ADR-0017 seam 2:
+      // single instance for cross-channel collision detection + reversal).
+      const sharedIdentityRegistry = createToolIdentityRegistry()
+
       const mcpAgg = await loadResolvedMcpServers(resolvedServers, {
         env,
         host: options.host,
         expected,
         connectorDescriptors,
+        identityRegistry: sharedIdentityRegistry,
       })
 
       const skillsAgg = await loadSkillsContributions(skillsItems, {
@@ -478,6 +500,7 @@ export function createPluginRegistry(
         runner: options.cliRunner,
         trustedPluginIds,
         connectorDescriptors,
+        identityRegistry: sharedIdentityRegistry,
       })
 
       const authStatuses = await resolvePluginAuthStatuses(authItems, authOpts)
@@ -534,10 +557,9 @@ export function createPluginRegistry(
         connectorDescriptors: [...connectorDescriptors],
         tools: [...mcpAgg.tools, ...cliAgg.tools],
         toolNames: [...mcpAgg.toolNames, ...cliAgg.toolNames],
-        toolIdentities: [
-          ...mcpAgg.toolIdentities,
-          ...cliAgg.toolIdentities,
-        ],
+        toolIdentities: sharedIdentityRegistry.list(),
+        resolveToolIdentity: (publicName: string) =>
+          sharedIdentityRegistry.resolve(publicName),
         mcpStatuses: mcpAgg.statuses,
         cliStatuses: cliAgg.statuses,
         authStatuses,
