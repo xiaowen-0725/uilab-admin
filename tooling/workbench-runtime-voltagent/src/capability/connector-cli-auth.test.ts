@@ -361,6 +361,65 @@ describe('default CLI auth process adapter', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  it('stop escalates to SIGKILL when child ignores SIGTERM (#6/#7)', async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), 'connector-auth-stop-'),
+    )
+    const executable = path.join(root, 'ignore-term')
+    await writeFile(
+      executable,
+      [
+        '#!/bin/sh',
+        "trap '' TERM",
+        'printf "ready\\n"',
+        'while true; do sleep 1; done',
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+    await chmod(executable, 0o755)
+    let output = ''
+    const runner = createDefaultCliAuthProcessRunner({ stopGraceMs: 50 })
+
+    try {
+      const handle = runner(executable, [], {
+        env: { PATH: process.env.PATH ?? '/usr/bin:/bin' },
+        timeoutMs: 60_000,
+        onOutput(chunk) {
+          output += chunk
+        },
+      })
+      await new Promise<void>((resolve, reject) => {
+        const started = Date.now()
+        const tick = () => {
+          if (output.includes('ready')) {
+            resolve()
+            return
+          }
+          if (Date.now() - started > 5_000) {
+            reject(new Error('child never became ready'))
+            return
+          }
+          setTimeout(tick, 20)
+        }
+        tick()
+      })
+
+      const started = Date.now()
+      await handle.stop()
+      const elapsed = Date.now() - started
+      assert.ok(
+        elapsed < 2_000,
+        `stop() should settle via SIGKILL; took ${elapsed}ms`,
+      )
+
+      const result = await handle.completion
+      assert.notEqual(result.exitCode, 0)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })
 
 
