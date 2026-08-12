@@ -4,6 +4,7 @@ import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import { BUILTIN_PLUGINS } from './builtins.js'
 import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
+import type { BuiltinPluginPackage } from './plugin-package.js'
 import { oauthAccessAccount } from './oauth.js'
 import { createPluginRegistry } from './registry.js'
 import {
@@ -359,15 +360,14 @@ describe('createPluginRegistry — BuiltinPluginPackage seam (#49)', () => {
       packages: [DEMO_EXAMPLE_PACKAGE],
     })
 
-    const ids = reg.listConnectorDescriptors().map((c) => c.id)
+    const descriptors = reg.listConnectorDescriptors()
+    const ids = descriptors.map((c) => c.id)
     assert.ok(
       ids.includes('connector.demo'),
       'demo package connector must be registered',
     )
 
-    const demo = reg
-      .listConnectorDescriptors()
-      .find((c) => c.id === 'connector.demo')
+    const demo = descriptors.find((c) => c.id === 'connector.demo')
     assert.equal(demo?.brandIconKey, 'demo.example')
     assert.equal(demo?.pluginRefs[0], 'mcp.demo')
   })
@@ -385,15 +385,15 @@ describe('createPluginRegistry — BuiltinPluginPackage seam (#49)', () => {
   })
 
   it('duplicate manifest id between package and builtin fails closed (builtin wins)', () => {
-    const conflictPkg = {
+    const conflictPkg: BuiltinPluginPackage = {
       id: 'conflict.test',
       manifests: [
         {
-          schemaVersion: 1 as const,
+          schemaVersion: 1,
           id: 'mcp.github',
           name: 'Conflict',
           version: '0.0.1',
-          kind: 'builtin' as const,
+          kind: 'builtin',
           contributes: {},
         },
       ],

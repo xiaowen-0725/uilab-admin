@@ -48,7 +48,6 @@ export {
 } from './security-policy.js'
 
 export {
-  createAuthBindingStore,
   createCompositeSecretStore,
   createDefaultSecretStore,
   createEnvSecretStore,
@@ -56,16 +55,23 @@ export {
   createKeychainSecretStoreStub,
   createMemorySecretStore,
   migrateEnvSecretsToKeychain,
-  resolveAuthStatus,
-  resolveCredentialMaterial,
   resolveKeychainCapability,
-  snapshotAuthBindingStore,
-  type AuthBindingStore,
-  type AuthBindingStoreSnapshot,
   type CreateKeychainSecretStoreOptions,
   type KeychainCapability,
   type SecretStore,
 } from './secret-store.js'
+
+export {
+  createAuthBindingStore,
+  snapshotAuthBindingStore,
+  type AuthBindingStore,
+  type AuthBindingStoreSnapshot,
+} from './auth-binding-store.js'
+
+export {
+  resolveAuthStatus,
+  resolveCredentialMaterial,
+} from './credential-resolver.js'
 
 export {
   AUTH_BINDINGS_FILENAME,

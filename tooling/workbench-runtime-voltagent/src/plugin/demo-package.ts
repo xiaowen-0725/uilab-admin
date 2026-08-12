@@ -12,6 +12,7 @@
 import type { BuiltinPluginPackage } from './plugin-package.js'
 import type { PluginManifest } from './manifest.js'
 
+const DEMO_PACKAGE_ID = 'demo.example'
 const DEMO_PLUGIN_ID = 'mcp.demo'
 const DEMO_CONNECTOR_ID = 'connector.demo'
 const DEMO_AUTH_RESOURCE_ID = 'mcp:demo'
@@ -34,7 +35,7 @@ const DEMO_MANIFEST: PluginManifest = {
         authResourceId: DEMO_AUTH_RESOURCE_ID,
         authKind: 'static_bearer',
         primaryChannel: 'mcp',
-        brandIconKey: 'demo.example',
+        brandIconKey: DEMO_PACKAGE_ID,
         availability: 'sidecar',
         toolScope: [DEMO_TOOL_PREFIX],
         capabilities: [
@@ -79,8 +80,8 @@ const DEMO_MANIFEST: PluginManifest = {
 
 /** Demo package — validates the BuiltinPluginPackage seam end-to-end. */
 export const DEMO_EXAMPLE_PACKAGE: BuiltinPluginPackage = {
-  id: 'demo.example',
-  brandIconKey: 'demo.example',
+  id: DEMO_PACKAGE_ID,
+  brandIconKey: DEMO_PACKAGE_ID,
   manifests: [DEMO_MANIFEST],
   fakeCatalog: [
     {
