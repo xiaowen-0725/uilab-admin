@@ -32,6 +32,7 @@ import {
   type McpServerLoadStatus,
   type PluginAuthStatus,
   type PluginDiscoveryFailure,
+  isConnectorEffective,
 } from './plugin/index.js'
 import {
   type AgentProfile,
@@ -253,14 +254,34 @@ export async function createWorkbenchAgent(
               status.pluginId === descriptor.authSummarySource.pluginId &&
               status.resourceId === descriptor.authSummarySource.resourceId,
           )
+          const pluginEnabled = descriptor.pluginRefs.some((pluginId) =>
+            enabledPluginIds.includes(pluginId),
+          )
+          const connected = auth?.status === 'connected'
+          const taskSelected =
+            turnContext.taskId !== null &&
+            turnContext.selectedConnectorIds.includes(connectorId)
+
+          // Route through the authoritative isConnectorEffective so the sandbox
+          // access resolver and the tool-gate stay in sync when the predicate
+          // evolves (e.g. taskMuted). When the authoritative decision is deny,
+          // surface the first failing condition as the sandbox's error reason
+          // (ADR-0017 §3: policy only filters, never copies Provider schema).
+          const decision = isConnectorEffective({
+            connectorId,
+            pluginGloballyEnabled: pluginEnabled,
+            authStatus: auth?.status ?? 'missing',
+            taskSelected,
+          })
+          if (decision.capabilityEntersNextTurn) {
+            return { pluginEnabled: true, connected: true, taskSelected: true }
+          }
+          // Map the first failing reason back to the sandbox's 3-boolean interface
+          const reason = decision.reasons[0]
           return {
-            pluginEnabled: descriptor.pluginRefs.some((pluginId) =>
-              enabledPluginIds.includes(pluginId),
-            ),
-            connected: auth?.status === 'connected',
-            taskSelected:
-              turnContext.taskId !== null &&
-              turnContext.selectedConnectorIds.includes(connectorId),
+            pluginEnabled: reason !== 'plugin_not_enabled' && pluginEnabled,
+            connected: reason !== 'not_connected' && reason !== 'auth_missing' && connected,
+            taskSelected: reason !== 'not_task_selected' && taskSelected,
           }
         },
       }))
