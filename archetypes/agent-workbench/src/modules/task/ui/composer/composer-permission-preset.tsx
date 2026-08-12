@@ -16,16 +16,21 @@ import {
   permissionPresetLabel,
   PERMISSION_PRESET_OPTIONS,
   usePermissionPreset,
-  type PermissionPreset,
 } from '../../application/permission-preset'
+
+export interface ComposerPermissionPresetProps {
+  taskId?: string | null
+}
 
 export function ComposerPermissionPreset({
   taskId,
-}: {
-  taskId?: string | null
-}) {
+}: ComposerPermissionPresetProps) {
   const { preset, setPreset } = usePermissionPreset(taskId)
   const label = permissionPresetLabel(preset)
+
+  function handlePresetChange(value: string): void {
+    if (isPermissionPreset(value)) setPreset(value)
+  }
 
   return (
     <DropdownMenu>
@@ -54,16 +59,14 @@ export function ComposerPermissionPreset({
         </p>
         <DropdownMenuRadioGroup
           value={preset}
-          onValueChange={(value) => {
-            if (isPermissionPreset(value)) setPreset(value)
-          }}
+          onValueChange={handlePresetChange}
         >
           {PERMISSION_PRESET_OPTIONS.map((option) => (
             <DropdownMenuRadioItem
               key={option.id}
               value={option.id}
               className='items-start py-2'
-              data-testid={`composer-permission-preset-${option.id as PermissionPreset}`}
+              data-testid={`composer-permission-preset-${option.id}`}
             >
               <span className='flex min-w-0 flex-1 flex-col gap-0.5 pr-2'>
                 <span>{option.label}</span>

@@ -40,20 +40,21 @@ export const PERMISSION_PRESET_OPTIONS = [
   },
 ] as const
 
-const PRESET_BY_ID: Record<
-  PermissionPreset,
-  (typeof PERMISSION_PRESET_OPTIONS)[number]
-> = {
-  'auto-approve': PERMISSION_PRESET_OPTIONS[0],
-  'full-access': PERMISSION_PRESET_OPTIONS[1],
+type PresetOption = (typeof PERMISSION_PRESET_OPTIONS)[number]
+type BrowserStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+
+function presetOption(id: PermissionPreset): PresetOption {
+  for (const option of PERMISSION_PRESET_OPTIONS) {
+    if (option.id === id) return option
+  }
+  return PERMISSION_PRESET_OPTIONS[0]
 }
 
 const STORAGE_KEY = 'uilab.agent-workbench.permission-preset.v1'
 
 const memory = new Map<string, PermissionPreset>()
 const listeners = new Set<() => void>()
-let storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null =
-  resolveBrowserStorage()
+let storage: BrowserStorage | null = resolveBrowserStorage()
 let hydrated = false
 
 export function isPermissionPreset(
@@ -70,19 +71,26 @@ export function decideApprovalResponse(
   preset: PermissionPreset,
   toolName: string | null | undefined,
 ): ApprovalResponseDecision {
-  if (preset === 'full-access') return 'approve'
-  if (typeof toolName === 'string' && AUTO_APPROVE_WRITE_TOOL_SET.has(toolName)) {
-    return 'approve'
+  switch (preset) {
+    case 'full-access':
+      return 'approve'
+    case 'auto-approve':
+      if (
+        typeof toolName === 'string' &&
+        AUTO_APPROVE_WRITE_TOOL_SET.has(toolName)
+      ) {
+        return 'approve'
+      }
+      return 'dock'
   }
-  return 'dock'
 }
 
 export function autoApproveReason(preset: PermissionPreset): string {
-  return PRESET_BY_ID[preset].autoApproveReason
+  return presetOption(preset).autoApproveReason
 }
 
 export function permissionPresetLabel(preset: PermissionPreset): string {
-  return PRESET_BY_ID[preset].label
+  return presetOption(preset).label
 }
 
 export function getPermissionPreset(
@@ -134,7 +142,7 @@ export function usePermissionPreset(taskId: string | null | undefined): {
 
 /** Test-only: clear memory (and storage unless `persistStorage`). */
 export function resetPermissionPresetStoreForTests(options?: {
-  storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null
+  storage?: BrowserStorage | null
   persistStorage?: boolean
 }): void {
   memory.clear()
@@ -188,10 +196,7 @@ function emit(): void {
   for (const listener of listeners) listener()
 }
 
-function resolveBrowserStorage(): Pick<
-  Storage,
-  'getItem' | 'setItem' | 'removeItem'
-> | null {
+function resolveBrowserStorage(): BrowserStorage | null {
   try {
     return typeof globalThis.localStorage === 'undefined'
       ? null

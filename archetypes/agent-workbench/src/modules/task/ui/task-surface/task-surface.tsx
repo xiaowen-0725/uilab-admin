@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import type { RunStatus } from '../../model/lifecycle'
 import type { StreamViewModel } from '../../model/stream-events'
 import type {
@@ -90,6 +90,22 @@ export interface TaskSurfaceProps {
 
 const claimedAutoRespond = new Set<string>()
 
+function claimAutoRespond(taskId: string, requestId: string): boolean {
+  const key = `${taskId}:${requestId}`
+  if (claimedAutoRespond.has(key)) return false
+  claimedAutoRespond.add(key)
+  return true
+}
+
+function isRejectedAcknowledgement(result: unknown): boolean {
+  return (
+    result != null &&
+    typeof result === 'object' &&
+    'status' in result &&
+    result.status === 'rejected'
+  )
+}
+
 export function TaskSurface({
   view,
   onCloseContextPanel,
@@ -99,7 +115,6 @@ export function TaskSurface({
 }: TaskSurfaceProps) {
   const [lastActionId, setLastActionId] = useState<string | null>(null)
   const { preset } = usePermissionPreset(view.taskId)
-  const autoRespondedRef = useRef<string | null>(null)
   const [autoApproveFailedId, setAutoApproveFailedId] = useState<string | null>(
     null,
   )
@@ -131,22 +146,13 @@ export function TaskSurface({
   useLayoutEffect(() => {
     if (!pendingApproval || approvalDecision !== 'approve') return
     if (autoApproveFailedId === pendingApproval.requestId) return
-    if (autoRespondedRef.current === pendingApproval.requestId) return
-    const claimKey = `${view.taskId}:${pendingApproval.requestId}`
-    if (claimedAutoRespond.has(claimKey)) return
     const onApprove = composerRuntime?.onApprove
     if (!onApprove) return
-    autoRespondedRef.current = pendingApproval.requestId
-    claimedAutoRespond.add(claimKey)
+    if (!claimAutoRespond(view.taskId, pendingApproval.requestId)) return
     const requestId = pendingApproval.requestId
     const reason = autoApproveReason(preset)
     void Promise.resolve(onApprove(requestId, reason)).then((result) => {
-      if (
-        result &&
-        typeof result === 'object' &&
-        'status' in result &&
-        result.status === 'rejected'
-      ) {
+      if (isRejectedAcknowledgement(result)) {
         setAutoApproveFailedId(requestId)
       }
     })

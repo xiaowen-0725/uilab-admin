@@ -2,16 +2,22 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeSubscriptionEvent } from '@/modules/task'
 import { createVoltAgentRuntimeAdapter } from './voltagent-runtime-adapter'
 
+function encodeSse(chunks: object[]): Uint8Array {
+  const encoder = new TextEncoder()
+  return encoder.encode(
+    chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join(''),
+  )
+}
+
 function hangingSse(
   chunks: object[],
   signal?: AbortSignal | null,
 ): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder()
-  const lines = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')
+  const bytes = encodeSse(chunks)
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(lines))
-      const abort = () => {
+      controller.enqueue(bytes)
+      function abort(): void {
         try {
           controller.error(
             Object.assign(new Error('aborted'), { name: 'AbortError' }),
@@ -30,11 +36,10 @@ function hangingSse(
 }
 
 function sseBody(chunks: object[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder()
-  const lines = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')
+  const bytes = encodeSse(chunks)
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(lines))
+      controller.enqueue(bytes)
       controller.close()
     },
   })

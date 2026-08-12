@@ -16,17 +16,19 @@ import {
 import type { AgentRuntimeEventEnvelope } from '../../protocol/events'
 import { TaskSurface, type TaskSurfaceView } from './task-surface'
 
+interface ApprovalHarnessProps {
+  taskId: string
+  toolName?: string
+  requestId: string
+  events?: AgentRuntimeEventEnvelope[]
+}
+
 function ApprovalHarness({
   taskId,
   toolName,
   requestId,
   events,
-}: {
-  taskId: string
-  toolName?: string
-  requestId: string
-  events?: AgentRuntimeEventEnvelope[]
-}) {
+}: ApprovalHarnessProps) {
   const runtime = useMemo(() => createScriptedRuntimePort(), [])
   const controller = useMemo(
     () =>

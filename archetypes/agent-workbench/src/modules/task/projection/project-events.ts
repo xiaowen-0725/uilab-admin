@@ -87,6 +87,23 @@ function payloadString(payload: unknown, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+function approvalResolvedStatus(decision: string | null): string {
+  if (decision === 'approved') return 'approved'
+  if (decision === 'rejected') return 'rejected'
+  return 'resolved'
+}
+
+function approvalDecisionLabel(
+  decision: string | null,
+  reason: string | null,
+): string {
+  if (decision === 'approved') {
+    return reason ? '自动批准' : '允许一次'
+  }
+  if (decision === 'rejected') return '拒绝'
+  return ''
+}
+
 function touchItem(
   item: TimelineItem,
   envelope: AgentRuntimeEventEnvelope,
@@ -1164,25 +1181,16 @@ export function applyRuntimeEvent(
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
       const decision = payloadString(envelope.payload, 'decision')
       const reason = payloadString(envelope.payload, 'reason')
-      const status =
-        decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'resolved'
       if (decision === 'approved') {
         setRunStatus(next, 'running', envelope)
         ensureRunTerminal(next, envelope, 'running', '正在思考')
         setLiveStatus(next, '正在思考')
       }
-      const decisionLabel =
-        decision === 'approved'
-          ? reason
-            ? '自动批准'
-            : '允许一次'
-          : decision === 'rejected'
-            ? '拒绝'
-            : ''
+      const decisionLabel = approvalDecisionLabel(decision, reason)
       let extra = decisionLabel ? `\n决定：${decisionLabel}` : ''
       if (reason) extra += `\n${reason}`
       upsertByKey(next, envelope, 'approval-request', requestId, {
-        status,
+        status: approvalResolvedStatus(decision),
         body: extra || undefined,
       })
       break

@@ -35,14 +35,18 @@ export function findPendingApproval(
   timeline: TimelineItem[] | undefined | null,
 ): PendingApproval | null {
   if (!timeline?.length) return null
-  const item = [...timeline]
-    .reverse()
-    .find(
-      (entry) =>
-        entry.category === 'approval-request' && entry.status === 'waiting',
-    )
-  if (!item) return null
+  for (let i = timeline.length - 1; i >= 0; i -= 1) {
+    const item = timeline[i]
+    if (!item) continue
+    if (item.category !== 'approval-request' || item.status !== 'waiting') {
+      continue
+    }
+    return toPendingApproval(item)
+  }
+  return null
+}
 
+function toPendingApproval(item: TimelineItem): PendingApproval {
   const requestId = item.id.startsWith('approval-request:')
     ? item.id.slice('approval-request:'.length)
     : item.id
@@ -51,15 +55,14 @@ export function findPendingApproval(
   const command =
     commandMatch?.[1]?.trim() ||
     (body && body.includes('/') && body.length < 240 ? body : undefined)
-  // toolName is projection meta only — never parse model-controlled body text.
-  const toolName = item.meta?.toolName?.trim() || null
 
   return {
     requestId,
     title: item.title ?? '需要审批',
     body,
     toolLabel: '终端',
-    toolName,
+    // toolName is projection meta only — never parse model-controlled body text.
+    toolName: item.meta?.toolName?.trim() || null,
     command,
   }
 }
