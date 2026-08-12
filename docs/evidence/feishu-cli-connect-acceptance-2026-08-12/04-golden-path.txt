@@ -1,0 +1,19 @@
+Capability golden path → http://127.0.0.1:3141 task=accept-43
+Honesty: real sidecar + real model path (not Fake Runtime)
+
+PASS  G.0  sidecar up profile=office workspace=/Users/zhoujw/develop/github/uilab-admin/output/voltagent-e2e-workspace
+PASS  G.1  feishu enabled=true connected=true authBoundary=provider_declared
+PASS  G.1b  cli_session honesty label present
+FAIL  G.1c  honesty note should mention not host OAuth inject
+PASS  G.2  startAuth phase=already_connected kind=cli_session url=n/a
+PASS  G.2b  startAuth kind=cli_session
+PASS  G.2c  no token in startAuth response
+PASS  G.3  refresh connected=true connectionState=connected
+PASS  G.4  selected feishu capabilityEffective=true effectiveCommands=lark-cli
+PASS  G.4b  connected+selected → native lark-cli command scope effective
+PASS  G.6  deselect → no lark-cli in effectiveCommandScopes
+PASS  G.5  model requested exact native lark-cli argv through execute_command; Host approval correctly paused execution
+
+--- summary ---
+total=12 pass=11 fail=1
+  - G.1c: honesty note should mention not host OAuth inject

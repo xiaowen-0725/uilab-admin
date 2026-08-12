@@ -67,8 +67,8 @@
 | `effectiveCommandScopes` | ☑ `['lark-cli']`（`04-selected-scopes.json`） |
 | 真读文档（Workbench 会话 CLI） | ☑ `lark-cli docs +fetch` → `ok=true` / `identity=user` / 标题命中《把 Claude Code…》 |
 | 文档 URL | `https://larkcommunity.feishu.cn/docx/OaRIdFIRFoLM3xxTmKwcetHqn5e` |
-| 模型 Turn / Host 审批 | ☑ golden-path：`PASS G.5` — 模型请求精确 `execute_command(lark-cli …)` 并正确停在 Host 审批（`04-golden-path.log`） |
-| 证据 | `04-docs-fetch-safe.json`、`04-golden-path.log`、`04-selected-scopes.json` |
+| 模型 Turn / Host 审批 | ☑ golden-path：`PASS G.5` — 模型请求精确 `execute_command(lark-cli …)` 并正确停在 Host 审批（`04-golden-path.txt`） |
+| 证据 | `04-docs-fetch-safe.json`、`04-golden-path.txt`、`04-selected-scopes.json` |
 
 ### 5. Task 开关不影响账号 Connected
 
@@ -130,7 +130,7 @@ docs/evidence/feishu-cli-connect-acceptance-2026-08-12/
   03-connected-ui.png
   04-selected-scopes.json
   04-docs-fetch-safe.json
-  04-golden-path.log
+  04-golden-path.txt
   05-deselect-reselect.json
   06-security-scan.json
 ```
