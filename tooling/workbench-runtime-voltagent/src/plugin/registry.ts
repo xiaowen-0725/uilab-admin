@@ -15,6 +15,7 @@ import {
 } from './auth-status.js'
 import { BUILTIN_PLUGINS } from './builtins.js'
 import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
+import { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
 import {
   projectConnectorDescriptors,
   type ConnectorDescriptor,
@@ -564,7 +565,10 @@ export async function createPluginRegistryFromEnv(
 ): Promise<PluginRegistry> {
   const env = options.env ?? process.env
   const builtins = options.builtins ?? BUILTIN_PLUGINS
-  const packages = options.packages ?? [DEMO_EXAMPLE_PACKAGE]
+  const packages = options.packages ?? [
+    DEMO_EXAMPLE_PACKAGE,
+    GITHUB_PLUGIN_PACKAGE,
+  ]
   const reservedIds = new Set(builtins.map((m) => m.id))
   for (const pkg of packages) {
     for (const m of pkg.manifests) reservedIds.add(m.id)

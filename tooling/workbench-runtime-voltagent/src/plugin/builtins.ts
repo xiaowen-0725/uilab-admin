@@ -1,5 +1,9 @@
 /**
  * Builtin plugins (MCP / Skills / domain CLI).
+ *
+ * GitHub has been migrated to the BuiltinPluginPackage seam (#50) — see
+ * github-package.ts. Constants and the manifest alias are re-exported here
+ * so existing imports from builtins.ts remain valid.
  */
 
 import type { PluginManifest } from './manifest.js'
@@ -7,15 +11,28 @@ import {
   projectConnectorDescriptors,
   type ConnectorDescriptor,
 } from './connector-descriptor.js'
+import {
+  BUILTIN_MCP_GITHUB_PLUGIN,
+  CONNECTOR_GITHUB_ID,
+  CONNECTOR_GITHUB_PLUGIN_ID,
+  CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
+  GITHUB_MCP_SERVER_ID,
+  GITHUB_MCP_REMOTE_URL,
+  GITHUB_MCP_TOOL_PREFIX,
+  GITHUB_PLUGIN_PACKAGE,
+} from './github-package.js'
 
-/** Provider-owned stable ids for the bundled GitHub MCP connector. */
-export const CONNECTOR_GITHUB_ID = 'connector.github' as const
-export const CONNECTOR_GITHUB_PLUGIN_ID = 'mcp.github' as const
-export const CONNECTOR_GITHUB_AUTH_RESOURCE_ID = 'mcp:github' as const
-export const GITHUB_MCP_SERVER_ID = 'github' as const
-export const GITHUB_MCP_REMOTE_URL =
-  'https://api.githubcopilot.com/mcp/' as const
-export const GITHUB_MCP_TOOL_PREFIX = 'github__' as const
+// Re-export so existing consumers importing from builtins.ts remain valid.
+export {
+  BUILTIN_MCP_GITHUB_PLUGIN,
+  CONNECTOR_GITHUB_ID,
+  CONNECTOR_GITHUB_PLUGIN_ID,
+  CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
+  GITHUB_MCP_SERVER_ID,
+  GITHUB_MCP_REMOTE_URL,
+  GITHUB_MCP_TOOL_PREFIX,
+  GITHUB_PLUGIN_PACKAGE,
+}
 
 /** Provider-owned stable ids / package contract for the bundled Feishu slice. */
 export const CONNECTOR_FEISHU_ID = 'connector.feishu' as const
@@ -57,80 +74,6 @@ const FEISHU_CALENDAR_CHILD_ENV = [
   'GOOGLE_APPLICATION_CREDENTIALS',
   'GOOGLE_CALENDAR_ID',
 ]
-
-/**
- * GitHub official MCP Server.
- * Product channel is MCP only; it is deliberately separate from cli.feishu.
- * The official remote endpoint uses the platform-owned GitHub App via the
- * managed Connector Broker. End users never configure App credentials or PATs.
- */
-export const BUILTIN_MCP_GITHUB_PLUGIN: PluginManifest = {
-  schemaVersion: 1,
-  id: CONNECTOR_GITHUB_PLUGIN_ID,
-  name: 'GitHub MCP',
-  version: '0.2.0',
-  kind: 'builtin',
-  enabledByDefault: true,
-  contributes: {
-    connectors: [
-      {
-        id: CONNECTOR_GITHUB_ID,
-        name: 'GitHub',
-        description:
-          '通过 GitHub 官方 MCP Server 动态发现仓库、Issue 与 Pull Request 等能力。',
-        authResourceId: CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
-        authKind: 'oauth2',
-        primaryChannel: 'mcp',
-        capabilities: [
-          {
-            id: 'collaboration',
-            name: '代码托管与协作',
-            description: '具体工具由官方 MCP tools/list 动态发现',
-            channel: 'mcp',
-            toolNames: [],
-            available: true,
-          },
-        ],
-        channelAuth: [
-          {
-            channel: 'mcp',
-            authKind: 'oauth2',
-            resourceId: CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
-            label: 'GitHub OAuth（官方远程 MCP）',
-          },
-        ],
-        toolScope: [GITHUB_MCP_TOOL_PREFIX],
-        availability: 'sidecar',
-        packageHint: 'github/github-mcp-server（官方远程服务）',
-        loginHint:
-          '点击「连接」一键授权 UI Lab Connector；无需创建 GitHub App、填写 PAT 或配置 Client Secret。',
-      },
-    ],
-    mcp: [
-      {
-        serverId: GITHUB_MCP_SERVER_ID,
-        url: GITHUB_MCP_REMOTE_URL,
-        urlFromEnv: ['MCP_GITHUB_URL'],
-        bearerTokenFromEnv: [],
-        toolNamePrefix: GITHUB_MCP_TOOL_PREFIX,
-      },
-    ],
-    auth: [
-      {
-        resourceId: CONNECTOR_GITHUB_AUTH_RESOURCE_ID,
-        kind: 'oauth2',
-        oauth: {
-          strategy: 'managed_broker',
-          mcpServerId: GITHUB_MCP_SERVER_ID,
-          providerId: 'github',
-          brokerBaseUrlFromEnv: ['UILAB_CONNECTOR_BROKER_URL'],
-        },
-        loginHint:
-          '点击 Workbench 的 GitHub「连接」一键授权 UI Lab Connector；Provider Client Secret 只存在于平台连接服务。',
-      },
-    ],
-  },
-}
 
 /** MCP docs / knowledge connector (env-gated). */
 export const BUILTIN_MCP_DOCS_PLUGIN: PluginManifest = {
@@ -369,7 +312,12 @@ export const BUILTIN_CLI_FEISHU_PLUGIN: PluginManifest = {
   },
 }
 
-/** Default builtin set for Registry. */
+/**
+ * Default builtin set for Registry. GitHub is owned by GITHUB_PLUGIN_PACKAGE
+ * (#50) but its manifest is still included here so createPluginRegistry
+ * (without explicit packages) surfaces it. The package adds brandIconKey +
+ * fakeCatalog on top via createPluginRegistryFromEnv.
+ */
 export const BUILTIN_PLUGINS: PluginManifest[] = [
   BUILTIN_MCP_GITHUB_PLUGIN,
   BUILTIN_MCP_DOCS_PLUGIN,

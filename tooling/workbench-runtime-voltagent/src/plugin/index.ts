@@ -171,6 +171,8 @@ export type {
 
 export { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
 
+export { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
+
 export {
   discoverLocalPlugins,
   loadPluginJsonFile,
