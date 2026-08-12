@@ -31,6 +31,16 @@ export {
   type TaskCapabilitySelectionStore,
 } from './model/task-selection'
 
+export {
+  projectConnectorRefs,
+  projectSelectedCapabilityRefs,
+  projectSelectedExpert,
+  projectSelectedSkills,
+  type SelectedConnectorRef,
+  type SelectedExpertRef,
+  type SelectedSkillRef,
+} from './model/capability-refs'
+
 export { createBrowserTaskCapabilitySelectionStore } from './adapters/browser-task-selection-store'
 
 export {

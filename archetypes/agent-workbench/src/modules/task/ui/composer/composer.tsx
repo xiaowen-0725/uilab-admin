@@ -13,6 +13,9 @@ import {
   CapabilityToolbarConnectors,
   formatStartAuthNotice,
   formatTaskConnectorSelectionNotice,
+  projectSelectedSkills,
+  projectConnectorRefs,
+  projectSelectedExpert,
   waitForConnectorAuth,
   useCapabilitySnapshot,
   useCapabilitySnapshotError,
@@ -492,27 +495,21 @@ export function TaskComposer({
             : planMode
               ? 'plan'
               : 'default'
-      const capabilitySkills =
-        capabilitySnapshot?.skills
-          .filter((s) => s.taskSelected)
-          .map((s) => ({ id: s.id, label: s.name })) ?? []
+      const capabilitySkills = capabilitySnapshot
+        ? projectSelectedSkills(capabilitySnapshot.skills)
+        : []
       const mergedSkills = [
         ...skillTokens.map(({ id, label }) => ({ id, label })),
         ...capabilitySkills.filter(
           (s) => !skillTokens.some((t) => t.id === s.id)
         ),
       ]
-      const capabilityConnectors =
-        capabilitySnapshot?.connectors.map((c) => ({
-          id: c.id,
-          label: c.name,
-          connected: c.connected,
-          taskSelected: c.taskSelected,
-          capabilityEffective: c.capabilityEffective,
-        })) ?? []
-      const selectedExpert = capabilitySnapshot?.experts.find(
-        (e) => e.taskSelected
-      )
+      const capabilityConnectors = capabilitySnapshot
+        ? projectConnectorRefs(capabilitySnapshot.connectors)
+        : []
+      const selectedExpert = capabilitySnapshot
+        ? projectSelectedExpert(capabilitySnapshot.experts)
+        : null
       const acknowledgement = await onSubmitText?.(payload, {
         attachments: attachments.map(({ name, meta, icon }) => ({
           name,
@@ -521,13 +518,7 @@ export function TaskComposer({
         })),
         skills: mergedSkills,
         connectors: capabilityConnectors,
-        expert: selectedExpert
-          ? {
-              id: selectedExpert.id,
-              label: selectedExpert.name,
-              instruction: selectedExpert.instruction,
-            }
-          : null,
+        expert: selectedExpert,
         mode,
       })
       if (

@@ -10,6 +10,11 @@ import type {
   TaskId,
   TurnId,
 } from '../model/lifecycle'
+import type {
+  SelectedConnectorRef,
+  SelectedExpertRef,
+  SelectedSkillRef,
+} from '@/modules/capabilities'
 
 export type CommandActor = 'user' | 'system' | 'runtime'
 
@@ -53,20 +58,15 @@ export interface TurnComposerContext {
     kind: 'file' | 'image'
     meta?: string
   }>
-  skills?: Array<{ id: string; label: string }>
-  /** Capability Surface snapshot for this Turn; status-safe labels only. */
-  connectors?: Array<{
-    id: string
-    label: string
-    connected?: boolean
-    taskSelected: boolean
-    capabilityEffective?: boolean
-  }>
+  /** Task-selected skills (slim ref owned by capabilities module). */
+  skills?: SelectedSkillRef[]
+  /** Connector status-safe projection for this Turn (owned by capabilities module). */
+  connectors?: SelectedConnectorRef[]
   /**
    * Task-selected expert profile (not a sub-agent).
    * `instruction` is the config-package overlay from Expert catalog (status-safe).
    */
-  expert?: { id: string; label: string; instruction?: string } | null
+  expert?: SelectedExpertRef | null
   mode?: 'default' | 'goal' | 'plan' | 'goal+plan'
 }
 
