@@ -32,6 +32,7 @@ import {
   type McpServerLoadStatus,
   type PluginAuthStatus,
   type PluginDiscoveryFailure,
+  isConnectorEffective,
 } from './plugin/index.js'
 import {
   type AgentProfile,
@@ -54,6 +55,7 @@ import {
   type ConnectorOAuthFetch,
 } from './capability/connector-oauth.js'
 import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-sandbox.js'
+import type { ConnectorCommandAccess } from './runtime-shell/connector-aware-sandbox.js'
 import { revokeAuthResource } from './plugin/revoke-auth-resource.js'
 
 export type CreateWorkbenchAgentOptions = {
@@ -236,16 +238,15 @@ export async function createWorkbenchAgent(
         env,
         connectors: plugins.connectorDescriptors,
         manifests,
-        resolveConnectorAccess: async (connectorId, turnContext) => {
+        resolveConnectorAccess: async (
+          connectorId,
+          turnContext,
+        ): Promise<ConnectorCommandAccess> => {
           const descriptor = plugins.connectorDescriptors.find(
             (connector) => connector.id === connectorId,
           )
           if (!descriptor) {
-            return {
-              pluginEnabled: false,
-              connected: false,
-              taskSelected: false,
-            }
+            return { allowed: false as const, reason: 'connector_not_found' }
           }
           const statuses = await refreshAuthStatuses()
           const auth = statuses.find(
@@ -253,14 +254,25 @@ export async function createWorkbenchAgent(
               status.pluginId === descriptor.authSummarySource.pluginId &&
               status.resourceId === descriptor.authSummarySource.resourceId,
           )
-          return {
-            pluginEnabled: descriptor.pluginRefs.some((pluginId) =>
+          // Route through the authoritative isConnectorEffective so the sandbox
+          // and tool-gate stay in sync. The decision carries the first failing
+          // reason — new reasons default to deny (no boolean back-mapping).
+          const decision = isConnectorEffective({
+            connectorId,
+            pluginGloballyEnabled: descriptor.pluginRefs.some((pluginId) =>
               enabledPluginIds.includes(pluginId),
             ),
-            connected: auth?.status === 'connected',
+            authStatus: auth?.status ?? 'missing',
             taskSelected:
               turnContext.taskId !== null &&
               turnContext.selectedConnectorIds.includes(connectorId),
+          })
+          if (decision.capabilityEntersNextTurn) {
+            return { allowed: true as const }
+          }
+          return {
+            allowed: false as const,
+            reason: decision.reasons[0] ?? 'unknown',
           }
         },
       }))
