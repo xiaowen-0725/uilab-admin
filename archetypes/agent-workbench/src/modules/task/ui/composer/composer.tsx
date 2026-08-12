@@ -21,7 +21,6 @@ import {
 } from '@/modules/capabilities'
 import {
   Check,
-  CircleAlert,
   FileText,
   Folder,
   FolderOpen,
@@ -34,7 +33,6 @@ import {
   Mic,
   Plus,
   Search,
-  ShieldCheck,
   Sparkles,
   Target,
   Zap,
@@ -51,10 +49,8 @@ import {
 import { Input } from '@/components/ui/input'
 import {
   Composer,
-  ComposerAccessChip,
   ComposerAttachmentChip,
   ComposerAttachments,
-  ComposerAutonomyDial,
   ComposerContextBar,
   ComposerContextGauge,
   ComposerDictation,
@@ -79,6 +75,7 @@ import type {
   TurnComposerContext,
 } from '../../protocol/commands'
 import { previewText, runtimeHonestyCopy } from '../../runtime/runtime-honesty'
+import { ComposerPermissionPreset } from './composer-permission-preset'
 
 export interface ComposerProps {
   /** Context chip — project / workspace name (local fixture state). */
@@ -128,9 +125,7 @@ export interface ComposerProps {
   onManageCapabilities?: () => void
 }
 
-const ACCESS_LEVELS = ['只读', '需确认', '作用域自动', '完全访问'] as const
 const EFFORT_LABELS = ['最低', '低', '标准', '高', '极高'] as const
-const AUTONOMY_LABELS = ['仅建议', '先询问', '作用域自动', '完全自动'] as const
 const ENVIRONMENTS = ['本地', '沙箱', '预发'] as const
 const BRANCHES = ['main', 'develop', 'feat/workbench'] as const
 const MODELS = [
@@ -376,8 +371,6 @@ export function TaskComposer({
     MODELS.find((m) => modelLabel.startsWith(m.label))?.id ?? MODELS[0].id
   )
   const [effort, setEffort] = useState(4)
-  const [autonomy, setAutonomy] = useState(3)
-  const [accessIndex, setAccessIndex] = useState(3)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [projectOpen, setProjectOpen] = useState(false)
@@ -649,15 +642,6 @@ export function TaskComposer({
       `已打开本地文件夹「${name}」（仅记录目录名，未挂载完整文件系统）`
     )
   }, [selectProject])
-
-  const accessLabel = ACCESS_LEVELS[accessIndex]
-  const accessTone =
-    accessIndex >= ACCESS_LEVELS.length - 1 ? 'warning' : 'default'
-
-  const cycleAccess = () => {
-    setAccessIndex((i) => (i + 1) % ACCESS_LEVELS.length)
-    setNotice(null)
-  }
 
   const stripTrailingSlash = useCallback(() => {
     const q = getTrailingSlashQuery(text)
@@ -1423,15 +1407,7 @@ export function TaskComposer({
                     计划模式
                   </ComposerModeBadge>
                 ) : null}
-                <ComposerAccessChip
-                  icon={<CircleAlert className='size-4' />}
-                  tone={accessTone}
-                  data-testid='composer-access'
-                  title='切换访问级别（本地）'
-                  onClick={cycleAccess}
-                >
-                  {accessLabel}
-                </ComposerAccessChip>
+                <ComposerPermissionPreset taskId={capabilityTaskId} />
                 <div className='ms-auto' />
                 {showContextGauge ? (
                   <ComposerContextGauge used={48_000} limit={200_000} />
@@ -1479,23 +1455,6 @@ export function TaskComposer({
                         onChange={setEffort}
                         labels={[...EFFORT_LABELS]}
                         aria-label='推理力度'
-                      />
-                    </div>
-                    <div className='flex items-center justify-between px-2 text-xs text-muted-foreground'>
-                      <span>自主度</span>
-                      <ShieldCheck className='size-3.5' />
-                    </div>
-                    <div className='px-2 pb-2'>
-                      <ComposerAutonomyDial
-                        value={autonomy}
-                        onChange={(next) => {
-                          setAutonomy(next)
-                          setAccessIndex(
-                            Math.min(next, ACCESS_LEVELS.length - 1)
-                          )
-                        }}
-                        labels={[...AUTONOMY_LABELS]}
-                        aria-label='自主度'
                       />
                     </div>
                   </ComposerModelPicker>

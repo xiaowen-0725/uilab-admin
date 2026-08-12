@@ -4,6 +4,7 @@
 import { ArrowUp, ChevronDown, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
+  type ButtonHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -586,33 +587,26 @@ export const ComposerIconButton = forwardRef<
   );
 });
 
-export interface ComposerAccessChipProps {
+export interface ComposerAccessChipProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon?: ReactNode;
   /** "warning" (default) reads as an orange access-level alert; "default" is muted. */
   tone?: "warning" | "default";
-  onClick?: () => void;
   children?: ReactNode;
-  className?: string;
-  title?: string;
-  "data-testid"?: string;
 }
 
 /** Pill button surfacing the current permission level (e.g. "Full access"). */
-export function ComposerAccessChip({
-  icon,
-  tone = "warning",
-  onClick,
-  children,
-  className,
-  title,
-  "data-testid": dataTestId,
-}: ComposerAccessChipProps) {
+export const ComposerAccessChip = forwardRef<
+  HTMLButtonElement,
+  ComposerAccessChipProps
+>(function ComposerAccessChip(
+  { icon, tone = "warning", children, className, type = "button", ...props },
+  ref,
+) {
   return (
     <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      data-testid={dataTestId}
+      ref={ref}
+      type={type}
       className={cn(
         "flex h-7 items-center gap-1 rounded-full px-2 text-[13px] transition-colors",
         tone === "warning"
@@ -620,12 +614,13 @@ export function ComposerAccessChip({
           : "text-muted-foreground hover:bg-[var(--wb-hover)]",
         className,
       )}
+      {...props}
     >
       {icon ? <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span> : null}
       {children}
     </button>
   );
-}
+});
 
 /**
  * Shared open state + dismiss behavior for the popover triggers below.
