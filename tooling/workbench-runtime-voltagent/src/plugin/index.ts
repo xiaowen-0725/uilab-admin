@@ -173,6 +173,8 @@ export { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
 
 export { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
 
+export { FEISHU_PLUGIN_PACKAGE } from './feishu-package.js'
+
 export {
   discoverLocalPlugins,
   loadPluginJsonFile,
