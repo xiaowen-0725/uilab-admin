@@ -1,11 +1,8 @@
 /** Brand marks for Capability Surface chips / toolbar. */
 import type { ImgHTMLAttributes, SVGProps } from 'react'
+import type { ReactNode } from 'react'
 import feishuAppIconUrl from '@/assets/connectors/feishu-app-icon.png'
 import { cn } from '@/lib/utils'
-import {
-  CONNECTOR_FEISHU_ID,
-  CONNECTOR_GITHUB_ID,
-} from '../model/task-selection'
 
 /**
  * Official GitHub Primer Octicon `mark-github-16`.
@@ -23,7 +20,7 @@ export function GitHubBrandIcon({
       fill='currentColor'
       role='img'
       aria-label={title}
-      data-brand-id={CONNECTOR_GITHUB_ID}
+      data-brand-id='github'
       className={cn('size-4 shrink-0', className)}
       {...props}
     >
@@ -50,15 +47,45 @@ export function FeishuBrandIcon({
       alt={alt ?? title}
       title={title}
       draggable={false}
-      data-brand-id={CONNECTOR_FEISHU_ID}
+      data-brand-id='feishu'
       className={cn('size-4 shrink-0 object-contain', className)}
       {...props}
     />
   )
 }
 
+/**
+ * Resolve a brand icon from a package-contributed brandIconKey (#52).
+ * Falls back to a first-letter monogram for unknown connectors — no
+ * Provider id branching in Host or Renderer.
+ */
+export function renderBrandIcon(
+  brandIconKey: string | undefined,
+  name: string,
+  className?: string,
+): ReactNode {
+  if (brandIconKey === 'github') {
+    return <GitHubBrandIcon className={className} title={name} aria-hidden />
+  }
+  if (brandIconKey === 'feishu') {
+    return <FeishuBrandIcon className={className} title={name} aria-hidden />
+  }
+  return (
+    <span
+      className={cn(
+        'flex items-center justify-center font-semibold text-muted-foreground',
+        className,
+      )}
+      aria-hidden
+    >
+      {name.slice(0, 1)}
+    </span>
+  )
+}
+
 /** WorkBuddy-style brand tile beside Composer「+」. */
 export function ConnectorBrandBadge({
+  brandIconKey,
   connectorId,
   name,
   connected,
@@ -67,6 +94,7 @@ export function ConnectorBrandBadge({
   onRemove,
   className,
 }: {
+  brandIconKey?: string
   connectorId: string
   name: string
   connected?: boolean
@@ -92,18 +120,10 @@ export function ConnectorBrandBadge({
           'inline-flex size-7 items-center justify-center rounded-[10px]',
           'bg-muted/35 ring-1 ring-border/40',
           'transition-colors hover:bg-[var(--wb-hover)] hover:ring-border/70',
-          !connected && 'opacity-65'
+          !connected && 'opacity-65',
         )}
       >
-        {connectorId === CONNECTOR_GITHUB_ID ? (
-          <GitHubBrandIcon className='size-[18px]' title={name} />
-        ) : connectorId === CONNECTOR_FEISHU_ID ? (
-          <FeishuBrandIcon className='size-[18px]' title={name} />
-        ) : (
-          <span className='text-[11px] font-semibold text-muted-foreground'>
-            {name.slice(0, 1)}
-          </span>
-        )}
+        {renderBrandIcon(brandIconKey, name, 'size-[18px] text-[11px]')}
       </button>
       {onRemove ? (
         <button
@@ -113,7 +133,7 @@ export function ConnectorBrandBadge({
           className={cn(
             'absolute -top-1 -right-1 flex size-3.5 items-center justify-center rounded-full',
             'bg-foreground text-[9px] leading-none text-background shadow-sm',
-            'opacity-0 transition-opacity group-focus-within/conn:opacity-100 group-hover/conn:opacity-100'
+            'opacity-0 transition-opacity group-focus-within/conn:opacity-100 group-hover/conn:opacity-100',
           )}
           onClick={(e) => {
             e.stopPropagation()
@@ -127,12 +147,13 @@ export function ConnectorBrandBadge({
   )
 }
 
-export function connectorBrandIconNode(connectorId: string, name: string) {
-  if (connectorId === CONNECTOR_GITHUB_ID) {
-    return <GitHubBrandIcon className='size-4' title={name} />
-  }
-  if (connectorId === CONNECTOR_FEISHU_ID) {
-    return <FeishuBrandIcon className='size-4' title={name} />
-  }
-  return null
+/**
+ * Resolve a brand icon node from brandIconKey (#52).
+ * Kept for external consumers that render icons outside ConnectorBrandBadge.
+ */
+export function connectorBrandIconNode(
+  brandIconKey: string | undefined,
+  name: string,
+): ReactNode {
+  return renderBrandIcon(brandIconKey, name, 'size-4 text-[10px]')
 }

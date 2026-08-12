@@ -43,6 +43,7 @@ export function CapabilityToolbarConnectors({
       {selected.map((c) => (
         <ConnectorBrandBadge
           key={c.id}
+          brandIconKey={c.brandIconKey}
           connectorId={c.id}
           name={c.name}
           connected={c.connected}
@@ -110,6 +111,7 @@ export function CapabilityChips({
         ? selectedConnectors.map((c) => (
             <ConnectorBrandBadge
               key={c.id}
+              brandIconKey={c.brandIconKey}
               connectorId={c.id}
               name={c.name}
               connected={c.connected}

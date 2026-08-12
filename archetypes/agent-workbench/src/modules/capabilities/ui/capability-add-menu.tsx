@@ -29,15 +29,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  CONNECTOR_FEISHU_ID,
-  CONNECTOR_GITHUB_ID,
-} from '../model/task-selection'
 import type {
   CapabilitySnapshot,
   CapabilitySnapshotConnector,
 } from '../ports/capability-snapshot-port'
-import { FeishuBrandIcon, GitHubBrandIcon } from './brand-icons'
+import { renderBrandIcon } from './brand-icons'
 
 export type CapabilityAddMenuProps = {
   open: boolean
@@ -63,24 +59,7 @@ function ConnectorGlyph({
 }: {
   connector: CapabilitySnapshotConnector
 }) {
-  if (connector.id === CONNECTOR_GITHUB_ID) {
-    return (
-      <GitHubBrandIcon className='size-4' title={connector.name} aria-hidden />
-    )
-  }
-  if (connector.id === CONNECTOR_FEISHU_ID) {
-    return (
-      <FeishuBrandIcon className='size-4' title={connector.name} aria-hidden />
-    )
-  }
-  return (
-    <span
-      className='flex size-4 items-center justify-center text-[10px] font-semibold text-muted-foreground'
-      aria-hidden
-    >
-      {connector.name.slice(0, 1)}
-    </span>
-  )
+  return renderBrandIcon(connector.brandIconKey, connector.name, 'size-4 text-[10px]')
 }
 
 function connectorAccountStatus(

@@ -89,6 +89,7 @@ function feishuConnector(overrides: Partial<CapabilitySnapshot['connectors'][num
     primaryChannel: 'domain_cli',
     channelAuth: [{ channel: 'domain_cli', authKind: 'cli_session', label: 'CLI session（lark-cli）' }],
     availability: 'sidecar',
+    brandIconKey: 'feishu',
     ...overrides,
   }
 }
@@ -115,6 +116,7 @@ function githubConnector(overrides: Partial<CapabilitySnapshot['connectors'][num
     primaryChannel: 'mcp',
     channelAuth: [{ channel: 'mcp', authKind: 'oauth2', label: 'GitHub OAuth（官方远程 MCP）' }],
     availability: 'sidecar',
+    brandIconKey: 'github',
     ...overrides,
   }
 }

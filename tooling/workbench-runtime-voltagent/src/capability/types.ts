@@ -55,6 +55,8 @@ export type CapabilitySnapshotConnector = {
     label: string
   }>
   availability: 'sidecar' | 'fake-catalog-only' | 'missing-binary'
+  /** Brand icon key (Renderer maps to asset; sidecar never resolves paths). (#52) */
+  brandIconKey?: string
 }
 
 export type CapabilitySnapshotSkill = {

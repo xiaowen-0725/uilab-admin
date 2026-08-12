@@ -84,6 +84,7 @@ export function createFakeCapabilitySnapshotPort(
             },
           ],
           availability: 'fake-catalog-only',
+          brandIconKey: 'github',
         },
         {
           id: CONNECTOR_FEISHU_ID,
@@ -120,6 +121,7 @@ export function createFakeCapabilitySnapshotPort(
             },
           ],
           availability: 'fake-catalog-only',
+          brandIconKey: 'feishu',
         },
       ],
       skills: [
