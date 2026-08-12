@@ -7,11 +7,9 @@ import {
 } from '@voltagent/core'
 import { readCapabilityTurnContext } from '../capability/turn-context.js'
 
-export type ConnectorCommandAccess = {
-  pluginEnabled: boolean
-  connected: boolean
-  taskSelected: boolean
-}
+export type ConnectorCommandAccess =
+  | { allowed: true }
+  | { allowed: false; reason: string }
 
 export type ConnectorCommandTurnContext = {
   taskId: string | null
@@ -111,14 +109,8 @@ export function createConnectorAwareSandbox(
         rule.connectorId,
         turnContext,
       )
-      if (!access.pluginEnabled) {
-        throw new Error(`connector_plugin_not_enabled:${rule.connectorId}`)
-      }
-      if (!access.connected) {
-        throw new Error(`connector_not_connected:${rule.connectorId}`)
-      }
-      if (!access.taskSelected) {
-        throw new Error(`connector_not_selected:${rule.connectorId}`)
+      if (!access.allowed) {
+        throw new Error(`connector_access_denied:${rule.connectorId}:${access.reason}`)
       }
 
       return rule.sandbox.execute({

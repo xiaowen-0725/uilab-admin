@@ -45,13 +45,10 @@ describe('createConnectorAwareSandbox', () => {
       ],
       resolveConnectorAccess: async (_connectorId, turnContext) => {
         received = turnContext
-        return {
-          pluginEnabled: true,
-          connected: true,
-          taskSelected: turnContext.selectedConnectorIds.includes(
-            'connector.feishu',
-          ),
-        }
+        const selected = turnContext.selectedConnectorIds.includes('connector.feishu')
+        return selected
+          ? { allowed: true as const }
+          : { allowed: false as const, reason: 'not_task_selected' }
       },
     })
 
@@ -85,9 +82,8 @@ describe('createConnectorAwareSandbox', () => {
         },
       ],
       resolveConnectorAccess: async () => ({
-        pluginEnabled: true,
-        connected: true,
-        taskSelected: false,
+        allowed: false as const,
+        reason: 'not_task_selected',
       }),
     })
 
@@ -97,7 +93,7 @@ describe('createConnectorAwareSandbox', () => {
           command: 'lark-cli',
           args: ['skills', 'list'],
         }),
-      /connector_not_selected/,
+      /connector_access_denied.*not_task_selected/,
     )
     assert.equal(providerCalls.length, 0)
     assert.equal(defaultCalls.length, 0)
@@ -119,9 +115,7 @@ describe('createConnectorAwareSandbox', () => {
         },
       ],
       resolveConnectorAccess: async () => ({
-        pluginEnabled: true,
-        connected: true,
-        taskSelected: true,
+        allowed: true as const,
       }),
     })
 
@@ -159,9 +153,7 @@ describe('createConnectorAwareSandbox', () => {
         },
       ],
       resolveConnectorAccess: async () => ({
-        pluginEnabled: true,
-        connected: true,
-        taskSelected: true,
+        allowed: true as const,
       }),
     })
 
@@ -184,15 +176,14 @@ describe('createConnectorAwareSandbox', () => {
         },
       ],
       resolveConnectorAccess: async () => ({
-        pluginEnabled: true,
-        connected: false,
-        taskSelected: true,
+        allowed: false as const,
+        reason: 'not_connected',
       }),
     })
 
     await assert.rejects(
       () => sandbox.execute({ command: 'lark-cli', args: ['auth', 'status'] }),
-      /connector_not_connected/,
+      /connector_access_denied.*not_connected/,
     )
     await assert.rejects(
       () =>
