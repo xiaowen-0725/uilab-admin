@@ -158,6 +158,13 @@ export {
   type PluginRuntimeRecord,
 } from './registry.js'
 
+export type {
+  BuiltinPluginPackage,
+  FakeCatalogEntry,
+} from './plugin-package.js'
+
+export { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
+
 export {
   discoverLocalPlugins,
   loadPluginJsonFile,

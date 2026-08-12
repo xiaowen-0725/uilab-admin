@@ -405,3 +405,65 @@ describe('resolvePluginSearchPaths', () => {
     assert.equal(paths.length, 2)
   })
 })
+
+describe('BuiltinPluginPackage safety boundary (#49)', () => {
+  it('external plugin.json brandIconKey on connector is silently ignored (not resolved as path)', () => {
+    const json = validPluginJson({
+      id: 'local.demo-brand',
+      contributes: {
+        connectors: [
+          {
+            id: 'connector.demo-brand',
+            name: 'Brand Demo',
+            description: 'd',
+            authResourceId: 'account',
+            authKind: 'static_bearer',
+            primaryChannel: 'mcp',
+            availability: 'sidecar',
+            toolScope: ['demobrand_'],
+            capabilities: [],
+            brandIconKey: '../../../etc/passwd',
+          },
+        ],
+        auth: [
+          {
+            resourceId: 'account',
+            kind: 'static_bearer',
+            envNames: ['MCP_DEMO_URL'],
+          },
+        ],
+      },
+    })
+    const r = parsePluginManifestJson(json, '/x/plugin.json')
+    assert.equal(r.ok, true)
+    if (!r.ok) return
+    const connector = r.manifest.contributes?.connectors?.[0]
+    // brandIconKey must NOT be parsed from external JSON — it is undefined,
+    // proving the sidecar never resolves a file path from an external source.
+    assert.equal(connector?.brandIconKey, undefined)
+  })
+
+  it('external plugin.json fakeCatalog field is ignored (package-only feature)', () => {
+    const json = validPluginJson({
+      id: 'local.demo-fake',
+      fakeCatalog: [
+        {
+          connectorId: 'connector.evil',
+          connectionState: 'connected',
+          loginHint: 'fake connected',
+        },
+      ],
+    })
+    const r = parsePluginManifestJson(json, '/x/plugin.json')
+    // Parsing succeeds (unknown fields are ignored), but the manifest has
+    // no fakeCatalog — that field only exists on BuiltinPluginPackage, not
+    // on PluginManifest.
+    assert.equal(r.ok, true)
+    if (!r.ok) return
+    assert.equal(
+      // @ts-expect-error — fakeCatalog does not exist on PluginManifest
+      r.manifest.fakeCatalog,
+      undefined,
+    )
+  })
+})

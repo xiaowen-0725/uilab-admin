@@ -14,6 +14,7 @@ import {
   type ResolvePluginAuthOptions,
 } from './auth-status.js'
 import { BUILTIN_PLUGINS } from './builtins.js'
+import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
 import {
   projectConnectorDescriptors,
   type ConnectorDescriptor,
@@ -22,6 +23,7 @@ import {
   discoverLocalPlugins,
   type PluginDiscoveryFailure,
 } from './discover.js'
+import type { FakeCatalogEntry, BuiltinPluginPackage } from './plugin-package.js'
 import {
   loadCliContributions,
   type CliLoadStatus,
@@ -105,6 +107,8 @@ export type PluginRegistryLoadOptions = {
 export type PluginRegistry = {
   listManifests(): PluginManifest[]
   listConnectorDescriptors(): ConnectorDescriptor[]
+  /** Deterministic Fake catalog entries from registered packages (#49). */
+  listFakeCatalog(): FakeCatalogEntry[]
   /** Enabled plugin ids for this env/config */
   resolveEnabledIds(): string[]
   /** Re-probe auth resources without reconnecting MCP or rebuilding tools. */
@@ -122,6 +126,8 @@ export type PluginRegistry = {
 export type CreatePluginRegistryOptions = {
   env?: ProfileEnv
   builtins?: PluginManifest[]
+  /** Builtin packages bundling manifests + brand + Fake catalog (#49). */
+  packages?: BuiltinPluginPackage[]
   /** Additional manifests (from PLUGIN_PATHS discovery or tests) */
   extra?: PluginManifest[]
   /** Isolated discovery failures (invalid plugin.json, conflicts, missing paths) */
@@ -167,8 +173,14 @@ export function createPluginRegistry(
   options: CreatePluginRegistryOptions = {},
 ): PluginRegistry {
   const env = options.env ?? process.env
+  // Expand package manifests into the builtin set before merging.
+  const packages = options.packages ?? []
+  const packageManifests = packages.flatMap((pkg) => pkg.manifests)
+  const fakeCatalog: FakeCatalogEntry[] = packages.flatMap(
+    (pkg) => pkg.fakeCatalog ?? [],
+  )
   const manifests = mergeManifests(
-    options.builtins ?? BUILTIN_PLUGINS,
+    [...(options.builtins ?? BUILTIN_PLUGINS), ...packageManifests],
     options.extra ?? [],
   )
   const byId = new Map(manifests.map((m) => [m.id, m]))
@@ -247,6 +259,7 @@ export function createPluginRegistry(
   return {
     listManifests: () => [...manifests],
     listConnectorDescriptors: () => [...connectorDescriptors],
+    listFakeCatalog: () => [...fakeCatalog],
     resolveEnabledIds,
     refreshAuthStatuses: () =>
       resolvePluginAuthStatuses(buildAuthItems(), authOpts),
@@ -551,7 +564,11 @@ export async function createPluginRegistryFromEnv(
 ): Promise<PluginRegistry> {
   const env = options.env ?? process.env
   const builtins = options.builtins ?? BUILTIN_PLUGINS
+  const packages = options.packages ?? [DEMO_EXAMPLE_PACKAGE]
   const reservedIds = new Set(builtins.map((m) => m.id))
+  for (const pkg of packages) {
+    for (const m of pkg.manifests) reservedIds.add(m.id)
+  }
   for (const m of options.extra ?? []) reservedIds.add(m.id)
 
   const discovery = await discoverLocalPlugins({
@@ -581,6 +598,7 @@ export async function createPluginRegistryFromEnv(
     ...options,
     env,
     builtins,
+    packages,
     secretStore,
     authBindingStore,
     extra: [...(options.extra ?? []), ...discovery.manifests],
