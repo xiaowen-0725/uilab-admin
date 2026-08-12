@@ -89,6 +89,7 @@ const {
   beginConnectorCliSession,
   reconcileConnectorAuth,
   revokeConnectorAuth,
+  getActiveCliSessions,
   disconnectMcp,
 } = await createWorkbenchAgent({
   profile,
@@ -181,6 +182,7 @@ new VoltAgent({
             beginConnectorCliSession,
             reconcileConnectorAuth,
             revokeConnectorAuth,
+            getActiveCliSessions,
           })
           logger.info(
             `capability routes mounted experts=${experts.map((e) => e.id).join(',') || '(none)'}`,

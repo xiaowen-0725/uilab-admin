@@ -50,6 +50,8 @@ export type BuildCapabilitySnapshotInput = {
   experts?: readonly CapabilitySnapshotExpert[]
   /** Enabled plugin ids from registry */
   enabledPluginIds: readonly string[]
+  /** Active CLI auth sessions for auth_in_progress projection (#45). */
+  activeCliSessions?: ReadonlyArray<{ connectorId: string; stage: string }>
 }
 
 export function buildCapabilitySnapshot(
@@ -100,7 +102,12 @@ export function buildCapabilitySnapshot(
       authStatus: c.authStatus,
       taskSelected: c.taskSelected,
     })
-    const connectionState = toConnectionState(c.authStatus, c.availability)
+    const isActiveCli = (input.activeCliSessions ?? []).some(
+      (s) => s.connectorId === c.descriptor.id,
+    )
+    const connectionState = isActiveCli
+      ? 'auth_in_progress' as const
+      : toConnectionState(c.authStatus, c.availability)
     const scopedTools = effective.effectiveToolNames.filter((name) =>
       c.descriptor.toolScope.some((scope) =>
         scope.endsWith('.') || scope.endsWith('_')

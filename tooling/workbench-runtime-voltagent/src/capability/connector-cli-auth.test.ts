@@ -92,7 +92,7 @@ describe('Connector CLI auth runtime', () => {
       })
       return {
         completion: new Promise(() => {}),
-        stop() {
+        async stop() {
           stopped = true
         },
       }
@@ -163,7 +163,7 @@ describe('Connector CLI auth runtime', () => {
           completion: new Promise((resolve) => {
             resolveBootstrap = resolve
           }),
-          stop() {},
+          async stop() {},
         }
       }
       assert.deepEqual(argv, [
@@ -177,7 +177,7 @@ describe('Connector CLI auth runtime', () => {
         completion: new Promise((resolve) => {
           resolveAuthorization = resolve
         }),
-        stop() {},
+        async stop() {},
       }
     }
     const runtime = createConnectorCliAuthRuntime({
@@ -311,7 +311,7 @@ describe('Connector CLI auth runtime', () => {
         processStarted = true
         return {
           completion: new Promise(() => {}),
-          stop() {},
+          async stop() {},
         }
       },
     })
@@ -360,5 +360,38 @@ describe('default CLI auth process adapter', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  })
+})
+
+
+
+describe('#45 auth restart recovery', () => {
+  it('getActiveSessions returns empty array when no sessions are pending', () => {
+    const runtime = createConnectorCliAuthRuntime({
+      descriptors: [descriptor],
+      manifests: [manifest],
+      enabledPluginIds: ['cli.demo'],
+      runner: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+      processRunner: () => ({
+        completion: new Promise(() => {}),
+        async stop() {},
+      }),
+    })
+    assert.deepEqual(runtime.getActiveSessions(), [])
+  })
+
+  it('dispose is safe with no active sessions and clears state', async () => {
+    const runtime = createConnectorCliAuthRuntime({
+      descriptors: [descriptor],
+      manifests: [manifest],
+      enabledPluginIds: ['cli.demo'],
+      runner: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+      processRunner: () => ({
+        completion: new Promise(() => {}),
+        async stop() {},
+      }),
+    })
+    await runtime.dispose()
+    assert.deepEqual(runtime.getActiveSessions(), [])
   })
 })

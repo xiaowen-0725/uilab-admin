@@ -128,6 +128,8 @@ export type WorkbenchAgentBundle = {
     /** True when the live MCP transport was disconnected in-process. */
     hotReclaimApplied?: boolean
   }>
+  /** Active CLI auth sessions for auth_in_progress projection (#45). */
+  getActiveCliSessions: () => Array<{ connectorId: string; stage: string }>
   disconnectMcp: () => Promise<void>
 }
 
@@ -571,6 +573,7 @@ export async function createWorkbenchAgent(
       beginConnectorCliSession: (connectorId, domains) =>
         connectorCliAuth.begin(connectorId, domains),
       reconcileConnectorAuth,
+      getActiveCliSessions: () => connectorCliAuth.getActiveSessions(),
       revokeConnectorAuth,
       disconnectMcp: async () => {
         await connectorCliAuth.dispose()
@@ -624,6 +627,7 @@ export async function createWorkbenchAgent(
     connectorDescriptors: [],
     discoverableSkillIds: [],
     refreshAuthStatuses: async () => [],
+    getActiveCliSessions: () => [],
     disconnectMcp: async () => {},
   }
 }
