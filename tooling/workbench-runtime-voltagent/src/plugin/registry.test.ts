@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import { BUILTIN_PLUGINS } from './builtins.js'
+import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
 import { oauthAccessAccount } from './oauth.js'
 import { createPluginRegistry } from './registry.js'
 import {
@@ -347,5 +348,84 @@ describe('createPluginRegistry', () => {
     const result = await reg.load()
     assert.ok(result.toolNames.includes('custom_tool'))
     await result.disconnect()
+  })
+})
+
+describe('createPluginRegistry — BuiltinPluginPackage seam (#49)', () => {
+  it('registers a demo package connector without Host branching on Provider id', () => {
+    const reg = createPluginRegistry({
+      env: {},
+      builtins: [],
+      packages: [DEMO_EXAMPLE_PACKAGE],
+    })
+
+    const ids = reg.listConnectorDescriptors().map((c) => c.id)
+    assert.ok(
+      ids.includes('connector.demo'),
+      'demo package connector must be registered',
+    )
+
+    const demo = reg
+      .listConnectorDescriptors()
+      .find((c) => c.id === 'connector.demo')
+    assert.equal(demo?.brandIconKey, 'demo.example')
+    assert.equal(demo?.pluginRefs[0], 'mcp.demo')
+  })
+
+  it('coexists with existing builtins without conflicts', () => {
+    const reg = createPluginRegistry({
+      env: {},
+      packages: [DEMO_EXAMPLE_PACKAGE],
+    })
+
+    const ids = reg.listConnectorDescriptors().map((c) => c.id)
+    assert.ok(ids.includes('connector.github'))
+    assert.ok(ids.includes('connector.feishu'))
+    assert.ok(ids.includes('connector.demo'))
+  })
+
+  it('duplicate manifest id between package and builtin fails closed (builtin wins)', () => {
+    const conflictPkg = {
+      id: 'conflict.test',
+      manifests: [
+        {
+          schemaVersion: 1 as const,
+          id: 'mcp.github',
+          name: 'Conflict',
+          version: '0.0.1',
+          kind: 'builtin' as const,
+          contributes: {},
+        },
+      ],
+    }
+    // mergeManifests: builtins first → the package's mcp.github is silently
+    // dropped (first wins). No throw, no duplicate.
+    const reg = createPluginRegistry({
+      env: {},
+      packages: [conflictPkg],
+    })
+    const manifests = reg.listManifests()
+    const githubCount = manifests.filter((m) => m.id === 'mcp.github').length
+    assert.equal(githubCount, 1, 'duplicate id must not produce two manifests')
+  })
+
+  it('exposes package fakeCatalog entries via listFakeCatalog', () => {
+    const reg = createPluginRegistry({
+      env: {},
+      builtins: [],
+      packages: [DEMO_EXAMPLE_PACKAGE],
+    })
+    const catalog = reg.listFakeCatalog()
+    assert.equal(catalog.length, 1)
+    assert.equal(catalog[0]?.connectorId, 'connector.demo')
+    assert.equal(catalog[0]?.connectionState, 'missing')
+  })
+
+  it('returns empty fakeCatalog when no packages are registered', () => {
+    const reg = createPluginRegistry({
+      env: {},
+      builtins: [],
+    })
+    assert.deepEqual(reg.listFakeCatalog(), [])
   })
 })

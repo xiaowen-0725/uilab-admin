@@ -121,6 +121,11 @@ export type ConnectorContribution = {
   }>
   packageHint?: string
   loginHint?: string
+  /**
+   * Brand icon key (pure string). The Renderer maps this to an actual icon
+   * asset; the sidecar never resolves it to a file path. (#49)
+   */
+  brandIconKey?: string
 }
 
 /**

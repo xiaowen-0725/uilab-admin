@@ -94,6 +94,8 @@ export type ConnectorDescriptor = {
   packageHint?: string
   /** Chinese operator/user login hint (no secret). */
   loginHint?: string
+  /** Brand icon key (Renderer maps to asset; sidecar never resolves paths). */
+  brandIconKey?: string
 }
 
 /**
@@ -140,6 +142,7 @@ export function projectConnectorDescriptors(
         availability: contribution.availability,
         packageHint: contribution.packageHint,
         loginHint: contribution.loginHint,
+        brandIconKey: contribution.brandIconKey,
       })
     }
   }
