@@ -99,11 +99,65 @@ type CliAuthSession =
 
 const DEFAULT_URL_TIMEOUT_MS = 30_000
 const MAX_PROCESS_OUTPUT_BYTES = 2 * 1024 * 1024
+/** Grace period after SIGTERM before escalating to SIGKILL (#6/#7). */
+const STOP_GRACE_MS = 2_000
+/** Hard cap after SIGKILL so stop() always settles. */
+const STOP_FORCE_MS = 1_000
 
-export function createDefaultCliAuthProcessRunner(): CliAuthProcessRunner {
-  return (command, argv, options) => {
+type SpawnedChild = ReturnType<typeof spawn>
+
+/**
+ * SIGTERM → grace → SIGKILL → absolute cap. Always resolves so callers
+ * (including fire-and-forget sites) cannot hang on ignore-SIGTERM children.
+ */
+function terminateChild(
+  child: SpawnedChild,
+  graceMs = STOP_GRACE_MS,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      clearTimeout(graceTimer)
+      clearTimeout(forceTimer)
+      child.off('exit', onExit)
+      resolve()
+    }
+    const onExit = () => finish()
+    child.once('exit', onExit)
+
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      finish()
+      return
+    }
+
+    const graceTimer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        finish()
+      }
+    }, graceMs)
+
+    const forceTimer = setTimeout(finish, graceMs + STOP_FORCE_MS)
+  })
+}
+
+export function createDefaultCliAuthProcessRunner(options?: {
+  /** Override SIGTERM→SIGKILL grace (tests). */
+  stopGraceMs?: number
+}): CliAuthProcessRunner {
+  const stopGraceMs = options?.stopGraceMs ?? STOP_GRACE_MS
+  return (command, argv, runnerOptions) => {
     const child = spawn(command, argv, {
-      env: options.env,
+      env: runnerOptions.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
     })
@@ -118,7 +172,7 @@ export function createDefaultCliAuthProcessRunner(): CliAuthProcessRunner {
 
     const append = (target: 'stdout' | 'stderr', chunk: Buffer) => {
       const text = chunk.toString('utf8')
-      options.onOutput(text)
+      runnerOptions.onOutput(text)
       if (target === 'stdout') {
         stdout = appendBounded(stdout, text)
       } else {
@@ -145,15 +199,15 @@ export function createDefaultCliAuthProcessRunner(): CliAuthProcessRunner {
     })
     const timer = setTimeout(() => {
       timedOut = true
-      child.kill('SIGTERM')
-    }, options.timeoutMs)
+      void terminateChild(child, stopGraceMs)
+    }, runnerOptions.timeoutMs)
 
     return {
       completion,
       async stop() {
         if (settled) return
-        child.kill('SIGTERM')
-        await new Promise((resolve) => child.once('exit', resolve))
+        clearTimeout(timer)
+        await terminateChild(child, stopGraceMs)
       },
     }
   }
@@ -240,7 +294,7 @@ export function createConnectorCliAuthRuntime(options: {
         subtype &&
         bootstrap.whenErrorSubtypes.includes(subtype)
       ) {
-        sessions.get(connectorId)?.handle?.stop()
+        await sessions.get(connectorId)?.handle?.stop()
         const domains = normalizeDomains(
           requestedDomains,
           flow.contribution.authorization.defaultDomains,
@@ -345,7 +399,7 @@ export function createConnectorCliAuthRuntime(options: {
         }
 
         if (Date.now() >= session.expiresAt) {
-          session.handle?.stop()
+          await session.handle?.stop()
           sessions.delete(connectorId)
           transitions.push({
             connectorId,
@@ -425,7 +479,8 @@ export function createConnectorCliAuthRuntime(options: {
         const stop = session.handle?.stop?.()
         if (stop) stops.push(stop)
       }
-      // Wait for child processes to exit (best-effort, 3s timeout, #45).
+      // stop() self-bounds via SIGTERM→SIGKILL (#6/#7); race remains a
+      // safety net for mock runners that ignore the contract.
       if (stops.length > 0) {
         await Promise.race([
           Promise.allSettled(stops),
@@ -510,7 +565,7 @@ async function startBootstrap(
       }),
     ])
   } catch (error) {
-    handle.stop()
+    await handle.stop()
     sessions.delete(connectorId)
     throw error
   } finally {
