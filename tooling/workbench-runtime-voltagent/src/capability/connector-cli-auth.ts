@@ -30,7 +30,7 @@ export type CliAuthProcessResult = {
 
 export type CliAuthProcessHandle = {
   completion: Promise<CliAuthProcessResult>
-  stop(): void
+  stop(): Promise<void>
 }
 
 export type CliAuthProcessRunner = (
@@ -65,6 +65,8 @@ export type ConnectorCliAuthTransition = {
 export type ConnectorCliAuthRuntime = {
   begin(connectorId: string, domains?: string[]): Promise<ConnectorCliAuthStart>
   reconcile(connectorId?: string): Promise<ConnectorCliAuthTransition[]>
+  /** Active CLI auth sessions (for snapshot auth_in_progress projection, #45). */
+  getActiveSessions(): Array<{ connectorId: string; stage: string }>
   dispose(): Promise<void>
 }
 
@@ -148,9 +150,10 @@ export function createDefaultCliAuthProcessRunner(): CliAuthProcessRunner {
 
     return {
       completion,
-      stop() {
+      async stop() {
         if (settled) return
         child.kill('SIGTERM')
+        await new Promise((resolve) => child.once('exit', resolve))
       },
     }
   }
@@ -409,8 +412,26 @@ export function createConnectorCliAuthRuntime(options: {
       return transitions
     },
 
+    getActiveSessions() {
+      return [...sessions.values()].map((s) => ({
+        connectorId: s.connectorId,
+        stage: s.stage,
+      }))
+    },
+
     async dispose() {
-      for (const session of sessions.values()) session.handle?.stop()
+      const stops = []
+      for (const session of sessions.values()) {
+        const stop = session.handle?.stop?.()
+        if (stop) stops.push(stop)
+      }
+      // Wait for child processes to exit (best-effort, 3s timeout, #45).
+      if (stops.length > 0) {
+        await Promise.race([
+          Promise.allSettled(stops),
+          new Promise((resolve) => setTimeout(resolve, 3_000)),
+        ])
+      }
       sessions.clear()
     },
   }

@@ -40,6 +40,8 @@ export type CapabilityHttpContext = {
   getExperts?: () => readonly CapabilitySnapshotExpert[]
   /** Live re-probe for every enabled Provider auth contribution. */
   refreshAuthStatuses?: () => Promise<readonly PluginAuthStatus[]>
+  /** Active CLI auth sessions for auth_in_progress projection (#45). */
+  getActiveCliSessions?: () => Array<{ connectorId: string; stage: string }>
   selectionStore?: CapabilitySelectionStore
   /** Snapshot version counter (mutated on invalidate). */
   versionRef: { current: number }
@@ -121,6 +123,7 @@ export function mountCapabilityRoutes<
       taskId,
       selectionStore: store,
       authStatuses,
+      activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
       enabledPluginIds: ctx.getEnabledPluginIds(),
       packagedToolNames: ctx.getPackagedToolNames(),
       cliStatuses: ctx.getCliStatuses(),
@@ -171,6 +174,7 @@ export function mountCapabilityRoutes<
       taskId,
       selection: next,
       authStatuses,
+      activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
       enabledPluginIds: ctx.getEnabledPluginIds(),
       packagedToolNames: ctx.getPackagedToolNames(),
       cliStatuses: ctx.getCliStatuses(),
@@ -248,6 +252,7 @@ export function mountCapabilityRoutes<
       taskId,
       selectionStore: store,
       authStatuses,
+      activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
       enabledPluginIds: ctx.getEnabledPluginIds(),
       packagedToolNames: ctx.getPackagedToolNames(),
       cliStatuses: ctx.getCliStatuses(),
@@ -290,6 +295,7 @@ export function mountCapabilityRoutes<
         taskId,
         selectionStore: store,
         authStatuses,
+        activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
         enabledPluginIds: ctx.getEnabledPluginIds(),
         packagedToolNames: ctx.getPackagedToolNames(),
         cliStatuses: ctx.getCliStatuses(),
