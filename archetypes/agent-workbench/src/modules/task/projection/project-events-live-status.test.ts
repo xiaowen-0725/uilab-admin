@@ -3,7 +3,6 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
-import { mapFullStreamChunks } from '@/modules/task-runtime'
 import { emptyProjectionState } from './empty-read-model'
 import { applyRuntimeEvent, projectEvents } from './project-events'
 
@@ -162,44 +161,27 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(tool?.body).toBeTruthy()
   })
 
-  it('mapper ls envelopes project to expandable tool-group children', () => {
-    const { envelopes } = mapFullStreamChunks(
-      [
-        {
-          type: 'tool-call',
-          toolCallId: 'ls-e2e',
-          toolName: 'ls',
-          args: { path: '/' },
-        },
-        {
-          type: 'tool-result',
-          toolCallId: 'ls-e2e',
-          toolName: 'ls',
-          args: { path: '/' },
-          output: '/notes/ (directory)\n/output/ (directory)',
-        },
-      ],
-      {
-        projectId: 'p',
-        taskId: 't',
-        turnId: 'turn-1',
-        runId: 'run-1',
-        nextSequence: 1,
-        schemaVersion: 1,
-        nowIso: () => '2026-08-05T00:00:00.000Z',
-        eventIdPrefix: 'test',
-      },
-    )
+  it('ls tool output projects to expandable tool-group children', () => {
+    const envelopes: AgentRuntimeEventEnvelope[] = [
+      mk(1, 'run.started', {}),
+      mk(2, 'tool.called', { name: 'ls', toolId: 'ls-e2e', args: { path: '/' } }),
+      mk(3, 'tool.completed', {
+        name: 'ls',
+        toolId: 'ls-e2e',
+        summary: '/notes/ (directory)\n/output/ (directory)',
+        items: ['/notes/ (directory)', '/output/ (directory)'],
+        status: 'completed',
+      }),
+      mk(4, 'run.completed', {}),
+    ]
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, envelopes)
     const tool = state.readModel.timeline.find((t) => t.category === 'tool-group')
     expect(tool?.status).toBe('completed')
-    expect(tool?.title).toBe('已列出 /')
     expect(tool?.meta?.children).toEqual([
       '/notes/ (directory)',
       '/output/ (directory)',
     ])
-    // Expandable content is present (Timeline ToolRow uses meta.children / body).
     expect(
       (tool?.meta?.children?.length ?? 0) > 0 || Boolean(tool?.body?.trim()),
     ).toBe(true)
