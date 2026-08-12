@@ -164,6 +164,7 @@ const FEISHU_MANIFEST: PluginManifest = {
             domainFlag: '--domain',
             timeoutMs: 10 * 60_000,
           },
+          logoutArgv: ['auth', 'logout', '--json'],
         },
         loginHint:
           '点击「连接」后先完成 CLI 应用配置（仅首次），再授权飞书账号；凭据由官方 lark-cli 自己保存，宿主不接触 device_code 或 token。',

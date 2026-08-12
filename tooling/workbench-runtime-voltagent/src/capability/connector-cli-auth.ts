@@ -65,6 +65,12 @@ export type ConnectorCliAuthTransition = {
 export type ConnectorCliAuthRuntime = {
   begin(connectorId: string, domains?: string[]): Promise<ConnectorCliAuthStart>
   reconcile(connectorId?: string): Promise<ConnectorCliAuthTransition[]>
+  /**
+   * Clear the Provider CLI session for UI revoke / logout.
+   * Stops any in-flight device-flow session, then runs logoutArgv (or default
+   * `auth logout --json`) against the connector's sessionStateEnv dir.
+   */
+  logout(connectorId: string): Promise<void>
   /** Active CLI auth sessions (for snapshot auth_in_progress projection, #45). */
   getActiveSessions(): Array<{ connectorId: string; stage: string }>
   dispose(): Promise<void>
@@ -471,6 +477,33 @@ export function createConnectorCliAuthRuntime(options: {
         connectorId: s.connectorId,
         stage: s.stage,
       }))
+    },
+
+    async logout(connectorId) {
+      const active = sessions.get(connectorId)
+      if (active) {
+        await active.handle?.stop()
+        sessions.delete(connectorId)
+      }
+      const flow = resolve(connectorId)
+      const argv =
+        flow.contribution.logoutArgv ?? ['auth', 'logout', '--json']
+      const result = await options.runner(flow.command, [...argv], {
+        env: flowProcessEnv(flow, env),
+        timeoutMs: 30_000,
+      })
+      if (result.exitCode !== 0) {
+        throw new Error(
+          safeErrorMessage(
+            new Error(
+              `CLI logout 失败（exit ${result.exitCode}）：${(
+                result.stderr || result.stdout
+              ).trim()}`,
+            ),
+            `撤销「${flow.descriptor.name}」CLI session 失败`,
+          ),
+        )
+      }
     },
 
     async dispose() {

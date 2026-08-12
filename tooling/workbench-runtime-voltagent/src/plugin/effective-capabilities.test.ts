@@ -29,7 +29,7 @@ describe('isConnectorEffective', () => {
     assert.ok(d.reasons.includes('not_task_selected'))
   })
 
-  it('task-selected but not connected → chip may stay; tools absent', () => {
+  it('task-selected but not connected → chip may stay; tools absent; distinguishable as not logged in', () => {
     const d = isConnectorEffective({
       ...base,
       authStatus: 'missing',
@@ -37,6 +37,9 @@ describe('isConnectorEffective', () => {
     assert.equal(d.capabilityEntersNextTurn, false)
     assert.equal(d.chipVisible, true)
     assert.ok(d.reasons.includes('not_connected'))
+    // acceptance 2.3: after logout / revoke, failure reason stays not_connected
+    // (not a generic runtime error) while Task selection chip remains.
+    assert.equal(d.reasons.includes('not_connected'), true)
   })
 
   it('plugin disabled → tools absent', () => {

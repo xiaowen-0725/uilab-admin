@@ -33,6 +33,7 @@ import {
   type PluginAuthStatus,
   type PluginDiscoveryFailure,
   isConnectorEffective,
+  authResourceToBinding,
 } from './plugin/index.js'
 import {
   type AgentProfile,
@@ -228,6 +229,29 @@ export async function createWorkbenchAgent(
       processRunner:
         options.cliAuthProcessRunner ?? createDefaultCliAuthProcessRunner(),
     })
+    /**
+     * CLI session credentials live in the Provider CLI config dir, not Keychain.
+     * Revoke marks binding-store revoked, but login never upserts a binding —
+     * so without this acknowledge, startAuth can report already_connected while
+     * snapshot still shows missing (banner vs card split).
+     */
+    const acknowledgeCliSessionConnected = (connectorId: string) => {
+      const descriptor = plugins.connectorDescriptors.find(
+        (candidate) => candidate.id === connectorId,
+      )
+      if (!descriptor || descriptor.authSummarySource.kind !== 'cli_session') {
+        return
+      }
+      const pluginId = descriptor.authSummarySource.pluginId
+      const resourceId = descriptor.authSummarySource.resourceId
+      const resource = manifests
+        .find((manifest) => manifest.id === pluginId)
+        ?.contributes?.auth?.find(
+          (candidate) => candidate.resourceId === resourceId,
+        )
+      if (!resource || resource.kind !== 'cli_session') return
+      bindingStore.upsert(authResourceToBinding(pluginId, resource, env))
+    }
     let liveAuthStatuses = [...plugins.authStatuses]
     const refreshAuthStatuses = async () => {
       liveAuthStatuses = await registry.refreshAuthStatuses()
@@ -442,6 +466,11 @@ export async function createWorkbenchAgent(
         pendingOAuthHotLoads.delete(pluginId)
       }
       const cliTransitions = await connectorCliAuth.reconcile(connectorId)
+      for (const transition of cliTransitions) {
+        if (transition.phase === 'connected') {
+          acknowledgeCliSessionConnected(transition.connectorId)
+        }
+      }
       liveAuthStatuses = await refreshAuthStatuses()
       return cliTransitions
     }
@@ -468,6 +497,23 @@ export async function createWorkbenchAgent(
         bindingStore,
         secretStore: authStores.secretStore,
       })
+      // CLI session credentials live in the Provider CLI config dir. Binding
+      // revoke alone leaves a reconnectable login; clear the session too.
+      if (resource.kind === 'cli_session') {
+        try {
+          await connectorCliAuth.logout(connectorId)
+        } catch (cause) {
+          console.warn(
+            `[workbench] CLI session logout failed for ${connectorId}:`,
+            cause instanceof Error ? cause.message : cause,
+          )
+          throw new Error(
+            `已标记撤销，但清除「${descriptor.name}」CLI 登录失败：${
+              cause instanceof Error ? cause.message : String(cause)
+            }`,
+          )
+        }
+      }
       // Hot-reclaim the live MCP transport for the affected plugin so subsequent
       // tool dispatch cannot reuse pre-logout wire credentials (HTTP bearer /
       // stdio child env). If the transport was never hot-loaded (e.g. plugin
@@ -484,6 +530,7 @@ export async function createWorkbenchAgent(
           cause instanceof Error ? cause.message : cause,
         )
       }
+      liveAuthStatuses = await refreshAuthStatuses()
       return {
         message: `已撤销「${descriptor.name}」账号连接`,
         needsSidecarRestart: hotReclaimApplied ? false : result.needsSidecarRestart,
@@ -570,8 +617,13 @@ export async function createWorkbenchAgent(
       discoverableSkillIds,
       refreshAuthStatuses,
       beginConnectorOAuth,
-      beginConnectorCliSession: (connectorId, domains) =>
-        connectorCliAuth.begin(connectorId, domains),
+      beginConnectorCliSession: async (connectorId, domains) => {
+        const started = await connectorCliAuth.begin(connectorId, domains)
+        if (started.phase === 'already_connected') {
+          acknowledgeCliSessionConnected(connectorId)
+        }
+        return started
+      },
       reconcileConnectorAuth,
       getActiveCliSessions: () => connectorCliAuth.getActiveSessions(),
       revokeConnectorAuth,

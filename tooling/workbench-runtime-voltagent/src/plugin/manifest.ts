@@ -231,6 +231,11 @@ export type CliSessionContribution = {
     domainFlag?: string
     timeoutMs?: number
   }
+  /**
+   * Clears the Provider CLI session so UI revoke cannot leave a reconnectable
+   * login behind. Defaults to `auth logout --json` when omitted.
+   */
+  logoutArgv?: string[]
 }
 
 /**

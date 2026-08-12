@@ -453,4 +453,51 @@ describe('#45 auth restart recovery', () => {
     await runtime.dispose()
     assert.deepEqual(runtime.getActiveSessions(), [])
   })
+
+  it('logout runs Provider CLI logout against the session env', async () => {
+    const calls: string[][] = []
+    const runtime = createConnectorCliAuthRuntime({
+      descriptors: [descriptor],
+      manifests: [manifest],
+      enabledPluginIds: ['cli.demo'],
+      runner: async (_command, argv) => {
+        calls.push([...argv])
+        if (argv[0] === 'auth' && argv[1] === 'logout') {
+          return { stdout: '{"ok":true}', stderr: '', exitCode: 0 }
+        }
+        return { stdout: '', stderr: '', exitCode: 0 }
+      },
+      processRunner: () => ({
+        completion: new Promise(() => {}),
+        async stop() {},
+      }),
+    })
+
+    await runtime.logout('connector.demo-cli')
+    assert.deepEqual(calls, [['auth', 'logout', '--json']])
+    assert.deepEqual(runtime.getActiveSessions(), [])
+  })
+
+  it('logout fails closed when the Provider CLI logout command errors', async () => {
+    const runtime = createConnectorCliAuthRuntime({
+      descriptors: [descriptor],
+      manifests: [manifest],
+      enabledPluginIds: ['cli.demo'],
+      runner: async (_command, argv) => {
+        if (argv[0] === 'auth' && argv[1] === 'logout') {
+          return { stdout: '', stderr: 'logout denied', exitCode: 2 }
+        }
+        return { stdout: '', stderr: '', exitCode: 0 }
+      },
+      processRunner: () => ({
+        completion: new Promise(() => {}),
+        async stop() {},
+      }),
+    })
+
+    await assert.rejects(
+      () => runtime.logout('connector.demo-cli'),
+      /CLI logout 失败/,
+    )
+  })
 })
