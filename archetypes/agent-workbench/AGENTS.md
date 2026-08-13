@@ -31,7 +31,7 @@
 
 `VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程。侧车 `AGENT_PROFILE=minimal|office`。
 
-默认 `pnpm --filter @uilab/agent-workbench test` **不要求**侧车，也不打真 Runtime submit。`tests/integration/workbench-runtime-slice.test.tsx` 的 submit → 「已处理」仅在 `pnpm --filter @uilab/agent-workbench test:live-runtime`（`VITE_WORKBENCH_LIVE_RUNTIME=1`）且侧车可达时执行；否则 skip，并说明原因。不把 Fake Runtime 装回产品 boot（ADR-0018）。完整切片：先 `pnpm dev:workbench-runtime`。
+默认包级 `test` 不要求侧车，也不打真 Runtime submit。submit → 「已处理」只走 `test:live-runtime`（需先 `pnpm dev:workbench-runtime`，且侧车可达）；否则 skip。不把 Fake Runtime 装回产品 boot（ADR-0018）。
 
 ### Capture / local-sim（非产品默认）
 
@@ -51,17 +51,21 @@
 ```text
 src/
   app/                 # bootstrap / providers / router / composition（唯一 Composition Root）
-    persistence/       # 统一 IndexedDB shell（Composition 打开一柄）
+    persistence/       # 统一 IndexedDB shell（Composition 打开一柄；叶层，无 React）
   shell/               # Workbench geometry、Navigator、responsive layout、快捷键
   modules/
     project/           # Project 实体 + Task 目录 + ProjectCatalogPort
+      ports/host-wire.ts  # Electron ↔ Renderer IPC 线协议（叶层，无 React）
     workbench-session/ # 选择指针 + 每 Task 布局（无 projects/tasks 数组）
-    task/              # Runtime / EventStore / projection / Task Surface UI
+    task/              # Runtime 契约 / EventStore Port / projection / Task Surface UI
+    task-runtime/      # VoltAgent Adapter + EventStore 实现（叶层，无 React）
     work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
+    capabilities/      # 连接器 / 技能 / 专家 snapshot 与选择
   components/ui/       # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
-  lib/                 # cn 等应用侧工具
-  config/              # fixtures / captures（capture 非产品默认 boot）
+  lib/                 # cn 等应用侧工具（叶层，无 React）
+  config/              # fixtures / captures / runtime-adapter（叶层，无 React）
   styles/              # tokens + shell CSS（含 shadcn/tailwind.css）
+desktop/electron/      # 最小 Desktop Host；只进口 host-wire + local-root-path
 tests/integration/     # 浏览器集成测试
 components.json        # shadcn 配置（base-nova）
 ```
@@ -84,6 +88,9 @@ components.json        # shadcn 配置（base-nova）
 14. **路径策略** — 公开入口优先 `toWorkspaceResourceKey`（`coerceWorkspaceResourceKey` 为同实现别名，新代码勿直接用 coerce 名）；已规范化 key 用 `normalizeWorkspaceResourceKey`。adapter / intent **禁止**自写 peel 或 `includes('..')`（段级 `..` 由 normalize 处理，允许 `v1..v2.md`）。
 15. **IO 失败 vs 渲染失败** — DocumentPanel：Port 失败 / Port throw → `read-failed`（及 not-found 等）；重型渲染/解码失败 → `render-failed`。用 `mapPortFailureToViewState`；禁止把 IO 映射成 `render-failed`。
 16. **Composition 接线层** — `workbench-app.tsx` 只做产品装配接线与薄 chrome（boot 全屏、删除确认等）。**禁止**在 App 内联：冷启动 boot 业务、Runtime 初始化与 busy 投影、新对话 blank-draft / 硬删级联、Surface Registry 工厂与 open 通道校验。上述能力分别落在 composition 子单元（`workbench-boot` / `runtime-wiring` / `task-lifecycle-commands` / `surface-assembly` 等），保持可单测；目标是主文件可读接线，避免再堆回巨型 Composition。
+17. **叶层无 React** — `model` / `ports` / `adapters` / `protocol` / `projection` / `task/runtime` / 整个 `task-runtime` / `app/persistence` / `config` / `lib`，以及 Desktop 共用的 `local-root-path.ts`，不得 import `react` / `react-dom`，不得为 `.tsx`，也不得进口 `components` / `shell` / `ui`。`application` 与 `ui` 可以依赖 React。ADR-0019。
+18. **运行时 import 无环** — `src/`（不含测试文件）运行时 import 图必须为零环；由 `check:workbench` 执行（等价 `madge --circular`）。
+19. **Host 线协议单点** — Electron preload/main 与 Renderer 共用 `modules/project/ports/host-wire.ts`（IPC 通道名 + `WorkbenchHostBridge`）。Desktop 只可再进口 `local-root-path.ts`（纯函数）。Renderer / tests **禁止**进口 `desktop/`。
 
 ## 完成定义（包级）
 

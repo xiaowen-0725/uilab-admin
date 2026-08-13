@@ -3,34 +3,33 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron'
+import {
+  HOST_IPC,
+  type WorkbenchHostBridge,
+} from '../../src/modules/project/ports/host-wire'
 
-contextBridge.exposeInMainWorld('__workbenchHost', {
+const bridge: WorkbenchHostBridge = {
   isAvailable() {
     return true
   },
   pickDirectory() {
-    return ipcRenderer.invoke('host:pickDirectory')
+    return ipcRenderer.invoke(HOST_IPC.pickDirectory)
   },
-  ensureProjectsHome(input: {
-    projectsHomeDirName: string
-    projectsHomeOverride?: string
-  }) {
-    return ipcRenderer.invoke('host:ensureProjectsHome', input)
+  ensureProjectsHome(input) {
+    return ipcRenderer.invoke(HOST_IPC.ensureProjectsHome, input)
   },
-  createProjectDirectory(input: {
-    preferredName: string
-    projectsHomeDirName: string
-    projectsHomeOverride?: string
-  }) {
-    return ipcRenderer.invoke('host:createProjectDirectory', input)
+  createProjectDirectory(input) {
+    return ipcRenderer.invoke(HOST_IPC.createProjectDirectory, input)
   },
-  startRuntime(workspaceRoot: string) {
-    return ipcRenderer.invoke('host:startRuntime', workspaceRoot)
+  startRuntime(workspaceRoot) {
+    return ipcRenderer.invoke(HOST_IPC.startRuntime, workspaceRoot)
   },
   stopRuntime() {
-    return ipcRenderer.invoke('host:stopRuntime')
+    return ipcRenderer.invoke(HOST_IPC.stopRuntime)
   },
   getRuntimeStatus() {
-    return ipcRenderer.invoke('host:getRuntimeStatus')
+    return ipcRenderer.invoke(HOST_IPC.getRuntimeStatus)
   },
-})
+}
+
+contextBridge.exposeInMainWorld('__workbenchHost', bridge)
