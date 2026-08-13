@@ -12,9 +12,12 @@ import { page, userEvent } from 'vitest/browser'
 const LIVE_SIDECAR_PROBE_MS = 2000
 const LIVE_PLAN_TIMEOUT_MS = 200_000
 const LIVE_PLAN_STEPS_TIMEOUT_MS = 170_000
+const FOLD_APPEAR_TIMEOUT_MS = 15_000
+const FOLD_OPEN_TIMEOUT_MS = 5_000
+const PLAN_CARD_TIMEOUT_MS = 10_000
 const LIVE_RUNTIME_SLICE_HOWTO =
   '完整 Runtime 切片：先 pnpm dev:workbench-runtime，再 pnpm --filter @uilab/agent-workbench test:live-runtime。'
-const PLAN_TOOL_ROW_COPY = /正在更新计划|已更新计划/
+const PLAN_TOOL_ROW_COPY = /正在更新计划|已更新计划|update_plan/
 
 const LIVE_PLAN_PROMPT =
   '请先列出计划再执行，每完成一步立刻更新计划。只做只读两步：1) 列出工作区根目录有哪些文件；2) 阅读 README.md。计划步骤用中文短语，至少两步，开始时恰好一步进行中。不要写文件。'
@@ -53,26 +56,23 @@ async function openNewChat() {
     .toHaveAttribute('data-composer-mode', 'runtime')
 }
 
+function processFold(): Element | null {
+  return document.querySelector('[data-kind="process-fold"]')
+}
+
+function isProcessFoldOpen(): boolean {
+  return processFold()?.getAttribute('data-fold-open') === 'true'
+}
+
 async function ensureProcessFoldOpen() {
   await expect
-    .poll(
-      () => document.querySelector('[data-kind="process-fold"]') != null,
-      { timeout: 15_000 },
-    )
+    .poll(() => processFold() != null, { timeout: FOLD_APPEAR_TIMEOUT_MS })
     .toBe(true)
-
-  const fold = document.querySelector('[data-kind="process-fold"]')
-  if (fold?.getAttribute('data-fold-open') === 'true') return
+  if (isProcessFoldOpen()) return
 
   await userEvent.click(page.getByTestId('timeline-turn-toggle'))
   await expect
-    .poll(
-      () =>
-        document
-          .querySelector('[data-kind="process-fold"]')
-          ?.getAttribute('data-fold-open') === 'true',
-      { timeout: 5_000 },
-    )
+    .poll(isProcessFoldOpen, { timeout: FOLD_OPEN_TIMEOUT_MS })
     .toBe(true)
 }
 
@@ -116,11 +116,14 @@ describe('Workbench Plan live sidecar', () => {
         document.querySelector('[data-testid="context-panel-plan-empty"]'),
       ).toBeNull()
 
-      const statuses = [
-        ...document.querySelectorAll('[data-testid="context-panel-plan-step"]'),
-      ].map((el) => el.getAttribute('data-status'))
+      const planSteps = document.querySelectorAll(
+        '[data-testid="context-panel-plan-step"]',
+      )
       expect(
-        statuses.some((status) => status === 'in_progress' || status === 'completed'),
+        [...planSteps].some((step) => {
+          const status = step.getAttribute('data-status')
+          return status === 'in_progress' || status === 'completed'
+        }),
       ).toBe(true)
 
       await ensureProcessFoldOpen()
@@ -128,7 +131,7 @@ describe('Workbench Plan live sidecar', () => {
       await expect
         .poll(
           () => document.querySelectorAll('[data-category="plan-update"]').length,
-          { timeout: 10_000 },
+          { timeout: PLAN_CARD_TIMEOUT_MS },
         )
         .toBeGreaterThanOrEqual(1)
 
@@ -138,14 +141,10 @@ describe('Workbench Plan live sidecar', () => {
         .map((el) => el.textContent ?? '')
         .join('\n')
       expect(toolText).not.toMatch(PLAN_TOOL_ROW_COPY)
-      expect(toolText).not.toMatch(/update_plan/)
 
-      await expect
-        .element(page.getByTestId('timeline-run-status-label'))
-        .toHaveTextContent('个动作')
-      expect(
-        page.getByTestId('timeline-run-status-label').element().textContent ?? '',
-      ).not.toMatch(/步/)
+      const runStatus = page.getByTestId('timeline-run-status-label')
+      await expect.element(runStatus).toHaveTextContent('个动作')
+      expect(runStatus.element().textContent ?? '').not.toMatch(/步/)
     },
   )
 })
