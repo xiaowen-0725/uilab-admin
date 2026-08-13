@@ -98,8 +98,8 @@ new VoltAgent({
     port,
     hostname: '127.0.0.1',
     /**
-     * Workbench Document Surface — read-only workspace file bytes.
-     * Not a tool call; not multi-tenant production storage.
+     * Workspace file bytes + Capability Surface HTTP.
+     * Awaited so routes mount before Hono's matcher is built.
      */
     configureApp: async (app) => {
       await configureSidecarApp(app, {

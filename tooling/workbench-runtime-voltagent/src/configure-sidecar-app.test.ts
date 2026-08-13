@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Hono } from 'hono'
 import type { OfficeConnectorRuntime } from './capability/office-connector-runtime.js'
-import { configureSidecarApp } from './configure-sidecar-app.js'
+import {
+  configureSidecarApp,
+  type ConfigureSidecarAppInput,
+} from './configure-sidecar-app.js'
 
 function createLogger() {
   const info: string[] = []
@@ -42,8 +45,8 @@ function emptyRuntime(): OfficeConnectorRuntime {
 
 function createInput(
   logger: ReturnType<typeof createLogger>,
-  loadExperts?: () => Promise<never>,
-) {
+  loadExperts?: ConfigureSidecarAppInput['loadExperts'],
+): ConfigureSidecarAppInput {
   return {
     workspaceRoot: '/tmp/workbench-sidecar-test',
     profile: 'minimal' as const,

@@ -35,13 +35,26 @@ export type ConfigureSidecarAppInput = {
   loadExperts?: () => Promise<readonly CapabilitySnapshotExpert[]>
 }
 
-export async function configureSidecarApp<
+function safeError(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
+}
+
+function parsePositiveMaxBytes(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
+  return parsed
+}
+
+function mountWorkspaceRoutes<
   E extends Env,
   S extends Schema,
   BasePath extends string,
->(app: Hono<E, S, BasePath>, input: ConfigureSidecarAppInput): Promise<void> {
-  const { workspaceRoot, profile, logger } = input
-
+>(
+  app: Hono<E, S, BasePath>,
+  workspaceRoot: string,
+  profile: AgentProfile,
+): void {
   app.get('/workspace/info', (c) =>
     c.json({
       workspaceRoot,
@@ -51,15 +64,11 @@ export async function configureSidecarApp<
   )
 
   app.get('/workspace/file', async (c) => {
-    const filePath = c.req.query('path') ?? ''
-    const maxRaw = c.req.query('maxBytes')
-    const maxBytes = maxRaw ? Number(maxRaw) : undefined
-    const result = await readWorkspaceFile(workspaceRoot, filePath, {
-      maxBytes:
-        Number.isFinite(maxBytes) && (maxBytes as number) > 0
-          ? (maxBytes as number)
-          : undefined,
-    })
+    const result = await readWorkspaceFile(
+      workspaceRoot,
+      c.req.query('path') ?? '',
+      { maxBytes: parsePositiveMaxBytes(c.req.query('maxBytes')) },
+    )
 
     if (!result.ok) {
       return c.json(
@@ -77,26 +86,35 @@ export async function configureSidecarApp<
       )
     }
 
-    const mime = guessMimeFromPath(result.relativePath)
-    c.header('Content-Type', mime)
+    c.header('Content-Type', guessMimeFromPath(result.relativePath))
     c.header('X-Workspace-Relative-Path', result.relativePath)
     c.header('X-Byte-Length', String(result.byteLength))
     c.header('Cache-Control', 'no-store')
     return c.body(Uint8Array.from(result.bytes))
   })
+}
 
-  let experts: readonly CapabilitySnapshotExpert[]
+async function loadExpertsOrDefault(
+  loadExperts: ConfigureSidecarAppInput['loadExperts'],
+  logger: SidecarHttpLogger,
+): Promise<readonly CapabilitySnapshotExpert[]> {
   try {
-    experts = await (input.loadExperts ?? loadExpertsForHttp)()
+    return await (loadExperts ?? loadExpertsForHttp)()
   } catch (cause) {
-    logger.error(
-      `capability expert catalog failed: ${
-        cause instanceof Error ? cause.message : String(cause)
-      }`,
-    )
-    experts = getDefaultExpertSnapshotCatalog()
+    logger.error(`capability expert catalog failed: ${safeError(cause)}`)
+    return getDefaultExpertSnapshotCatalog()
   }
+}
 
+export async function configureSidecarApp<
+  E extends Env,
+  S extends Schema,
+  BasePath extends string,
+>(app: Hono<E, S, BasePath>, input: ConfigureSidecarAppInput): Promise<void> {
+  const { workspaceRoot, profile, logger } = input
+  mountWorkspaceRoutes(app, workspaceRoot, profile)
+
+  const experts = await loadExpertsOrDefault(input.loadExperts, logger)
   try {
     mountCapabilityRoutes(app, {
       versionRef: input.capabilityVersionRef,
@@ -105,13 +123,10 @@ export async function configureSidecarApp<
       getExperts: () => experts,
     })
   } catch (cause) {
-    logger.error(
-      `capability routes failed to mount: ${
-        cause instanceof Error ? cause.message : String(cause)
-      }`,
-    )
+    logger.error(`capability routes failed to mount: ${safeError(cause)}`)
     throw cause
   }
+
   logger.info(
     `capability routes mounted experts=${experts.map((e) => e.id).join(',') || '(none)'}`,
   )
