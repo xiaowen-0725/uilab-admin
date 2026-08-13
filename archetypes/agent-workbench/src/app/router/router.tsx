@@ -6,6 +6,7 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { WorkbenchApp } from '../composition/workbench-app'
+import { PlanPanelPrototypePage } from '../prototype/plan-panel-prototype'
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -17,7 +18,16 @@ const indexRoute = createRoute({
   component: WorkbenchApp,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute])
+// PROTOTYPE — throwaway route for issue #96 (dev only); remove after review.
+const planPanelPrototypeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/prototype/plan-panel',
+  component: PlanPanelPrototypePage,
+})
+
+const routeTree = rootRoute.addChildren(
+  import.meta.env.DEV ? [indexRoute, planPanelPrototypeRoute] : [indexRoute],
+)
 
 export const router = createRouter({
   routeTree,
