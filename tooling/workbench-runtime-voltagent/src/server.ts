@@ -22,6 +22,7 @@
 import { VoltAgent } from '@voltagent/core'
 import { createPinoLogger } from '@voltagent/logger'
 import { honoServer } from '@voltagent/server-hono'
+import { configureSidecarApp } from './configure-sidecar-app.js'
 import { createWorkbenchAgent } from './create-agent.js'
 import {
   createLanguageModel,
@@ -100,71 +101,18 @@ new VoltAgent({
      * Workbench Document Surface — read-only workspace file bytes.
      * Not a tool call; not multi-tenant production storage.
      */
-    configureApp: (app) => {
-      app.get('/workspace/info', (c) =>
-        c.json({
-          workspaceRoot,
-          profile: resolvedProfile,
-          note: 'local sidecar workspace — not remote production storage',
-        }),
-      )
-
-      app.get('/workspace/file', async (c) => {
-        const filePath = c.req.query('path') ?? ''
-        const maxRaw = c.req.query('maxBytes')
-        const maxBytes = maxRaw ? Number(maxRaw) : undefined
-        const {
-          readWorkspaceFile,
-          httpStatusForWorkspaceRead,
-          guessMimeFromPath,
-        } = await import('./workspace-file-api.js')
-
-        const result = await readWorkspaceFile(workspaceRoot, filePath, {
-          maxBytes:
-            Number.isFinite(maxBytes) && (maxBytes as number) > 0
-              ? (maxBytes as number)
-              : undefined,
-        })
-
-        if (!result.ok) {
-          return c.json(
-            {
-              ok: false,
-              reason: result.reason,
-              message: result.message,
-            },
-            httpStatusForWorkspaceRead(result.reason) as
-              | 400
-              | 403
-              | 404
-              | 413
-              | 500,
-          )
-        }
-
-        const mime = guessMimeFromPath(result.relativePath)
-        c.header('Content-Type', mime)
-        c.header('X-Workspace-Relative-Path', result.relativePath)
-        c.header('X-Byte-Length', String(result.byteLength))
-        c.header('Cache-Control', 'no-store')
-        return c.body(Uint8Array.from(result.bytes))
-      })
-
-      // Capability Surface — status-safe snapshot / selection / startAuth.
-      void import('./capability/http-routes.js').then(
-        async ({ mountCapabilityRoutes, loadExpertsForHttp }) => {
-          const experts = await loadExpertsForHttp()
-          mountCapabilityRoutes(app, {
-            versionRef: capabilityVersionRef,
-            connectorRuntime,
-            getDiscoverableSkillIds: () => discoverableSkillIds,
-            getExperts: () => experts,
-          })
-          logger.info(
-            `capability routes mounted experts=${experts.map((e) => e.id).join(',') || '(none)'}`,
-          )
+    configureApp: async (app) => {
+      await configureSidecarApp(app, {
+        workspaceRoot,
+        profile: resolvedProfile,
+        capabilityVersionRef,
+        connectorRuntime,
+        getDiscoverableSkillIds: () => discoverableSkillIds,
+        logger: {
+          info: (message) => logger.info(message),
+          error: (message) => logger.error(message),
         },
-      )
+      })
     },
   }),
   logger,
