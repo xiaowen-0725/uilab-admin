@@ -40,6 +40,7 @@ import { FileChangeSummaryCard } from '../markdown/file-change-summary-card'
 import { SimpleMarkdown } from '../markdown/simple-markdown'
 import { runtimeHonestyCopy } from '../../runtime/runtime-honesty'
 import { groupTimelineIntoTurns } from './group-timeline-turns'
+import { PlanUpdateCard } from './plan-update-card'
 import { ToolActivityIcon } from '../tool-activity-icon'
 
 export const TIMELINE_FOLD_THRESHOLD = 600
@@ -576,7 +577,7 @@ function ProcessFold({
         <span className='tabular-nums'>{durationLabel}</span>
       ) : null}
       {processSummary && processSummary.stepCount > 0 ? (
-        <span>· {processSummary.stepCount} 步</span>
+        <span>· {processSummary.stepCount} 个动作</span>
       ) : null}
     </span>
   )
@@ -977,21 +978,7 @@ function TimelineRow({
     case 'reasoning-section':
       return <ReasoningRow item={item} />
     case 'plan-update':
-      return (
-        <div
-          className='mb-2 rounded-md px-1 py-1.5 text-sm'
-          data-kind='plan-update'
-          data-testid={`timeline-item-${item.id}`}
-          data-category='plan-update'
-        >
-          <div className='mb-1 text-[12px] font-medium text-muted-foreground'>
-            计划{item.title ? ` · ${item.title}` : ''}
-          </div>
-          <div className='whitespace-pre-wrap text-[12px] text-muted-foreground'>
-            {item.body}
-          </div>
-        </div>
-      )
+      return <PlanUpdateCard item={item} />
     case 'tool-group':
       return <ToolRow item={item} forceCollapsed={forceToolCollapsed} />
     case 'command-execution':
@@ -1108,7 +1095,10 @@ function TimelineRow({
           data-testid={`timeline-item-${item.id}`}
           data-category='warning'
         >
-          {item.title ?? item.body}
+          <div className='font-medium'>{item.title ?? '警告'}</div>
+          {item.body ? (
+            <div className='mt-1 opacity-90'>{item.body}</div>
+          ) : null}
         </div>
       )
     case 'run-terminal':

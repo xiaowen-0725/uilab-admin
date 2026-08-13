@@ -19,6 +19,7 @@ import {
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
+import { parsePlanSnapshot } from './plan-snapshot'
 import {
   classifyToolActivity,
   extractToolObject,
@@ -639,6 +640,27 @@ function pushError(
   )
 }
 
+function pushWarning(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const title =
+    payloadString(envelope.payload, 'title') ?? '警告'
+  const body =
+    payloadString(envelope.payload, 'message') ??
+    payloadText(envelope.payload) ??
+    ''
+  pushItem(
+    state,
+    baseItem(state, envelope, {
+      id: `warning:${envelope.eventId}`,
+      category: 'warning',
+      title,
+      body: body || undefined,
+    }),
+  )
+}
+
 function pushUnsupported(state: MutableState, envelope: AgentRuntimeEventEnvelope): void {
   pushItem(
     state,
@@ -918,18 +940,39 @@ export function applyRuntimeEvent(
       break
     }
     case 'plan.updated': {
-      const title = payloadString(envelope.payload, 'title') ?? '计划'
-      const steps = rec.steps
-      const body = Array.isArray(steps)
-        ? steps.map((s, i) => `${i + 1}. ${String(s)}`).join('\n')
-        : payloadText(envelope.payload) ?? ''
-      upsertByKey(
-        next,
-        envelope,
-        'plan-update',
-        String(envelope.runId ?? envelope.eventId),
-        { title, body, status: 'updated' },
+      const snapshot = parsePlanSnapshot(envelope.payload)
+      next.readModel = { ...next.readModel, plan: snapshot }
+      const version = next.readModel.projectionVersion
+      const key = String(envelope.runId ?? envelope.eventId)
+      const id = `plan-update:${key}`
+      const idx = findIndex(
+        next.readModel.timeline,
+        (item) => item.category === 'plan-update' && item.id === id,
       )
+      const patch = {
+        title: '计划已更新',
+        body: snapshot.explanation,
+        status: 'updated' as const,
+        meta: {
+          plan: {
+            explanation: snapshot.explanation,
+            steps: snapshot.steps,
+          },
+        },
+      }
+      if (idx >= 0) {
+        const base = touchItem(next.readModel.timeline[idx]!, envelope, version)
+        replaceItem(next, idx, { ...base, ...patch })
+      } else {
+        pushItem(
+          next,
+          baseItem(next, envelope, {
+            id,
+            category: 'plan-update',
+            ...patch,
+          }),
+        )
+      }
       setLiveStatus(next, '正在更新计划…')
       break
     }
@@ -1245,6 +1288,10 @@ export function applyRuntimeEvent(
     // Work Surface open is Session/Composition concern — never a timeline row / openTabs fact.
     case 'work_surface.open_requested':
       break
+    case 'warning': {
+      pushWarning(next, envelope)
+      break
+    }
     default: {
       pushUnsupported(next, envelope)
       break

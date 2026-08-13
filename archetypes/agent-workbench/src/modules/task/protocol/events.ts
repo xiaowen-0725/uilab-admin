@@ -39,6 +39,7 @@ export type AgentRuntimeEventType =
   | 'reasoning.section_completed'
   | 'reasoning.completed'
   | 'plan.updated'
+  | 'warning'
   // tool/approval/input
   | 'tool.called'
   | 'tool.progress'
@@ -90,6 +91,7 @@ export const AGENT_RUNTIME_EVENT_TYPES = [
   'reasoning.section_completed',
   'reasoning.completed',
   'plan.updated',
+  'warning',
   'tool.called',
   'tool.progress',
   'tool.completed',

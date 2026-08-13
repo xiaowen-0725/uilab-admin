@@ -69,6 +69,8 @@ type TaskStreamState = {
   lastCapabilityConnectorIds: string[]
   /** Pending tool approvals keyed by approvalId. */
   pendingApprovals: Map<string, PendingApproval>
+  /** In-flight `update_plan` call ids for mapper tool-result suppression. */
+  updatePlanCallIds: Set<string>
 }
 
 type Listener = (event: RuntimeSubscriptionEvent) => void
@@ -411,6 +413,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         lastUserText: null,
         lastCapabilityConnectorIds: [],
         pendingApprovals: new Map(),
+        updatePlanCallIds: new Set(),
       }
       this.taskState.set(taskId, state)
     }
@@ -798,6 +801,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           schemaVersion: this.schemaVersion,
           nowIso: this.nowIso,
           eventIdPrefix: 'va',
+          updatePlanCallIds: state.updatePlanCallIds,
         })
         for (const env of mapped.envelopes) {
           if (env.eventType === 'run.started') continue

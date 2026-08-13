@@ -20,6 +20,11 @@ export interface MapFullStreamContext {
   /** ISO clock; default Date.now for adapter, fixed in tests. */
   nowIso?: () => string
   eventIdPrefix?: string
+  /**
+   * In-flight `update_plan` toolCallIds. The mapper mutates this set so the
+   * adapter can suppress the matching tool-result across SSE chunks.
+   */
+  updatePlanCallIds?: Set<string>
 }
 
 export type FullStreamChunk = {
@@ -98,6 +103,69 @@ function isWriteTool(name: string): boolean {
   return /^(write|write_file|writeFile|create_file|createFile|edit|edit_file|editFile|delete_file|deleteFile|rmdir)$/i.test(
     name,
   )
+}
+
+function isUpdatePlanTool(name: string): boolean {
+  return name === 'update_plan'
+}
+
+function planCallIds(ctx: MapFullStreamContext): Set<string> {
+  if (!ctx.updatePlanCallIds) ctx.updatePlanCallIds = new Set()
+  return ctx.updatePlanCallIds
+}
+
+function rememberUpdatePlanCall(
+  ctx: MapFullStreamContext,
+  callId: string,
+): void {
+  planCallIds(ctx).add(callId)
+}
+
+function consumeUpdatePlanCall(
+  ctx: MapFullStreamContext,
+  name: string,
+  callId: string,
+): boolean {
+  const ids = planCallIds(ctx)
+  if (ids.has(callId) || isUpdatePlanTool(name)) {
+    ids.delete(callId)
+    return true
+  }
+  return false
+}
+
+function updatePlanWarningPayload(
+  name: string,
+  callId: string,
+  error: unknown,
+): {
+  title: string
+  message: string
+  toolCallId: string
+  toolName: string
+} {
+  return {
+    title: '计划更新失败',
+    message: extractErrorMessage(error) ?? '未知错误',
+    toolCallId: callId,
+    toolName: name,
+  }
+}
+
+function planUpdatedPayload(args: unknown): {
+  explanation?: string
+  steps: unknown
+} {
+  const rec =
+    args != null && typeof args === 'object' && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : {}
+  const explanation =
+    typeof rec.explanation === 'string' && rec.explanation.length > 0
+      ? rec.explanation
+      : undefined
+  const steps = rec.plan ?? rec.steps ?? []
+  return explanation === undefined ? { steps } : { explanation, steps }
 }
 
 function extractToolPath(
@@ -195,6 +263,11 @@ export function mapFullStreamChunk(
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
       const args = chunk.args ?? chunk.input ?? chunk.arguments
+      if (isUpdatePlanTool(name)) {
+        rememberUpdatePlanCall(ctx, callId)
+        push('plan.updated', planUpdatedPayload(args))
+        break
+      }
       if (isShellTool(name)) {
         push('command.started', {
           commandId: callId,
@@ -225,6 +298,20 @@ export function mapFullStreamChunk(
     case 'tool-result': {
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
+      if (consumeUpdatePlanCall(ctx, name, callId)) {
+        const isError = chunk.isError === true || chunk.error != null
+        if (isError) {
+          push(
+            'warning',
+            updatePlanWarningPayload(
+              name,
+              callId,
+              chunk.error ?? chunk.output ?? chunk.result ?? chunk.content,
+            ),
+          )
+        }
+        break
+      }
       const output = chunk.output ?? chunk.result ?? chunk.content
       const args = chunk.args ?? chunk.input ?? chunk.arguments
       const isError = chunk.isError === true || chunk.error != null
@@ -295,14 +382,19 @@ export function mapFullStreamChunk(
     case 'tool-error': {
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
-      const error = chunk.error ?? chunk.message ?? 'tool error'
+      const error = chunk.error ?? chunk.message
+      if (consumeUpdatePlanCall(ctx, name, callId)) {
+        push('warning', updatePlanWarningPayload(name, callId, error))
+        break
+      }
+      const failed = error ?? 'tool error'
       const completed = {
         toolId: callId,
         toolCallId: callId,
         toolName: name,
         name,
-        error,
-        summary: normalizeToolOutput(error).summary,
+        error: failed,
+        summary: normalizeToolOutput(failed).summary,
         isError: true,
         status: 'error',
       }
@@ -390,8 +482,13 @@ export function mapFullStreamChunks(
 ): MapFullStreamResult {
   let nextSequence = ctx.nextSequence
   const envelopes: AgentRuntimeEventEnvelope[] = []
+  const updatePlanCallIds = ctx.updatePlanCallIds ?? new Set<string>()
   for (const chunk of chunks) {
-    const step = mapFullStreamChunk(chunk, { ...ctx, nextSequence })
+    const step = mapFullStreamChunk(chunk, {
+      ...ctx,
+      nextSequence,
+      updatePlanCallIds,
+    })
     envelopes.push(...step.envelopes)
     nextSequence = step.nextSequence
   }

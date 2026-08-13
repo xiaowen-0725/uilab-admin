@@ -8,6 +8,7 @@ import type {
   CommandAcknowledgement,
   TurnComposerContext,
 } from '../protocol/commands'
+import { emptyTaskReadModel } from '../projection/empty-read-model'
 import type { TaskReadModel } from '../projection/types'
 import type { TimelineFollowMode } from '../projection/types'
 import type { TaskRuntimeController } from './task-runtime-controller'
@@ -34,21 +35,7 @@ export interface UseTaskRuntimeResult {
 }
 
 function emptyReadModel(taskId: string, title?: string): TaskReadModel {
-  return {
-    taskId: taskId as TaskReadModel['taskId'],
-    projectId: '' as TaskReadModel['projectId'],
-    title: title ?? '未命名任务',
-    titleSource: 'local',
-    projectionVersion: 0,
-    runStatus: null,
-    activeRunId: null,
-    activeTurnId: null,
-    liveStatus: null,
-    timeline: [],
-    recoveryRequired: false,
-    lastTaskSequence: 0,
-    scroll: { followMode: 'follow', unreadCount: 0 },
-  }
+  return emptyTaskReadModel({ taskId, projectId: '', title })
 }
 
 /**

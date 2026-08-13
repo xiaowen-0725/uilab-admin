@@ -2,9 +2,13 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { ContextSection } from '../../model/types'
+import type { PlanSnapshot } from '../../projection/plan-snapshot'
+import { ContextPanelBlock } from './context-panel-block'
+import { PlanBlock } from './plan-block'
 
 export interface ContextPanelProps {
   open: boolean
+  plan?: PlanSnapshot | null
   sections: ContextSection[]
   onClose?: () => void
 }
@@ -13,8 +17,18 @@ export interface ContextPanelProps {
  * Adaptive Context Panel visual card (shadcn Button / ScrollArea / Separator).
  * Placement (reserved vs overlay) is controlled by CSS container queries on the Task Surface.
  * Card sizes to content up to available-height max (not default full-height).
+ *
+ * Blocks are isomorphic slots: Plan is always first; `sections` and future
+ * blocks reuse {@link ContextPanelBlock}.
  */
-export function ContextPanel({ open, sections, onClose }: ContextPanelProps) {
+export function ContextPanel({
+  open,
+  plan = null,
+  sections,
+  onClose,
+}: ContextPanelProps) {
+  const progress = plan?.progress
+
   return (
     <aside
       className='context-panel-slot'
@@ -43,14 +57,25 @@ export function ContextPanel({ open, sections, onClose }: ContextPanelProps) {
         <Separator />
         <ScrollArea className='min-h-0 flex-1'>
           <div className='flex flex-col gap-4 p-3'>
+            <ContextPanelBlock
+              id='plan'
+              title='计划'
+              trailing={
+                progress && progress.total > 0 ? (
+                  <span
+                    data-testid='context-panel-plan-progress'
+                    className='text-xs tabular-nums text-muted-foreground'
+                    aria-label={`进度 ${progress.completed}/${progress.total}`}
+                  >
+                    {progress.completed}/{progress.total}
+                  </span>
+                ) : null
+              }
+            >
+              <PlanBlock plan={plan} />
+            </ContextPanelBlock>
             {sections.map((section) => (
-              <section key={section.id} aria-labelledby={`ctx-${section.id}`}>
-                <h3
-                  id={`ctx-${section.id}`}
-                  className='mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase'
-                >
-                  {section.title}
-                </h3>
+              <ContextPanelBlock key={section.id} id={section.id} title={section.title}>
                 <ul className='flex flex-col gap-1 text-sm'>
                   {section.items.map((item) => (
                     <li
@@ -61,7 +86,7 @@ export function ContextPanel({ open, sections, onClose }: ContextPanelProps) {
                     </li>
                   ))}
                 </ul>
-              </section>
+              </ContextPanelBlock>
             ))}
           </div>
         </ScrollArea>

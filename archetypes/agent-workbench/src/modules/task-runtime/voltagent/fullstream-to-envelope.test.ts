@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { mapFullStreamChunks, type MapFullStreamContext } from './fullstream-to-envelope'
+import {
+  mapFullStreamChunk,
+  mapFullStreamChunks,
+  type MapFullStreamContext,
+} from './fullstream-to-envelope'
 
 const baseCtx = (): MapFullStreamContext => ({
   projectId: 'proj-1',
@@ -356,6 +360,189 @@ describe('mapFullStreamChunks', () => {
       toolId: 'lt1',
       toolName: 'list_tree',
     })
+  })
+
+  it('maps update_plan tool-call to plan.updated and renames plan to steps', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'plan-1',
+          toolName: 'update_plan',
+          args: {
+            explanation: '先拆出鉴权',
+            plan: [
+              { step: '调研 OpenAPI', status: 'completed' },
+              { step: '实现参数装配', status: 'in_progress' },
+            ],
+          },
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes).toHaveLength(1)
+    expect(envelopes[0]?.eventType).toBe('plan.updated')
+    expect(envelopes[0]?.payload).toEqual({
+      explanation: '先拆出鉴权',
+      steps: [
+        { step: '调研 OpenAPI', status: 'completed' },
+        { step: '实现参数装配', status: 'in_progress' },
+      ],
+    })
+  })
+
+  it('suppresses the matching update_plan tool-result', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'plan-1',
+          toolName: 'update_plan',
+          args: {
+            plan: [{ step: '调研 OpenAPI', status: 'in_progress' }],
+          },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'plan-1',
+          toolName: 'update_plan',
+          output: 'Plan updated. Continue to keep it updated as you progress.',
+        },
+        {
+          type: 'tool-call',
+          toolCallId: 'read-1',
+          toolName: 'read_file',
+          args: { path: 'README.md' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'read-1',
+          toolName: 'read_file',
+          output: { content: 'ok' },
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'plan.updated',
+      'tool.called',
+      'tool.completed',
+    ])
+  })
+
+  it('maps update_plan tool-error to a warning row', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'plan-err',
+          toolName: 'update_plan',
+          args: { plan: [{ step: '调研', status: 'pending' }] },
+        },
+        {
+          type: 'tool-error',
+          toolCallId: 'plan-err',
+          toolName: 'update_plan',
+          error: 'sidecar unavailable',
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'plan.updated',
+      'warning',
+    ])
+    expect(envelopes[1]?.payload).toMatchObject({
+      title: '计划更新失败',
+      message: 'sidecar unavailable',
+      toolCallId: 'plan-err',
+    })
+  })
+
+  it('maps update_plan tool-result isError to a warning without tool.completed', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'plan-fail',
+          toolName: 'update_plan',
+          args: { plan: [{ step: '调研', status: 'pending' }] },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'plan-fail',
+          toolName: 'update_plan',
+          isError: true,
+          output: { message: 'handler exploded' },
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'plan.updated',
+      'warning',
+    ])
+    expect(envelopes[1]?.payload).toMatchObject({
+      title: '计划更新失败',
+      message: 'handler exploded',
+      toolCallId: 'plan-fail',
+    })
+  })
+
+  it('maps update_plan tool-error without a message to a Chinese warning', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'plan-blank',
+          toolName: 'update_plan',
+          args: { plan: [{ step: '调研', status: 'pending' }] },
+        },
+        {
+          type: 'tool-error',
+          toolCallId: 'plan-blank',
+          toolName: 'update_plan',
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'plan.updated',
+      'warning',
+    ])
+    expect(envelopes[1]?.payload).toMatchObject({
+      title: '计划更新失败',
+      message: '未知错误',
+      toolCallId: 'plan-blank',
+    })
+  })
+
+  it('remembers update_plan call ids across one-chunk mapper calls', () => {
+    const ctx = { ...baseCtx(), updatePlanCallIds: new Set<string>() }
+    const call = mapFullStreamChunk(
+      {
+        type: 'tool-call',
+        toolCallId: 'plan-live',
+        toolName: 'update_plan',
+        input: {
+          plan: [{ step: '写测试', status: 'in_progress' }],
+        },
+      },
+      ctx,
+    )
+    const result = mapFullStreamChunk(
+      {
+        type: 'tool-result',
+        toolCallId: 'plan-live',
+        toolName: 'update_plan',
+        output: 'Plan updated.',
+      },
+      { ...ctx, nextSequence: call.nextSequence },
+    )
+    expect(call.envelopes.map((event) => event.eventType)).toEqual([
+      'plan.updated',
+    ])
+    expect(result.envelopes).toEqual([])
   })
 
   it('maps bash tool to command.* events', () => {

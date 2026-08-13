@@ -108,6 +108,14 @@ _Avoid_: Runtime Command, Component State
 由 Snapshot 与后续 Agent Runtime Event 计算出的当前任务可读状态，供 Task Surface 与其他 Module 消费。
 _Avoid_: Event Store, Local Component State
 
+**Plan**:
+Agent 在执行中通过工具声明并维护的结构化步骤列表，是任务当前意图的真源；UI 只读投影其最新快照，进度（已完成/总数）是 Plan 的派生属性而非独立概念。
+_Avoid_: Todo, 待办, 任务列表, Progress（作主名）
+
+**Plan Step**:
+Plan 的条目，状态为待处理、进行中或已完成；「步骤」一词专属 Plan Step，不用于 Turn 过程活动计数等其他含义。
+_Avoid_: 任务, 待办项, Task
+
 **Work Surface Host**:
 按需承载 Markdown、HTML、Browser、Editor、Review、Terminal 等可组合工作面的 Workspace 区域。
 _Avoid_: Inspector, Artifact Sidebar, 固定右栏
@@ -121,8 +129,8 @@ _Avoid_: Universal Document Component, Browser Surface
 _Avoid_: Spreadsheet Preview, Data Table
 
 **Task Context Panel**:
-呈现当前任务关联的环境、变更、来源与子智能体等辅助上下文；空间充足时占据保留位置，空间受限时覆盖 Task Surface。
-_Avoid_: Context Overlay, Inspector, Context Sidebar
+呈现当前任务关联的环境、变更、来源、计划与子智能体等辅助上下文的只读状态快照（面板看「现在」，Timeline 看「过程」，Work Surface Host 看「产物」）；空间充足时占据保留位置，空间受限时覆盖 Task Surface。
+_Avoid_: Context Overlay, Inspector, Context Sidebar, 任务摘要面板
 
 **Capability Surface**:
 用户在对话路径可浏览与选用的能力集合，由 Connector、Skill 与 Expert 及其状态摘要构成。
