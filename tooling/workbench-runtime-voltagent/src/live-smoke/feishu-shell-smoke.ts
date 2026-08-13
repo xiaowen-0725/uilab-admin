@@ -75,7 +75,11 @@ export async function runFeishuShellSmoke(
       },
     })
 
-    const auth = bundle.authStatuses.find(
+    const inspection = await bundle.connectorRuntime.execute({
+      kind: 'inspect',
+      refreshAuth: true,
+    })
+    const auth = inspection.snapshot.authStatuses.find(
       (status) =>
         status.pluginId === 'cli.feishu' &&
         status.resourceId === 'cli:feishu',
@@ -83,7 +87,7 @@ export async function runFeishuShellSmoke(
     if (auth?.status !== 'connected') {
       throw new Error(auth?.hint ?? 'lark-cli session is not connected')
     }
-    const connector = bundle.connectorDescriptors.find(
+    const connector = inspection.snapshot.descriptors.find(
       (candidate) => candidate.id === CONNECTOR_FEISHU_ID,
     )
     if (!connector) throw new Error('connector.feishu is missing')
@@ -134,7 +138,7 @@ export async function runFeishuShellSmoke(
     }
   } finally {
     try {
-      await bundle?.disconnectMcp()
+      await bundle?.connectorRuntime.dispose()
       await bundle?.workspace?.destroy()
     } finally {
       setDefaultCapabilitySelectionStore(null)

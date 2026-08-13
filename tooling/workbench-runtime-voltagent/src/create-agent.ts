@@ -21,19 +21,13 @@ import {
 } from './office-runtime-defaults.js'
 import {
   createPluginRegistryFromEnv,
-  defaultCliRunner,
-  expandConnectorToolScope,
   formatRegistryCliStatusLine,
   formatRegistryMcpStatusLine,
   listWorkspaceSkillIds,
   type CliLoadStatus,
-  type ConnectorDescriptor,
   type CreatePluginRegistryOptions,
   type McpServerLoadStatus,
-  type PluginAuthStatus,
   type PluginDiscoveryFailure,
-  isConnectorEffective,
-  authResourceToBinding,
 } from './plugin/index.js'
 import {
   type AgentProfile,
@@ -42,22 +36,16 @@ import {
 } from './profile.js'
 import { workbenchTools } from './tools.js'
 import { ensureOfficeWorkspace } from './workspace-root.js'
-import { filterToolsForTaskSelection } from './capability/tool-gate.js'
 import { readCapabilityTurnContext } from './capability/turn-context.js'
+import type { CliAuthProcessRunner } from './capability/connector-cli-auth.js'
+import type { ConnectorOAuthFetch } from './capability/connector-oauth.js'
 import {
-  createConnectorCliAuthRuntime,
-  createDefaultCliAuthProcessRunner,
-  type CliAuthProcessRunner,
-  type ConnectorCliAuthStart,
-  type ConnectorCliAuthTransition,
-} from './capability/connector-cli-auth.js'
-import {
-  createConnectorOAuthRuntime,
-  type ConnectorOAuthFetch,
-} from './capability/connector-oauth.js'
+  createEmptyOfficeConnectorRuntime,
+  createOfficeConnectorRuntime,
+  type OfficeConnectorRuntime,
+} from './capability/office-connector-runtime.js'
 import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-sandbox.js'
 import type { ConnectorCommandAccess } from './runtime-shell/connector-aware-sandbox.js'
-import { revokeAuthResource } from './plugin/revoke-auth-resource.js'
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
@@ -82,7 +70,9 @@ export type WorkbenchAgentBundle = {
   profile: AgentProfile
   agent: Agent
   workspaceRoot: string
+  /** Boot-time tool names retained for operator logs and minimal-profile compatibility. */
   tools: readonly string[]
+  connectorRuntime: OfficeConnectorRuntime
   /** Present only for office profile. */
   workspace?: Workspace
   /** O5 resolved long-run defaults (for logs / tests). */
@@ -94,44 +84,13 @@ export type WorkbenchAgentBundle = {
   mcpStatusLine: string
   cliStatuses: CliLoadStatus[]
   cliStatusLine: string
-  authStatuses: PluginAuthStatus[]
   authStatusLine: string
   authDoctorLine: string
   discoveryFailures: PluginDiscoveryFailure[]
   /** Virtual skill roots mounted on Workspace (office). */
   skillRoots: string[]
-  /** Enabled and successfully loaded plugin ids (for Capability Snapshot). */
-  enabledPluginIds: string[]
-  /** Product Connector catalog projected from Provider-owned manifests. */
-  connectorDescriptors: ConnectorDescriptor[]
   /** Workspace skill folder ids discoverable after seed (office). */
   discoverableSkillIds: string[]
-  /** Live re-probe auth statuses without full reload (best-effort). */
-  refreshAuthStatuses: () => Promise<PluginAuthStatus[]>
-  /** Product OAuth browser flow; office profile only. */
-  beginConnectorOAuth?: (connectorId: string) => Promise<{
-    authorizationUrl: string
-    expiresIn: number
-  }>
-  /** Provider-declared CLI Device Flow; no Provider id or argv at this seam. */
-  beginConnectorCliSession?: (
-    connectorId: string,
-    domains?: string[],
-  ) => Promise<ConnectorCliAuthStart>
-  /** Reconcile every active auth driver and return safe UI transitions. */
-  reconcileConnectorAuth?: (
-    connectorId?: string,
-  ) => Promise<ConnectorCliAuthTransition[]>
-  /** Revoke one descriptor-owned auth resource; no Provider-specific branch. */
-  revokeConnectorAuth?: (connectorId: string) => Promise<{
-    message: string
-    needsSidecarRestart: boolean
-    /** True when the live MCP transport was disconnected in-process. */
-    hotReclaimApplied?: boolean
-  }>
-  /** Active CLI auth sessions for auth_in_progress projection (#45). */
-  getActiveCliSessions: () => Array<{ connectorId: string; stage: string }>
-  disconnectMcp: () => Promise<void>
 }
 
 /**
@@ -181,20 +140,7 @@ export async function createWorkbenchAgent(
       host: options.mcpHost,
       cliRunner: options.cliRunner,
     })
-    const authStores = registry.getAuthRuntimeStores()
-    const bindingStore = authStores.bindingStore
-    if (!bindingStore) {
-      throw new Error('Office OAuth Runtime 缺少 AuthBindingStore')
-    }
     const manifests = registry.listManifests()
-    const connectorOAuth = createConnectorOAuthRuntime({
-      env,
-      descriptors: registry.listConnectorDescriptors(),
-      manifests,
-      secretStore: authStores.secretStore,
-      bindingStore,
-      fetchImpl: options.oauthFetch,
-    })
     const plugins = await registry.load({ workspaceRoot })
 
     // Soft-fail optional skills plugins; only hard-fail when skills.office itself fails.
@@ -211,52 +157,16 @@ export async function createWorkbenchAgent(
     const skillRoots = plugins.skillRoots
     const skillsEnabled = skillRoots.length > 0
     const honestyTools = [...tools, ...plugins.toolNames]
-    const liveMcpStatuses = [...plugins.mcpStatuses]
-    // Hot-loaded MCP disconnectors keyed by pluginId so revoke can target only
-    // the affected plugin's transports without tearing down unrelated servers.
-    const dynamicMcpDisconnectors = new Map<string, Array<() => Promise<void>>>()
-    // Capability execution requires both configuration enablement and a
-    // successfully loaded contribution (including any Provider Skills sync).
-    const enabledPluginIds = plugins.plugins
-      .filter((plugin) => plugin.enabled && plugin.loadStatus === 'loaded')
-      .map((plugin) => plugin.id)
-    const connectorCliAuth = createConnectorCliAuthRuntime({
+    const connectorRuntime = createOfficeConnectorRuntime({
       env,
-      descriptors: plugins.connectorDescriptors,
+      registry,
+      plugins,
       manifests,
-      enabledPluginIds,
-      runner: options.cliRunner ?? defaultCliRunner,
-      processRunner:
-        options.cliAuthProcessRunner ?? createDefaultCliAuthProcessRunner(),
+      baseToolNames: tools,
+      oauthFetch: options.oauthFetch,
+      cliRunner: options.cliRunner,
+      cliAuthProcessRunner: options.cliAuthProcessRunner,
     })
-    /**
-     * CLI session credentials live in the Provider CLI config dir, not Keychain.
-     * Revoke marks binding-store revoked, but login never upserts a binding —
-     * so without this acknowledge, startAuth can report already_connected while
-     * snapshot still shows missing (banner vs card split).
-     */
-    const acknowledgeCliSessionConnected = (connectorId: string) => {
-      const descriptor = plugins.connectorDescriptors.find(
-        (candidate) => candidate.id === connectorId,
-      )
-      if (!descriptor || descriptor.authSummarySource.kind !== 'cli_session') {
-        return
-      }
-      const pluginId = descriptor.authSummarySource.pluginId
-      const resourceId = descriptor.authSummarySource.resourceId
-      const resource = manifests
-        .find((manifest) => manifest.id === pluginId)
-        ?.contributes?.auth?.find(
-          (candidate) => candidate.resourceId === resourceId,
-        )
-      if (!resource || resource.kind !== 'cli_session') return
-      bindingStore.upsert(authResourceToBinding(pluginId, resource, env))
-    }
-    let liveAuthStatuses = [...plugins.authStatuses]
-    const refreshAuthStatuses = async () => {
-      liveAuthStatuses = await registry.refreshAuthStatuses()
-      return [...liveAuthStatuses]
-    }
     const workspaceSandbox =
       options.workspaceSandbox ??
       (await createOfficeWorkspaceSandbox({
@@ -268,38 +178,15 @@ export async function createWorkbenchAgent(
           connectorId,
           turnContext,
         ): Promise<ConnectorCommandAccess> => {
-          const descriptor = plugins.connectorDescriptors.find(
-            (connector) => connector.id === connectorId,
-          )
-          if (!descriptor) {
-            return { allowed: false as const, reason: 'connector_not_found' }
-          }
-          const statuses = await refreshAuthStatuses()
-          const auth = statuses.find(
-            (status) =>
-              status.pluginId === descriptor.authSummarySource.pluginId &&
-              status.resourceId === descriptor.authSummarySource.resourceId,
-          )
-          // Route through the authoritative isConnectorEffective so the sandbox
-          // and tool-gate stay in sync. The decision carries the first failing
-          // reason — new reasons default to deny (no boolean back-mapping).
-          const decision = isConnectorEffective({
+          const result = await connectorRuntime.execute({
+            kind: 'check-command-access',
             connectorId,
-            pluginGloballyEnabled: descriptor.pluginRefs.some((pluginId) =>
-              enabledPluginIds.includes(pluginId),
-            ),
-            authStatus: auth?.status ?? 'missing',
-            taskSelected:
-              turnContext.taskId !== null &&
-              turnContext.selectedConnectorIds.includes(connectorId),
+            turnContext,
           })
-          if (decision.capabilityEntersNextTurn) {
-            return { allowed: true as const }
+          if (result.kind !== 'command-access-checked') {
+            return { allowed: false as const, reason: 'runtime_result_mismatch' }
           }
-          return {
-            allowed: false as const,
-            reason: decision.reasons[0] ?? 'unknown',
-          }
+          return result.access
         },
       }))
 
@@ -344,7 +231,6 @@ export async function createWorkbenchAgent(
         ].join(' ')
       : 'Office skills plugins are not enabled in this session; do not invent skill toolkits.'
 
-    const livePluginTools = [...plugins.tools] as Tool<any, any>[]
     const agent = new Agent({
       id: 'workbench',
       name: 'workbench',
@@ -384,201 +270,12 @@ export async function createWorkbenchAgent(
         : {}),
       tools: ({ context }) => {
         const turnContext = readCapabilityTurnContext({ context })
-        return filterToolsForTaskSelection(
-          livePluginTools,
-          plugins.connectorDescriptors,
-          turnContext.selectedConnectorIds,
-        )
+        return connectorRuntime.toolsFor(turnContext)
       },
       maxSteps: defaults.maxSteps,
       summarization: defaults.summarization,
       memory: defaults.memory,
     })
-
-    const beginConnectorOAuth = (connectorId: string) =>
-      connectorOAuth.begin(connectorId)
-
-    const pendingOAuthHotLoads = new Map<
-      string,
-      { connectorId: string; pluginId: string }
-    >()
-    const hotLoadOAuthConnector = async (completed: {
-      connectorId: string
-      pluginId: string
-    }) => {
-      const descriptor = plugins.connectorDescriptors.find(
-        (row) => row.id === completed.connectorId,
-      )
-      if (!descriptor) {
-        throw new Error('平台 OAuth 完成后找不到 Connector descriptor')
-      }
-      const hot = await registry.loadMcpPlugin(completed.pluginId)
-      const previousNames = expandConnectorToolScope(descriptor, honestyTools)
-      const previousNameSet = new Set(previousNames)
-      const retainedTools = livePluginTools.filter(
-        (tool) => !previousNameSet.has(tool.name),
-      )
-      livePluginTools.splice(0, livePluginTools.length, ...retainedTools)
-      livePluginTools.push(...hot.tools)
-      const previousSet = new Set(previousNames)
-      const nextNames = honestyTools.filter((name) => !previousSet.has(name))
-      nextNames.push(...hot.toolNames)
-      honestyTools.splice(0, honestyTools.length, ...new Set(nextNames))
-      const statusIndexes: number[] = []
-      for (let i = 0; i < liveMcpStatuses.length; i++) {
-        if (liveMcpStatuses[i]?.pluginId === completed.pluginId) {
-          statusIndexes.push(i)
-        }
-      }
-      for (let i = statusIndexes.length - 1; i >= 0; i--) {
-        liveMcpStatuses.splice(statusIndexes[i]!, 1)
-      }
-      liveMcpStatuses.push(...hot.statuses)
-      // Disconnect any previous transport for this plugin before recording the
-      // new one, so re-authorization (token refresh / re-login) does not leave
-      // a zombie wire session carrying stale credentials. Guard each disconnect
-      // so a failing old transport never prevents the new disconnector (and its
-      // fresh credentials) from being registered.
-      const previousDisconnectors =
-        dynamicMcpDisconnectors.get(completed.pluginId) ?? []
-      for (const disconnect of previousDisconnectors) {
-        try {
-          await disconnect()
-        } catch (cause) {
-          console.warn(
-            `[workbench] stale MCP disconnect failed during re-auth for ${completed.pluginId}:`,
-            cause instanceof Error ? cause.message : cause,
-          )
-        }
-      }
-      dynamicMcpDisconnectors.set(completed.pluginId, [hot.disconnect])
-      if (!hot.statuses.some((row) => row.status === 'connected')) {
-        throw new Error(`「${descriptor.name}」已授权，但 MCP 工具热加载失败`)
-      }
-    }
-    const reconcileConnectorAuth = async (connectorId?: string) => {
-      const newlyAuthorized = await connectorOAuth.reconcile()
-      for (const completed of newlyAuthorized) {
-        pendingOAuthHotLoads.set(completed.pluginId, completed)
-      }
-      for (const [pluginId, completed] of pendingOAuthHotLoads) {
-        await hotLoadOAuthConnector(completed)
-        pendingOAuthHotLoads.delete(pluginId)
-      }
-      const cliTransitions = await connectorCliAuth.reconcile(connectorId)
-      for (const transition of cliTransitions) {
-        if (transition.phase === 'connected') {
-          acknowledgeCliSessionConnected(transition.connectorId)
-        }
-      }
-      liveAuthStatuses = await refreshAuthStatuses()
-      return cliTransitions
-    }
-    const revokeConnectorAuth = async (connectorId: string) => {
-      const descriptor = plugins.connectorDescriptors.find(
-        (candidate) => candidate.id === connectorId,
-      )
-      if (!descriptor) throw new Error(`未找到连接器：${connectorId}`)
-
-      const pluginId = descriptor.authSummarySource.pluginId
-      const resourceId = descriptor.authSummarySource.resourceId
-      const resource = manifests
-        .find((manifest) => manifest.id === pluginId)
-        ?.contributes?.auth?.find(
-          (candidate) => candidate.resourceId === resourceId,
-        )
-      if (!resource) {
-        throw new Error(`连接器未声明可撤销的账号资源：${connectorId}`)
-      }
-
-      const result = await revokeAuthResource({
-        pluginId,
-        resource,
-        bindingStore,
-        secretStore: authStores.secretStore,
-      })
-      // CLI session credentials live in the Provider CLI config dir. Binding
-      // revoke alone leaves a reconnectable login; clear the session too.
-      if (resource.kind === 'cli_session') {
-        try {
-          await connectorCliAuth.logout(connectorId)
-        } catch (cause) {
-          console.warn(
-            `[workbench] CLI session logout failed for ${connectorId}:`,
-            cause instanceof Error ? cause.message : cause,
-          )
-          throw new Error(
-            `已标记撤销，但清除「${descriptor.name}」CLI 登录失败：${
-              cause instanceof Error ? cause.message : String(cause)
-            }`,
-          )
-        }
-      }
-      // Hot-reclaim the live MCP transport for the affected plugin so subsequent
-      // tool dispatch cannot reuse pre-logout wire credentials (HTTP bearer /
-      // stdio child env). If the transport was never hot-loaded (e.g. plugin
-      // loaded at boot and not via OAuth hot-load), the boot-time disconnector
-      // in plugins.disconnect still owns it and needsSidecarRestart stays true.
-      let hotReclaimApplied = false
-      try {
-        const reclaim = await disconnectMcpPlugin(pluginId, descriptor)
-        hotReclaimApplied = reclaim.disconnected
-      } catch (cause) {
-        // Stay honest: if live disconnect failed, fall back to restart advice.
-        console.warn(
-          `[workbench] live MCP disconnect failed for ${pluginId}:`,
-          cause instanceof Error ? cause.message : cause,
-        )
-      }
-      liveAuthStatuses = await refreshAuthStatuses()
-      return {
-        message: `已撤销「${descriptor.name}」账号连接`,
-        needsSidecarRestart: hotReclaimApplied ? false : result.needsSidecarRestart,
-        hotReclaimApplied,
-      }
-    }
-
-    /**
-     * Disconnect the live MCP transport(s) hot-loaded for one plugin and drop
-     * their tools/statuses so post-revoke dispatch cannot reuse stale wire
-     * credentials. Returns disconnected:false when no live transport exists.
-     */
-    const disconnectMcpPlugin = async (
-      pluginId: string,
-      descriptor: ConnectorDescriptor,
-    ): Promise<{ disconnected: boolean }> => {
-      const disconnectors = dynamicMcpDisconnectors.get(pluginId)
-      if (!disconnectors || disconnectors.length === 0) {
-        return { disconnected: false }
-      }
-      for (const disconnect of disconnectors) {
-        await disconnect()
-      }
-      dynamicMcpDisconnectors.delete(pluginId)
-
-      // Remove this connector's tools from the live tool registry.
-      const staleNames = new Set(
-        expandConnectorToolScope(descriptor, honestyTools),
-      )
-      if (staleNames.size > 0) {
-        const retained = livePluginTools.filter(
-          (tool) => !staleNames.has(tool.name),
-        )
-        livePluginTools.splice(0, livePluginTools.length, ...retained)
-        const retainedHonesty = honestyTools.filter(
-          (name) => !staleNames.has(name),
-        )
-        honestyTools.splice(0, honestyTools.length, ...retainedHonesty)
-      }
-
-      // Drop MCP status rows owned by this plugin.
-      for (let i = liveMcpStatuses.length - 1; i >= 0; i--) {
-        if (liveMcpStatuses[i]?.pluginId === pluginId) {
-          liveMcpStatuses.splice(i, 1)
-        }
-      }
-      return { disconnected: true }
-    }
 
     let discoverableSkillIds: string[] = []
     try {
@@ -598,42 +295,21 @@ export async function createWorkbenchAgent(
       profile,
       agent,
       workspaceRoot,
+      connectorRuntime,
       tools: honestyTools,
       workspace,
       maxSteps: defaults.maxSteps,
       summarizationEnabled: defaults.summarization !== false,
       memoryKind: defaults.memoryKind,
-      mcpStatuses: liveMcpStatuses,
-      mcpStatusLine: formatRegistryMcpStatusLine(liveMcpStatuses),
+      mcpStatuses: plugins.mcpStatuses,
+      mcpStatusLine: formatRegistryMcpStatusLine(plugins.mcpStatuses),
       cliStatuses: plugins.cliStatuses,
       cliStatusLine: formatRegistryCliStatusLine(plugins.cliStatuses),
-      authStatuses: plugins.authStatuses,
       authStatusLine: plugins.authStatusLine,
       authDoctorLine: plugins.authDoctorLine,
       discoveryFailures: plugins.discoveryFailures,
       skillRoots,
-      enabledPluginIds,
-      connectorDescriptors: [...plugins.connectorDescriptors],
       discoverableSkillIds,
-      refreshAuthStatuses,
-      beginConnectorOAuth,
-      beginConnectorCliSession: async (connectorId, domains) => {
-        const started = await connectorCliAuth.begin(connectorId, domains)
-        if (started.phase === 'already_connected') {
-          acknowledgeCliSessionConnected(connectorId)
-        }
-        return started
-      },
-      reconcileConnectorAuth,
-      getActiveCliSessions: () => connectorCliAuth.getActiveSessions(),
-      revokeConnectorAuth,
-      disconnectMcp: async () => {
-        await connectorCliAuth.dispose()
-        for (const disconnectors of dynamicMcpDisconnectors.values()) {
-          for (const disconnect of disconnectors) await disconnect()
-        }
-        await plugins.disconnect()
-      },
     }
   }
 
@@ -662,6 +338,7 @@ export async function createWorkbenchAgent(
     profile,
     agent,
     workspaceRoot,
+    connectorRuntime: createEmptyOfficeConnectorRuntime(tools),
     tools,
     maxSteps: defaults.maxSteps,
     summarizationEnabled: false,
@@ -670,16 +347,10 @@ export async function createWorkbenchAgent(
     mcpStatusLine: 'mcp=none',
     cliStatuses: [],
     cliStatusLine: 'cli=none',
-    authStatuses: [],
     authStatusLine: 'auth=none',
     authDoctorLine: 'auth=none',
     discoveryFailures: [],
     skillRoots: [],
-    enabledPluginIds: [],
-    connectorDescriptors: [],
     discoverableSkillIds: [],
-    refreshAuthStatuses: async () => [],
-    getActiveCliSessions: () => [],
-    disconnectMcp: async () => {},
   }
 }

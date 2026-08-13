@@ -69,6 +69,7 @@ describe('createWorkbenchAgent', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-github-'))
     tempRoots.push(root)
     let claimed = false
+    const disconnected: string[] = []
     const bundle = await createWorkbenchAgent({
       profile: 'office',
       model: stubModel,
@@ -79,6 +80,8 @@ describe('createWorkbenchAgent', () => {
         UILAB_KEYCHAIN_MODE: 'fake',
         UILAB_PERSIST_AUTH: '0',
         VOLTAGENT_MEMORY: 'in-memory',
+        MCP_DOCS_URL: 'https://docs-mcp.uilab.test',
+        MCP_DOCS_BEARER_TOKEN: 'docs-boot-token',
       },
       oauthFetch: async (input, init) => {
         if (input === 'https://connectors.uilab.test/v1/oauth/sessions') {
@@ -107,6 +110,21 @@ describe('createWorkbenchAgent', () => {
       },
       mcpHost: {
         getTools: async (servers) => {
+          if (servers.docs) {
+            return {
+              tools: [
+                createTool({
+                  name: 'search_docs',
+                  description: 'Search docs',
+                  parameters: z.object({}),
+                  execute: async () => ({ ok: true }),
+                }),
+              ] as any[],
+              disconnect: async () => {
+                disconnected.push('docs')
+              },
+            }
+          }
           const headers = (
             servers.github as {
               requestInit?: { headers?: Record<string, string> }
@@ -122,27 +140,90 @@ describe('createWorkbenchAgent', () => {
                 execute: async () => ({ ok: true }),
               }),
             ] as any[],
-            disconnect: async () => {},
+            disconnect: async () => {
+              disconnected.push('github')
+            },
           }
         },
       },
     })
 
-    assert.ok(!bundle.tools.includes('github__search_repositories'))
-    const started = await bundle.beginConnectorOAuth?.(CONNECTOR_GITHUB_ID)
-    assert.match(started?.authorizationUrl ?? '', /github\.com\/login\/oauth/)
-    await bundle.reconcileConnectorAuth?.()
+    const before = await bundle.connectorRuntime.execute({ kind: 'inspect' })
+    assert.equal(before.kind, 'inspection')
+    assert.ok(
+      !before.snapshot.packagedToolNames.includes(
+        'github__search_repositories',
+      ),
+    )
+    const started = await bundle.connectorRuntime.execute({
+      kind: 'start-auth',
+      connectorId: CONNECTOR_GITHUB_ID,
+    })
+    assert.equal(started.kind, 'auth-started')
+    assert.match(
+      started.auth.ok ? (started.auth.verificationUrl ?? '') : '',
+      /github\.com\/login\/oauth/,
+    )
+    const reconciled = await bundle.connectorRuntime.execute({
+      kind: 'reconcile-auth',
+    })
+    assert.equal(reconciled.kind, 'auth-reconciled')
     assert.equal(claimed, true)
-    assert.ok(bundle.tools.includes('github__search_repositories'))
-    const statuses = await bundle.refreshAuthStatuses()
+    assert.ok(
+      reconciled.snapshot.packagedToolNames.includes(
+        'github__search_repositories',
+      ),
+    )
     assert.equal(
-      statuses.find(
+      reconciled.snapshot.authStatuses.find(
         (row) =>
           row.pluginId === 'mcp.github' && row.resourceId === 'mcp:github',
       )?.status,
       'connected',
     )
-    await bundle.disconnectMcp()
+    assert.ok(
+      bundle.connectorRuntime
+        .toolsFor({
+          taskId: 'task-github',
+          selectedConnectorIds: [CONNECTOR_GITHUB_ID],
+        })
+        .some((tool) => tool.name === 'github__search_repositories'),
+    )
+    assert.equal(
+      bundle.connectorRuntime
+        .toolsFor({
+          taskId: 'task-without-github',
+          selectedConnectorIds: [],
+        })
+        .some((tool) => tool.name === 'github__search_repositories'),
+      false,
+    )
+    assert.equal(
+      bundle.connectorRuntime
+        .toolsFor({
+          taskId: null,
+          selectedConnectorIds: [CONNECTOR_GITHUB_ID],
+        })
+        .some((tool) => tool.name === 'github__search_repositories'),
+      false,
+      'a selected Connector must stay fail-closed without Turn Task context',
+    )
+    await Promise.all([
+      bundle.connectorRuntime.dispose(),
+      bundle.connectorRuntime.dispose(),
+    ])
+    assert.deepEqual(disconnected.sort(), ['docs', 'github'])
+    assert.deepEqual(
+      bundle.connectorRuntime.toolsFor({
+        taskId: 'task-github',
+        selectedConnectorIds: [CONNECTOR_GITHUB_ID],
+      }),
+      [],
+    )
+    await assert.rejects(
+      bundle.connectorRuntime.execute({ kind: 'inspect' }),
+      /disposed/,
+    )
   })
 
   it('revokes GitHub auth and hot-reclaims the MCP transport in-process (#33)', async () => {
@@ -222,10 +303,19 @@ describe('createWorkbenchAgent', () => {
     })
 
     // --- Phase 1: initial login hot-loads MCP tools with token-1. ---
-    assert.ok(!bundle.tools.includes('github__search_repositories'))
-    await bundle.beginConnectorOAuth?.(CONNECTOR_GITHUB_ID)
-    await bundle.reconcileConnectorAuth?.()
-    assert.ok(bundle.tools.includes('github__search_repositories'))
+    await bundle.connectorRuntime.execute({
+      kind: 'start-auth',
+      connectorId: CONNECTOR_GITHUB_ID,
+    })
+    const firstLogin = await bundle.connectorRuntime.execute({
+      kind: 'reconcile-auth',
+    })
+    assert.equal(firstLogin.kind, 'auth-reconciled')
+    assert.ok(
+      firstLogin.snapshot.packagedToolNames.includes(
+        'github__search_repositories',
+      ),
+    )
     assert.equal(disconnectCalls, 0)
     const firstLoginCount = seenTokens.length
     assert.ok(
@@ -234,8 +324,11 @@ describe('createWorkbenchAgent', () => {
     )
 
     // --- Phase 2: revoke in-process — transport torn down immediately. ---
-    const result = await bundle.revokeConnectorAuth?.(CONNECTOR_GITHUB_ID)
-    assert.ok(result, 'revokeConnectorAuth should be present for office profile')
+    const result = await bundle.connectorRuntime.execute({
+      kind: 'revoke-auth',
+      connectorId: CONNECTOR_GITHUB_ID,
+    })
+    assert.equal(result.kind, 'auth-revoked')
     assert.equal(
       result.needsSidecarRestart,
       false,
@@ -244,13 +337,14 @@ describe('createWorkbenchAgent', () => {
     assert.equal(result.hotReclaimApplied, true)
     assert.equal(disconnectCalls, 1, 'live MCP transport must be disconnected')
     assert.ok(
-      !bundle.tools.includes('github__search_repositories'),
+      !result.snapshot.packagedToolNames.includes(
+        'github__search_repositories',
+      ),
       'tool must be removed from the live registry after revoke',
     )
 
     // Auth status must reflect the revocation.
-    const statuses = await bundle.refreshAuthStatuses()
-    const githubStatus = statuses.find(
+    const githubStatus = result.snapshot.authStatuses.find(
       (row) =>
         row.pluginId === 'mcp.github' && row.resourceId === 'mcp:github',
     )
@@ -259,10 +353,18 @@ describe('createWorkbenchAgent', () => {
     // --- Phase 3 (adversarial): re-login must use a fresh bearer, and the
     // pre-revoke token-1 must NEVER reappear in any subsequent getTools call. ---
     const tokensBeforeRelogin = seenTokens.length
-    await bundle.beginConnectorOAuth?.(CONNECTOR_GITHUB_ID)
-    await bundle.reconcileConnectorAuth?.()
+    await bundle.connectorRuntime.execute({
+      kind: 'start-auth',
+      connectorId: CONNECTOR_GITHUB_ID,
+    })
+    const relogin = await bundle.connectorRuntime.execute({
+      kind: 'reconcile-auth',
+    })
+    assert.equal(relogin.kind, 'auth-reconciled')
     assert.ok(
-      bundle.tools.includes('github__search_repositories'),
+      relogin.snapshot.packagedToolNames.includes(
+        'github__search_repositories',
+      ),
       're-login must hot-load tools again',
     )
 
@@ -286,7 +388,7 @@ describe('createWorkbenchAgent', () => {
       'pre-revoke bearer must never be handed to a transport after revoke',
     )
 
-    await bundle.disconnectMcp()
+    await bundle.connectorRuntime.dispose()
   })
 
   it('uses official lark-* Skills plus generic execute_command, never Provider-specific wrappers', async () => {
@@ -346,8 +448,11 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.skillRoots.includes('/.runtime-skills/feishu'))
     assert.ok(bundle.discoverableSkillIds.includes('lark-doc'))
     assert.ok(bundle.tools.includes('execute_command'))
+    const connectorInspection = await bundle.connectorRuntime.execute({
+      kind: 'inspect',
+    })
     assert.deepEqual(
-      bundle.connectorDescriptors.find(
+      connectorInspection.snapshot.descriptors.find(
         (connector) => connector.id === CONNECTOR_FEISHU_ID,
       )?.toolScope,
       [],
@@ -365,7 +470,7 @@ describe('createWorkbenchAgent', () => {
     assert.equal(result?.exitCode, 0)
     assert.match(result?.stdout ?? '', /lark-doc/)
 
-    await bundle.disconnectMcp()
+    await bundle.connectorRuntime.dispose()
     setDefaultCapabilitySelectionStore(null)
   })
 
@@ -407,8 +512,11 @@ describe('createWorkbenchAgent', () => {
       await access(path.join(root, rel))
     }
     assert.ok(bundle.skillRoots.includes('/skills'))
+    const connectorInspection = await bundle.connectorRuntime.execute({
+      kind: 'inspect',
+    })
     assert.ok(
-      bundle.connectorDescriptors.some(
+      connectorInspection.snapshot.descriptors.some(
         (connector) => connector.id === CONNECTOR_FEISHU_ID,
       ),
     )
@@ -464,7 +572,7 @@ describe('createWorkbenchAgent', () => {
       'utf8',
     )
     await access(deliverable)
-    await bundle.disconnectMcp()
+    await bundle.connectorRuntime.dispose()
   })
 
   it('office O5 defaults: maxSteps ≥ 50, summarization on, memory available', async () => {
@@ -488,7 +596,7 @@ describe('createWorkbenchAgent', () => {
     assert.match(bundle.mcpStatusLine, /docs=off/)
     assert.match(bundle.mcpStatusLine, /calendar=off/)
     assert.ok(bundle.tools.includes('ls'))
-    await bundle.disconnectMcp()
+    await bundle.connectorRuntime.dispose()
   })
 
   it('minimal profile keeps DIY tools without Workspace', async () => {
@@ -503,7 +611,10 @@ describe('createWorkbenchAgent', () => {
     assert.equal(bundle.workspace, undefined)
     assert.equal(bundle.maxSteps, 8)
     assert.equal(bundle.summarizationEnabled, false)
-    assert.deepEqual(bundle.connectorDescriptors, [])
+    const connectorInspection = await bundle.connectorRuntime.execute({
+      kind: 'inspect',
+    })
+    assert.deepEqual(connectorInspection.snapshot.descriptors, [])
     assert.deepEqual(
       [...bundle.tools],
       ['read_file', 'write_file', 'run_command'],

@@ -68,6 +68,15 @@ export {
 } from './turn-context.js'
 
 export {
+  createEmptyOfficeConnectorRuntime,
+  createOfficeConnectorRuntime,
+  type OfficeConnectorRuntime,
+  type OfficeConnectorRuntimeCommand,
+  type OfficeConnectorRuntimeResult,
+  type OfficeConnectorRuntimeSnapshot,
+} from './office-connector-runtime.js'
+
+export {
   loadExpertsForHttp,
   mountCapabilityRoutes,
   probePluginAuthResource,

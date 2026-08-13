@@ -10,21 +10,25 @@ import {
 } from '../plugin/builtins.js'
 import { createCapabilitySelectionStore } from './selection-store.js'
 import { mountCapabilityRoutes } from './http-routes.js'
+import type {
+  OfficeConnectorRuntime,
+  OfficeConnectorRuntimeSnapshot,
+} from './office-connector-runtime.js'
 
 function createTestApp(input?: {
   authStatuses?: PluginAuthStatus[]
   enabledPluginIds?: string[]
-  reconcileConnectorAuth?: () => Promise<
+  onReconcile?: () => Promise<
     Array<{
       connectorId: string
       kind: 'cli_session'
       phase: 'authorization_required'
       step: 'authorize'
-      authorizationUrl: string
+      verificationUrl: string
       message: string
     }>
   >
-  revokeConnectorAuth?: (connectorId: string) => Promise<{
+  onRevoke?: (connectorId: string) => Promise<{
     message: string
     needsSidecarRestart: boolean
     hotReclaimApplied?: boolean
@@ -32,33 +36,85 @@ function createTestApp(input?: {
 }) {
   const app = new Hono()
   const versionRef = { current: 1 }
+  const statuses = input?.authStatuses ?? []
+  const snapshot = (): OfficeConnectorRuntimeSnapshot => ({
+    descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
+    authStatuses: [...statuses],
+    enabledPluginIds: input?.enabledPluginIds ?? ['mcp.github'],
+    packagedToolNames: [],
+    cliStatuses: [],
+    mcpStatuses: [],
+    activeCliSessions: [],
+  })
+  const connectorRuntime: OfficeConnectorRuntime = {
+    async execute(command) {
+      if (command.kind === 'inspect') {
+        return { kind: 'inspection', snapshot: snapshot() }
+      }
+      if (command.kind === 'start-auth') {
+        if (command.connectorId === CONNECTOR_GITHUB_ID) {
+          return {
+            kind: 'auth-started',
+            auth: {
+              ok: true,
+              connectorId: command.connectorId,
+              kind: 'oauth2',
+              phase: 'login_started',
+              step: 'authorize',
+              verificationUrl:
+                'https://github.com/login/oauth/authorize?client_id=uilab-connector&state=broker-state',
+              expiresIn: 900,
+              loginHint: '通过浏览器完成 GitHub 账号授权。',
+              message: '已启动 GitHub 一键授权，请在浏览器中确认。',
+            },
+            snapshot: snapshot(),
+          }
+        }
+        return {
+          kind: 'auth-started',
+          auth: {
+            ok: true,
+            connectorId: command.connectorId,
+            kind: 'cli_session',
+            phase: 'login_started',
+            step: 'configure',
+            verificationUrl:
+              'https://open.feishu.cn/page/cli?user_code=bootstrap-code',
+            loginHint: '通过浏览器完成飞书 CLI session 授权。',
+            message: '请先完成 CLI 应用配置。',
+          },
+          snapshot: snapshot(),
+        }
+      }
+      if (command.kind === 'reconcile-auth') {
+        const transitions = (await input?.onReconcile?.()) ?? []
+        return {
+          kind: 'auth-reconciled',
+          transitions,
+          snapshot: snapshot(),
+        }
+      }
+      const revoked = input?.onRevoke
+        ? await input.onRevoke(command.connectorId)
+        : {
+            message: '连接已撤销',
+            needsSidecarRestart: false,
+            hotReclaimApplied: true,
+          }
+      return {
+        kind: 'auth-revoked',
+        connectorId: command.connectorId,
+        ...revoked,
+        snapshot: snapshot(),
+      }
+    },
+    toolsFor: () => [],
+    async dispose() {},
+  }
   mountCapabilityRoutes(app, {
     versionRef,
     selectionStore: createCapabilitySelectionStore(),
-    getAuthStatuses: async () => input?.authStatuses ?? [],
-    getEnabledPluginIds: () => input?.enabledPluginIds ?? ['mcp.github'],
-    getPackagedToolNames: () => [],
-    getCliStatuses: () => [],
-    getConnectorDescriptors: () => BUILTIN_CONNECTOR_DESCRIPTORS,
-    beginConnectorOAuth: async (connectorId) => {
-      assert.equal(connectorId, CONNECTOR_GITHUB_ID)
-      return {
-        authorizationUrl:
-          'https://github.com/login/oauth/authorize?client_id=uilab-connector&state=broker-state',
-        expiresIn: 900,
-      }
-    },
-    beginConnectorCliSession: async (connectorId) => ({
-      connectorId,
-      kind: 'cli_session',
-      phase: 'authorization_required',
-      step: 'configure',
-      authorizationUrl:
-        'https://open.feishu.cn/page/cli?user_code=bootstrap-code',
-      message: '请先完成 CLI 应用配置。',
-    }),
-    reconcileConnectorAuth: input?.reconcileConnectorAuth,
-    revokeConnectorAuth: input?.revokeConnectorAuth,
+    connectorRuntime,
   })
   return { app, versionRef }
 }
@@ -166,7 +222,7 @@ describe('Capability OAuth HTTP routes', () => {
   it('reconciles the platform authorization session during status refresh', async () => {
     let reconciled = 0
     const { app, versionRef } = createTestApp({
-      reconcileConnectorAuth: async () => {
+      onReconcile: async () => {
         reconciled += 1
         return []
       },
@@ -198,7 +254,7 @@ describe('Capability OAuth HTTP routes', () => {
     const revoked: string[] = []
     const { app } = createTestApp({
       authStatuses: statuses,
-      revokeConnectorAuth: async (connectorId) => {
+      onRevoke: async (connectorId) => {
         revoked.push(connectorId)
         statuses[0] = { ...statuses[0]!, status: 'missing' }
         return {
@@ -244,7 +300,7 @@ describe('Capability OAuth HTTP routes', () => {
     ]
     const { app } = createTestApp({
       authStatuses: statuses,
-      revokeConnectorAuth: async () => {
+      onRevoke: async () => {
         statuses[0] = { ...statuses[0]!, status: 'missing' }
         return {
           message: '连接已撤销',
@@ -272,13 +328,13 @@ describe('Capability OAuth HTTP routes', () => {
 
   it('starts and continues a CLI flow without exposing a device code', async () => {
     const { app } = createTestApp({
-      reconcileConnectorAuth: async () => [
+      onReconcile: async () => [
         {
           connectorId: CONNECTOR_FEISHU_ID,
           kind: 'cli_session',
           phase: 'authorization_required',
           step: 'authorize',
-          authorizationUrl:
+          verificationUrl:
             'https://accounts.feishu.cn/open-apis/authen/v1/authorize?flow_id=next',
           message: '请授权账号。',
         },

@@ -9,9 +9,7 @@ import {
   type PluginAuthStatus,
 } from '../plugin/auth-status.js'
 import type { AuthResourceContribution } from '../plugin/manifest.js'
-import type { CliLoadStatus } from '../plugin/cli-loader.js'
 import type { CliRunner } from '../plugin/cli-loader.js'
-import type { ConnectorDescriptor } from '../plugin/connector-descriptor.js'
 import type { ProfileEnv } from '../plugin/types.js'
 import {
   getDefaultExpertSnapshotCatalog,
@@ -22,59 +20,24 @@ import {
   type CapabilitySelectionStore,
 } from './selection-store.js'
 import { buildCapabilitySnapshot } from './snapshot.js'
-import { startConnectorAuth } from './start-auth.js'
 import type {
+  OfficeConnectorRuntime,
+  OfficeConnectorRuntimeSnapshot,
+} from './office-connector-runtime.js'
+import type {
+  CapabilitySnapshot,
   CapabilitySnapshotExpert,
-  ConnectorAuthTransition,
   TaskCapabilitySelection,
 } from './types.js'
 
 export type CapabilityHttpContext = {
-  getAuthStatuses: () => Promise<readonly PluginAuthStatus[]>
-  getEnabledPluginIds: () => readonly string[]
-  getPackagedToolNames: () => readonly string[]
-  getCliStatuses: () => readonly CliLoadStatus[]
-  getConnectorDescriptors: () => readonly ConnectorDescriptor[]
+  connectorRuntime: OfficeConnectorRuntime
   getDiscoverableSkillIds?: () => readonly string[]
   /** Temporary expert file catalog (not Plugin packaging). */
   getExperts?: () => readonly CapabilitySnapshotExpert[]
-  /** Live re-probe for every enabled Provider auth contribution. */
-  refreshAuthStatuses?: () => Promise<readonly PluginAuthStatus[]>
-  /** Active CLI auth sessions for auth_in_progress projection (#45). */
-  getActiveCliSessions?: () => Array<{ connectorId: string; stage: string }>
   selectionStore?: CapabilitySelectionStore
   /** Snapshot version counter (mutated on invalidate). */
   versionRef: { current: number }
-  beginConnectorOAuth?: (connectorId: string) => Promise<{
-    authorizationUrl: string
-    expiresIn?: number
-  }>
-  beginConnectorCliSession?: (
-    connectorId: string,
-    domains?: string[],
-  ) => Promise<{
-    phase: 'authorization_required' | 'already_connected'
-    step: 'configure' | 'authorize' | 'connected'
-    authorizationUrl?: string
-    expiresIn?: number
-    message: string
-  }>
-  /** Poll every auth driver and hot-load newly connected capabilities. */
-  reconcileConnectorAuth?: (connectorId?: string) => Promise<
-    Array<{
-      connectorId: string
-      kind: 'cli_session' | 'oauth2'
-      phase: 'authorization_required' | 'connected' | 'failed'
-      step: 'configure' | 'authorize' | 'connected'
-      authorizationUrl?: string
-      message: string
-    }>
-  >
-  revokeConnectorAuth?: (connectorId: string) => Promise<{
-    message: string
-    needsSidecarRestart: boolean
-    hotReclaimApplied?: boolean
-  }>
 }
 
 /** Boot-time expert catalog load (files first, builtin fallback). */
@@ -117,20 +80,8 @@ export function mountCapabilityRoutes<
     const taskId = c.req.query('taskId')?.trim() || null
     if (taskId) store.setActiveTaskId(taskId)
 
-    const authStatuses = await ctx.getAuthStatuses()
-    const snapshot = buildCapabilitySnapshot({
-      version: ctx.versionRef.current,
-      taskId,
-      selectionStore: store,
-      authStatuses,
-      activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
-      enabledPluginIds: ctx.getEnabledPluginIds(),
-      packagedToolNames: ctx.getPackagedToolNames(),
-      cliStatuses: ctx.getCliStatuses(),
-      descriptors: ctx.getConnectorDescriptors(),
-      discoverableSkillIds: ctx.getDiscoverableSkillIds?.() ?? [],
-      experts: resolveExperts(ctx),
-    })
+    const runtime = await inspectRuntime(ctx)
+    const snapshot = buildHttpSnapshot(ctx, store, taskId, runtime)
     return c.json(snapshot)
   })
 
@@ -168,20 +119,8 @@ export function mountCapabilityRoutes<
     if (body.active !== false) store.setActiveTaskId(taskId)
     ctx.versionRef.current += 1
 
-    const authStatuses = await ctx.getAuthStatuses()
-    const snapshot = buildCapabilitySnapshot({
-      version: ctx.versionRef.current,
-      taskId,
-      selection: next,
-      authStatuses,
-      activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
-      enabledPluginIds: ctx.getEnabledPluginIds(),
-      packagedToolNames: ctx.getPackagedToolNames(),
-      cliStatuses: ctx.getCliStatuses(),
-      descriptors: ctx.getConnectorDescriptors(),
-      discoverableSkillIds: ctx.getDiscoverableSkillIds?.() ?? [],
-      experts: resolveExperts(ctx),
-    })
+    const runtime = await inspectRuntime(ctx)
+    const snapshot = buildHttpSnapshot(ctx, store, taskId, runtime, next)
     return c.json({ ok: true, snapshot })
   })
 
@@ -197,20 +136,16 @@ export function mountCapabilityRoutes<
       return c.json({ ok: false, error: 'missing_connectorId' }, 400)
     }
 
-    const result = await startConnectorAuth(
-      { connectorId, domains: body.domains },
-      {
-        descriptors: ctx.getConnectorDescriptors(),
-        beginOAuth: ctx.beginConnectorOAuth
-          ? ({ connectorId: target }) => ctx.beginConnectorOAuth!(target)
-          : undefined,
-        beginCliSession: ctx.beginConnectorCliSession
-          ? ({ connectorId: target, domains }) =>
-              ctx.beginConnectorCliSession!(target, domains)
-          : undefined,
-      },
-    )
+    const executed = await ctx.connectorRuntime.execute({
+      kind: 'start-auth',
+      connectorId,
+      domains: body.domains,
+    })
+    if (executed.kind !== 'auth-started') {
+      throw new Error('OfficeConnectorRuntime start-auth result mismatch')
+    }
     ctx.versionRef.current += 1
+    const result = executed.auth
     return c.json(result, result.ok ? 200 : 400)
   })
 
@@ -237,30 +172,15 @@ export function mountCapabilityRoutes<
     if (taskId) store.setActiveTaskId(taskId)
     ctx.versionRef.current += 1
 
-    const transitions: ConnectorAuthTransition[] =
-      (await ctx.reconcileConnectorAuth?.(body.connectorId?.trim()))?.map(
-        ({ authorizationUrl, ...transition }) => ({
-          ...transition,
-          verificationUrl: authorizationUrl,
-        }),
-      ) ?? []
-    const authStatuses = ctx.refreshAuthStatuses
-      ? await ctx.refreshAuthStatuses()
-      : await ctx.getAuthStatuses()
-    const snapshot = buildCapabilitySnapshot({
-      version: ctx.versionRef.current,
-      taskId,
-      selectionStore: store,
-      authStatuses,
-      activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
-      enabledPluginIds: ctx.getEnabledPluginIds(),
-      packagedToolNames: ctx.getPackagedToolNames(),
-      cliStatuses: ctx.getCliStatuses(),
-      descriptors: ctx.getConnectorDescriptors(),
-      discoverableSkillIds: ctx.getDiscoverableSkillIds?.() ?? [],
-      experts: resolveExperts(ctx),
+    const executed = await ctx.connectorRuntime.execute({
+      kind: 'reconcile-auth',
+      connectorId: body.connectorId?.trim(),
     })
-    return c.json({ ok: true, snapshot, transitions })
+    if (executed.kind !== 'auth-reconciled') {
+      throw new Error('OfficeConnectorRuntime reconcile-auth result mismatch')
+    }
+    const snapshot = buildHttpSnapshot(ctx, store, taskId, executed.snapshot)
+    return c.json({ ok: true, snapshot, transitions: executed.transitions })
   })
 
   app.post('/capability/auth/revoke', async (c) => {
@@ -274,35 +194,24 @@ export function mountCapabilityRoutes<
     if (!connectorId) {
       return c.json({ ok: false, error: 'missing_connectorId' }, 400)
     }
-    if (!ctx.getConnectorDescriptors().some((row) => row.id === connectorId)) {
+    const inspection = await inspectRuntime(ctx)
+    if (!inspection.descriptors.some((row) => row.id === connectorId)) {
       return c.json({ ok: false, error: 'connector_not_found' }, 404)
-    }
-    if (!ctx.revokeConnectorAuth) {
-      return c.json({ ok: false, error: 'revoke_not_supported' }, 501)
     }
 
     const taskId = body.taskId?.trim() || store.getActiveTaskId()
     if (taskId) store.setActiveTaskId(taskId)
 
     try {
-      const result = await ctx.revokeConnectorAuth(connectorId)
-      ctx.versionRef.current += 1
-      const authStatuses = ctx.refreshAuthStatuses
-        ? await ctx.refreshAuthStatuses()
-        : await ctx.getAuthStatuses()
-      const snapshot = buildCapabilitySnapshot({
-        version: ctx.versionRef.current,
-        taskId,
-        selectionStore: store,
-        authStatuses,
-        activeCliSessions: ctx.getActiveCliSessions?.() ?? [],
-        enabledPluginIds: ctx.getEnabledPluginIds(),
-        packagedToolNames: ctx.getPackagedToolNames(),
-        cliStatuses: ctx.getCliStatuses(),
-        descriptors: ctx.getConnectorDescriptors(),
-        discoverableSkillIds: ctx.getDiscoverableSkillIds?.() ?? [],
-        experts: resolveExperts(ctx),
+      const result = await ctx.connectorRuntime.execute({
+        kind: 'revoke-auth',
+        connectorId,
       })
+      if (result.kind !== 'auth-revoked') {
+        throw new Error('OfficeConnectorRuntime revoke-auth result mismatch')
+      }
+      ctx.versionRef.current += 1
+      const snapshot = buildHttpSnapshot(ctx, store, taskId, result.snapshot)
       return c.json({
         ok: true,
         connectorId,
@@ -322,6 +231,39 @@ export function mountCapabilityRoutes<
         500,
       )
     }
+  })
+}
+
+async function inspectRuntime(
+  ctx: CapabilityHttpContext,
+): Promise<OfficeConnectorRuntimeSnapshot> {
+  const result = await ctx.connectorRuntime.execute({ kind: 'inspect' })
+  if (result.kind !== 'inspection') {
+    throw new Error('OfficeConnectorRuntime inspect result mismatch')
+  }
+  return result.snapshot
+}
+
+function buildHttpSnapshot(
+  ctx: CapabilityHttpContext,
+  store: CapabilitySelectionStore,
+  taskId: string | null,
+  runtime: OfficeConnectorRuntimeSnapshot,
+  selection?: TaskCapabilitySelection,
+): CapabilitySnapshot {
+  return buildCapabilitySnapshot({
+    version: ctx.versionRef.current,
+    taskId,
+    selection,
+    selectionStore: store,
+    authStatuses: runtime.authStatuses,
+    activeCliSessions: runtime.activeCliSessions,
+    enabledPluginIds: runtime.enabledPluginIds,
+    packagedToolNames: runtime.packagedToolNames,
+    cliStatuses: runtime.cliStatuses,
+    descriptors: runtime.descriptors,
+    discoverableSkillIds: ctx.getDiscoverableSkillIds?.() ?? [],
+    experts: resolveExperts(ctx),
   })
 }
 

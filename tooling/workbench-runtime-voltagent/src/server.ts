@@ -79,25 +79,14 @@ const {
   cliStatuses,
   authStatusLine,
   authDoctorLine,
-  authStatuses,
   discoveryFailures,
-  enabledPluginIds,
-  connectorDescriptors,
   discoverableSkillIds,
-  refreshAuthStatuses,
-  beginConnectorOAuth,
-  beginConnectorCliSession,
-  reconcileConnectorAuth,
-  revokeConnectorAuth,
-  getActiveCliSessions,
-  disconnectMcp,
+  connectorRuntime,
 } = await createWorkbenchAgent({
   profile,
   model,
 })
 
-/** Live auth cache for Capability Snapshot (refreshed on /capability/auth/*). */
-let liveAuthStatuses = [...authStatuses]
 const capabilityVersionRef = { current: 1 }
 
 new VoltAgent({
@@ -167,22 +156,9 @@ new VoltAgent({
           const experts = await loadExpertsForHttp()
           mountCapabilityRoutes(app, {
             versionRef: capabilityVersionRef,
-            getAuthStatuses: async () => liveAuthStatuses,
-            getEnabledPluginIds: () => enabledPluginIds,
-            getConnectorDescriptors: () => connectorDescriptors,
-            getPackagedToolNames: () => tools,
-            getCliStatuses: () => cliStatuses,
+            connectorRuntime,
             getDiscoverableSkillIds: () => discoverableSkillIds,
             getExperts: () => experts,
-            refreshAuthStatuses: async () => {
-              liveAuthStatuses = await refreshAuthStatuses()
-              return liveAuthStatuses
-            },
-            beginConnectorOAuth,
-            beginConnectorCliSession,
-            reconcileConnectorAuth,
-            revokeConnectorAuth,
-            getActiveCliSessions,
           })
           logger.info(
             `capability routes mounted experts=${experts.map((e) => e.id).join(',') || '(none)'}`,
@@ -250,7 +226,7 @@ for (const f of discoveryFailures) {
 
 const shutdown = async () => {
   try {
-    await disconnectMcp()
+    await connectorRuntime.dispose()
   } catch {
     // best-effort
   }
