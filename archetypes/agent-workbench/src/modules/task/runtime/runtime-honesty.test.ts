@@ -1,19 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { previewText, runtimeHonestyCopy } from './runtime-honesty'
+import {
+  previewText,
+  runtimeHonestyCopy,
+  VOLTAGENT_RUNTIME_HONESTY_COPY,
+} from './runtime-honesty'
 
-describe('runtimeHonestyCopy', () => {
+describe('VOLTAGENT_RUNTIME_HONESTY_COPY', () => {
   it('discloses local sidecar Runtime and never claims Fake', () => {
-    const c = runtimeHonestyCopy()
+    const c = VOLTAGENT_RUNTIME_HONESTY_COPY
     expect(c.banner).toMatch(/本机 VoltAgent/)
     expect(c.banner).toMatch(/非远程生产集群/)
+    expect(c.timelineAriaLabel).toMatch(/本机 VoltAgent/)
     expect(c.banner).not.toMatch(/Fake/)
     expect(c.submitAccepted).not.toMatch(/Fake/)
+    expect(c.cancelAccepted).toMatch(/本机 VoltAgent/)
+    expect(c.cancelAccepted).toMatch(/非远程生产集群/)
+    expect(c).not.toHaveProperty('cancelRequested')
+    expect(c).not.toHaveProperty('contextItems')
     expect(c.waitingApproval).toMatch(/本机侧车/)
     expect(c.approvalApproved).toMatch(/本机侧车/)
     expect(c.approvalApproved).not.toMatch(/Fake/)
     expect(c.approvalRejected).not.toMatch(/Fake/)
-    expect(c.contextItems.some((i) => /VoltAgent/.test(i))).toBe(true)
-    expect(c.contextItems.some((i) => /非远程生产集群/.test(i))).toBe(true)
     for (const key of [
       'retryAccepted',
       'queueAccepted',
@@ -23,7 +30,10 @@ describe('runtimeHonestyCopy', () => {
       expect(c[key]).not.toMatch(/Fake/i)
       expect(c[key]).toMatch(/本机|VoltAgent/)
     }
-    expect(c.cancelRequested).toBe(c.cancelAccepted)
+  })
+
+  it('keeps the compatibility accessor on the same readonly copy', () => {
+    expect(runtimeHonestyCopy()).toBe(VOLTAGENT_RUNTIME_HONESTY_COPY)
   })
 
   it('previewText truncates with ellipsis', () => {

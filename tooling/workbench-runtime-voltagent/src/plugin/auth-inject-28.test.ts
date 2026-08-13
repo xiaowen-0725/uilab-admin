@@ -4,12 +4,14 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from './auth-binding-store.js'
 import {
   resolveAuthResourceMaterial,
   resolveAuthResourceStatus,
 } from './auth-status.js'
 import { BUILTIN_MCP_DOCS_PLUGIN } from './builtins.js'
 import { buildCliChildEnv } from './cli-loader.js'
+import { resolveCredentialMaterial } from './credential-resolver.js'
 import type { AuthResourceContribution, CliContribution } from './manifest.js'
 import {
   resolveMcpBearerToken,
@@ -18,10 +20,8 @@ import {
 } from './mcp-loader.js'
 import { createPluginRegistry } from './registry.js'
 import {
-  createAuthBindingStore,
   createEnvSecretStore,
   createMemorySecretStore,
-  resolveCredentialMaterial,
 } from './secret-store.js'
 import type { AuthBinding } from './types.js'
 

@@ -11,7 +11,12 @@ import {
   createPersistedAuthBindingStore,
   parseAuthBindingSnapshot,
 } from './auth-binding-persist.js'
+import {
+  createAuthBindingStore,
+  snapshotAuthBindingStore,
+} from './auth-binding-store.js'
 import { buildCliChildEnv, loadCliContributions } from './cli-loader.js'
+import { resolveCredentialMaterial } from './credential-resolver.js'
 import type { CliContribution } from './manifest.js'
 import {
   buildMcpChildEnv,
@@ -31,13 +36,12 @@ import {
 import { runAuthLogin, runAuthLogout } from './operator-auth.js'
 import { BUILTIN_MCP_DOCS_PLUGIN } from './builtins.js'
 import {
-  createAuthBindingStore,
-  createEnvSecretStore,
-  createKeychainSecretStore,
   isHostOwnedKeychainAccount,
   pluginAuthKeychainAccount,
-  resolveCredentialMaterial,
-  snapshotAuthBindingStore,
+} from './keychain-account.js'
+import {
+  createEnvSecretStore,
+  createKeychainSecretStore,
 } from './secret-store.js'
 import type { AuthBinding } from './types.js'
 import { loadAuthBindingSnapshot } from './auth-binding-persist.js'
@@ -637,24 +641,43 @@ describe('adversarial pure-review P1 fixes', () => {
     )
   })
 
-  it('MCP live-auth wrap preserves dynamic needsApproval function', () => {
-    const approvalFn = async () => true
+  it('MCP live-auth reconstruction preserves policy, hooks, and execute receiver', async () => {
+    let authChecks = 0
+    const approvalFn = async (args: { sensitive?: boolean }) =>
+      args.sensitive === true
+    const hooks = { onStart: async () => {} }
     const base = createTool({
       name: 'docs_read',
       description: 'r',
       parameters: z.object({}),
       needsApproval: approvalFn,
-      execute: async () => ({ ok: true }),
+      hooks,
+      execute: async function () {
+        return { receiverName: this.name }
+      },
     }) as any
-    const [gated] = wrapMcpToolsWithLiveAuthGate([base], async () => ({
-      status: 'connected',
-      envValues: {},
-      controlledEnvNames: [],
-      bearerToken: 't',
-    }))
+    Object.defineProperty(base, 'execute', {
+      value: base.execute,
+      writable: false,
+      configurable: true,
+    })
+    const [gated] = wrapMcpToolsWithLiveAuthGate([base], async () => {
+      authChecks += 1
+      return {
+        status: 'connected',
+        envValues: {},
+        controlledEnvNames: [],
+        bearerToken: 't',
+      }
+    })
     assert.equal(typeof (gated as any).needsApproval, 'function')
-    // In-place wrap keeps the original approval policy callable
     assert.equal((gated as any).needsApproval, approvalFn)
+    assert.equal((gated as any).hooks, hooks)
+    assert.equal(await (gated as any).needsApproval({ sensitive: false }), false)
+    assert.deepEqual(await (gated as any).execute({}), {
+      receiverName: 'docs_read',
+    })
+    assert.equal(authChecks, 1)
   })
 
   it('persisted store rejects explicit rootDir under WORKSPACE_ROOT', async () => {

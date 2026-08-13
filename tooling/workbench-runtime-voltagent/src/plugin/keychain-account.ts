@@ -1,11 +1,8 @@
 /**
  * Keychain account encoders — pure leaf module with zero dependencies.
  *
- * Extracted from secret-store.ts to break the circular dependency:
- * credential-resolver.ts needed isHostOwnedKeychainAccount from secret-store.ts,
- * while secret-store.ts façade re-exported resolveCredentialMaterial from
- * credential-resolver.ts. Moving these pure functions to a leaf file lets
- * credential-resolver import from here without creating a cycle.
+ * Credential resolution, OAuth, operator auth, and revocation import these
+ * helpers directly; secret-store.ts owns only SecretStore backends.
  *
  * Format: length-prefixed segments so pluginId/resourceId containing `:`
  * cannot collide (e.g. a + b:c vs a:b + c).

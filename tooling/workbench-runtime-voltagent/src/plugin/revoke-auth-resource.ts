@@ -2,13 +2,13 @@
  * Revoke one manifest-declared auth resource for a Connector Surface action.
  * Generic by plugin/resource descriptor; never branches on Provider identity.
  */
-import type { AuthResourceContribution } from './manifest.js'
+import type { AuthBindingStore } from './auth-binding-store.js'
 import {
   oauthKeychainAccount,
   pluginAuthKeychainAccount,
-  type AuthBindingStore,
-  type SecretStore,
-} from './secret-store.js'
+} from './keychain-account.js'
+import type { AuthResourceContribution } from './manifest.js'
+import type { SecretStore } from './secret-store.js'
 
 export type RevokeAuthResourceResult = {
   clearedResources: string[]

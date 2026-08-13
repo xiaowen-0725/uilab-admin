@@ -6,6 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from './auth-binding-store.js'
 import { BUILTIN_MCP_DOCS_PLUGIN, BUILTIN_PLUGINS } from './builtins.js'
 import { createPersistedAuthBindingStore } from './auth-binding-persist.js'
 import {
@@ -15,7 +16,6 @@ import {
 } from './operator-auth.js'
 import { createPluginRegistry } from './registry.js'
 import {
-  createAuthBindingStore,
   createDefaultSecretStore,
   createKeychainSecretStore,
 } from './secret-store.js'

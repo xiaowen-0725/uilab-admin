@@ -79,7 +79,7 @@ export interface TaskSurfaceProps {
   onCloseContextPanel?: () => void
   /** Fixture-honest: parent may switch to stream capture. */
   onLaunchAction?: (action: LaunchAction) => void
-  /** Dual-path composer: default local-sim; runtime for Fake vertical slice. */
+  /** Composer path: default local-sim; runtime for the VoltAgent lifecycle. */
   composerRuntime?: TaskSurfaceComposerRuntime
   /**
    * Open a path/file from Timeline chips/cards into Work Surface.

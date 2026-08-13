@@ -204,6 +204,76 @@ export function resolveMcpContribution(
   return null
 }
 
+type ExecutableTool = Tool<any, any> & {
+  parameters?: unknown
+  execute: (...args: any[]) => any
+  description?: string
+  needsApproval?: unknown
+  hooks?: unknown
+}
+
+type InspectedExecutableTool = {
+  source: ExecutableTool
+  boundExecute: (...args: any[]) => any
+}
+
+function inspectExecutableTool(
+  tool: Tool<any, any>,
+): InspectedExecutableTool | null {
+  const source = tool as ExecutableTool
+  if (typeof source.execute !== 'function') return null
+  return {
+    source,
+    boundExecute: source.execute.bind(tool),
+  }
+}
+
+function tryReplaceWritableToolProperty(
+  tool: Tool<any, any>,
+  property: 'execute' | 'needsApproval',
+  replacement: unknown,
+  options: {
+    allowSetter: boolean
+    verify?: () => boolean
+  },
+): boolean {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(tool, property)
+    if (
+      descriptor &&
+      !descriptor.writable &&
+      !(options.allowSetter && descriptor.set)
+    ) {
+      return false
+    }
+    ;(tool as unknown as Record<string, unknown>)[property] = replacement
+    return options.verify?.() ?? true
+  } catch {
+    return false
+  }
+}
+
+function reconstructExecutableTool(
+  inspected: InspectedExecutableTool,
+  overrides: {
+    name: string
+    description: string
+    needsApproval: unknown
+    hooks?: unknown
+    execute: (...args: any[]) => any
+  },
+): Tool<any, any> | null {
+  if (inspected.source.parameters == null) return null
+  return createTool({
+    name: overrides.name,
+    description: overrides.description,
+    parameters: inspected.source.parameters as any,
+    needsApproval: overrides.needsApproval as any,
+    ...(overrides.hooks != null ? { hooks: overrides.hooks as any } : {}),
+    execute: overrides.execute,
+  }) as Tool<any, any>
+}
+
 /**
  * Gate MCP tool execute on live auth status so revoke/logout blocks further
  * calls even when HTTP Authorization was snapshotted at load (adversarial).
@@ -214,20 +284,8 @@ export function wrapMcpToolsWithLiveAuthGate(
   resolveMaterial: () => Promise<CredentialMaterial | undefined>,
 ): Tool<any, any>[] {
   return tools.map((tool) => {
-    const anyTool = tool as Tool<any, any> & {
-      parameters?: unknown
-      execute?: (...args: any[]) => any
-      description?: string
-      needsApproval?: unknown
-      hooks?: unknown
-      outputSchema?: unknown
-      providerOptions?: unknown
-      tags?: unknown
-    }
-    if (typeof anyTool.execute !== 'function') {
-      return tool
-    }
-    const original = anyTool.execute.bind(tool)
+    const inspected = inspectExecutableTool(tool)
+    if (!inspected) return tool
     const gated = async (...args: any[]) => {
       const material = await resolveMaterial()
       if (!material || material.status !== 'connected') {
@@ -239,30 +297,26 @@ export function wrapMcpToolsWithLiveAuthGate(
             '授权已撤销或未连接；请 auth login 后重启 sidecar（MCP 会话）',
         }
       }
-      return original(...args)
+      return inspected.boundExecute(...args)
     }
 
     // Prefer mutating execute in place — preserves dynamic needsApproval / hooks
-    try {
-      const desc = Object.getOwnPropertyDescriptor(tool, 'execute')
-      if (!desc || desc.writable || desc.set) {
-        ;(anyTool as { execute: typeof gated }).execute = gated
-        return tool
-      }
-    } catch {
-      // fall through to reconstruct
+    if (
+      tryReplaceWritableToolProperty(tool, 'execute', gated, {
+        allowSetter: true,
+      })
+    ) {
+      return tool
     }
 
-    if (anyTool.parameters == null) return tool
-    return createTool({
+    return reconstructExecutableTool(inspected, {
       name: tool.name,
-      description: anyTool.description ?? tool.name,
-      parameters: anyTool.parameters as any,
+      description: inspected.source.description ?? tool.name,
       // Preserve boolean OR function approval policy (do not collapse to === true)
-      needsApproval: anyTool.needsApproval as any,
-      ...(anyTool.hooks != null ? { hooks: anyTool.hooks as any } : {}),
+      needsApproval: inspected.source.needsApproval,
+      hooks: inspected.source.hooks,
       execute: gated,
-    }) as Tool<any, any>
+    }) ?? tool
   })
 }
 
@@ -281,15 +335,8 @@ export function wrapMcpToolsWithTaskSelectionGate(
     )
     if (!connector) return tool
 
-    const anyTool = tool as Tool<any, any> & {
-      parameters?: unknown
-      execute?: (...args: any[]) => any
-      description?: string
-      needsApproval?: unknown
-      hooks?: unknown
-    }
-    if (typeof anyTool.execute !== 'function') return tool
-    const original = anyTool.execute.bind(tool)
+    const inspected = inspectExecutableTool(tool)
+    if (!inspected) return tool
     const gated = async (
       rawArgs: unknown,
       executeOptions?: ToolExecuteOptions,
@@ -311,51 +358,42 @@ export function wrapMcpToolsWithTaskSelectionGate(
           hint: decision.hint,
         }
       }
-      return original(rawArgs, executeOptions)
+      return inspected.boundExecute(rawArgs, executeOptions)
     }
 
-    try {
-      const desc = Object.getOwnPropertyDescriptor(tool, 'execute')
-      if (!desc || desc.writable || desc.set) {
-        ;(anyTool as { execute: typeof gated }).execute = gated
-        return tool
-      }
-    } catch {
-      // fall through to reconstruct
+    if (
+      tryReplaceWritableToolProperty(tool, 'execute', gated, {
+        allowSetter: true,
+      })
+    ) {
+      return tool
     }
 
-    if (anyTool.parameters == null) return tool
-    return createTool({
+    return reconstructExecutableTool(inspected, {
       name: tool.name,
-      description: anyTool.description ?? tool.name,
-      parameters: anyTool.parameters as any,
-      needsApproval: anyTool.needsApproval as any,
-      ...(anyTool.hooks != null ? { hooks: anyTool.hooks as any } : {}),
+      description: inspected.source.description ?? tool.name,
+      needsApproval: inspected.source.needsApproval,
+      hooks: inspected.source.hooks,
       execute: gated,
-    }) as Tool<any, any>
+    }) ?? tool
   })
 }
 
 export function forceToolNeedsApproval(tool: Tool<any, any>): Tool<any, any> {
   const current = (tool as { needsApproval?: unknown }).needsApproval
   if (current === true) return tool
-  try {
-    const desc = Object.getOwnPropertyDescriptor(tool, 'needsApproval')
-    if (!desc || desc.writable) {
-      ;(tool as { needsApproval?: boolean }).needsApproval = true
-      if ((tool as { needsApproval?: unknown }).needsApproval === true) {
-        return tool
-      }
-    }
-  } catch {
-    // wrap
+  if (
+    tryReplaceWritableToolProperty(tool, 'needsApproval', true, {
+      allowSetter: false,
+      verify: () =>
+        (tool as { needsApproval?: unknown }).needsApproval === true,
+    })
+  ) {
+    return tool
   }
-  const anyTool = tool as Tool<any, any> & {
-    parameters?: unknown
-    execute?: (...args: any[]) => any
-    description?: string
-  }
-  if (typeof anyTool.execute !== 'function' || anyTool.parameters == null) {
+
+  const inspected = inspectExecutableTool(tool)
+  if (!inspected || inspected.source.parameters == null) {
     try {
       ;(tool as { needsApproval?: boolean }).needsApproval = true
     } catch {
@@ -363,13 +401,14 @@ export function forceToolNeedsApproval(tool: Tool<any, any>): Tool<any, any> {
     }
     return tool
   }
-  return createTool({
+
+  return reconstructExecutableTool(inspected, {
     name: tool.name,
-    description: anyTool.description ?? tool.name,
-    parameters: anyTool.parameters as any,
+    description: inspected.source.description ?? tool.name,
     needsApproval: true,
-    execute: (...args: any[]) => anyTool.execute!(...args),
-  }) as Tool<any, any>
+    // Keep the current late property lookup and original Tool receiver.
+    execute: (...args: any[]) => inspected.source.execute(...args),
+  })!
 }
 
 export function applyMcpNeedsApproval(
@@ -392,25 +431,17 @@ function exposeMcpToolWithPublicName(
   publicName: string,
 ): Tool<any, any> {
   if (tool.name === publicName) return tool
-  const source = tool as Tool<any, any> & {
-    parameters?: unknown
-    execute?: (...args: any[]) => any
-    description?: string
-    needsApproval?: unknown
-    hooks?: unknown
-  }
-  if (source.parameters == null || typeof source.execute !== 'function') {
+  const inspected = inspectExecutableTool(tool)
+  if (!inspected || inspected.source.parameters == null) {
     throw new Error(`MCP 工具 ${tool.name} 无法安全映射公开名 ${publicName}`)
   }
-  const execute = source.execute.bind(tool)
-  return createTool({
+  return reconstructExecutableTool(inspected, {
     name: publicName,
-    description: source.description ?? tool.name,
-    parameters: source.parameters as any,
-    needsApproval: source.needsApproval as any,
-    ...(source.hooks != null ? { hooks: source.hooks as any } : {}),
-    execute: (...args: any[]) => execute(...args),
-  }) as Tool<any, any>
+    description: inspected.source.description ?? tool.name,
+    needsApproval: inspected.source.needsApproval,
+    hooks: inspected.source.hooks,
+    execute: (...args: any[]) => inspected.boundExecute(...args),
+  })!
 }
 
 export function mergeReadOnlyAllowlist(

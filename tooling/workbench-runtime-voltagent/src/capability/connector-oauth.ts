@@ -7,11 +7,12 @@
  * the Renderer seam.
  */
 
+import type { AuthBindingStore } from '../plugin/auth-binding-store.js'
 import type { ConnectorDescriptor } from '../plugin/connector-descriptor.js'
 import type { PluginManifest } from '../plugin/manifest.js'
 import { persistOAuthTokens } from '../plugin/oauth.js'
 import { firstEnv } from '../plugin/parse-util.js'
-import type { AuthBindingStore, SecretStore } from '../plugin/secret-store.js'
+import type { SecretStore } from '../plugin/secret-store.js'
 import type { ProfileEnv } from '../plugin/types.js'
 
 export type ConnectorOAuthFetch = (

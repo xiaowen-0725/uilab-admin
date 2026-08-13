@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from './auth-binding-store.js'
 import {
   formatAuthDoctorLine,
   formatAuthStatusSummary,
@@ -8,11 +9,10 @@ import {
   sanitizeHint,
 } from './auth-status.js'
 import { BUILTIN_MCP_DOCS_PLUGIN, BUILTIN_PLUGINS } from './builtins.js'
+import { resolveAuthStatus } from './credential-resolver.js'
 import {
-  createAuthBindingStore,
   createEnvSecretStore,
   createMemorySecretStore,
-  resolveAuthStatus,
 } from './secret-store.js'
 import { createPluginRegistry } from './registry.js'
 import type { AuthResourceContribution } from './manifest.js'

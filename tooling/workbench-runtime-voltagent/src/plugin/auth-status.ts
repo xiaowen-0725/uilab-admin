@@ -5,12 +5,12 @@
  */
 
 import type { CliRunner } from './cli-loader.js'
+import type { AuthBindingStore } from './auth-binding-store.js'
+import { resolveCredentialMaterial } from './credential-resolver.js'
 import type { AuthResourceContribution } from './manifest.js'
 import { firstEnv } from './parse-util.js'
 import {
   createEnvSecretStore,
-  resolveCredentialMaterial,
-  type AuthBindingStore,
   type SecretStore,
 } from './secret-store.js'
 import { formatSafeStatusLine, redactSecretValues } from './security-policy.js'

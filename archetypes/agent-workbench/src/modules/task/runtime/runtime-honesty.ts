@@ -8,37 +8,28 @@
 
 export interface RuntimeHonestyCopy {
   /** Short banner on Timeline (11px quiet line). */
-  banner: string
+  readonly banner: string
   /** aria-label for the timeline region. */
-  timelineAriaLabel: string
-  /** Context panel env chips. */
-  contextItems: string[]
-  submitAccepted: string
-  cancelAccepted: string
-  /** Alias of cancelAccepted (historical dual keys); keep for callers. */
-  cancelRequested: string
-  clarifyingSubmit: (preview: string) => string
-  submitWithPreview: (preview: string) => string
-  waitingApproval: string
-  approvalApproved: string
-  approvalRejected: string
-  inputProvided: string
-  recovery: string
+  readonly timelineAriaLabel: string
+  readonly submitAccepted: string
+  readonly cancelAccepted: string
+  readonly clarifyingSubmit: (preview: string) => string
+  readonly submitWithPreview: (preview: string) => string
+  readonly waitingApproval: string
+  readonly approvalApproved: string
+  readonly approvalRejected: string
+  readonly inputProvided: string
+  readonly recovery: string
   /** Secondary command success notices. */
-  retryAccepted: string
-  queueAccepted: string
-  steerAccepted: string
-  reconcileAccepted: string
+  readonly retryAccepted: string
+  readonly queueAccepted: string
+  readonly steerAccepted: string
+  readonly reconcileAccepted: string
 }
 
-const VOLTAGENT: RuntimeHonestyCopy = {
+export const VOLTAGENT_RUNTIME_HONESTY_COPY = {
   banner: '本机 VoltAgent Runtime · 非远程生产集群 · 本地侧车',
   timelineAriaLabel: '任务时间线（本机 VoltAgent Runtime）',
-  contextItems: [
-    '本机 VoltAgent Runtime',
-    '非远程生产集群',
-    '本地侧车（Office/minimal 由侧车 profile 决定）',
-  ],
   submitAccepted: '已提交到本机 VoltAgent Runtime（非远程生产集群）',
   cancelAccepted: '已请求取消（本机 VoltAgent Runtime，非远程生产集群）',
   clarifyingSubmit: (preview) =>
@@ -55,11 +46,11 @@ const VOLTAGENT: RuntimeHonestyCopy = {
   queueAccepted: '已排队后续消息（本机 VoltAgent Runtime）',
   steerAccepted: '已发送转向（本机 VoltAgent Runtime）',
   reconcileAccepted: '已对账中断 Run（本机 Runtime）',
-  cancelRequested: '已请求取消（本机 VoltAgent Runtime，非远程生产集群）',
-}
+} as const satisfies RuntimeHonestyCopy
 
+/** Compatibility accessor for controller and timeline consumers. */
 export function runtimeHonestyCopy(): RuntimeHonestyCopy {
-  return VOLTAGENT
+  return VOLTAGENT_RUNTIME_HONESTY_COPY
 }
 
 export function previewText(text: string, max = 40): string {

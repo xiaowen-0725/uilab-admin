@@ -4,6 +4,10 @@
 
 import type { Tool } from '@voltagent/core'
 import {
+  createAuthBindingStore,
+  type AuthBindingStore,
+} from './auth-binding-store.js'
+import {
   formatAuthDoctorLine,
   formatAuthStatusSummary,
   pickAuthResourceForCli,
@@ -39,9 +43,7 @@ import type {
 } from './manifest.js'
 import { createPersistedAuthBindingStore } from './auth-binding-persist.js'
 import {
-  createAuthBindingStore,
   createDefaultSecretStore,
-  type AuthBindingStore,
   type SecretStore,
 } from './secret-store.js'
 import {

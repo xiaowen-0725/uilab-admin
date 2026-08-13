@@ -3,11 +3,11 @@
  *
  * Owns:
  * - RuntimePort / EventStorePort / projection / TaskSurface
- * - Phase 4B Runtime Kernel + Deterministic Fake
- * - Phase 4C–4F Task Pane (projection, Fake scenarios, fold/scroll)
- * - Capture path only via test harness / explicit demo (not product default)
+ * - Phase 4B Runtime Kernel
+ * - Phase 4C–4F Task Pane (projection, Runtime lifecycle, fold/scroll)
+ * - Capture replay retained only for test harness / explicit dev (not product default)
  *
- * Product default: Runtime path (Fake or local VoltAgent sidecar).
+ * Product default: local VoltAgent sidecar Runtime path (ADR-0018).
  * VoltAgent Adapter is a local sidecar client — not a remote multi-tenant production Runtime.
  * Does not own Project/Task directory (see modules/project).
  */

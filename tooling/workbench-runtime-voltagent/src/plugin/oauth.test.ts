@@ -3,6 +3,8 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from './auth-binding-store.js'
+import { resolveCredentialMaterial } from './credential-resolver.js'
 import {
   beginOAuthAuthorization,
   buildAuthorizationUrl,
@@ -12,11 +14,7 @@ import {
   createPkcePair,
   refreshOAuthBinding,
 } from './oauth.js'
-import { resolveCredentialMaterial } from './secret-store.js'
-import {
-  createAuthBindingStore,
-  createKeychainSecretStore,
-} from './secret-store.js'
+import { createKeychainSecretStore } from './secret-store.js'
 import { resolveMcpBearerToken } from './mcp-loader.js'
 import { BUILTIN_MCP_DOCS_PLUGIN } from './builtins.js'
 

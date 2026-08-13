@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Agent Workbench Archetype — Phase 3 Shell + Phase 4 Fake Runtime + optional local VoltAgent RuntimePort adapter (sidecar; not multi-tenant production Runtime).",
+  "description": "Agent Workbench Archetype — Phase 3 Shell + real task lifecycle via local VoltAgent sidecar (not a production multi-tenant Runtime).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

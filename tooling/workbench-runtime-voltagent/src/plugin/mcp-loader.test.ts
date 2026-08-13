@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
+import { createAuthBindingStore } from './auth-binding-store.js'
 import {
   BUILTIN_CONNECTOR_DESCRIPTORS,
   BUILTIN_MCP_CALENDAR_PLUGIN,
@@ -13,6 +14,7 @@ import {
   applyMcpNeedsApproval,
   buildMcpChildEnv,
   forceToolNeedsApproval,
+  loadResolvedMcpServers,
   mergeReadOnlyAllowlist,
   resolveMcpContribution,
   wrapMcpToolsWithTaskSelectionGate,
@@ -20,10 +22,7 @@ import {
 import { createPluginRegistry, formatRegistryMcpStatusLine } from './registry.js'
 import { decideToolNeedsApproval } from './security-policy.js'
 import { oauthAccessAccount } from './oauth.js'
-import {
-  createAuthBindingStore,
-  createKeychainSecretStore,
-} from './secret-store.js'
+import { createKeychainSecretStore } from './secret-store.js'
 
 function docsContrib() {
   return BUILTIN_MCP_DOCS_PLUGIN.contributes!.mcp![0]
@@ -151,6 +150,38 @@ describe('MCP tool approval (fail-closed)', () => {
     assert.notEqual(out[0].needsApproval, true)
     assert.equal(out[1].needsApproval, true)
   })
+
+  it('fails closed without changing execution when needsApproval is non-writable', async () => {
+    let calls = 0
+    const source = createTool({
+      name: 'docs_write_document',
+      description: 'write',
+      parameters: z.object({ path: z.string() }),
+      needsApproval: false,
+      execute: async function (args) {
+        calls += 1
+        return {
+          path: args.path,
+          receiverName: this.name,
+        }
+      },
+    })
+    Object.defineProperty(source, 'needsApproval', {
+      value: false,
+      writable: false,
+      configurable: true,
+    })
+
+    const forced = forceToolNeedsApproval(source as any)
+
+    assert.equal(source.needsApproval, false)
+    assert.equal(forced.needsApproval, true)
+    assert.deepEqual(await forced.execute?.({ path: 'report.md' }), {
+      path: 'report.md',
+      receiverName: 'docs_write_document',
+    })
+    assert.equal(calls, 1)
+  })
 })
 
 describe('resolveMcpContribution (builtin manifests)', () => {
@@ -231,6 +262,102 @@ describe('buildMcpChildEnv (connector-scoped)', () => {
     assert.equal(docsEnv.CUSTOM_DOCS_TOKEN, 'tok')
     assert.equal(docsEnv.DEEPSEEK_API_KEY, undefined)
     assert.equal(docsEnv.GEMINI_API_KEY, undefined)
+  })
+})
+
+describe('loadResolvedMcpServers tool decoration', () => {
+  it('composes forced approval, live auth, public naming, hooks, and task selection', async () => {
+    let authChecks = 0
+    let sourceCalls = 0
+    const hooks = { onStart: async () => {} }
+    const source = createTool({
+      name: 'create_issue',
+      description: 'Create an issue',
+      parameters: z.object({
+        title: z.string(),
+      }),
+      needsApproval: false,
+      hooks,
+      execute: async ({ title }) => {
+        sourceCalls += 1
+        return { title }
+      },
+    })
+
+    const loaded = await loadResolvedMcpServers(
+      [
+        {
+          serverId: 'github',
+          pluginId: 'mcp.github',
+          transport: 'http',
+          server: {
+            type: 'http',
+            url: 'https://mcp.example/github',
+            timeout: 10,
+          },
+          readOnlyToolNames: ['search_repositories'],
+          toolNamePrefix: 'github__',
+          resolveAuthMaterial: async () => {
+            authChecks += 1
+            return {
+              status: 'connected',
+              envValues: {},
+              controlledEnvNames: [],
+              bearerToken: 'live-token',
+            }
+          },
+        },
+      ],
+      {
+        connectorDescriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
+        host: {
+          getTools: async () => ({
+            tools: [source as any],
+            disconnect: async () => {},
+          }),
+        },
+      },
+    )
+
+    try {
+      const [exposed] = loaded.tools
+      assert.equal(exposed.name, 'github__create_issue')
+      assert.equal(exposed.needsApproval, true)
+      assert.equal(exposed.hooks, hooks)
+      assert.deepEqual(
+        await exposed.execute?.(
+          { title: 'C3 characterization' },
+          {
+            conversationId: 'task-a',
+            context: new Map([['capabilityConnectorIds', []]]),
+          } as any,
+        ),
+        {
+          ok: false,
+          error: 'not_task_selected',
+          hint: '连接器「GitHub」工具面未进入本 Task；本 Task 未选用该连接器',
+        },
+      )
+      assert.equal(authChecks, 0)
+      assert.equal(sourceCalls, 0)
+
+      assert.deepEqual(
+        await exposed.execute?.(
+          { title: 'C3 characterization' },
+          {
+            conversationId: 'task-a',
+            context: new Map([
+              ['capabilityConnectorIds', [CONNECTOR_GITHUB_ID]],
+            ]),
+          } as any,
+        ),
+        { title: 'C3 characterization' },
+      )
+      assert.equal(authChecks, 1)
+      assert.equal(sourceCalls, 1)
+    } finally {
+      await loaded.disconnect()
+    }
   })
 })
 

@@ -12,12 +12,10 @@ import {
   atomicWriteFileSync,
   withAuthBindingFileLock,
 } from './auth-binding-persist.js'
+import type { AuthBindingStore } from './auth-binding-store.js'
+import { oauthKeychainAccount } from './keychain-account.js'
+import type { SecretStore } from './secret-store.js'
 import type { AuthBinding, OAuthBindingMeta, ProfileEnv, SecretRef } from './types.js'
-import {
-  oauthKeychainAccount,
-  type AuthBindingStore,
-  type SecretStore,
-} from './secret-store.js'
 
 export type PkcePair = {
   codeVerifier: string

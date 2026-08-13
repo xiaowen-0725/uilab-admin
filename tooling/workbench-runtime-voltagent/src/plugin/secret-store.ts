@@ -1,28 +1,11 @@
 /**
- * Secret store backends + keychain account encoders.
+ * Secret store interface and memory/env/keychain/composite backend factories.
  *
- * After splitting auth-binding-store.ts (revoke state) and credential-resolver.ts
- * (credential resolution) out, this file owns only: SecretStore interface, the
- * memory/env/keychain/composite factories, and the keychain account encoders.
+ * Auth binding state, credential resolution, and keychain account encoding live
+ * in dedicated modules that depend on this module only for the SecretStore type.
  */
 
-import { isAllowedAuthEnvName } from './security-policy.js'
-import type {
-  AuthBinding,
-  AuthStatusResult,
-  CredentialMaterial,
-  ProfileEnv,
-  SecretRef,
-} from './types.js'
-import { isCliSessionConnected } from './cli-session-status.js'
-// Keychain account encoders — re-exported from keychain-account.ts (pure leaf).
-// Moved to break the credential-resolver ↔ secret-store circular dependency.
-export {
-  encodeAuthScopeSegment,
-  isHostOwnedKeychainAccount,
-  oauthKeychainAccount,
-  pluginAuthKeychainAccount,
-} from './keychain-account.js'
+import type { ProfileEnv, SecretRef } from './types.js'
 
 export type SecretStore = {
   /** Resolve secret value; never logs the value. */
@@ -404,24 +387,3 @@ export function createCompositeSecretStore(stores: SecretStore[]): SecretStore {
     },
   }
 }
-
-// --- Façade re-exports (symbols moved to dedicated modules) ---
-// Kept here so existing direct importers of ./secret-store.js are unaffected.
-// The barrel (index.ts) re-exports from the dedicated modules directly.
-
-// auth-binding-store.ts — in-memory binding table + revoke state machine
-export {
-  createAuthBindingStore,
-  splitRevokedSnapshot,
-  snapshotAuthBindingStore,
-  type AuthBindingStore,
-  type AuthBindingStoreSnapshot,
-  type CreateAuthBindingStoreOptions,
-} from './auth-binding-store.js'
-
-// credential-resolver.ts — credential resolution + auth status
-export {
-  resolveCredentialMaterial,
-  resolveAuthStatus,
-  type ResolveAuthStatusProbe,
-} from './credential-resolver.js'

@@ -23,8 +23,11 @@ import type {
   TaskReadModel,
   TimelineFollowMode,
 } from '../projection/types'
-import type { CommandAcknowledgement } from '../protocol/commands'
-import type { TurnComposerContext } from '../protocol/commands'
+import type {
+  ApplicationCommand,
+  CommandAcknowledgement,
+  TurnComposerContext,
+} from '../protocol/commands'
 import { runtimeHonestyCopy } from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
@@ -361,28 +364,22 @@ export class TaskRuntimeController {
     if (!taskId) return null
     const runId = this.projection.readModel.activeRunId ?? undefined
 
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.cancelRun({
+    return this.runCommandTransaction(
+      () => this.commands.cancelRun({
         taskId,
         runId: runId ?? undefined,
         turnId: this.projection.readModel.activeTurnId ?? undefined,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = this.honesty.cancelAccepted
-      } else {
-        this.notice =
-          ack.message ??
-          `取消未接受：${ack.status}${ack.reasonCode ? ` (${ack.reasonCode})` : ''}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice = this.honesty.cancelAccepted
+        } else {
+          this.notice =
+            ack.message ??
+            `取消未接受：${ack.status}${ack.reasonCode ? ` (${ack.reasonCode})` : ''}`
+        }
+      },
+    )
   }
 
   async respondToApproval(
@@ -392,32 +389,26 @@ export class TaskRuntimeController {
   ): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.respondToApproval({
+    return this.runCommandTransaction(
+      () => this.commands.respondToApproval({
         taskId,
         requestId,
         decision,
         reason,
         runId: this.projection.readModel.activeRunId ?? undefined,
         turnId: this.projection.readModel.activeTurnId ?? undefined,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice =
-          decision === 'approved'
-            ? this.honesty.approvalApproved
-            : this.honesty.approvalRejected
-      } else {
-        this.notice = ack.message ?? `审批响应未接受：${ack.status}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice =
+            decision === 'approved'
+              ? this.honesty.approvalApproved
+              : this.honesty.approvalRejected
+        } else {
+          this.notice = ack.message ?? `审批响应未接受：${ack.status}`
+        }
+      },
+    )
   }
 
   async provideRunInput(text: string, requestId?: string): Promise<CommandAcknowledgement | null> {
@@ -429,28 +420,22 @@ export class TaskRuntimeController {
       this.emit()
       return null
     }
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.provideRunInput({
+    return this.runCommandTransaction(
+      () => this.commands.provideRunInput({
         taskId,
         inputText: text,
         requestId: rid,
         runId: this.projection.readModel.activeRunId ?? undefined,
         turnId: this.projection.readModel.activeTurnId ?? undefined,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = this.honesty.inputProvided
-      } else {
-        this.notice = ack.message ?? `补充输入未接受：${ack.status}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice = this.honesty.inputProvided
+        } else {
+          this.notice = ack.message ?? `补充输入未接受：${ack.status}`
+        }
+      },
+    )
   }
 
   async retryTurn(turnId?: string): Promise<CommandAcknowledgement | null> {
@@ -462,25 +447,19 @@ export class TaskRuntimeController {
       this.emit()
       return null
     }
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.retryTurn({
+    return this.runCommandTransaction(
+      () => this.commands.retryTurn({
         taskId,
         turnId: tid,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = this.honesty.retryAccepted
-      } else {
-        this.notice = ack.message ?? `重试未接受：${ack.status}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice = this.honesty.retryAccepted
+        } else {
+          this.notice = ack.message ?? `重试未接受：${ack.status}`
+        }
+      },
+    )
   }
 
   async queueFollowUp(text: string): Promise<CommandAcknowledgement | null> {
@@ -489,30 +468,24 @@ export class TaskRuntimeController {
     const trimmed = text.trim()
     if (!trimmed) return null
 
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.queueFollowUp({
+    return this.runCommandTransaction(
+      () => this.commands.queueFollowUp({
         taskId,
         inputText: trimmed,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = this.honesty.queueAccepted
-      } else if (ack.status === 'unsupported') {
-        // Fallback local queue + submit when idle
-        this.localFollowUps.push(trimmed)
-        this.notice = '已本地排队（Runtime 未实现 queueFollowUp）'
-        this.maybeDrainLocalQueue()
-      } else {
-        this.notice = ack.message ?? `排队未接受：${ack.status}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice = this.honesty.queueAccepted
+        } else if (ack.status === 'unsupported') {
+          // Fallback local queue + submit when idle
+          this.localFollowUps.push(trimmed)
+          this.notice = '已本地排队（Runtime 未实现 queueFollowUp）'
+          this.maybeDrainLocalQueue()
+        } else {
+          this.notice = ack.message ?? `排队未接受：${ack.status}`
+        }
+      },
+    )
   }
 
   async steerRun(text: string): Promise<CommandAcknowledgement | null> {
@@ -524,26 +497,20 @@ export class TaskRuntimeController {
       this.emit()
       return null
     }
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.steerRun({
+    return this.runCommandTransaction(
+      () => this.commands.steerRun({
         taskId,
         runId,
         inputText: text,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = this.honesty.steerAccepted
-      } else {
-        this.notice = ack.message ?? `转向未接受：${ack.status}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice = this.honesty.steerAccepted
+        } else {
+          this.notice = ack.message ?? `转向未接受：${ack.status}`
+        }
+      },
+    )
   }
 
   async reconcileInterruptedRun(options?: {
@@ -562,27 +529,21 @@ export class TaskRuntimeController {
     }
     const cursor =
       options?.runtimeCursor ?? String(this.projection.readModel.lastTaskSequence)
-    this.pending = true
-    this.emit()
-    try {
-      const command = this.commands.reconcileInterruptedRun({
+    return this.runCommandTransaction(
+      () => this.commands.reconcileInterruptedRun({
         taskId,
         turnId,
         runId,
         runtimeCursor: cursor,
-      })
-      const ack = await dispatchCommand(this.runtime, command)
-      await this.rememberAck(command.commandId, ack)
-      if (ack.status === 'accepted' || ack.status === 'duplicate') {
-        this.notice = this.honesty.reconcileAccepted
-      } else {
-        this.notice = ack.message ?? `对账未接受：${ack.status}`
-      }
-      return ack
-    } finally {
-      this.pending = false
-      this.emit()
-    }
+      }),
+      (ack) => {
+        if (ack.status === 'accepted' || ack.status === 'duplicate') {
+          this.notice = this.honesty.reconcileAccepted
+        } else {
+          this.notice = ack.message ?? `对账未接受：${ack.status}`
+        }
+      },
+    )
   }
 
   /** Approve the latest waiting approval request. */
@@ -797,6 +758,24 @@ export class TaskRuntimeController {
       await this.eventStore.putCommandAcknowledgement(commandId, ack)
     } catch {
       // ignore
+    }
+  }
+
+  private async runCommandTransaction(
+    createCommand: () => ApplicationCommand,
+    handleAcknowledgement: (ack: CommandAcknowledgement) => void,
+  ): Promise<CommandAcknowledgement> {
+    this.pending = true
+    this.emit()
+    try {
+      const command = createCommand()
+      const ack = await dispatchCommand(this.runtime, command)
+      await this.rememberAck(command.commandId, ack)
+      handleAcknowledgement(ack)
+      return ack
+    } finally {
+      this.pending = false
+      this.emit()
     }
   }
 

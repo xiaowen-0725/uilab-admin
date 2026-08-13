@@ -9,7 +9,15 @@ import {
   createPersistedAuthBindingStore,
   defaultRuntimeConfigDir,
 } from './auth-binding-persist.js'
+import {
+  createAuthBindingStore,
+  type AuthBindingStore,
+} from './auth-binding-store.js'
 import { resolveAuthResourceStatus } from './auth-status.js'
+import {
+  oauthKeychainAccount,
+  pluginAuthKeychainAccount,
+} from './keychain-account.js'
 import type { AuthResourceContribution, PluginManifest } from './manifest.js'
 import {
   createPluginRegistryFromEnv,
@@ -24,12 +32,8 @@ import {
   type OAuthPendingStore,
 } from './oauth.js'
 import {
-  createAuthBindingStore,
   createDefaultSecretStore,
-  oauthKeychainAccount,
-  pluginAuthKeychainAccount,
   resolveKeychainCapability,
-  type AuthBindingStore,
   type SecretStore,
 } from './secret-store.js'
 import { isAllowedAuthEnvName } from './security-policy.js'

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
+import { createAuthBindingStore } from './auth-binding-store.js'
 import {
   BUILTIN_CLI_FEISHU_PLUGIN,
   BUILTIN_MCP_GITHUB_PLUGIN,
@@ -13,10 +14,7 @@ import { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
 import type { BuiltinPluginPackage } from './plugin-package.js'
 import { oauthAccessAccount } from './oauth.js'
 import { createPluginRegistry } from './registry.js'
-import {
-  createAuthBindingStore,
-  createKeychainSecretStore,
-} from './secret-store.js'
+import { createKeychainSecretStore } from './secret-store.js'
 import type { PluginManifest } from './manifest.js'
 
 describe('createPluginRegistry', () => {

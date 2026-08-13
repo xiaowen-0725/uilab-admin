@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from '../plugin/auth-binding-store.js'
 import {
   BUILTIN_CONNECTOR_DESCRIPTORS,
   BUILTIN_MCP_GITHUB_PLUGIN,
   CONNECTOR_GITHUB_ID,
 } from '../plugin/builtins.js'
-import {
-  createAuthBindingStore,
-  oauthKeychainAccount,
-  type SecretStore,
-} from '../plugin/secret-store.js'
+import { oauthKeychainAccount } from '../plugin/keychain-account.js'
+import type { SecretStore } from '../plugin/secret-store.js'
 import { createConnectorOAuthRuntime } from './connector-oauth.js'
 
 describe('Managed Connector OAuth runtime', () => {

@@ -74,7 +74,10 @@ import type {
   CommandAcknowledgement,
   TurnComposerContext,
 } from '../../protocol/commands'
-import { previewText, runtimeHonestyCopy } from '../../runtime/runtime-honesty'
+import {
+  previewText,
+  VOLTAGENT_RUNTIME_HONESTY_COPY,
+} from '../../runtime/runtime-honesty'
 import { ComposerPermissionPreset } from './composer-permission-preset'
 
 export interface ComposerProps {
@@ -335,7 +338,7 @@ export function TaskComposer({
   capabilityTaskId = null,
   onManageCapabilities,
 }: ComposerProps) {
-  const honesty = runtimeHonestyCopy()
+  const honesty = VOLTAGENT_RUNTIME_HONESTY_COPY
   const noticeId = useId()
   const [text, setText] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -466,12 +469,12 @@ export function TaskComposer({
   const handleSend = useCallback(async () => {
     if (recording) stopRecording()
 
-    // Runtime path: Application Command → RuntimePort (Fake or VoltAgent).
+    // Runtime path: Application Command → VoltAgent RuntimePort.
     if (isRuntimeMode) {
       // Stop only while actively running / queued / cancelling (not HITL waits).
       if (sendActsAsStop) {
         await onCancelRun?.()
-        setNotice(honesty.cancelRequested)
+        setNotice(honesty.cancelAccepted)
         return
       }
       if (!text.trim()) return

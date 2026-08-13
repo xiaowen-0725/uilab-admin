@@ -16,6 +16,7 @@ import {
 import {
   resolveAuthResourceStatus,
 } from './auth-status.js'
+import { resolveCredentialMaterial } from './credential-resolver.js'
 import { resolveMcpBearerToken } from './mcp-loader.js'
 import { BUILTIN_MCP_DOCS_PLUGIN } from './builtins.js'
 import { createPluginRegistry } from './registry.js'
@@ -24,7 +25,6 @@ import {
   createEnvSecretStore,
   createKeychainSecretStore,
   migrateEnvSecretsToKeychain,
-  resolveCredentialMaterial,
   resolveKeychainCapability,
 } from './secret-store.js'
 

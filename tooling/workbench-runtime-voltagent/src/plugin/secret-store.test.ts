@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from './auth-binding-store.js'
+import { resolveAuthStatus } from './credential-resolver.js'
 import {
-  createAuthBindingStore,
   createCompositeSecretStore,
   createEnvSecretStore,
   createKeychainSecretStoreStub,
   createMemorySecretStore,
-  resolveAuthStatus,
 } from './secret-store.js'
 import type { AuthBinding, SecretRef } from './types.js'
 

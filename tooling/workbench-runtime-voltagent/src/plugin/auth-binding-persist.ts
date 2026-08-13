@@ -20,14 +20,14 @@ import {
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import type { AuthBinding, ProfileEnv, SecretRef } from './types.js'
 import {
   createAuthBindingStore,
   snapshotAuthBindingStore,
   splitRevokedSnapshot,
   type AuthBindingStore,
   type AuthBindingStoreSnapshot,
-} from './secret-store.js'
+} from './auth-binding-store.js'
+import type { AuthBinding, ProfileEnv, SecretRef } from './types.js'
 
 /** Exclusive lock wait budget for concurrent operator processes. */
 const AUTH_BIND_LOCK_WAIT_MS = 5_000

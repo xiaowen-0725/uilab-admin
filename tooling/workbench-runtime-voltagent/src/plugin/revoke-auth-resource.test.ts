@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { createAuthBindingStore } from './auth-binding-store.js'
 import {
-  createAuthBindingStore,
   oauthKeychainAccount,
   pluginAuthKeychainAccount,
-  type SecretStore,
-} from './secret-store.js'
+} from './keychain-account.js'
 import { revokeAuthResource } from './revoke-auth-resource.js'
+import type { SecretStore } from './secret-store.js'
 
 describe('revokeAuthResource', () => {
   it('revokes the descriptor resource first and clears deterministic Keychain accounts', async () => {
