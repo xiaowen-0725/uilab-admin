@@ -647,18 +647,22 @@ function assertRegisteredUpdatePlan(fullState: {
 
 function assertPlanGuidance(instructions: string | undefined) {
   assert.equal(typeof instructions, 'string')
-  const text = instructions ?? ''
-  assert.match(text, /non-trivial, multi-stage/)
-  assert.match(text, /one-sentence phrase/)
-  assert.match(text, /single-step plan/)
-  assert.match(text, /exactly one step in_progress/)
-  assert.match(text, /completed immediately/)
-  assert.match(text, /If blocked/)
-  assert.match(text, /Before finishing/)
-  assert.match(text, /include an explanation/)
-  assert.match(text, /proactively and often/)
-  assert.match(text, /user's language/)
-  assert.match(text, /Chinese first/)
+  const patterns = [
+    /non-trivial, multi-stage/,
+    /one-sentence phrase/,
+    /single-step plan/,
+    /exactly one step in_progress/,
+    /completed immediately/,
+    /If blocked/,
+    /Before finishing/,
+    /include an explanation/,
+    /proactively and often/,
+    /user's language/,
+    /Chinese first/,
+  ]
+  for (const pattern of patterns) {
+    assert.match(instructions as string, pattern)
+  }
 }
 
 function jsonResponse(status: number, body: unknown) {

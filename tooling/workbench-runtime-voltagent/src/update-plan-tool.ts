@@ -7,14 +7,6 @@
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 
-const UPDATE_PLAN_TOOL_NAME = 'update_plan'
-
-const UPDATE_PLAN_TOOL_DESCRIPTION =
-  'Updates the task plan. Provide an optional explanation and a list of plan items, each with a step and status. At most one step can be in_progress at a time.'
-
-const UPDATE_PLAN_RESULT =
-  'Plan updated. Continue to keep it updated as you progress.'
-
 export const PLAN_TOOL_INSTRUCTIONS = [
   'Use update_plan for non-trivial, multi-stage tasks.',
   'Write each step as a one-sentence phrase.',
@@ -34,12 +26,14 @@ const planItemSchema = z.strictObject({
 })
 
 export const updatePlanTool = createTool({
-  name: UPDATE_PLAN_TOOL_NAME,
-  description: UPDATE_PLAN_TOOL_DESCRIPTION,
+  name: 'update_plan',
+  description:
+    'Updates the task plan. Provide an optional explanation and a list of plan items, each with a step and status. At most one step can be in_progress at a time.',
   parameters: z.strictObject({
     explanation: z.string().optional(),
     plan: z.array(planItemSchema),
   }),
   needsApproval: false,
-  execute: async () => UPDATE_PLAN_RESULT,
+  execute: async () =>
+    'Plan updated. Continue to keep it updated as you progress.',
 })

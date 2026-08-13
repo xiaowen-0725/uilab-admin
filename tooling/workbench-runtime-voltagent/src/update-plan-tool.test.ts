@@ -12,6 +12,7 @@ after(async () => {
   await Promise.all(
     tempRoots.map((dir) => rm(dir, { recursive: true, force: true })),
   )
+  delete process.env.WORKSPACE_ROOT
 })
 
 describe('update_plan tool', () => {
@@ -82,7 +83,8 @@ describe('update_plan tool', () => {
     await writeFile(path.join(workspace, 'sentinel.txt'), 'keep\n', 'utf8')
     const before = await readdir(workspace, { recursive: true })
 
-    const result = await updatePlanTool.execute?.(
+    assert.ok(updatePlanTool.execute)
+    const result = await updatePlanTool.execute(
       {
         explanation: 'started the first step',
         plan: [
@@ -97,28 +99,25 @@ describe('update_plan tool', () => {
       result,
       'Plan updated. Continue to keep it updated as you progress.',
     )
-    const after = await readdir(workspace, { recursive: true })
-    assert.deepEqual(after, before)
-    delete process.env.WORKSPACE_ROOT
+    const afterListing = await readdir(workspace, { recursive: true })
+    assert.deepEqual(afterListing, before)
   })
 })
+
+type JsonObjectSchema = {
+  additionalProperties?: unknown
+  required?: unknown
+  properties: Record<string, unknown>
+}
 
 function asSchemaNode(value: unknown): Record<string, unknown> {
   assert.ok(value && typeof value === 'object' && !Array.isArray(value))
   return value as Record<string, unknown>
 }
 
-function asObjectSchema(value: unknown): {
-  additionalProperties?: unknown
-  required?: unknown
-  properties: Record<string, unknown>
-} {
+function asObjectSchema(value: unknown): JsonObjectSchema {
   const node = asSchemaNode(value)
   assert.equal(node.type, 'object')
   assert.ok(node.properties && typeof node.properties === 'object')
-  return node as {
-    additionalProperties?: unknown
-    required?: unknown
-    properties: Record<string, unknown>
-  }
+  return node as JsonObjectSchema
 }

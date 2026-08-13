@@ -51,7 +51,7 @@ import {
 import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-sandbox.js'
 import type { ConnectorCommandAccess } from './runtime-shell/connector-aware-sandbox.js'
 
-const planToolkit = { name: 'update_plan', tools: [updatePlanTool] }
+const planToolkit: Toolkit = { name: 'update_plan', tools: [updatePlanTool] }
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
