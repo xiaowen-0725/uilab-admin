@@ -9,8 +9,7 @@ import type {
   TurnComposerContext,
 } from '../protocol/commands'
 import { emptyTaskReadModel } from '../projection/empty-read-model'
-import type { TaskReadModel } from '../projection/types'
-import type { TimelineFollowMode } from '../projection/types'
+import type { TaskReadModel, TimelineFollowMode } from '../projection/types'
 import type { TaskRuntimeController } from './task-runtime-controller'
 
 export interface UseTaskRuntimeResult {
@@ -32,10 +31,6 @@ export interface UseTaskRuntimeResult {
   retryTurn: () => Promise<void>
   setFollowMode: (mode: TimelineFollowMode) => void
   ready: boolean
-}
-
-function emptyReadModel(taskId: string, title?: string): TaskReadModel {
-  return emptyTaskReadModel({ taskId, projectId: '', title })
 }
 
 /**
@@ -133,7 +128,7 @@ export function useTaskRuntime(
 
   if (!controller || !enabled) {
     return {
-      readModel: emptyReadModel(taskId, title),
+      readModel: emptyTaskReadModel({ taskId, projectId: '', title }),
       busy: false,
       notice: null,
       runStatus: null,

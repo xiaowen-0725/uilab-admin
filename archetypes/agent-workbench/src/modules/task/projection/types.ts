@@ -4,7 +4,7 @@
  */
 
 import type { ProjectId, RunId, RunStatus, TaskId, TitleSource, TurnId } from '../model/lifecycle'
-import type { PlanSnapshot, PlanStep } from './plan-snapshot'
+import type { PlanSnapshot } from './plan-snapshot'
 
 export type { PlanProgress, PlanSnapshot, PlanStep, PlanStepStatus } from './plan-snapshot'
 
@@ -76,11 +76,8 @@ export interface TimelineItemMeta {
   toolName?: string
   /** Stable process category for deterministic summary aggregation. */
   processKind?: ProcessStepKind
-  /** Structured plan for Timeline plan-update cards. */
-  plan?: {
-    explanation?: string
-    steps: PlanStep[]
-  }
+  /** Structured plan for Timeline plan-update cards (snapshot without derived progress). */
+  plan?: Omit<PlanSnapshot, 'progress'>
   /** Run-terminal deterministic summary, counted by logical row id. */
   processSummary?: ProcessSummary
   /**

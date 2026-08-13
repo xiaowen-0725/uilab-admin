@@ -134,6 +134,13 @@ function consumeUpdatePlanCall(
   return false
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
 function updatePlanWarningPayload(
   name: string,
   callId: string,
@@ -156,16 +163,14 @@ function planUpdatedPayload(args: unknown): {
   explanation?: string
   steps: unknown
 } {
-  const rec =
-    args != null && typeof args === 'object' && !Array.isArray(args)
-      ? (args as Record<string, unknown>)
-      : {}
+  const rec = asRecord(args)
   const explanation =
     typeof rec.explanation === 'string' && rec.explanation.length > 0
       ? rec.explanation
       : undefined
   const steps = rec.plan ?? rec.steps ?? []
-  return explanation === undefined ? { steps } : { explanation, steps }
+  if (explanation === undefined) return { steps }
+  return { explanation, steps }
 }
 
 function extractToolPath(
@@ -298,21 +303,16 @@ export function mapFullStreamChunk(
     case 'tool-result': {
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
+      const output = chunk.output ?? chunk.result ?? chunk.content
       if (consumeUpdatePlanCall(ctx, name, callId)) {
-        const isError = chunk.isError === true || chunk.error != null
-        if (isError) {
+        if (chunk.isError === true || chunk.error != null) {
           push(
             'warning',
-            updatePlanWarningPayload(
-              name,
-              callId,
-              chunk.error ?? chunk.output ?? chunk.result ?? chunk.content,
-            ),
+            updatePlanWarningPayload(name, callId, chunk.error ?? output),
           )
         }
         break
       }
-      const output = chunk.output ?? chunk.result ?? chunk.content
       const args = chunk.args ?? chunk.input ?? chunk.arguments
       const isError = chunk.isError === true || chunk.error != null
       const normalized = normalizeToolOutput(output)

@@ -5,23 +5,17 @@ export interface ContextPanelBlockProps {
   title: string
   trailing?: ReactNode
   children: ReactNode
-  className?: string
 }
 
-/**
- * Isomorphic Task Context Panel slot. Plan is the first block; future
- * sections (environment, changes, subagents) reuse this chrome.
- */
+/** Shared chrome for Task Context Panel blocks. */
 export function ContextPanelBlock({
   id,
   title,
   trailing,
   children,
-  className,
 }: ContextPanelBlockProps) {
   return (
     <section
-      className={className}
       aria-labelledby={`ctx-${id}`}
       data-testid={`context-panel-block-${id}`}
     >

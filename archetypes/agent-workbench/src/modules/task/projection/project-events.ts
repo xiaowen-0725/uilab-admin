@@ -553,17 +553,54 @@ function syncProcessSummary(
   })
 }
 
+type TimelineItemPatch = {
+  title?: string
+  body?: string
+  status?: string
+  meta?: TimelineItemMeta
+}
+
+/**
+ * Whole-table replace for a keyed Timeline row.
+ * Unlike {@link upsertByKey}, this overwrites body/meta instead of appending.
+ */
+function replaceByKey(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  category: TimelineItemCategory,
+  key: string,
+  patch: TimelineItemPatch,
+): void {
+  const version = state.readModel.projectionVersion
+  const id = `${category}:${key}`
+  const idx = findIndex(
+    state.readModel.timeline,
+    (item) => item.category === category && item.id === id,
+  )
+  if (idx >= 0) {
+    const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
+    replaceItem(state, idx, { ...base, ...patch })
+    return
+  }
+  pushItem(
+    state,
+    baseItem(state, envelope, {
+      id,
+      category,
+      title: patch.title,
+      body: patch.body,
+      status: patch.status,
+      meta: patch.meta,
+    }),
+  )
+}
+
 function upsertByKey(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
   category: TimelineItemCategory,
   key: string,
-  patch: {
-    title?: string
-    body?: string
-    status?: string
-    meta?: TimelineItemMeta
-  },
+  patch: TimelineItemPatch,
 ): void {
   const version = state.readModel.projectionVersion
   const id = `${category}:${key}`
@@ -942,37 +979,23 @@ export function applyRuntimeEvent(
     case 'plan.updated': {
       const snapshot = parsePlanSnapshot(envelope.payload)
       next.readModel = { ...next.readModel, plan: snapshot }
-      const version = next.readModel.projectionVersion
-      const key = String(envelope.runId ?? envelope.eventId)
-      const id = `plan-update:${key}`
-      const idx = findIndex(
-        next.readModel.timeline,
-        (item) => item.category === 'plan-update' && item.id === id,
-      )
-      const patch = {
-        title: '计划已更新',
-        body: snapshot.explanation,
-        status: 'updated' as const,
-        meta: {
-          plan: {
-            explanation: snapshot.explanation,
-            steps: snapshot.steps,
+      replaceByKey(
+        next,
+        envelope,
+        'plan-update',
+        String(envelope.runId ?? envelope.eventId),
+        {
+          title: '计划已更新',
+          body: snapshot.explanation,
+          status: 'updated',
+          meta: {
+            plan: {
+              explanation: snapshot.explanation,
+              steps: snapshot.steps,
+            },
           },
         },
-      }
-      if (idx >= 0) {
-        const base = touchItem(next.readModel.timeline[idx]!, envelope, version)
-        replaceItem(next, idx, { ...base, ...patch })
-      } else {
-        pushItem(
-          next,
-          baseItem(next, envelope, {
-            id,
-            category: 'plan-update',
-            ...patch,
-          }),
-        )
-      }
+      )
       setLiveStatus(next, '正在更新计划…')
       break
     }

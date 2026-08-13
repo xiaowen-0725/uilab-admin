@@ -1,9 +1,14 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { PlanStepStatus } from '../../projection/plan-snapshot'
 import type { TimelineItem } from '../../projection/types'
 import { planStepStatusLabel, planStepTextClass } from '../plan-step-style'
 
-export function PlanUpdateCard({ item }: { item: TimelineItem }) {
+export interface PlanUpdateCardProps {
+  item: TimelineItem
+}
+
+export function PlanUpdateCard({ item }: PlanUpdateCardProps) {
   const plan = item.meta?.plan
   const steps = plan?.steps ?? []
   const explanation = plan?.explanation ?? item.body
@@ -39,27 +44,34 @@ export function PlanUpdateCard({ item }: { item: TimelineItem }) {
               className='flex items-start gap-2'
               aria-label={`${planStepStatusLabel(step.status)}：${step.step}`}
             >
-              {step.status === 'completed' ? (
-                <Check
-                  className='mt-0.5 size-3.5 shrink-0 text-primary'
-                  aria-hidden
-                />
-              ) : (
-                <span
-                  className={cn(
-                    'mt-0.5 inline-block size-3.5 shrink-0 rounded-[3px] border',
-                    step.status === 'in_progress'
-                      ? 'border-primary'
-                      : 'border-muted-foreground/40',
-                  )}
-                  aria-hidden
-                />
-              )}
+              <PlanUpdateStepMark status={step.status} />
               <span className={planStepTextClass(step.status)}>{step.step}</span>
             </div>
           ))
         )}
       </div>
     </div>
+  )
+}
+
+function PlanUpdateStepMark({ status }: { status: PlanStepStatus }) {
+  if (status === 'completed') {
+    return (
+      <Check
+        className='mt-0.5 size-3.5 shrink-0 text-primary'
+        aria-hidden
+      />
+    )
+  }
+  return (
+    <span
+      className={cn(
+        'mt-0.5 inline-block size-3.5 shrink-0 rounded-[3px] border',
+        status === 'in_progress'
+          ? 'border-primary'
+          : 'border-muted-foreground/40',
+      )}
+      aria-hidden
+    />
   )
 }

@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { ContextSection } from '../../model/types'
-import type { PlanSnapshot } from '../../projection/plan-snapshot'
+import type { PlanProgress, PlanSnapshot } from '../../projection/plan-snapshot'
 import { ContextPanelBlock } from './context-panel-block'
 import { PlanBlock } from './plan-block'
 
@@ -18,8 +19,7 @@ export interface ContextPanelProps {
  * Placement (reserved vs overlay) is controlled by CSS container queries on the Task Surface.
  * Card sizes to content up to available-height max (not default full-height).
  *
- * Blocks are isomorphic slots: Plan is always first; `sections` and future
- * blocks reuse {@link ContextPanelBlock}.
+ * Plan is always the first block; other sections reuse {@link ContextPanelBlock}.
  */
 export function ContextPanel({
   open,
@@ -27,8 +27,6 @@ export function ContextPanel({
   sections,
   onClose,
 }: ContextPanelProps) {
-  const progress = plan?.progress
-
   return (
     <aside
       className='context-panel-slot'
@@ -60,17 +58,7 @@ export function ContextPanel({
             <ContextPanelBlock
               id='plan'
               title='计划'
-              trailing={
-                progress && progress.total > 0 ? (
-                  <span
-                    data-testid='context-panel-plan-progress'
-                    className='text-xs tabular-nums text-muted-foreground'
-                    aria-label={`进度 ${progress.completed}/${progress.total}`}
-                  >
-                    {progress.completed}/{progress.total}
-                  </span>
-                ) : null
-              }
+              trailing={planProgressTrailing(plan?.progress)}
             >
               <PlanBlock plan={plan} />
             </ContextPanelBlock>
@@ -92,5 +80,18 @@ export function ContextPanel({
         </ScrollArea>
       </div>
     </aside>
+  )
+}
+
+function planProgressTrailing(progress: PlanProgress | undefined): ReactNode {
+  if (!progress || progress.total <= 0) return null
+  return (
+    <span
+      data-testid='context-panel-plan-progress'
+      className='text-xs tabular-nums text-muted-foreground'
+      aria-label={`进度 ${progress.completed}/${progress.total}`}
+    >
+      {progress.completed}/{progress.total}
+    </span>
   )
 }

@@ -25,20 +25,22 @@ export interface PlanSnapshot {
   progress: PlanProgress
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
 function isPlanStepStatus(value: unknown): value is PlanStepStatus {
-  return (
-    value === 'pending' || value === 'in_progress' || value === 'completed'
-  )
+  return (PLAN_STEP_STATUSES as readonly string[]).includes(value as string)
 }
 
 function parseStep(entry: unknown): PlanStep | null {
   if (typeof entry === 'string' && entry.length > 0) {
     return { step: entry, status: 'pending' }
   }
-  if (entry == null || typeof entry !== 'object' || Array.isArray(entry)) {
-    return null
-  }
-  const rec = entry as Record<string, unknown>
+  const rec = asRecord(entry)
   const step = typeof rec.step === 'string' ? rec.step : ''
   if (step.length === 0) return null
   return {
@@ -48,26 +50,22 @@ function parseStep(entry: unknown): PlanStep | null {
 }
 
 export function parsePlanSnapshot(payload: unknown): PlanSnapshot {
-  const rec =
-    payload != null && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : {}
+  const rec = asRecord(payload)
   const explanation =
     typeof rec.explanation === 'string' && rec.explanation.length > 0
       ? rec.explanation
       : undefined
   const rawSteps = Array.isArray(rec.steps) ? rec.steps : []
-  const steps: PlanStep[] = []
-  for (const entry of rawSteps) {
-    const parsed = parseStep(entry)
-    if (parsed) steps.push(parsed)
+  const steps = rawSteps
+    .map(parseStep)
+    .filter((step): step is PlanStep => step !== null)
+  const snapshot: PlanSnapshot = {
+    steps,
+    progress: {
+      completed: steps.filter((step) => step.status === 'completed').length,
+      total: steps.length,
+    },
   }
-  const completed = steps.filter((step) => step.status === 'completed').length
-  return explanation === undefined
-    ? { steps, progress: { completed, total: steps.length } }
-    : {
-        explanation,
-        steps,
-        progress: { completed, total: steps.length },
-      }
+  if (explanation !== undefined) snapshot.explanation = explanation
+  return snapshot
 }
