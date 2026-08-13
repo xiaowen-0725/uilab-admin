@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run --browser.headless",
+    "test:live-runtime": "VITE_WORKBENCH_LIVE_RUNTIME=1 vitest run --browser.headless tests/integration/workbench-runtime-slice.test.tsx",
     "test:watch": "vitest --browser.headless",
     "test:browser": "vitest",
     "test:browser:install": "playwright install chromium --with-deps",

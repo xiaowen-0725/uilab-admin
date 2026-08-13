@@ -31,6 +31,8 @@
 
 `VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程。侧车 `AGENT_PROFILE=minimal|office`。
 
+默认 `pnpm --filter @uilab/agent-workbench test` **不要求**侧车，也不打真 Runtime submit。`tests/integration/workbench-runtime-slice.test.tsx` 的 submit → 「已处理」仅在 `pnpm --filter @uilab/agent-workbench test:live-runtime`（`VITE_WORKBENCH_LIVE_RUNTIME=1`）且侧车可达时执行；否则 skip，并说明原因。不把 Fake Runtime 装回产品 boot（ADR-0018）。完整切片：先 `pnpm dev:workbench-runtime`。
+
 ### Capture / local-sim（非产品默认）
 
 - Capture JSON **保留**在 `config/captures`；仅 **test harness / 显式 dev** 入口使用
@@ -92,3 +94,5 @@ pnpm --filter @uilab/agent-workbench test
 pnpm check:workbench
 pnpm check:foundation
 ```
+
+无侧车时包级 `test` 应为 0 failed（submit → 「已处理」skip）。活侧车 Runtime 切片：先 `pnpm dev:workbench-runtime`，再 `pnpm --filter @uilab/agent-workbench test:live-runtime`。
