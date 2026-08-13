@@ -41,7 +41,7 @@ export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
 /** Session pointer row persisted in `session` store. */
 export interface SessionPointerRecord {
   id: typeof SESSION_ROW_ID
-  selectedProjectId: string
+  selectedProjectId: string | null
   selectedTaskId: string | null
   lastTaskByProject: Record<string, string | null>
   /** Serialized per-task layout map (optional restore). */

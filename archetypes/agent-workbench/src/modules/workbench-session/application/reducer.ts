@@ -97,7 +97,10 @@ export function createInitialSessionState(
   const lastTaskByProject: Record<string, string | null> = {
     ...(seed.lastTaskByProject ?? {}),
   }
-  if (!(seed.selectedProjectId in lastTaskByProject)) {
+  if (
+    seed.selectedProjectId != null &&
+    !(seed.selectedProjectId in lastTaskByProject)
+  ) {
     lastTaskByProject[seed.selectedProjectId] = selectedTaskId
   }
 
@@ -239,13 +242,14 @@ export function workbenchSessionReducer(
     case 'selectTask': {
       const taskId = command.taskId
       if (taskId === state.selectedTaskId) return state
+      const lastTaskByProject = { ...state.lastTaskByProject }
+      if (state.selectedProjectId) {
+        lastTaskByProject[state.selectedProjectId] = taskId
+      }
       let next: WorkbenchSessionState = {
         ...state,
         selectedTaskId: taskId,
-        lastTaskByProject: {
-          ...state.lastTaskByProject,
-          [state.selectedProjectId]: taskId,
-        },
+        lastTaskByProject,
       }
       if (taskId) next = ensureLayout(next, taskId)
       return next

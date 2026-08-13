@@ -99,6 +99,10 @@ export interface WorkbenchShellProps {
   onNewChat?: () => void
   onDeleteTask?: (taskId: string) => void
   onSelectProject?: (projectId: string) => void
+  hostAvailable?: boolean
+  projectActionError?: string | null
+  onOpenLocalFolder?: () => void
+  onCreateProject?: () => void
   /** Runtime composer props for product Runtime path. */
   composerRuntime?: TaskSurfaceComposerRuntime
   /** Capability catalog controller assembled by Composition Root. */
@@ -141,6 +145,10 @@ export function WorkbenchShell({
   onNewChat,
   onDeleteTask,
   onSelectProject,
+  hostAvailable = false,
+  projectActionError = null,
+  onOpenLocalFolder,
+  onCreateProject,
   composerRuntime,
   capabilityController,
   surfaceRegistry,
@@ -349,6 +357,10 @@ export function WorkbenchShell({
     onNewChat: startNewChatFromShell,
     onDeleteTask,
     onSelectProject,
+    hostAvailable,
+    projectActionError,
+    onOpenLocalFolder,
+    onCreateProject,
     onOpenSettings: openSettings,
     activeDestination,
     onOpenCapabilities: openCapabilities,

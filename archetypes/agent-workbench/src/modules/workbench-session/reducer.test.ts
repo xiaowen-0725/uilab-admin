@@ -32,6 +32,17 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     expect(view.workSurfaceTabs).toEqual([])
   })
 
+  it('allows null selectedProjectId on Host cold start', () => {
+    const emptySeed: WorkbenchSessionSeed = {
+      selectedProjectId: null,
+      selectedTaskId: null,
+    }
+    const state = createInitialSessionState(emptySeed)
+    const view = selectSessionView(state)
+    expect(view.selectedProjectId).toBeNull()
+    expect(view.selectedTaskId).toBeNull()
+  })
+
   it('selects a task and ensures layout', () => {
     const initial = createInitialSessionState({
       ...seed,

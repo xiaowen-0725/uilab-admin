@@ -78,4 +78,37 @@ describe('MemoryProjectCatalog + ProjectCatalogController', () => {
     expect(second.name).toBe('侧边项目')
     expect(controller.getView().projects).toHaveLength(2)
   })
+
+  it('persists localRoot/rootSource and reads missing fields as null', async () => {
+    const catalog = createMemoryProjectCatalog()
+    await catalog.putProject({
+      ...createDefaultProject(),
+      localRoot: '/Users/me/repo',
+      rootSource: 'opened',
+    })
+    const withRoot = await catalog.getProject(DEFAULT_PROJECT_ID)
+    expect(withRoot?.localRoot).toBe('/Users/me/repo')
+    expect(withRoot?.rootSource).toBe('opened')
+    expect('runStatus' in (withRoot ?? {})).toBe(false)
+
+    await catalog.putProject({
+      id: 'project-legacy',
+      name: '旧记录',
+      sortOrder: 1,
+      pinned: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as unknown as ReturnType<typeof createDefaultProject>)
+    const legacy = await catalog.getProject('project-legacy')
+    expect(legacy?.localRoot).toBeNull()
+    expect(legacy?.rootSource).toBeNull()
+  })
+
+  it('hydrate({ seedDefaultProject: false }) leaves an empty catalog', async () => {
+    const catalog = createMemoryProjectCatalog()
+    const controller = new ProjectCatalogController(catalog)
+    await controller.hydrate({ seedDefaultProject: false })
+    expect(controller.getView().projects).toHaveLength(0)
+    expect(controller.getView().ready).toBe(true)
+  })
 })

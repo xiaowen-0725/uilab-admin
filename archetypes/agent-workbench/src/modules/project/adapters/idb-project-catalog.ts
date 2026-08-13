@@ -16,7 +16,11 @@ import type {
   TaskCatalogRow,
   TaskId,
 } from '../model/types'
-import { sortProjects, sortTasksByUpdatedAt } from '../model/types'
+import {
+  normalizeProjectRecord,
+  sortProjects,
+  sortTasksByUpdatedAt,
+} from '../model/types'
 import {
   ProjectCatalogPortError,
   type ProjectCatalogPort,
@@ -36,7 +40,7 @@ export class IdbProjectCatalog implements ProjectCatalogPort {
           return idbRequest(store.getAll() as IDBRequest<ProjectRecord[]>)
         },
       )
-      return sortProjects(rows)
+      return sortProjects(rows.map((row) => normalizeProjectRecord(row)))
     } catch (err) {
       throw toCatalogError(err)
     }
@@ -53,7 +57,7 @@ export class IdbProjectCatalog implements ProjectCatalogPort {
           const row = await idbRequest(
             store.get(projectId) as IDBRequest<ProjectRecord | undefined>,
           )
-          return row ?? null
+          return row ? normalizeProjectRecord(row) : null
         },
       )
     } catch (err) {

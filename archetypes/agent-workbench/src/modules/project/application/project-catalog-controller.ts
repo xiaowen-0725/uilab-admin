@@ -35,7 +35,7 @@ export type ProjectCatalogListener = () => void
 export class ProjectCatalogController {
   private projects: ProjectRecord[] = []
   private tasks: TaskCatalogRow[] = []
-  private focusedProjectId: ProjectId = DEFAULT_PROJECT_ID
+  private focusedProjectId: ProjectId | null = DEFAULT_PROJECT_ID
   private ready = false
   private error: string | null = null
   private readonly listeners = new Set<ProjectCatalogListener>()
@@ -66,9 +66,9 @@ export class ProjectCatalogController {
   }
 
   private rebuildView(): void {
-    const tasksForFocus = this.tasks.filter(
-      (t) => t.projectId === this.focusedProjectId,
-    )
+    const tasksForFocus = this.focusedProjectId
+      ? this.tasks.filter((t) => t.projectId === this.focusedProjectId)
+      : []
     this.cachedView = {
       projects: sortProjects(this.projects).map(toProjectSummary),
       tasks: sortTasksByUpdatedAt(tasksForFocus).map(toTaskSummary),
@@ -92,21 +92,25 @@ export class ProjectCatalogController {
     )
   }
 
-  setFocusedProject(projectId: ProjectId): void {
+  setFocusedProject(projectId: ProjectId | null): void {
     if (this.focusedProjectId === projectId) return
     this.focusedProjectId = projectId
     this.emit()
   }
 
   /**
-   * Load catalog from port. Bootstraps default project when empty.
+   * Load catalog from port.
+   * `seedDefaultProject` (default true) writes the no-Host 降级夹具「默认项目」.
+   * Desktop Host 产品路径应传 false：空目录保持未选。
    */
   async hydrate(options?: {
-    focusedProjectId?: ProjectId
+    focusedProjectId?: ProjectId | null
+    seedDefaultProject?: boolean
   }): Promise<void> {
     try {
       let projects = [...(await this.catalog.listProjects())]
-      if (projects.length === 0) {
+      const seedDefault = options?.seedDefaultProject !== false
+      if (projects.length === 0 && seedDefault) {
         const defaults = createDefaultProject()
         await this.catalog.putProject(defaults)
         projects = [defaults]
@@ -114,12 +118,16 @@ export class ProjectCatalogController {
       const tasks = [...(await this.catalog.listTasks())]
       this.projects = projects
       this.tasks = tasks
-      this.focusedProjectId =
-        options?.focusedProjectId &&
-        projects.some((p) => p.id === options.focusedProjectId)
-          ? options.focusedProjectId
-          : (projects.find((p) => p.id === DEFAULT_PROJECT_ID)?.id ??
-            projects[0]!.id)
+      const requested = options?.focusedProjectId
+      if (requested && projects.some((p) => p.id === requested)) {
+        this.focusedProjectId = requested
+      } else if (projects.length === 0) {
+        this.focusedProjectId = null
+      } else {
+        this.focusedProjectId =
+          projects.find((p) => p.id === DEFAULT_PROJECT_ID)?.id ??
+          projects[0]!.id
+      }
       this.ready = true
       this.error = null
       this.emit()
@@ -132,7 +140,13 @@ export class ProjectCatalogController {
     }
   }
 
-  async createProject(name: string): Promise<ProjectRecord> {
+  async createProject(
+    name: string,
+    extras?: {
+      localRoot?: string | null
+      rootSource?: ProjectRecord['rootSource']
+    },
+  ): Promise<ProjectRecord> {
     const trimmed = name.trim() || '未命名项目'
     const now = new Date().toISOString()
     const maxOrder = this.projects.reduce(
@@ -146,6 +160,8 @@ export class ProjectCatalogController {
       pinned: false,
       createdAt: now,
       updatedAt: now,
+      localRoot: extras?.localRoot ?? null,
+      rootSource: extras?.rootSource ?? null,
     }
     await this.catalog.putProject(project)
     this.projects = [...this.projects, project]

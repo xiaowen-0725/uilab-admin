@@ -30,6 +30,8 @@
 - **2026-08-10b（作者最终确认 · 一键授权）:** 普通用户不创建 GitHub App、不填写 PAT/Client Secret。平台统一注册 **UI Lab Connector** 并托管 callback/refresh；Sidecar 通过 managed Broker 创建授权会话、持有一次性 claim capability、轮询后写入 Keychain。删除 GitHub builtin 的本机凭据与 PAT fallback。
 - **2026-08-09f（历史实现）:** 曾通过专用 Runtime tools 间接执行 `lark-cli`；此形态已被下一条决策完全替代。
 - **2026-08-09g（作者最终确认 · 主流 Shell 形态）:** Office Runtime 暴露通用 `execute_command`；飞书 Plugin 只贡献官方 `lark-*` Skills、`lark-cli` command scope 与 CLI session auth，不再生成任何飞书业务 wrapper tools，不保留兼容路径。
+- **2026-08-12（Workbuddy 里程碑拆分 · Spec-β）:** 与 Spec-α（Projects Home / Project 本地根 / Desktop Host，见 [`workbench-project-home-and-host-spec.md`](./workbench-project-home-and-host-spec.md)）并行。本父 Spec 合同继续有效；**默认权限产品面 + Composer「+」收口 + 真连接器黄金路径** 作为可勾选里程碑写入 [`workbench-capability-permissions-milestone-spec.md`](./workbench-capability-permissions-milestone-spec.md)，对应 grilling Q8 的 4+5+6。α/β 互不阻塞。
+- **2026-08-12b（代码审查后收缩 Spec-β）:** Capability「+」/chips/管理面/飞书 CLI / effective **已落地**，不在 β 重做。β **Must = 默认权限**；「+」与飞书路径降为 **acceptance closeout**；GitHub Broker 可选；企微等新 Provider **明确不进 β**。见 Spec-β 正文与 [#88](https://github.com/xiaowen-0725/uilab-admin/issues/88)。
 
 ---
 

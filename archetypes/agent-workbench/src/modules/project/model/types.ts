@@ -8,11 +8,14 @@ export type TaskId = string
 
 export type TitleSource = 'local' | 'runtime' | 'user'
 
-/** Well-known default project (cold-start bootstrap). */
+/** Well-known default project (cold-start bootstrap, no-Host 降级夹具). */
 export const DEFAULT_PROJECT_ID: ProjectId = 'project-default'
 export const DEFAULT_PROJECT_NAME = '默认项目'
 /** Initial title for a newly created conversation catalog row. */
 export const NEW_TASK_TITLE = '新对话'
+
+/** How a Project obtained its local root. null = 无根（测试/Web 降级）. */
+export type ProjectRootSource = 'opened' | 'created' | 'auto'
 
 export interface ProjectRecord {
   id: ProjectId
@@ -21,6 +24,43 @@ export interface ProjectRecord {
   pinned: boolean
   createdAt: string
   updatedAt: string
+  /** 规范化后的绝对路径；null = 无根（仅测试/降级） */
+  localRoot: string | null
+  rootSource: ProjectRootSource | null
+}
+
+const ROOT_SOURCES: ReadonlySet<ProjectRootSource> = new Set([
+  'opened',
+  'created',
+  'auto',
+])
+
+/**
+ * Fill missing root fields for records written before Spec-α.
+ * Catalog adapters must run this on read so old IDB rows surface as null.
+ */
+export function normalizeProjectRecord(
+  row: Omit<ProjectRecord, 'localRoot' | 'rootSource'> & {
+    localRoot?: string | null
+    rootSource?: ProjectRootSource | null
+  },
+): ProjectRecord {
+  const localRoot =
+    typeof row.localRoot === 'string' && row.localRoot.trim()
+      ? row.localRoot
+      : null
+  const rootSource =
+    row.rootSource && ROOT_SOURCES.has(row.rootSource) ? row.rootSource : null
+  return {
+    id: row.id,
+    name: row.name,
+    sortOrder: row.sortOrder,
+    pinned: row.pinned,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    localRoot,
+    rootSource,
+  }
 }
 
 /**
@@ -77,6 +117,8 @@ export function createDefaultProject(now = new Date().toISOString()): ProjectRec
     pinned: false,
     createdAt: now,
     updatedAt: now,
+    localRoot: null,
+    rootSource: null,
   }
 }
 

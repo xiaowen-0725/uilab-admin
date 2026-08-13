@@ -20,7 +20,7 @@ export type WorkbenchPersistence = 'idb' | 'memory'
 
 /** Initial selection pointers produced by cold-start hydrate. */
 export type WorkbenchBootPointer = {
-  selectedProjectId: string
+  selectedProjectId: string | null
   selectedTaskId: string | null
   lastTaskByProject?: Record<string, string | null>
   navigatorOpen?: boolean
@@ -42,6 +42,11 @@ export interface WorkbenchBootResult {
 export interface BootWorkbenchOptions {
   persistence: WorkbenchPersistence
   idbName?: string
+  /**
+   * Desktop Host 可用时不种子「默认项目」，允许未选 Project。
+   * Web / 测试降级保持 Memory 夹具路径。
+   */
+  hostAvailable?: boolean
   /** Return true to abort applying side effects after async gaps. */
   isCancelled?: () => boolean
 }
@@ -65,6 +70,7 @@ function memoryBoot(): WorkbenchBootResult {
 
 /**
  * Resolve session pointer against hydrated catalog (invalid / cross-project → null task).
+ * `allowUnselectedProject` (Host 产品路径) 在存储指针无效时保持未选，而不是回落到默认项目。
  */
 export function resolveBootPointer(
   controller: ProjectCatalogController,
@@ -74,15 +80,26 @@ export function resolveBootPointer(
     lastTaskByProject?: Record<string, string | null>
     navigatorOpen?: boolean
   } | null,
+  options?: { allowUnselectedProject?: boolean },
 ): WorkbenchBootPointer {
   const projects = controller.getView().projects
-  const projectId =
-    raw?.selectedProjectId &&
-    projects.some((p) => p.id === raw.selectedProjectId)
-      ? raw.selectedProjectId
-      : DEFAULT_PROJECT_ID
+  const storedId = raw?.selectedProjectId ?? null
+  const storedValid =
+    storedId != null && projects.some((p) => p.id === storedId)
 
-  controller.setFocusedProject(projectId)
+  let projectId: string | null
+  if (storedValid) {
+    projectId = storedId
+  } else if (options?.allowUnselectedProject) {
+    projectId = null
+  } else {
+    projectId = projects.some((p) => p.id === DEFAULT_PROJECT_ID)
+      ? DEFAULT_PROJECT_ID
+      : (projects[0]?.id ?? DEFAULT_PROJECT_ID)
+  }
+
+  if (projectId) controller.setFocusedProject(projectId)
+  else controller.setFocusedProject(null)
 
   let selectedTaskId = raw?.selectedTaskId ?? null
   if (selectedTaskId && !controller.getTaskRow(selectedTaskId)) {
@@ -109,14 +126,21 @@ export function resolveBootPointer(
 export async function bootWorkbench(
   options: BootWorkbenchOptions,
 ): Promise<WorkbenchBootResult> {
-  const { persistence, idbName, isCancelled } = options
+  const { persistence, idbName, isCancelled, hostAvailable = false } = options
   const cancelled = () => isCancelled?.() === true
+  const seedDefaultProject = !hostAvailable
 
   if (persistence === 'memory') {
     const result = memoryBoot()
-    await result.catalogController.hydrate()
+    await result.catalogController.hydrate({ seedDefaultProject })
     if (cancelled()) {
       return result
+    }
+    if (hostAvailable) {
+      return {
+        ...result,
+        pointer: { selectedProjectId: null, selectedTaskId: null },
+      }
     }
     return result
   }
@@ -133,7 +157,7 @@ export async function bootWorkbench(
     const catalog = createIdbProjectCatalog(database)
     const controller = new ProjectCatalogController(catalog)
     const eventStore = createIdbEventStore(database)
-    await controller.hydrate()
+    await controller.hydrate({ seedDefaultProject })
     if (cancelled()) {
       database.close()
       return memoryBoot()
@@ -145,7 +169,9 @@ export async function bootWorkbench(
       return memoryBoot()
     }
 
-    const pointer = resolveBootPointer(controller, stored)
+    const pointer = resolveBootPointer(controller, stored, {
+      allowUnselectedProject: hostAvailable,
+    })
 
     return {
       catalogController: controller,
@@ -160,7 +186,7 @@ export async function bootWorkbench(
     }
     // Degrade to memory so the shell still opens (D14 honesty).
     const result = memoryBoot()
-    await result.catalogController.hydrate()
+    await result.catalogController.hydrate({ seedDefaultProject: true })
     return {
       ...result,
       error: err instanceof Error ? err.message : '无法初始化本地存储',
@@ -171,6 +197,7 @@ export async function bootWorkbench(
 export interface UseWorkbenchBootOptions {
   persistence: WorkbenchPersistence
   idbName?: string
+  hostAvailable?: boolean
   onHydratePointers: (pointer: WorkbenchBootPointer) => void
 }
 
@@ -188,7 +215,7 @@ export interface UseWorkbenchBootState {
 export function useWorkbenchBoot(
   options: UseWorkbenchBootOptions,
 ): UseWorkbenchBootState {
-  const { persistence, idbName, onHydratePointers } = options
+  const { persistence, idbName, hostAvailable, onHydratePointers } = options
   const hydrateRef = useRef(onHydratePointers)
   hydrateRef.current = onHydratePointers
 
@@ -206,6 +233,7 @@ export function useWorkbenchBoot(
       const result = await bootWorkbench({
         persistence,
         idbName,
+        hostAvailable,
         isCancelled: () => cancelled,
       })
       if (cancelled) {
@@ -223,7 +251,7 @@ export function useWorkbenchBoot(
     return () => {
       cancelled = true
     }
-  }, [persistence, idbName])
+  }, [persistence, idbName, hostAvailable])
 
   return {
     ready,

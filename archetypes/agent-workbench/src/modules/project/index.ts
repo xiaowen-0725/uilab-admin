@@ -1,7 +1,8 @@
 /**
  * Project Module — public Interface.
  *
- * Owns: Project entity, Task catalog rows, ProjectCatalogPort.
+ * Owns: Project entity, Task catalog rows, ProjectCatalogPort, HostPort,
+ * and the local-root command face.
  * Does not own: Runtime, EventStore, session selection, layout chrome.
  */
 
@@ -12,6 +13,7 @@ export {
   createDefaultProject,
   createTaskCatalogRow,
   isBlankDraftTask,
+  normalizeProjectRecord,
   sortProjects,
   sortTasksByUpdatedAt,
   toProjectSummary,
@@ -22,6 +24,7 @@ export type {
   TaskId,
   TitleSource,
   ProjectRecord,
+  ProjectRootSource,
   TaskCatalogRow,
   ProjectSummary,
   TaskSummary,
@@ -33,6 +36,18 @@ export type {
 } from './ports/project-catalog-port'
 export { ProjectCatalogPortError } from './ports/project-catalog-port'
 
+export type {
+  HostPort,
+  HostRuntimeStatus,
+  PickDirectoryResult,
+  WorkbenchHostBridge,
+} from './ports/host-port'
+export {
+  HOST_UNAVAILABLE_MESSAGE,
+  HostUnavailableError,
+  isHostUnavailableError,
+} from './ports/host-port'
+
 export {
   MemoryProjectCatalog,
   createMemoryProjectCatalog,
@@ -41,6 +56,19 @@ export {
   IdbProjectCatalog,
   createIdbProjectCatalog,
 } from './adapters/idb-project-catalog'
+export {
+  createFakeHostPort,
+} from './adapters/fake-host-port'
+export type {
+  FakeHostPort,
+  FakeHostPortOptions,
+} from './adapters/fake-host-port'
+export { createUnavailableHostPort } from './adapters/unavailable-host-port'
+export {
+  createElectronHostAdapter,
+  createWorkbenchHostPort,
+  isElectronHostBridgePresent,
+} from './adapters/electron-host-adapter'
 
 export {
   ProjectCatalogController,
@@ -50,3 +78,20 @@ export type {
   ProjectCatalogListener,
 } from './application/project-catalog-controller'
 export { useProjectCatalog } from './application/use-project-catalog'
+export {
+  createProjectLocalRootCommands,
+} from './application/project-local-root-commands'
+export type {
+  ProjectLocalRootCommands,
+  ProjectLocalRootCommandDeps,
+  OpenFolderResult,
+  WritableRuntimeGate,
+} from './application/project-local-root-commands'
+export {
+  basenameOfRoot,
+  expandHome,
+  normalizeLocalRoot,
+  resolveProjectsHomePath,
+  sanitizeDirectoryName,
+  uniqueChildDirectoryName,
+} from './application/local-root-path'

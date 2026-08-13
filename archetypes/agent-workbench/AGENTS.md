@@ -16,16 +16,16 @@
 
 - **Shell**：Navigator、Task Surface、Composer、Adaptive Context Panel、Single-pane + Tabs Work Surface Host；inset layout、pane chrome/motion
 - **Real Task Lifecycle（会话管理）**：
-  - `modules/project`：Project 实体 + Task **目录**权威；`ProjectCatalogPort`（Memory / IndexedDB）
-  - `modules/workbench-session`：仅 `selectedProjectId` + `selectedTaskId | null` + layout chrome + `lastTaskByProject`
-  - 冷启动：`project-default` /「默认项目」+ **零 Task** 空壳
-  - 新对话 → 目录 title「新对话」→ **Runtime** empty hub（产品默认路径）
+  - `modules/project`：Project 实体 + Task **目录**权威；`ProjectCatalogPort`（Memory / IndexedDB）；**单根 `localRoot` / `rootSource`**；**HostPort**（选目录 / Projects Home / 侧车生命周期）
+  - `modules/workbench-session`：仅 `selectedProjectId | null` + `selectedTaskId | null` + layout chrome + `lastTaskByProject`
+  - 冷启动：有 Desktop Host 时允许未选 Project（首次新对话自动建带根项目）；无 Host（Web/测试）保留「默认项目」夹具
+  - 新对话 → 目录 title「新对话」→ **Runtime** empty hub（产品默认路径）；未选 Project 时先 `ensureProjectForNewChat`
   - 硬删 Task（目录 + events + snapshot；确认文案强调不可恢复）
-  - Navigator：**仅**真目录；无 mock utility；busy = RunStatusIndex（queued|running|cancelling）
+  - Navigator：**仅**真目录；当前项目名可见；「打开本地文件夹」「新建项目」绑定命令面
   - 统一 IndexedDB `uilab-agent-workbench`（目录 + EventStore 一 open）；测试默认 Memory
 - **Runtime path（产品默认）**：本机 VoltAgent 侧车 → projection → Timeline（ADR-0018 移除了 Deterministic Fake Runtime）
 - **Phase 4B–4F Kernel**：Commands/Events、RuntimePort、VirtualClock、reasoning/tool/approval、queue/steer、长文折叠/滚动
-- **VoltAgent 侧车 ≠ 远程生产集群** — 本机执行；批准后可能写入工作区文件
+- **VoltAgent 侧车 ≠ 远程生产集群** — 本机执行；批准后可能写入工作区文件。无 Desktop Host（Web/测试降级）时，写盘范围由侧车自身 `WORKSPACE_ROOT` 环境决定，不受项目选择约束；桌面产品路径才有项目根写盘约束。
 
 ### 可选 Local VoltAgent 侧车
 
@@ -40,8 +40,9 @@
 ### 未交付（勿伪装）
 
 - 云上多租户 Agent Runtime、Surface Registry 真实现、Document/Browser/Review
-- Resource Explorer、Git 全量集成、Electron/Tauri Desktop Host
+- Resource Explorer、Git 全量集成、Tauri、完整安装器/自动更新/签名
 - 删除 Project 及级联、跨标签页 IDB 同步、会话导出/导入
+- Spec-α 已交付最小 Electron Host（`desktop/electron/`，dev-mode）；不等于产品级桌面安装体验
 
 ## 目录约定
 

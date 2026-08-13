@@ -11,18 +11,25 @@ import type {
   TaskCatalogRow,
   TaskId,
 } from '../model/types'
-import { sortProjects, sortTasksByUpdatedAt } from '../model/types'
+import {
+  normalizeProjectRecord,
+  sortProjects,
+  sortTasksByUpdatedAt,
+} from '../model/types'
 
 export class MemoryProjectCatalog implements ProjectCatalogPort {
   private readonly projects = new Map<ProjectId, ProjectRecord>()
   private readonly tasks = new Map<TaskId, TaskCatalogRow>()
 
   async listProjects(): Promise<readonly ProjectRecord[]> {
-    return sortProjects([...this.projects.values()])
+    return sortProjects(
+      [...this.projects.values()].map((row) => normalizeProjectRecord(row)),
+    )
   }
 
   async getProject(projectId: ProjectId): Promise<ProjectRecord | null> {
-    return this.projects.get(projectId) ?? null
+    const row = this.projects.get(projectId)
+    return row ? normalizeProjectRecord(row) : null
   }
 
   async putProject(project: ProjectRecord): Promise<void> {

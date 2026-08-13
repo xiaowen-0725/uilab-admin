@@ -2,6 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react'
 import type { ProjectSummary, TaskSummary } from '@/modules/project'
 import {
   ChevronDown,
+  FolderOpen,
+  FolderPlus,
   Filter,
   Kanban,
   Loader2,
@@ -42,6 +44,10 @@ export interface NavigatorProps {
   onDeleteTask?: (taskId: string) => void
   onSelectProject?: (projectId: string) => void
   onRenameProject?: (projectId: string, name: string) => void
+  hostAvailable?: boolean
+  projectActionError?: string | null
+  onOpenLocalFolder?: () => void
+  onCreateProject?: () => void
   onClose?: () => void
   /** Collapse / open left rail (control lives on the rail, not Task chrome). */
   onToggleNavigator?: () => void
@@ -118,15 +124,20 @@ export function Navigator({
   onOpenSettings,
   activeDestination = 'task',
   onOpenCapabilities,
+  hostAvailable = false,
+  projectActionError = null,
+  onOpenLocalFolder,
+  onCreateProject,
 }: NavigatorProps) {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [projectQuery, setProjectQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
   const [tasksExpanded, setTasksExpanded] = useState(true)
 
   const filterActive = statusFilter !== 'all' || timeFilter !== 'all'
-  const projectName = project?.name ?? '…'
+  const projectName = project?.name ?? '未选择项目'
   const tabIndex = open ? 0 : -1
 
   const filteredTasks = useMemo(() => {
@@ -254,9 +265,13 @@ export function Navigator({
           Workbench
           <span className='ms-1.5 text-foreground/60'>{DISPLAY_VERSION}</span>
         </p>
-        <span className='sr-only' data-testid='project-name'>
+        <p
+          className='mt-0.5 truncate text-[12px] leading-4 text-foreground/80'
+          data-testid='project-name'
+          title={projectName}
+        >
           {projectName}
-        </span>
+        </p>
       </div>
 
       {searchOpen ? (
@@ -320,27 +335,114 @@ export function Navigator({
         </ul>
       </div>
 
-      {projects && projects.length > 1 && onSelectProject ? (
-        <div className='px-2.5 pb-2' data-testid='navigator-project-list'>
-          <label className='sr-only' htmlFor='navigator-project-select'>
-            切换项目
-          </label>
-          <select
-            id='navigator-project-select'
-            data-testid='navigator-project-select'
-            className='h-8 w-full rounded-md border border-border/60 bg-sidebar-accent/30 px-2 text-xs'
-            value={project?.id ?? ''}
-            tabIndex={tabIndex}
-            onChange={(e) => onSelectProject(e.target.value)}
+      <div className='px-2.5 pb-2' data-testid='navigator-project-list'>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type='button'
+                className='flex h-8 w-full items-center justify-between gap-1 rounded-md border border-border/60 bg-sidebar-accent/30 px-2 text-xs text-foreground outline-none hover:bg-sidebar-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50'
+                tabIndex={tabIndex}
+                data-testid='navigator-project-trigger'
+                aria-label='选择项目'
+              />
+            }
           >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+            <span className='min-w-0 truncate'>{projectName}</span>
+            <ChevronDown className='size-3.5 shrink-0 opacity-70' aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align='start'
+            side='bottom'
+            className='w-[var(--navigator-width)] max-w-72'
+            data-testid='navigator-project-menu'
+          >
+            <div className='px-1.5 pb-1.5'>
+              <label className='sr-only' htmlFor='navigator-project-search'>
+                搜索项目
+              </label>
+              <Input
+                id='navigator-project-search'
+                data-testid='navigator-project-search'
+                placeholder='搜索项目…'
+                value={projectQuery}
+                className='h-8 bg-sidebar-accent/40 text-xs shadow-none'
+                onChange={(e) => setProjectQuery(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            <DropdownMenuGroup>
+              {(projects ?? [])
+                .filter((item) => {
+                  const q = projectQuery.trim().toLowerCase()
+                  if (!q) return true
+                  return item.name.toLowerCase().includes(q)
+                })
+                .map((item) => (
+                  <DropdownMenuItem
+                    key={item.id}
+                    data-testid={`navigator-project-item-${item.id}`}
+                    onClick={() => onSelectProject?.(item.id)}
+                  >
+                    {item.name}
+                  </DropdownMenuItem>
+                ))}
+            </DropdownMenuGroup>
+            {(projects ?? []).length === 0 ? (
+              <p
+                className='px-2 py-1.5 text-xs text-muted-foreground'
+                data-testid='navigator-project-empty'
+              >
+                还没有项目
+              </p>
+            ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={!hostAvailable}
+              data-testid='navigator-open-folder'
+              title={
+                hostAvailable
+                  ? '打开本地文件夹'
+                  : '当前是浏览器环境，打开本地文件夹需要桌面宿主'
+              }
+              onClick={() => onOpenLocalFolder?.()}
+            >
+              <FolderOpen className='size-3.5' aria-hidden />
+              打开本地文件夹
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!hostAvailable}
+              data-testid='navigator-create-project'
+              title={
+                hostAvailable
+                  ? '新建项目'
+                  : '当前是浏览器环境，新建项目需要桌面宿主'
+              }
+              onClick={() => onCreateProject?.()}
+            >
+              <FolderPlus className='size-3.5' aria-hidden />
+              新建项目
+            </DropdownMenuItem>
+            {!hostAvailable ? (
+              <p
+                className='px-2 py-1.5 text-[11px] leading-4 text-muted-foreground'
+                data-testid='navigator-host-unavailable'
+              >
+                浏览器环境无法选择本地文件夹，桌面宿主下可打开或新建项目
+              </p>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {projectActionError ? (
+          <p
+            className='mt-1 px-0.5 text-[11px] leading-4 text-destructive'
+            data-testid='project-action-error'
+          >
+            {projectActionError}
+          </p>
+        ) : null}
+      </div>
 
       <ScrollArea className='min-h-0 flex-1 px-2 pb-2'>
         <section data-testid='navigator-tasks' className='pt-2'>

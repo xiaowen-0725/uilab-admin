@@ -45,6 +45,18 @@ describe('bootWorkbench', () => {
     expect(result.eventStore).toBeTruthy()
   })
 
+  it('Host-available Memory path does not seed 默认项目 and leaves project unselected', async () => {
+    const result = await bootWorkbench({
+      persistence: 'memory',
+      hostAvailable: true,
+    })
+
+    expect(result.error).toBeNull()
+    expect(result.pointer.selectedProjectId).toBeNull()
+    expect(result.pointer.selectedTaskId).toBeNull()
+    expect(result.catalogController.getView().projects).toHaveLength(0)
+  })
+
   it('IDB open failure degrades to Memory with honest Chinese error', async () => {
     vi.mocked(openWorkbenchIdb).mockRejectedValue(
       new Error('IndexedDB 打开失败'),
@@ -110,5 +122,20 @@ describe('resolveBootPointer', () => {
         selectedTaskId: 'task-a',
       }).selectedTaskId,
     ).toBe('task-a')
+  })
+
+  it('allowUnselectedProject keeps null when stored id is missing', async () => {
+    const catalog = createMemoryProjectCatalog()
+    const controller = new ProjectCatalogController(catalog)
+    await controller.hydrate({ seedDefaultProject: false })
+
+    const pointer = resolveBootPointer(
+      controller,
+      { selectedProjectId: 'missing-project', selectedTaskId: 'task-x' },
+      { allowUnselectedProject: true },
+    )
+
+    expect(pointer.selectedProjectId).toBeNull()
+    expect(pointer.selectedTaskId).toBeNull()
   })
 })

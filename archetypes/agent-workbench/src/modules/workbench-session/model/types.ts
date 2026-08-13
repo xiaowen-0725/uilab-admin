@@ -44,7 +44,7 @@ export interface TaskLayoutState {
 }
 
 export interface WorkbenchSessionState {
-  selectedProjectId: ProjectId
+  selectedProjectId: ProjectId | null
   /** null when cold-start empty shell or all tasks deleted. */
   selectedTaskId: TaskId | null
   /** Last selected task per project (for switch restore). */
@@ -59,7 +59,7 @@ export interface WorkbenchSessionState {
 
 /** Read-only view model consumed by Shell and Composition. */
 export interface WorkbenchSessionView {
-  selectedProjectId: ProjectId
+  selectedProjectId: ProjectId | null
   selectedTaskId: TaskId | null
   navigatorOpen: boolean
   layout: TaskLayoutState
@@ -104,7 +104,7 @@ export type WorkbenchSessionCommand =
   | { type: 'exitMaximize' }
   | {
       type: 'hydratePointers'
-      selectedProjectId: ProjectId
+      selectedProjectId: ProjectId | null
       selectedTaskId: TaskId | null
       lastTaskByProject?: Record<ProjectId, TaskId | null>
       navigatorOpen?: boolean
@@ -134,7 +134,7 @@ export interface WorkbenchSessionCommands {
   toggleMaximize: () => void
   exitMaximize: () => void
   hydratePointers: (input: {
-    selectedProjectId: ProjectId
+    selectedProjectId: ProjectId | null
     selectedTaskId: TaskId | null
     lastTaskByProject?: Record<ProjectId, TaskId | null>
     navigatorOpen?: boolean
@@ -149,7 +149,7 @@ export interface WorkbenchSessionController {
 
 /** Seed for session chrome only — no project/tasks arrays, no global open tabs. */
 export interface WorkbenchSessionSeed {
-  selectedProjectId: ProjectId
+  selectedProjectId: ProjectId | null
   selectedTaskId?: TaskId | null
   lastTaskByProject?: Record<ProjectId, TaskId | null>
   workSurfaceMinWidth?: number

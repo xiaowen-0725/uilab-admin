@@ -13,15 +13,18 @@ import {
 import { launchActions } from '@/config/fixtures'
 import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
+  createProjectLocalRootCommands,
+  createWorkbenchHostPort,
   DEFAULT_PROJECT_ID,
   NEW_TASK_TITLE,
+  type HostPort,
   type ProjectSummary,
   type TaskSummary,
   useProjectCatalog,
 } from '@/modules/project'
 import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
 import { useTaskRuntime } from '@/modules/task'
-import { useWorkspaceDocumentSource } from '@/modules/work-surface'
+import { useWorkspaceDocumentSource, fetchWorkspaceHint } from '@/modules/work-surface'
 import {
   useWorkbenchSession,
   type WorkbenchSessionSeed,
@@ -54,10 +57,12 @@ export interface WorkbenchAppProps {
   persistence?: WorkbenchPersistence
   /** Optional unique IDB name for parallel browser tests. */
   idbName?: string
+  /** Optional HostPort injection (tests). Product path uses Electron 桥 or unavailable. */
+  hostPort?: HostPort
 }
 
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
-  selectedProjectId: DEFAULT_PROJECT_ID,
+  selectedProjectId: null,
   selectedTaskId: null,
 }
 
@@ -74,14 +79,27 @@ function runtimeContext(): [] {
 export function WorkbenchApp({
   persistence: persistenceProp,
   idbName,
+  hostPort: hostPortProp,
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
+  const hostPort = useMemo(
+    () => hostPortProp ?? createWorkbenchHostPort(),
+    [hostPortProp],
+  )
+  const hostAvailable = hostPort.isAvailable()
+  const localRootRef = useRef<ReturnType<
+    typeof createProjectLocalRootCommands
+  > | null>(null)
+  const [projectActionError, setProjectActionError] = useState<string | null>(
+    null
+  )
 
   // --- Boot ---
   const boot = useWorkbenchBoot({
     persistence,
     idbName,
+    hostAvailable,
     onHydratePointers: session.commands.hydratePointers,
   })
   const {
@@ -107,9 +125,7 @@ export function WorkbenchApp({
   }, [catalogController, projectId, catalogView.ready])
 
   const currentProject: ProjectSummary | null =
-    catalogView.projects.find((p) => p.id === projectId) ??
-    catalogView.projects[0] ??
-    null
+    catalogView.projects.find((p) => p.id === projectId) ?? null
 
   const tasks: TaskSummary[] = catalogView.tasks
   const taskId = session.view.selectedTaskId
@@ -120,7 +136,7 @@ export function WorkbenchApp({
   // --- Runtime wiring ---
   const runtimeWiring = useWorkbenchRuntimeWiring({
     eventStore,
-    projectId,
+    projectId: projectId ?? DEFAULT_PROJECT_ID,
     persistence,
     bootReady,
   })
@@ -204,7 +220,7 @@ export function WorkbenchApp({
     return {
       taskId,
       title: displayTitle,
-      projectName: currentProject?.name ?? '默认项目',
+      projectName: currentProject?.name ?? '未选择项目',
       mode,
       stream: null,
       streamPlaying: false,
@@ -230,12 +246,28 @@ export function WorkbenchApp({
             mode: 'runtime' as const,
             modelLabel: '本地侧车模型',
             runStatus: runtime.runStatus,
-            onSubmitText: runtime.submitText,
+            onSubmitText: async (
+              text: string,
+              composerContext?: Parameters<typeof runtime.submitText>[1],
+            ) => {
+              const gate = await localRootRef.current?.assertWritableRuntime()
+              if (gate && !gate.ok) {
+                setProjectActionError(gate.message)
+                return null
+              }
+              setProjectActionError(null)
+              return runtime.submitText(text, composerContext)
+            },
             onCancelRun: runtime.cancelActiveRun,
-            runtimeNotice:
+            runtimeNotice: [
+              runtime.notice,
               bootError && persistence === 'idb'
-                ? `${runtime.notice ?? ''} · 本地存储降级：${bootError}`.trim()
-                : runtime.notice,
+                ? `本地存储降级：${bootError}`
+                : null,
+              projectActionError,
+            ]
+              .filter(Boolean)
+              .join(' · ') || null,
             onApprove: (requestId: string, reason?: string) =>
               runtime.respondToApproval(requestId, 'approved', reason),
             onReject: (requestId: string) =>
@@ -262,13 +294,21 @@ export function WorkbenchApp({
       persistence,
       capabilityController,
       taskId,
+      projectActionError,
     ]
   )
 
   const onLaunchAction = useCallback(
     (action: LaunchAction) => {
       if (!taskId || !action.promptStub) return
-      void runtime.submitText(action.promptStub)
+      void (async () => {
+        const gate = await localRootRef.current?.assertWritableRuntime()
+        if (gate && !gate.ok) {
+          setProjectActionError(gate.message)
+          return
+        }
+        void runtime.submitText(action.promptStub)
+      })()
     },
     [runtime, taskId]
   )
@@ -283,18 +323,44 @@ export function WorkbenchApp({
     null
   )
 
-  const onNewChat = useCallback(async () => {
-    if (!catalogController) return
+  const localRootCommands = useMemo(() => {
+    if (!catalogController) return null
+    return createProjectLocalRootCommands({
+      catalog: catalogController,
+      host: hostPort,
+      getSelectedProjectId: () => selectedProjectIdRef.current,
+      selectProject: (nextProjectId) => {
+        catalogController.setFocusedProject(nextProjectId)
+        session.commands.selectProject(nextProjectId)
+      },
+      fetchWorkspaceRoot: () => fetchWorkspaceHint(resolveVoltAgentBaseUrl()),
+    })
+  }, [catalogController, hostPort, session.commands])
+  localRootRef.current = localRootCommands
 
-    const projectIdNow = selectedProjectIdRef.current
+  const onNewChat = useCallback(async () => {
+    if (!catalogController || !localRootCommands) return
+
+    let project
+    try {
+      project = await localRootCommands.ensureProjectForNewChat()
+      setProjectActionError(null)
+    } catch (err) {
+      setProjectActionError(
+        err instanceof Error ? err.message : '无法准备项目',
+      )
+      return
+    }
+
     const selectedId = selectedTaskIdRef.current
     const selected = selectedId
       ? catalogController.getTaskRow(selectedId)
       : null
 
     const decision = decideNewChat({
-      selectedProjectId: projectIdNow,
-      selectedTask: selected,
+      selectedProjectId: project.id,
+      selectedTask:
+        selected?.projectId === project.id ? selected : null,
     })
     if (decision.kind === 'reselect') {
       session.commands.selectTask(decision.taskId)
@@ -304,24 +370,56 @@ export function WorkbenchApp({
     newTaskCounterRef.current += 1
     const row = await createNewChatTask({
       catalog: catalogController,
-      projectId: projectIdNow,
+      projectId: project.id,
       sequence: newTaskCounterRef.current,
     })
     session.commands.ensureTaskLayout(row.id)
     session.commands.selectTask(row.id)
-  }, [catalogController, session.commands])
+  }, [catalogController, localRootCommands, session.commands])
 
   const onSelectProject = useCallback(
     (nextProjectId: string) => {
       catalogController?.setFocusedProject(nextProjectId)
       session.commands.selectProject(nextProjectId)
+      const record = catalogController?.getProjectRecord(nextProjectId)
+      if (hostPort.isAvailable() && record?.localRoot) {
+        void hostPort.startRuntime(record.localRoot).catch((err: unknown) => {
+          setProjectActionError(
+            err instanceof Error ? err.message : '无法切换项目运行时',
+          )
+        })
+      }
     },
-    [catalogController, session.commands]
+    [catalogController, hostPort, session.commands]
   )
+
+  const onOpenLocalFolder = useCallback(async () => {
+    if (!localRootCommands) return
+    try {
+      await localRootCommands.openLocalFolder()
+      setProjectActionError(null)
+    } catch (err) {
+      setProjectActionError(
+        err instanceof Error ? err.message : '无法打开本地文件夹',
+      )
+    }
+  }, [localRootCommands])
+
+  const onCreateProject = useCallback(async () => {
+    if (!localRootCommands) return
+    try {
+      await localRootCommands.createProject()
+      setProjectActionError(null)
+    } catch (err) {
+      setProjectActionError(
+        err instanceof Error ? err.message : '无法新建项目',
+      )
+    }
+  }, [localRootCommands])
 
   const performDeleteTask = useCallback(
     async (deleteTaskId: string) => {
-      if (!catalogController) return
+      if (!catalogController || !session.view.selectedProjectId) return
 
       const result = await hardDeleteTask({
         taskId: deleteTaskId,
@@ -405,6 +503,10 @@ export function WorkbenchApp({
           onNewChat={() => void onNewChat()}
           onDeleteTask={onDeleteTask}
           onSelectProject={onSelectProject}
+          hostAvailable={hostAvailable}
+          projectActionError={projectActionError}
+          onOpenLocalFolder={() => void onOpenLocalFolder()}
+          onCreateProject={() => void onCreateProject()}
           composerRuntime={composerRuntime}
           capabilityController={capabilityController}
           surfaceRegistry={surface.surfaceRegistry}

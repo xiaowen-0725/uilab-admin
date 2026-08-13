@@ -65,8 +65,12 @@ _Avoid_: Dashboard, 页面内容区
 _Avoid_: Chat Page, Main Content
 
 **Project**:
-为 Task 提供资源、环境与权限范围的持久工作集合。
-_Avoid_: Workspace, Repository
+为 Task 提供资源、环境与权限范围的持久工作集合；本地资源边界为单个根目录。根目录来源：(1)「打开本地文件夹」绑定任意目录；(2) 在 Projects Home 下「新建」；(3) 用户未选择 Project 时由新 Task 自动创建（目录落在 Projects Home 下，并成为可选 Project）。已选 Project 时，多个 Task 共用该根目录，不再为每个 Task 新建根。
+_Avoid_: Workspace（指文件夹或 Shell 主区域时）, Repository, Working Tree（作风领域主名）, Projects Home
+
+**Projects Home**:
+Desktop Host（或等价本机配置）管理的应用级默认父目录，用于容纳「新建」或「未选择时自动创建」的 Project 根目录；本身不是 Project，不出现在可选 Project 列表中。路径可配置，Product Profile 提供初始默认值。
+_Avoid_: Workspace, Project, cwd, 默认工作空间（作风领域主名）
 
 **Task**:
 可持久化、可在 Navigator 中选择的工作单元，包含多个 Turn、Run 与相关 Artifact；外部 Runtime 的 Thread 映射到 Task。

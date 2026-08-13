@@ -13,6 +13,7 @@
     "plugin:doctor": "tsx --env-file-if-exists=.env src/operator-cli.ts doctor",
     "plugin:auth": "tsx --env-file-if-exists=.env src/operator-cli.ts auth",
     "capability:golden": "node scripts/capability-surface-golden-path.mjs",
+    "capability:project-home-smoke": "node scripts/project-home-e2e-smoke.mjs",
     "capability:feishu-shell-smoke": "tsx --env-file-if-exists=.env src/live-smoke/feishu-shell-smoke.ts"
   },
   "dependencies": {
