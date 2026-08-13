@@ -36,16 +36,21 @@ export type {
 } from './ports/project-catalog-port'
 export { ProjectCatalogPortError } from './ports/project-catalog-port'
 
-export type {
-  HostPort,
-  HostRuntimeStatus,
-  PickDirectoryResult,
-  WorkbenchHostBridge,
-} from './ports/host-port'
 export {
+  HOST_IPC,
   HOST_UNAVAILABLE_MESSAGE,
   HostUnavailableError,
   isHostUnavailableError,
+} from './ports/host-port'
+export type {
+  HostPort,
+  HostCreateProjectDirectoryInput,
+  HostIpcChannel,
+  HostProjectsHomePayload,
+  HostRuntimeStatus,
+  HostStartRuntimeResult,
+  PickDirectoryResult,
+  WorkbenchHostBridge,
 } from './ports/host-port'
 
 export {

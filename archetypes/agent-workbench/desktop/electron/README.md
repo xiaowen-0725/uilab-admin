@@ -27,5 +27,6 @@ pnpm --filter @uilab/agent-workbench dev:desktop
 ## 约束
 
 - Renderer（`src/` / `tests/`）**禁止** import `electron` 或 Node built-ins
+- IPC 通道名与 `WorkbenchHostBridge` 形状在 `src/modules/project/ports/host-wire.ts`（无 React）；main/preload 与 Renderer 共用，禁止各写一份
 - 纯逻辑（路径规范化、唯一目录名、Projects Home 解析）在 `src/modules/project/application/local-root-path.ts`，由浏览器单测覆盖
 - 真实系统弹窗路径不在 CI 跑，标记为桌面手动验收

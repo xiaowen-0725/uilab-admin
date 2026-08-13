@@ -1,11 +1,38 @@
 /**
  * Real Task Lifecycle — Runtime vertical slice (product default path).
  * Cold start: empty shell; new chat → Runtime empty hub → submit → Timeline.
+ * Submit → 「已处理」needs a live sidecar; default `pnpm test` skips it (ADR-0018).
+ * Live: `pnpm dev:workbench-runtime` then `pnpm --filter @uilab/agent-workbench test:live-runtime`.
  */
 import { WorkbenchApp } from '@/app/composition/workbench-app'
+import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
+
+const LIVE_SIDECAR_PROBE_MS = 2000
+const LIVE_RUNTIME_SLICE_HOWTO =
+  '完整 Runtime 切片：先 pnpm dev:workbench-runtime，再 pnpm --filter @uilab/agent-workbench test:live-runtime。'
+
+function isLiveRuntimeSliceRequested(): boolean {
+  const flag = String(import.meta.env.VITE_WORKBENCH_LIVE_RUNTIME ?? '')
+    .trim()
+    .toLowerCase()
+  return flag === '1' || flag === 'true'
+}
+
+async function isVoltAgentSidecarReachable(): Promise<boolean> {
+  try {
+    const res = await fetch(`${resolveVoltAgentBaseUrl()}/workspace/info`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(LIVE_SIDECAR_PROBE_MS),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
 
 async function waitBooted() {
   await expect
@@ -64,7 +91,16 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
     ).toBe(true)
   })
 
-  it('empty task: submit shows timeline and completed status', async () => {
+  it('empty task: submit shows timeline and completed status', async ({ skip }) => {
+    skip(
+      !isLiveRuntimeSliceRequested(),
+      `默认套件不跑真侧车 submit。${LIVE_RUNTIME_SLICE_HOWTO}`,
+    )
+    skip(
+      !(await isVoltAgentSidecarReachable()),
+      `本机 VoltAgent 侧车不可达。${LIVE_RUNTIME_SLICE_HOWTO}`,
+    )
+
     await render(<WorkbenchApp persistence='memory' />)
     await waitBooted()
     await openNewChat()
@@ -89,7 +125,7 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
     const timeline = page.getByTestId('task-timeline').element()
     expect(timeline.getAttribute('data-runtime-run')).toBe('completed')
     expect(timeline.getAttribute('data-run-status')).toBe('completed')
-    expect(timeline.getAttribute('data-honesty-mode')).toMatch(/fake|voltagent/)
+    expect(timeline.getAttribute('data-honesty-mode')).toBe('voltagent')
 
     expect(
       document.querySelectorAll('[data-category="user-message"]').length,

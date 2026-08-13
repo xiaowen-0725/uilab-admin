@@ -316,11 +316,13 @@ describe('TaskComposer connector selection', () => {
     }
     const controller = createCapabilityController(port)
     await controller.refresh('task-a')
-    const onSubmitText = vi.fn(async () => ({
-      status: 'accepted' as const,
-      commandId: 'cmd-xhs',
-      acceptedAt: '2026-08-13T00:00:00.000Z',
-    }))
+    const onSubmitText = vi.fn(
+      async (_text: string, _composerContext?: object) => ({
+        status: 'accepted' as const,
+        commandId: 'cmd-xhs',
+        acceptedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    )
 
     render(
       <TaskComposer

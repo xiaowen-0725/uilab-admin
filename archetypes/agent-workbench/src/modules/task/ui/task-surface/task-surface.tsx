@@ -226,6 +226,7 @@ export function TaskSurface({
         </div>
         <ContextPanel
           open={view.contextPanelOpen}
+          plan={view.readModel?.plan ?? null}
           sections={view.contextSections}
           onClose={onCloseContextPanel}
         />

@@ -15,19 +15,20 @@ import {
   resolveProjectsHomePath,
   uniqueChildDirectoryName,
 } from '../../src/modules/project/application/local-root-path'
+import {
+  HOST_IPC,
+  type HostCreateProjectDirectoryInput,
+  type HostProjectsHomePayload,
+  type HostRuntimeStatus,
+} from '../../src/modules/project/ports/host-wire'
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL ?? 'http://localhost:5174'
 const SIDECAR_PORT = process.env.WORKBENCH_SIDECAR_PORT ?? '3141'
 const SIDECAR_BASE = `http://127.0.0.1:${SIDECAR_PORT}`
 
-type ProfilePayload = {
-  projectsHomeDirName: string
-  projectsHomeOverride?: string
-}
-
 let mainWindow: BrowserWindow | null = null
 let sidecar: ChildProcess | null = null
-let runtimeStatus: 'stopped' | 'starting' | 'ready' | 'error' = 'stopped'
+let runtimeStatus: HostRuntimeStatus = 'stopped'
 
 function hereDir(): string {
   return path.dirname(fileURLToPath(import.meta.url))
@@ -46,7 +47,7 @@ function resolvePreload(): string {
   return path.join(here, 'preload.cjs')
 }
 
-function resolveHome(payload: ProfilePayload): string {
+function resolveHome(payload: HostProjectsHomePayload): string {
   const homeDir = os.homedir()
   return resolveProjectsHomePath(homeDir, {
     projectsHomeDirName: payload.projectsHomeDirName || 'AgentWorkbench',
@@ -119,7 +120,7 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('host:pickDirectory', async () => {
+  ipcMain.handle(HOST_IPC.pickDirectory, async () => {
     const parent = mainWindow ?? undefined
     const result = await dialog.showOpenDialog(parent, {
       properties: ['openDirectory'],
@@ -130,18 +131,15 @@ function registerIpc(): void {
     return { path: result.filePaths[0]! }
   })
 
-  ipcMain.handle('host:ensureProjectsHome', async (_event, payload: ProfilePayload) => {
+  ipcMain.handle(HOST_IPC.ensureProjectsHome, async (_event, payload: HostProjectsHomePayload) => {
     const home = resolveHome(payload)
     await mkdir(home, { recursive: true })
     return home
   })
 
   ipcMain.handle(
-    'host:createProjectDirectory',
-    async (
-      _event,
-      input: ProfilePayload & { preferredName: string },
-    ) => {
+    HOST_IPC.createProjectDirectory,
+    async (_event, input: HostCreateProjectDirectoryInput) => {
       const home = resolveHome(input)
       await mkdir(home, { recursive: true })
       const entries = await readdir(home, { withFileTypes: true })
@@ -153,7 +151,7 @@ function registerIpc(): void {
     },
   )
 
-  ipcMain.handle('host:startRuntime', async (_event, workspaceRoot: string) => {
+  ipcMain.handle(HOST_IPC.startRuntime, async (_event, workspaceRoot: string) => {
     const root = normalizeLocalRoot(expandHome(workspaceRoot, os.homedir()))
     runtimeStatus = 'starting'
     await stopSidecar()
@@ -184,11 +182,11 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('host:stopRuntime', async () => {
+  ipcMain.handle(HOST_IPC.stopRuntime, async () => {
     await stopSidecar()
   })
 
-  ipcMain.handle('host:getRuntimeStatus', async () => runtimeStatus)
+  ipcMain.handle(HOST_IPC.getRuntimeStatus, async () => runtimeStatus)
 }
 
 app.whenReady().then(() => {

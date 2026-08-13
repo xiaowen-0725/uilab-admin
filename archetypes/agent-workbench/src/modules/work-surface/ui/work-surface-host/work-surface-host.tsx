@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 import type { SurfaceRegistry, WorkSurfaceHostTab } from '../../model/types'
 import { UnknownSurfaceFallback } from './unknown-surface-fallback'
 
-/** Empty host body when no tabs are open. */
 const WORK_SURFACE_EMPTY_NOTICE =
   '工作区暂无打开的标签。打开文档或预览后将显示在此。'
 
@@ -168,7 +167,7 @@ export function WorkSurfaceHost({
       resourceKey: activeTab.resourceKey,
       title: activeTab.title,
       taskId: taskId ?? '',
-    })
+    }) as ReactNode
   } else {
     panelBody = (
       <UnknownSurfaceFallback

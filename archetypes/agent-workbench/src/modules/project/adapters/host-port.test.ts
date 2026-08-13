@@ -3,11 +3,23 @@ import {
   createElectronHostAdapter,
   createUnavailableHostPort,
   createWorkbenchHostPort,
+  HOST_IPC,
   HOST_UNAVAILABLE_MESSAGE,
   HostUnavailableError,
 } from '@/modules/project'
 
 describe('HostPort adapters (renderer)', () => {
+  it('HOST_IPC channel names stay stable for Desktop preload/main', () => {
+    expect(HOST_IPC).toEqual({
+      pickDirectory: 'host:pickDirectory',
+      ensureProjectsHome: 'host:ensureProjectsHome',
+      createProjectDirectory: 'host:createProjectDirectory',
+      startRuntime: 'host:startRuntime',
+      stopRuntime: 'host:stopRuntime',
+      getRuntimeStatus: 'host:getRuntimeStatus',
+    })
+  })
+
   it('unavailable host fails closed with Chinese copy', async () => {
     const host = createUnavailableHostPort()
     expect(host.isAvailable()).toBe(false)

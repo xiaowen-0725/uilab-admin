@@ -72,6 +72,7 @@ export type {
   OpenResourceRef,
   SurfaceDefinition,
   SurfaceKind,
+  SurfaceNode,
   SurfaceRegistry,
   SurfaceRenderProps,
   WorkSurfaceHostTab,

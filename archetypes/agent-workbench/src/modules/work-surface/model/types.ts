@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react'
-
 /** Application-level registered work-surface type id (document / browser / test / …). */
 export type SurfaceKind = string
 
@@ -21,6 +19,12 @@ export type SurfaceRenderProps = {
 }
 
 /**
+ * Opaque tree returned by SurfaceDefinition.render.
+ * Work Surface Host (React) interprets this as ReactNode; model must not import react.
+ */
+export type SurfaceNode = unknown
+
+/**
  * Registry entry for one SurfaceKind.
  * Concrete Document/Browser implementations live under surfaces/* — Host never imports them.
  */
@@ -29,7 +33,7 @@ export type SurfaceDefinition = {
   displayName: string
   /** Used only when open intent omits kind. */
   match?: (resource: OpenResourceRef) => boolean
-  render: (props: SurfaceRenderProps) => ReactNode
+  render: (props: SurfaceRenderProps) => SurfaceNode
   onOpen?: (props: SurfaceRenderProps) => void
   onClose?: (props: SurfaceRenderProps) => void
   onTaskDispose?: (taskId: string) => void

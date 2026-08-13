@@ -19,6 +19,7 @@ import {
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
+import { parsePlanSnapshot } from './plan-snapshot'
 import {
   classifyToolActivity,
   extractToolObject,
@@ -552,17 +553,54 @@ function syncProcessSummary(
   })
 }
 
+type TimelineItemPatch = {
+  title?: string
+  body?: string
+  status?: string
+  meta?: TimelineItemMeta
+}
+
+/**
+ * Whole-table replace for a keyed Timeline row.
+ * Unlike {@link upsertByKey}, this overwrites body/meta instead of appending.
+ */
+function replaceByKey(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  category: TimelineItemCategory,
+  key: string,
+  patch: TimelineItemPatch,
+): void {
+  const version = state.readModel.projectionVersion
+  const id = `${category}:${key}`
+  const idx = findIndex(
+    state.readModel.timeline,
+    (item) => item.category === category && item.id === id,
+  )
+  if (idx >= 0) {
+    const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
+    replaceItem(state, idx, { ...base, ...patch })
+    return
+  }
+  pushItem(
+    state,
+    baseItem(state, envelope, {
+      id,
+      category,
+      title: patch.title,
+      body: patch.body,
+      status: patch.status,
+      meta: patch.meta,
+    }),
+  )
+}
+
 function upsertByKey(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
   category: TimelineItemCategory,
   key: string,
-  patch: {
-    title?: string
-    body?: string
-    status?: string
-    meta?: TimelineItemMeta
-  },
+  patch: TimelineItemPatch,
 ): void {
   const version = state.readModel.projectionVersion
   const id = `${category}:${key}`
@@ -635,6 +673,27 @@ function pushError(
       body: message,
       status: 'failed',
       runId,
+    }),
+  )
+}
+
+function pushWarning(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const title =
+    payloadString(envelope.payload, 'title') ?? '警告'
+  const body =
+    payloadString(envelope.payload, 'message') ??
+    payloadText(envelope.payload) ??
+    ''
+  pushItem(
+    state,
+    baseItem(state, envelope, {
+      id: `warning:${envelope.eventId}`,
+      category: 'warning',
+      title,
+      body: body || undefined,
     }),
   )
 }
@@ -918,17 +977,24 @@ export function applyRuntimeEvent(
       break
     }
     case 'plan.updated': {
-      const title = payloadString(envelope.payload, 'title') ?? '计划'
-      const steps = rec.steps
-      const body = Array.isArray(steps)
-        ? steps.map((s, i) => `${i + 1}. ${String(s)}`).join('\n')
-        : payloadText(envelope.payload) ?? ''
-      upsertByKey(
+      const snapshot = parsePlanSnapshot(envelope.payload)
+      next.readModel = { ...next.readModel, plan: snapshot }
+      replaceByKey(
         next,
         envelope,
         'plan-update',
         String(envelope.runId ?? envelope.eventId),
-        { title, body, status: 'updated' },
+        {
+          title: '计划已更新',
+          body: snapshot.explanation,
+          status: 'updated',
+          meta: {
+            plan: {
+              explanation: snapshot.explanation,
+              steps: snapshot.steps,
+            },
+          },
+        },
       )
       setLiveStatus(next, '正在更新计划…')
       break
@@ -1245,6 +1311,10 @@ export function applyRuntimeEvent(
     // Work Surface open is Session/Composition concern — never a timeline row / openTabs fact.
     case 'work_surface.open_requested':
       break
+    case 'warning': {
+      pushWarning(next, envelope)
+      break
+    }
     default: {
       pushUnsupported(next, envelope)
       break

@@ -4,6 +4,9 @@
  */
 
 import type { ProjectId, RunId, RunStatus, TaskId, TitleSource, TurnId } from '../model/lifecycle'
+import type { PlanSnapshot } from './plan-snapshot'
+
+export type { PlanProgress, PlanSnapshot, PlanStep, PlanStepStatus } from './plan-snapshot'
 
 /**
  * Design §9 taxonomy (full). Phase 4C must project at least:
@@ -73,6 +76,8 @@ export interface TimelineItemMeta {
   toolName?: string
   /** Stable process category for deterministic summary aggregation. */
   processKind?: ProcessStepKind
+  /** Structured plan for Timeline plan-update cards (snapshot without derived progress). */
+  plan?: Omit<PlanSnapshot, 'progress'>
   /** Run-terminal deterministic summary, counted by logical row id. */
   processSummary?: ProcessSummary
   /**
@@ -126,6 +131,11 @@ export interface TaskReadModel {
    * Chinese label while run is non-terminal; null when idle or terminal.
    */
   liveStatus: string | null
+  /**
+   * Latest Plan snapshot from `plan.updated`. Null until the first update.
+   * Progress is derived; UI must not treat it as independent state.
+   */
+  plan: PlanSnapshot | null
   timeline: TimelineItem[]
   recoveryRequired: boolean
   lastTaskSequence: number
