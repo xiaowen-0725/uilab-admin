@@ -35,6 +35,10 @@ import {
   toolsForProfile,
 } from './profile.js'
 import { workbenchTools } from './tools.js'
+import {
+  PLAN_TOOL_INSTRUCTIONS,
+  updatePlanTool,
+} from './update-plan-tool.js'
 import { ensureOfficeWorkspace } from './workspace-root.js'
 import { readCapabilityTurnContext } from './capability/turn-context.js'
 import type { CliAuthProcessRunner } from './capability/connector-cli-auth.js'
@@ -46,6 +50,8 @@ import {
 } from './capability/office-connector-runtime.js'
 import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-sandbox.js'
 import type { ConnectorCommandAccess } from './runtime-shell/connector-aware-sandbox.js'
+
+const planToolkit = { name: 'update_plan', tools: [updatePlanTool] }
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
@@ -249,8 +255,10 @@ export async function createWorkbenchAgent(
         'Never use host absolute paths (/Users/..., /home/..., drive letters). Never paste operator host paths into tools.',
         'Prefer planning briefly, then read before write. Writes and deletes require user approval.',
         'Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar.',
+        PLAN_TOOL_INSTRUCTIONS,
       ].join(' '),
       model: options.model,
+      toolkits: [planToolkit],
       workspace,
       workspaceToolkits: {
         filesystem: {},
@@ -325,11 +333,13 @@ export async function createWorkbenchAgent(
     instructions: [
       'You are the local Agent Runtime for UI Lab Agent Workbench.',
       'Respond in Chinese unless the user writes in another language.',
-      'You may use read_file, write_file (requires approval), and run_command tools when helpful.',
+      'You may use read_file, write_file (requires approval), run_command, and update_plan tools when helpful.',
       'Prefer concise answers. Stay within the workspace tools for file access.',
       'This is a local demo sidecar, not a remote production cluster.',
+      PLAN_TOOL_INSTRUCTIONS,
     ].join(' '),
     model: options.model,
+    toolkits: [planToolkit],
     tools: workbenchTools as (Tool<any, any> | Toolkit)[],
     maxSteps: defaults.maxSteps,
   })
