@@ -1,13 +1,8 @@
 /**
  * Real Task Lifecycle — Runtime vertical slice (product default path).
  * Cold start: empty shell; new chat → Runtime empty hub → submit → Timeline.
- *
- * Submit → 「已处理」hits the live VoltAgent sidecar (Vite proxy
- * `/voltagent-runtime` → sidecar `/workspace/info`). Default `pnpm test`
- * skips that case (ADR-0018: do not fake a local Runtime). Live entry:
- * `pnpm dev:workbench-runtime`, then
- * `pnpm --filter @uilab/agent-workbench test:live-runtime`
- * (`VITE_WORKBENCH_LIVE_RUNTIME=1`). Missing sidecar still skips.
+ * Submit → 「已处理」needs a live sidecar; default `pnpm test` skips it (ADR-0018).
+ * Live: `pnpm dev:workbench-runtime` then `pnpm --filter @uilab/agent-workbench test:live-runtime`.
  */
 import { WorkbenchApp } from '@/app/composition/workbench-app'
 import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
@@ -16,14 +11,14 @@ import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
 const LIVE_SIDECAR_PROBE_MS = 2000
-const LIVE_RUNTIME_OPT_IN_SKIP_REASON =
-  '默认套件不跑真侧车 submit。完整 Runtime 切片：先 pnpm dev:workbench-runtime，再 pnpm --filter @uilab/agent-workbench test:live-runtime。'
-const LIVE_SIDECAR_SKIP_REASON =
-  '本机 VoltAgent 侧车不可达。完整 Runtime 切片需先 pnpm dev:workbench-runtime，再 pnpm --filter @uilab/agent-workbench test:live-runtime。'
+const LIVE_RUNTIME_SLICE_HOWTO =
+  '完整 Runtime 切片：先 pnpm dev:workbench-runtime，再 pnpm --filter @uilab/agent-workbench test:live-runtime。'
 
 function isLiveRuntimeSliceRequested(): boolean {
-  const flag = String(import.meta.env.VITE_WORKBENCH_LIVE_RUNTIME ?? '').trim()
-  return flag === '1' || flag.toLowerCase() === 'true'
+  const flag = String(import.meta.env.VITE_WORKBENCH_LIVE_RUNTIME ?? '')
+    .trim()
+    .toLowerCase()
+  return flag === '1' || flag === 'true'
 }
 
 async function isVoltAgentSidecarReachable(): Promise<boolean> {
@@ -97,8 +92,14 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
   })
 
   it('empty task: submit shows timeline and completed status', async ({ skip }) => {
-    skip(!isLiveRuntimeSliceRequested(), LIVE_RUNTIME_OPT_IN_SKIP_REASON)
-    skip(!(await isVoltAgentSidecarReachable()), LIVE_SIDECAR_SKIP_REASON)
+    skip(
+      !isLiveRuntimeSliceRequested(),
+      `默认套件不跑真侧车 submit。${LIVE_RUNTIME_SLICE_HOWTO}`,
+    )
+    skip(
+      !(await isVoltAgentSidecarReachable()),
+      `本机 VoltAgent 侧车不可达。${LIVE_RUNTIME_SLICE_HOWTO}`,
+    )
 
     await render(<WorkbenchApp persistence='memory' />)
     await waitBooted()
