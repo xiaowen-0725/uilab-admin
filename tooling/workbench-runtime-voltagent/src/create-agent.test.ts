@@ -17,6 +17,7 @@ import {
   createWorkbenchAgent,
   officeFilesystemToolConfig,
 } from './create-agent.js'
+import { updatePlanTool } from './update-plan-tool.js'
 import {
   CONNECTOR_FEISHU_ID,
   CONNECTOR_GITHUB_ID,
@@ -497,6 +498,7 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.tools.includes('ls'))
     assert.ok(bundle.tools.includes('write_file'))
     assert.ok(bundle.tools.includes('execute_command'))
+    assert.ok(bundle.tools.includes('update_plan'))
     assert.ok(!bundle.tools.includes('run_command'))
 
     // O2 first-run bootstrap
@@ -544,6 +546,7 @@ describe('createWorkbenchAgent', () => {
       toolNames.includes('execute_command'),
       `expected generic Workspace Shell, got: ${toolNames.join(',')}`,
     )
+    assertRegisteredUpdatePlan(fullState)
 
     // Discover skills via Workspace API (no LLM).
     assert.ok(bundle.workspace?.skills, 'workspace.skills present')
@@ -617,7 +620,7 @@ describe('createWorkbenchAgent', () => {
     assert.deepEqual(connectorInspection.snapshot.descriptors, [])
     assert.deepEqual(
       [...bundle.tools],
-      ['read_file', 'write_file', 'run_command'],
+      ['read_file', 'write_file', 'run_command', 'update_plan'],
     )
 
     const fullState = await bundle.agent.getFullState()
@@ -627,8 +630,40 @@ describe('createWorkbenchAgent', () => {
     assert.ok(toolNames.includes('read_file'))
     assert.ok(toolNames.includes('write_file'))
     assert.ok(toolNames.includes('run_command'))
+    assertRegisteredUpdatePlan(fullState)
   })
 })
+
+function assertRegisteredUpdatePlan(fullState: {
+  instructions?: string
+  tools: Array<{ name?: string; description?: string; needsApproval?: unknown }>
+}) {
+  const planTool = fullState.tools.find((tool) => tool.name === 'update_plan')
+  assert.ok(planTool, 'update_plan must be registered')
+  assert.equal(planTool.description, updatePlanTool.description)
+  assert.equal(planTool.needsApproval, false)
+  assertPlanGuidance(fullState.instructions)
+}
+
+function assertPlanGuidance(instructions: string | undefined) {
+  assert.equal(typeof instructions, 'string')
+  const patterns = [
+    /non-trivial, multi-stage/,
+    /one-sentence phrase/,
+    /single-step plan/,
+    /exactly one step in_progress/,
+    /completed immediately/,
+    /If blocked/,
+    /Before finishing/,
+    /include an explanation/,
+    /proactively and often/,
+    /user's language/,
+    /Chinese first/,
+  ]
+  for (const pattern of patterns) {
+    assert.match(instructions as string, pattern)
+  }
+}
 
 function jsonResponse(status: number, body: unknown) {
   return {
