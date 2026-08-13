@@ -5,7 +5,7 @@ import {
 } from '@/modules/capabilities'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
-import { page } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { TaskComposer } from './composer'
 
 const selectedSnapshot: CapabilitySnapshot = {
@@ -259,6 +259,100 @@ describe('TaskComposer connector selection', () => {
     await expect
       .element(page.getByTestId('composer-notice'))
       .toHaveTextContent('已选用专家「会议纪要专家」，将从下次发送开始生效。')
+  })
+
+  it('shows the xhs-cover chip and forwards its instruction on the next Turn', async () => {
+    const xhsInstruction =
+      '你当前以「小红书封面专家」配置包工作：关注封面标题、视觉卖点与合规表述；不调用未选用的连接器，不编造外呼结果。输出中文。'
+    let current: CapabilitySnapshot = {
+      ...selectedSnapshot,
+      connectors: [],
+      selection: { connectorIds: [], skillIds: [], expertId: null },
+      effectiveCommandScopes: [],
+      experts: [
+        {
+          id: 'expert.xhs-cover',
+          name: '小红书封面专家',
+          description: '辅助 UX 样例专家配置包',
+          taskSelected: false,
+          skills: [],
+          connectors: [],
+          source: 'static-catalog',
+          instruction: xhsInstruction,
+        },
+      ],
+    }
+    const listeners = new Set<(snapshot: CapabilitySnapshot) => void>()
+    const setSelection = vi.fn<CapabilitySnapshotPort['setSelection']>(
+      async (taskId, selection) => {
+        const expertId =
+          selection.expertId !== undefined
+            ? selection.expertId
+            : current.selection.expertId
+        current = {
+          ...current,
+          version: current.version + 1,
+          taskId,
+          experts: current.experts.map((expert) => ({
+            ...expert,
+            taskSelected: expert.id === expertId,
+          })),
+          selection: { ...current.selection, expertId },
+        }
+        for (const listener of listeners) listener(current)
+        return current
+      },
+    )
+    const port: CapabilitySnapshotPort = {
+      getSnapshot: vi.fn(async () => current),
+      setSelection,
+      startAuth: vi.fn(),
+      refreshAuth: vi.fn(),
+      revokeAuth: vi.fn(),
+      subscribe(listener) {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    }
+    const controller = createCapabilityController(port)
+    await controller.refresh('task-a')
+    const onSubmitText = vi.fn(async () => ({
+      status: 'accepted' as const,
+      commandId: 'cmd-xhs',
+      acceptedAt: '2026-08-13T00:00:00.000Z',
+    }))
+
+    render(
+      <TaskComposer
+        mode='runtime'
+        capabilityController={controller}
+        capabilityTaskId='task-a'
+        onSubmitText={onSubmitText}
+      />,
+    )
+
+    await page.getByTestId('composer-add').click()
+    await page.getByTestId('composer-add-experts-nav').click()
+    await page.getByTestId('capability-expert-expert.xhs-cover').click()
+
+    await expect
+      .element(page.getByTestId('capability-chip-expert-expert.xhs-cover'))
+      .toHaveTextContent('小红书封面专家')
+
+    await userEvent.fill(page.getByTestId('composer-input'), '写一张封面')
+    await page.getByTestId('composer-submit').click()
+
+    await expect.poll(() => onSubmitText.mock.calls.length).toBe(1)
+    expect(onSubmitText.mock.calls[0]?.[0]).toBe('写一张封面')
+    expect(onSubmitText.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        expert: {
+          id: 'expert.xhs-cover',
+          label: '小红书封面专家',
+          instruction: xhsInstruction,
+        },
+      }),
+    )
   })
 
   it('announces account connection failures without adapter diagnostics', async () => {

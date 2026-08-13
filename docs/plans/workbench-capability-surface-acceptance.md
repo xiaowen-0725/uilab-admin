@@ -1,6 +1,6 @@
 # 验收剧本：对话内连接器 / 技能 / 专家 E2E
 
-**Status:** acceptance-in-progress（当前基准为 GitHub/官方 MCP + 飞书/官方 Skills/原生 CLI；Office 统一使用通用 Workspace Shell）
+**Status:** accepted（2026-08-13 Spec-β closeout：Pass，GitHub 真 Broker 证据除外，转 #46/#47。当前基准为 GitHub/官方 MCP + 飞书/官方 Skills/原生 CLI；Office 统一使用通用 Workspace Shell）
 **Spec:** [workbench-capability-surface-spec.md](./workbench-capability-surface-spec.md)
 **修订：**
 
@@ -110,9 +110,9 @@
 
 | #   | 步骤                     | 期望                            | Pass?                                                      |
 | --- | ------------------------ | ------------------------------- | ---------------------------------------------------------- |
-| 4.1 | 小红书封面专家（辅助）   | 芯片；instruction 影响下一 Turn | ☐                                                          |
+| 4.1 | 小红书封面专家（辅助）   | 芯片；instruction 影响下一 Turn | ☑ 2026-08-13 新增 `composer-capability-selection.test.tsx`「shows the xhs-cover chip and forwards its instruction on the next Turn」（芯片 + submit 捕获 instruction）；侧车 `snapshot.test.ts`「selecting xhs-cover keeps catalog instruction on the snapshot for the next Turn」 |
 | 4.2 | `research-brief` skill（辅助） | 芯片                       | ☑ Playwright 真实侧车 UI 选用并在刷新后保留                |
-| 4.3 | Run 中切换专家           | 当前 Run 不变                   | ☐                                                          |
+| 4.3 | Run 中切换专家           | 当前 Run 不变                   | ☑ 2026-08-13 新增 `voltagent-runtime-adapter.test.ts`「keeps the in-flight Run expert overlay after a later expert selection」（Turn 提交捕获 expert overlay；进行中再 submit 不同专家 → `task_busy`；approval resume 仍用原 instruction） |
 | 4.4 | 缺连接仍选依赖飞书的专家 | 允许；提示缺连接                | ☑ 飞书 Switch off 时会议纪要专家与默认 Skill 保留；不假外呼 |
 | 4.5 | 刷新页面                 | 同 Task 选用仍在                | ☑ Playwright reload 后飞书、会议纪要专家、`meeting-notes`、`research-brief` 均保留 |
 
@@ -144,22 +144,22 @@
 
 | 字段                 | 值                                                                                                                            |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 日期                 | 2026-08-09                                                                                                                    |
-| 分支                 | research/capability-surface-reference-models（工作区）                                                                        |
-| 证据                 | [GitHub/MCP + 飞书/CLI 双 Provider](../evidence/capability-surface-github-mcp-feishu-cli-2026-08-09.md)；[既有飞书黄金路径](../evidence/capability-surface-hybrid-expert-golden-2026-08-09.md) |
-| 侧车探针             | 隔离 :3143 + 临时 Workspace → **12/12 PASS**；`effectiveCommandScopes=['lark-cli']`；G.5 真实 stream 命中精确原生 argv 并正确停在 Host 审批 |
+| 日期                 | 2026-08-13                                                                                                                    |
+| 分支                 | main                                                                                                                          |
+| 证据                 | [GitHub/MCP + 飞书/CLI 双 Provider](../evidence/capability-surface-github-mcp-feishu-cli-2026-08-09.md)；[既有飞书黄金路径](../evidence/capability-surface-hybrid-expert-golden-2026-08-09.md)；Spec-β closeout 见 [`workbench-capability-permissions-milestone-spec.md`](./workbench-capability-permissions-milestone-spec.md) §验收清单 |
+| 侧车探针             | 隔离 :3143 + 临时 Workspace → **12/12 PASS**（2026-08-09 既有）；`effectiveCommandScopes=['lark-cli']`；G.5 真实 stream 命中精确原生 argv 并正确停在 Host 审批 |
 | lark-cli             | 1.0.67；CLI session connected；本机官方 `lark-*` Skills 完整同步到 Workspace                                                  |
 | G.5 真模型工具行     | ☑ `deepseek-v4-flash` 读取官方 `lark-doc` / `lark-shared` / `lark-doc-fetch` 后调用 `execute_command(command='lark-cli', args=['docs','+fetch',...])`；UI 批准后成功读取真实文档 |
-| Channel / Expert     | GitHub=mcp、飞书=domain_cli；experts/\*.json + instruction 已挂 snapshot                                                     |
+| Channel / Expert     | GitHub=mcp、飞书=domain_cli；experts/\*.json + instruction 已挂 snapshot；4.1 xhs-cover instruction 与 4.3 in-flight overlay 由自动化闭合 |
 | UI / Switch          | [飞书结构与 WorkBuddy 开关证据](../evidence/capability-surface-feishu-structure-and-workbuddy-switch-2026-08-09.md)；G.5 审批前后截图：`output/playwright/feishu-g5-approval-request.png`、`output/playwright/feishu-g5-success.png` |
-| 自动化回归           | Workbench **314/314**；VoltAgent 侧车 **255/255**；root `pnpm check`；Workbench build 全部通过                         |
+| 自动化回归           | Workbench **383 passed / 1 failed**（既有 `workbench-runtime-slice`「submit → 已处理」侧车环境依赖，不在本切片范围；本切片新增 2 测，既有 381 通过无回归）；侧车 closeout 复跑 `snapshot`+`expert-catalog` **14/14**、`effective-capabilities` **9/9**；`pnpm check:workbench` / `pnpm check:ai` 通过 |
 | doctor 说明          | 飞书 findings 均为 OK；整体 exit 1 仅因同次 doctor 的可选 `mcp.docs/calendar` 未配置                                           |
 | 执行人               |                                                                                                                               |
-| 分支 / commit        |                                                                                                                               |
-| lark-cli 版本 / 路径 |                                                                                                                               |
-| 黄金路径 G.\*        |                                                                                                                               |
-| 失败项与证据         | OAuth 登录取消后的完整 UI、解绑、小红书专家与 Run 中切换专家仍待执行；GitHub 真实 OAuth 待平台 Broker/App 部署                  |
-| 总评 Pass/Fail       | **In progress**（G.5 原生 Skill → Shell → UI approval → 真实 docs 已通过；剩余 auth 边界与辅助 Expert 剧本未收口）             |
+| 分支 / commit        | `main` @ `2d50146`（本切片测试与文档尚未提交）                                                                                |
+| lark-cli 版本 / 路径 | 1.0.67（既有黄金路径记录；本切片未重跑需真密钥的 G.5）                                                                         |
+| 黄金路径 G.\*        | G.1–G.7 ☑（既有 2026-08-09 探针 + 2026-08-12 飞书 CLI 收口）                                                                   |
+| 失败项与证据         | GitHub 真实平台 Broker 未部署（0.1.7 ◐ / 3.4 注记保留，转 #46/#47）。既有 `workbench-runtime-slice`「submit → 已处理」侧车环境依赖用例不在本切片范围。 |
+| 总评 Pass/Fail       | **Pass（GitHub 真 Broker 证据除外，转 #46/#47）**                                                                             |
 
 **总评 Fail（任一）：**
 

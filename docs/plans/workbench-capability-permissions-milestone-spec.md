@@ -1,6 +1,6 @@
 # Spec: Workbench 默认权限 + Capability 收口（Spec-β）
 
-**Status:** drafted（2026-08-12b 口径收缩：权限为主；连接器不重做）  
+**Status:** accepted（2026-08-13 Spec-β closeout：Must/Should 闭合；Optional GitHub 真 Broker 转 #46/#47）  
 **Map:** https://github.com/xiaowen-0725/uilab-admin/issues/88  
 **Vocabulary:** root [`CONTEXT.md`](../../CONTEXT.md)  
 **Parent contract:** [`workbench-capability-surface-spec.md`](./workbench-capability-surface-spec.md)  
@@ -92,22 +92,22 @@ Capability「+」、chips、管理面、飞书 CLI 黄金路径与 Plugin 体系
 
 ### 验收清单
 
-**Must（β 主门）**
+**Must（β 主门）** — 2026-08-13 复跑 3 文件 / 15 通过
 
-- [ ] Composer 旁「默认权限」中文预设（12f 两档：帮我批准 / 完全访问）  
-- [ ] 预设对后续 Turn 审批打扰有可观测影响（非纯 UI）  
-- [ ] 作用域（推荐每 Task）与切换 Project 规则有测试  
-- [ ] 映射表写入 Spec 附录或 Profile，并有自动化覆盖  
+- [x] Composer 旁「默认权限」中文预设（12f 两档：帮我批准 / 完全访问） — `archetypes/agent-workbench/src/modules/task/ui/composer/composer-permission-preset.test.tsx`（默认「帮我批准」；菜单列出两档中文名与说明；可切到「完全访问」）
+- [x] 预设对后续 Turn 审批打扰有可观测影响（非纯 UI） — `archetypes/agent-workbench/src/modules/task/ui/task-surface/task-surface-permission-preset.test.tsx`（`auto-approve`：`write_file` 自动批准并写 Timeline reason，`execute_command`/未知工具弹 Dock；`full-access`：写文件与命令均自动批准）
+- [x] 作用域（推荐每 Task）与切换 Project 规则有测试 — `archetypes/agent-workbench/src/modules/task/application/permission-preset.test.ts`（每 Task 隔离、新 Task/缺 id 回落 `auto-approve`、localStorage 恢复）+ `composer-permission-preset.test.tsx`（Task A `full-access` 时 Task B 仍为默认）
+- [x] 映射表写入 Spec 附录或 Profile，并有自动化覆盖 — 本文件 Appendix A；`permission-preset.test.ts` 的 `decideApprovalResponse` 覆盖白名单写工具 / `execute_command` / 未知工具在两档下的 approve vs dock
 
-**Should（closeout）**
+**Should（closeout）** — 2026-08-13
 
-- [ ] 「+」选用 Connector/Skill/Expert 回归通过  
-- [ ] 飞书：登录 → Connected → 选用 → Turn 可观测工具；取消选用可解释（父 Spec acceptance 对应项闭合）  
-- [ ] Fake/无侧车不假装外呼成功  
+- [x] 「+」选用 Connector/Skill/Expert 回归通过 — Workbench：`capability-add-menu` / `capability-management-surface` / `composer-capability-selection` / `use-capability-snapshot` / `fake-capability-snapshot` / `browser-task-selection-store` / `wait-for-connector-auth` / `capability-keyboard-paths` / `capability-visual-matrix` + `runtime-honesty`（10 文件 / 63 通过）；侧车：`snapshot.test.ts` + `expert-catalog.test.ts`（14 通过）+ `effective-capabilities.test.ts`（9 通过）
+- [x] 飞书：登录 → Connected → 选用 → Turn 可观测工具；取消选用可解释（父 Spec acceptance 对应项闭合） — 父剧本 G.1–G.7 / 2.1 / 2.3 既有 ☑；本切片闭合剩余 **4.1 / 4.3**（见父验收剧本）
+- [x] Fake/无侧车不假装外呼成功 — `fake-capability-snapshot.test.ts`（无假 Connected、`startAuth` 返回 `fake_runtime` 中文诚实文案）+ `composer-capability-selection.test.tsx`（取消登录保持未连接）+ `runtime-honesty.test.ts`
 
 **Optional**
 
-- [ ] GitHub 真实 Broker/App 证据附入 evidence（不挡 Must）
+- [ ] GitHub 真实 Broker/App 证据附入 evidence（不挡 Must） — **转 #46/#47**；父剧本 0.1.7 保持 ◐
 
 ## Out of Scope
 

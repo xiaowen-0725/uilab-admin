@@ -97,6 +97,30 @@ describe('buildCapabilitySnapshot effective algorithm', () => {
     )
   })
 
+  it('selecting xhs-cover keeps catalog instruction on the snapshot for the next Turn', () => {
+    const snap = buildCapabilitySnapshot({
+      descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,
+      version: 1,
+      taskId: 'task-xhs',
+      selection: {
+        connectorIds: [],
+        skillIds: [],
+        expertId: 'expert.xhs-cover',
+      },
+      authStatuses: [],
+      enabledPluginIds: [],
+      packagedToolNames: [],
+    })
+    const expert = snap.experts.find((e) => e.id === 'expert.xhs-cover')
+    assert.ok(expert)
+    assert.equal(expert.taskSelected, true)
+    assert.match(expert.instruction ?? '', /小红书封面专家/)
+    assert.equal(
+      snap.experts.find((e) => e.id === 'expert.office-meeting')?.taskSelected,
+      false,
+    )
+  })
+
   it('globally enabled but not task selected → tools absent', () => {
     const snap = buildCapabilitySnapshot({
       descriptors: BUILTIN_CONNECTOR_DESCRIPTORS,

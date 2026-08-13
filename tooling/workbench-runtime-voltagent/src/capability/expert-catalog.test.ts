@@ -53,6 +53,8 @@ describe('expert catalog', () => {
     assert.ok(meeting?.instruction)
     assert.deepEqual(meeting?.skills, ['meeting-notes'])
     assert.deepEqual(meeting?.connectors, ['connector.feishu'])
+    const xhs = result.experts.find((e) => e.id === 'expert.xhs-cover')
+    assert.ok(xhs?.instruction?.includes('小红书封面'))
   })
 
   it('fallback catalog includes office-meeting instruction', () => {
@@ -61,6 +63,12 @@ describe('expert catalog', () => {
     assert.ok(
       getExpertInstruction('expert.office-meeting', BUILTIN_EXPERT_FALLBACK)?.includes(
         '会议纪要',
+      ),
+    )
+    assert.ok(snap.some((e) => e.id === 'expert.xhs-cover'))
+    assert.ok(
+      getExpertInstruction('expert.xhs-cover', BUILTIN_EXPERT_FALLBACK)?.includes(
+        '小红书封面',
       ),
     )
   })

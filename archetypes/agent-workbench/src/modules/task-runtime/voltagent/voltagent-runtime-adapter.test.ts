@@ -127,6 +127,134 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the in-flight Run expert overlay after a later expert selection', async () => {
+    const xhsInstruction =
+      '你当前以「小红书封面专家」配置包工作：关注封面标题、视觉卖点与合规表述。'
+    const meetingInstruction = '优先结构化会议纪要（议题、决议、待办）。'
+    let call = 0
+    let firstBody = ''
+    let resumeBody = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        firstBody = String(init?.body ?? '')
+        return new Response(
+          hangingSse(
+            [
+              {
+                type: 'tool-call',
+                toolCallId: 'call_xhs',
+                toolName: 'write_file',
+                args: { file_path: '/output/cover.md', content: 'hi' },
+              },
+              {
+                type: 'tool-approval-request',
+                approvalId: 'apr-xhs',
+                toolCall: {
+                  type: 'tool-call',
+                  toolCallId: 'call_xhs',
+                  toolName: 'write_file',
+                  input: { file_path: '/output/cover.md', content: 'hi' },
+                },
+              },
+            ],
+            init?.signal,
+          ),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      resumeBody = String(init?.body ?? '')
+      return new Response(
+        sseBody([
+          { type: 'text-delta', delta: '已写入' },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-13T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-xhs-run')
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-xhs-s',
+      issuedAt: '2026-08-13T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-xhs-s',
+      schemaVersion: 1,
+      taskId: 'task-xhs-run',
+      inputText: '写一张封面',
+      composerContext: {
+        expert: {
+          id: 'expert.xhs-cover',
+          label: '小红书封面专家',
+          instruction: xhsInstruction,
+        },
+      },
+      proposedTurnId: 'turn-xhs',
+      proposedRunId: 'run-xhs',
+    })
+
+    await vi.waitFor(() => expect(firstBody).toContain(xhsInstruction))
+    expect(firstBody).toContain('专家指令')
+    expect(firstBody).toContain('expert.xhs-cover')
+
+    const busy = await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-xhs-busy',
+      issuedAt: '2026-08-13T12:00:01.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-xhs-busy',
+      schemaVersion: 1,
+      taskId: 'task-xhs-run',
+      inputText: '改成会议纪要',
+      composerContext: {
+        expert: {
+          id: 'expert.office-meeting',
+          label: '会议纪要专家',
+          instruction: meetingInstruction,
+        },
+      },
+    })
+    expect(busy.status).toBe('rejected')
+    expect(busy.reasonCode).toBe('task_busy')
+
+    await vi.waitFor(() => {
+      expect(
+        events.some(
+          (event) =>
+            event.kind === 'event' &&
+            event.envelope.eventType === 'approval.requested',
+        ),
+      ).toBe(true)
+    })
+
+    const aprAck = await adapter.sendCommand({
+      type: 'respondToApproval',
+      commandId: 'cmd-xhs-a',
+      issuedAt: '2026-08-13T12:00:02.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-xhs-a',
+      schemaVersion: 1,
+      taskId: 'task-xhs-run',
+      runId: 'run-xhs',
+      turnId: 'turn-xhs',
+      payload: { requestId: 'apr-xhs', decision: 'approved' },
+    })
+    expect(aprAck.status).toBe('accepted')
+
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2))
+    expect(resumeBody).toContain(xhsInstruction)
+    expect(resumeBody).not.toContain(meetingInstruction)
+    expect(resumeBody).not.toContain('expert.office-meeting')
+  })
+
   it('treats a DONE-only stream as a completed run', async () => {
     const encoder = new TextEncoder()
     const fetchImpl = vi.fn(
