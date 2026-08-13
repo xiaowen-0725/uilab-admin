@@ -1,5 +1,6 @@
 /**
- * Live Plan smoke (#101). Default `pnpm test` skips unless the sidecar is up.
+ * Live Plan smoke (#101). Default `pnpm test` skips unless
+ * VITE_WORKBENCH_LIVE_RUNTIME=1 and the sidecar is reachable.
  * Live: `pnpm dev:workbench-runtime` then `pnpm --filter @uilab/agent-workbench test:live-runtime`.
  */
 import { WorkbenchApp } from '@/app/composition/workbench-app'
@@ -9,9 +10,11 @@ import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
 const LIVE_SIDECAR_PROBE_MS = 2000
-const LIVE_PLAN_TIMEOUT_MS = 180_000
+const LIVE_PLAN_TIMEOUT_MS = 200_000
+const LIVE_PLAN_STEPS_TIMEOUT_MS = 170_000
 const LIVE_RUNTIME_SLICE_HOWTO =
   '完整 Runtime 切片：先 pnpm dev:workbench-runtime，再 pnpm --filter @uilab/agent-workbench test:live-runtime。'
+const PLAN_TOOL_ROW_COPY = /正在更新计划|已更新计划/
 
 const LIVE_PLAN_PROMPT =
   '请先列出计划再执行，每完成一步立刻更新计划。只做只读两步：1) 列出工作区根目录有哪些文件；2) 阅读 README.md。计划步骤用中文短语，至少两步，开始时恰好一步进行中。不要写文件。'
@@ -50,6 +53,29 @@ async function openNewChat() {
     .toHaveAttribute('data-composer-mode', 'runtime')
 }
 
+async function ensureProcessFoldOpen() {
+  await expect
+    .poll(
+      () => document.querySelector('[data-kind="process-fold"]') != null,
+      { timeout: 15_000 },
+    )
+    .toBe(true)
+
+  const fold = document.querySelector('[data-kind="process-fold"]')
+  if (fold?.getAttribute('data-fold-open') === 'true') return
+
+  await userEvent.click(page.getByTestId('timeline-turn-toggle'))
+  await expect
+    .poll(
+      () =>
+        document
+          .querySelector('[data-kind="process-fold"]')
+          ?.getAttribute('data-fold-open') === 'true',
+      { timeout: 5_000 },
+    )
+    .toBe(true)
+}
+
 describe('Workbench Plan live sidecar', () => {
   it(
     'live sidecar: multi-stage task surfaces a plan snapshot without an update_plan tool row',
@@ -79,7 +105,7 @@ describe('Workbench Plan live sidecar', () => {
       await expect
         .poll(
           () => document.querySelectorAll('[data-testid="context-panel-plan-step"]').length,
-          { timeout: LIVE_PLAN_TIMEOUT_MS - 10_000 },
+          { timeout: LIVE_PLAN_STEPS_TIMEOUT_MS },
         )
         .toBeGreaterThanOrEqual(2)
 
@@ -97,10 +123,12 @@ describe('Workbench Plan live sidecar', () => {
         statuses.some((status) => status === 'in_progress' || status === 'completed'),
       ).toBe(true)
 
+      await ensureProcessFoldOpen()
+
       await expect
         .poll(
           () => document.querySelectorAll('[data-category="plan-update"]').length,
-          { timeout: 30_000 },
+          { timeout: 10_000 },
         )
         .toBeGreaterThanOrEqual(1)
 
@@ -109,6 +137,7 @@ describe('Workbench Plan live sidecar', () => {
       ]
         .map((el) => el.textContent ?? '')
         .join('\n')
+      expect(toolText).not.toMatch(PLAN_TOOL_ROW_COPY)
       expect(toolText).not.toMatch(/update_plan/)
 
       await expect
