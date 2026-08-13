@@ -1,0 +1,12 @@
+{
+  "taskId": "task-msrp9buq-1",
+  "afterReload": {
+    "restoreBanner": "已从本地存储恢复时间线",
+    "progress": "3/3",
+    "steps": [
+      { "status": "completed", "text": "列出工作区根目录的文件" },
+      { "status": "completed", "text": "阅读 notes 目录下已有文件" },
+      { "status": "completed", "text": "将三句话摘要写入 /output/plan-smoke-notes.md" }
+    ]
+  }
+}
