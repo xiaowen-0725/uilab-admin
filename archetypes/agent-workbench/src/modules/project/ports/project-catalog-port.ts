@@ -41,6 +41,9 @@ export interface ProjectCatalogPort {
 
   putProject(project: ProjectRecord): Promise<void>
 
+  /** Remove the project row only. Task rows are deleted by the controller. */
+  deleteProject(projectId: ProjectId): Promise<void>
+
   listTasks(projectId?: ProjectId): Promise<readonly TaskCatalogRow[]>
 
   getTask(taskId: TaskId): Promise<TaskCatalogRow | null>

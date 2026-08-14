@@ -10,10 +10,12 @@ import {
 } from './local-root-path'
 import type { HostPort } from '../ports/host-port'
 import { HostUnavailableError } from '../ports/host-port'
-import type {
-  ProjectId,
-  ProjectRecord,
-  ProjectSummary,
+import {
+  DEFAULT_PROJECT_ID,
+  isSpecifiedWorkProject,
+  type ProjectId,
+  type ProjectRecord,
+  type ProjectSummary,
 } from '../model/types'
 
 export type OpenFolderResult =
@@ -30,8 +32,22 @@ export interface ProjectLocalRootCommands {
   openLocalFolder(): Promise<OpenFolderResult>
   createProject(name?: string): Promise<ProjectRecord>
   ensureProjectForNewChat(): Promise<ProjectRecord>
+  /** Leave a specified work project; reuse or create the unspecified auto/default. */
+  useUnspecifiedProject(): Promise<ProjectRecord>
   getCurrentRoot(): { projectId: string; localRoot: string } | null
+  /**
+   * Start the sidecar for the selected project if needed.
+   * Skips when Host already reports ready on the same root.
+   */
+  ensureRuntimeForSelectedProject(): Promise<void>
   assertWritableRuntime(): Promise<WritableRuntimeGate>
+  /**
+   * Join an in-flight start, then poll until the selected root is writable.
+   * Use this on send — snapshot assert is too eager during project switch.
+   */
+  waitForWritableRuntime(options?: {
+    timeoutMs?: number
+  }): Promise<WritableRuntimeGate>
 }
 
 export interface ProjectLocalRootCommandDeps {
@@ -45,6 +61,8 @@ export interface ProjectLocalRootCommandDeps {
    * Used to close the selectProject → startRuntime IPC race.
    */
   fetchWorkspaceRoot?: () => Promise<string | null>
+  /** Background startRuntime failures; must not block catalog selection. */
+  onRuntimeError?: (err: unknown) => void
 }
 
 const NO_ROOT_WRITE_MESSAGE =
@@ -72,12 +90,93 @@ export function createProjectLocalRootCommands(
     return { projectId: record.id, localRoot: record.localRoot }
   }
 
+  let runtimeStart: Promise<void> | null = null
+  let runtimeStartRoot: string | null = null
+
+  async function isLiveRoot(root: string): Promise<'match' | 'mismatch' | 'unknown'> {
+    if (!deps.fetchWorkspaceRoot) return 'unknown'
+    const live = await deps.fetchWorkspaceRoot()
+    if (!live) return 'unknown'
+    try {
+      return normalizeLocalRoot(live) === root ? 'match' : 'mismatch'
+    } catch {
+      return 'unknown'
+    }
+  }
+
+  async function ensureRuntime(
+    localRoot: string | null | undefined,
+  ): Promise<void> {
+    if (!deps.host.isAvailable() || !localRoot) return
+    const root = normalizeLocalRoot(localRoot)
+    if (runtimeStart && runtimeStartRoot === root) {
+      return runtimeStart
+    }
+
+    // Assign in-flight before any await so overlapping callers join
+    // instead of issuing a second startRuntime (which kills the sidecar).
+    const work = (async () => {
+      const status = await deps.host.getRuntimeStatus()
+      if (status === 'ready') {
+        const live = await isLiveRoot(root)
+        if (live === 'match' || live === 'unknown') return
+      }
+      await deps.host.startRuntime(root)
+    })()
+    runtimeStartRoot = root
+    runtimeStart = work.finally(() => {
+      if (runtimeStartRoot === root) {
+        runtimeStart = null
+        runtimeStartRoot = null
+      }
+    })
+    return runtimeStart
+  }
+
+  function startRuntimeInBackground(localRoot: string | null | undefined): void {
+    void ensureRuntime(localRoot).catch((err) => {
+      deps.onRuntimeError?.(err)
+    })
+  }
+
   async function activate(project: ProjectRecord): Promise<void> {
     deps.catalog.setFocusedProject(project.id)
     deps.selectProject(project.id)
-    if (deps.host.isAvailable() && project.localRoot) {
-      await deps.host.startRuntime(project.localRoot)
+    startRuntimeInBackground(project.localRoot)
+  }
+
+  function findUnspecifiedProject(): ProjectRecord | null {
+    const records = deps.catalog
+      .getView()
+      .projects
+      .map((summary) => deps.catalog.getProjectRecord(summary.id))
+      .filter(
+        (row): row is ProjectRecord =>
+          row != null && !isSpecifiedWorkProject(row),
+      )
+    return (
+      records.find((row) => row.id === DEFAULT_PROJECT_ID) ??
+      records.find((row) => row.rootSource === 'auto') ??
+      records[0] ??
+      null
+    )
+  }
+
+  async function createAutoProject(): Promise<ProjectRecord> {
+    if (!deps.host.isAvailable()) {
+      throw new HostUnavailableError()
     }
+    await deps.host.ensureProjectsHome()
+    const localRoot = await deps.host.createProjectDirectory('项目')
+    const project = await deps.catalog.createProject(
+      basenameOfRoot(localRoot),
+      {
+        localRoot,
+        rootSource: 'auto',
+      },
+    )
+    await activate(project)
+    return project
   }
 
   return {
@@ -119,10 +218,13 @@ export function createProjectLocalRootCommands(
       await deps.host.ensureProjectsHome()
       const preferred = name?.trim() || '未命名项目'
       const localRoot = await deps.host.createProjectDirectory(preferred)
-      const project = await deps.catalog.createProject(preferred, {
-        localRoot,
-        rootSource: 'created',
-      })
+      const project = await deps.catalog.createProject(
+        basenameOfRoot(localRoot),
+        {
+          localRoot,
+          rootSource: 'created',
+        },
+      )
       await activate(project)
       return project
     },
@@ -131,55 +233,91 @@ export function createProjectLocalRootCommands(
       const selectedId = deps.getSelectedProjectId()
       if (selectedId) {
         const existing = deps.catalog.getProjectRecord(selectedId)
-        if (existing) return existing
+        if (existing) {
+          startRuntimeInBackground(existing.localRoot)
+          return existing
+        }
       }
-      if (!deps.host.isAvailable()) {
-        throw new HostUnavailableError()
+      const unspecified = findUnspecifiedProject()
+      if (unspecified) {
+        await activate(unspecified)
+        return unspecified
       }
-      await deps.host.ensureProjectsHome()
-      const localRoot = await deps.host.createProjectDirectory('项目')
-      const project = await deps.catalog.createProject(
-        basenameOfRoot(localRoot),
-        {
-          localRoot,
-          rootSource: 'auto',
-        },
-      )
-      await activate(project)
-      return project
+      return createAutoProject()
+    },
+
+    async useUnspecifiedProject() {
+      const unspecified = findUnspecifiedProject()
+      if (unspecified) {
+        await activate(unspecified)
+        return unspecified
+      }
+      return createAutoProject()
     },
 
     getCurrentRoot() {
       return currentRoot()
     },
 
+    async ensureRuntimeForSelectedProject() {
+      await ensureRuntime(currentRoot()?.localRoot)
+    },
+
     async assertWritableRuntime() {
+      return snapshotWritableRuntime()
+    },
+
+    async waitForWritableRuntime(options?: { timeoutMs?: number }) {
       if (!deps.host.isAvailable()) {
-        // Web / test 降级：侧车由开发者独立启动，不由 Host 管生命周期。
         return { ok: true }
       }
       const root = currentRoot()
       if (!root) {
         return { ok: false, message: NO_ROOT_WRITE_MESSAGE }
       }
-      const status = await deps.host.getRuntimeStatus()
-      if (status !== 'ready') {
+      try {
+        await ensureRuntime(root.localRoot)
+      } catch {
         return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
       }
-      if (deps.fetchWorkspaceRoot) {
-        const live = await deps.fetchWorkspaceRoot()
-        if (!live) {
-          return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
-        }
-        try {
-          if (normalizeLocalRoot(live) !== normalizeLocalRoot(root.localRoot)) {
-            return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
-          }
-        } catch {
-          return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
-        }
+
+      const timeoutMs = options?.timeoutMs ?? 8_000
+      const startedAt = Date.now()
+      let snapshot = await snapshotWritableRuntime()
+      while (!snapshot.ok && Date.now() - startedAt < timeoutMs) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        snapshot = await snapshotWritableRuntime()
       }
-      return { ok: true }
+      return snapshot
     },
+  }
+
+  async function snapshotWritableRuntime(): Promise<WritableRuntimeGate> {
+    if (!deps.host.isAvailable()) {
+      // Web / test 降级：侧车由开发者独立启动，不由 Host 管生命周期。
+      return { ok: true }
+    }
+    const root = currentRoot()
+    if (!root) {
+      return { ok: false, message: NO_ROOT_WRITE_MESSAGE }
+    }
+    const status = await deps.host.getRuntimeStatus()
+    if (status !== 'ready') {
+      return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
+    }
+    if (deps.fetchWorkspaceRoot) {
+      const live = await deps.fetchWorkspaceRoot()
+      if (!live) {
+        return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
+      }
+      try {
+        if (normalizeLocalRoot(live) !== normalizeLocalRoot(root.localRoot)) {
+          return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
+        }
+      } catch {
+        return { ok: false, message: RUNTIME_NOT_READY_MESSAGE }
+      }
+    }
+    return { ok: true }
   }
 }

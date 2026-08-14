@@ -1,6 +1,8 @@
 /**
- * Task lifecycle commands — new chat (blank-draft once) + hard delete cascade.
- * Shell only receives callbacks; this unit owns catalog / EventStore / pointer updates.
+ * Task lifecycle commands — new chat (blank-draft once), hard delete, and
+ * remove-project-from-list. Shell only receives callbacks; this unit owns
+ * catalog / EventStore / pointer updates. Removing a project never deletes
+ * the local folder.
  */
 import { deleteTaskCascade } from '@/app/persistence/workbench-idb'
 import {
@@ -21,20 +23,28 @@ export type NewChatDecision =
   | { kind: 'reselect'; taskId: string }
   | { kind: 'create' }
 
+function isUsableBlankDraft(
+  row: TaskCatalogRow | null | undefined,
+  projectId: string,
+): row is TaskCatalogRow {
+  return row != null && row.projectId === projectId && isBlankDraftTask(row)
+}
+
 /**
  * Blank unused draft → re-select only (Codex / WorkBuddy: 新对话只开一次).
  */
 export function decideNewChat(input: {
   selectedProjectId: string
   selectedTask: TaskCatalogRow | null
+  /** Unused 新对话 already in this project (WorkBuddy: open once). */
+  blankDraftInProject?: TaskCatalogRow | null
 }): NewChatDecision {
-  const { selectedProjectId, selectedTask } = input
-  if (
-    selectedTask &&
-    selectedTask.projectId === selectedProjectId &&
-    isBlankDraftTask(selectedTask)
-  ) {
+  const { selectedProjectId, selectedTask, blankDraftInProject } = input
+  if (isUsableBlankDraft(selectedTask, selectedProjectId)) {
     return { kind: 'reselect', taskId: selectedTask.id }
+  }
+  if (isUsableBlankDraft(blankDraftInProject, selectedProjectId)) {
+    return { kind: 'reselect', taskId: blankDraftInProject.id }
   }
   return { kind: 'create' }
 }
@@ -183,5 +193,107 @@ export async function hardDeleteTask(
     nextSelectedTaskId: nextSelected,
     lastTaskByProject,
     selectionChanged: selectedTaskId === deleteTaskId,
+  }
+}
+
+export interface RemoveProjectFromListInput {
+  projectId: string
+  catalog: ProjectCatalogController
+  eventStore: EventStorePort | null
+  runStatusIndex: RunStatusIndex
+  runtimeController: TaskRuntimeController | null
+  activeTaskId: string | null
+  selectedTaskId: string | null
+  selectedProjectId: string | null
+  lastTaskByProject: Record<string, string | null>
+  activeRunStatus?: RunStatus | null
+  cancelTimeoutMs?: number
+  onTaskDeleted?: (taskId: string) => void | Promise<void>
+}
+
+export interface RemoveProjectFromListResult {
+  removedTaskIds: string[]
+  nextSelectedProjectId: string | null
+  nextSelectedTaskId: string | null
+  lastTaskByProject: Record<string, string | null>
+  selectionChanged: boolean
+}
+
+/**
+ * Drop a project from the catalog and cascade its task records.
+ * Does not delete the filesystem folder.
+ */
+export async function removeProjectFromList(
+  input: RemoveProjectFromListInput,
+): Promise<RemoveProjectFromListResult> {
+  const {
+    projectId,
+    catalog,
+    eventStore,
+    runStatusIndex,
+    runtimeController,
+    activeTaskId,
+    selectedTaskId,
+    selectedProjectId,
+    activeRunStatus,
+    cancelTimeoutMs = 3000,
+  } = input
+
+  const taskIds = catalog.listTasksInProject(projectId).map((row) => row.id)
+  const removingSelected = selectedProjectId === projectId
+  const selectedTaskInProject =
+    selectedTaskId != null && taskIds.includes(selectedTaskId)
+
+  if (activeTaskId && taskIds.includes(activeTaskId) && runtimeController) {
+    const status = runStatusIndex.get(activeTaskId)
+    if (isNavigatorBusyStatus(status ?? activeRunStatus)) {
+      try {
+        await Promise.race([
+          runtimeController.cancelActiveRun(),
+          new Promise((resolve) => setTimeout(resolve, cancelTimeoutMs)),
+        ])
+      } catch {
+        // continue list removal
+      }
+    }
+    runtimeController.detach()
+  }
+
+  for (const taskId of taskIds) {
+    await eventStore?.deleteTaskData(taskId)
+    runStatusIndex.clear(taskId)
+    await input.onTaskDeleted?.(taskId)
+  }
+
+  await catalog.removeProject(projectId)
+
+  const { [projectId]: _removed, ...lastRest } = input.lastTaskByProject
+  const remaining = catalog.getView().projects
+  const nextSelectedProjectId = removingSelected
+    ? (remaining[0]?.id ?? null)
+    : selectedProjectId
+
+  let nextSelectedTaskId: string | null
+  if (removingSelected || selectedTaskInProject) {
+    if (nextSelectedProjectId) {
+      const remembered = lastRest[nextSelectedProjectId] ?? null
+      nextSelectedTaskId =
+        remembered && catalog.getTaskRow(remembered) ? remembered : null
+    } else {
+      nextSelectedTaskId = null
+    }
+  } else {
+    nextSelectedTaskId =
+      selectedTaskId && catalog.getTaskRow(selectedTaskId)
+        ? selectedTaskId
+        : null
+  }
+
+  return {
+    removedTaskIds: taskIds,
+    nextSelectedProjectId,
+    nextSelectedTaskId,
+    lastTaskByProject: lastRest,
+    selectionChanged: removingSelected || selectedTaskInProject,
   }
 }

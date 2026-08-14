@@ -105,6 +105,28 @@ function buildComponents(onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef']) {
           />
         )
       }
+      const httpUrl =
+        href && /^https?:\/\//i.test(href) ? href : null
+      if (httpUrl && onOpenFileRef) {
+        return (
+          <a
+            {...rest}
+            href={httpUrl}
+            data-testid='timeline-url-link'
+            className='font-medium underline-offset-2 hover:underline'
+            style={{ color: 'color(srgb 0.511373 0.712157 0.900392)' }}
+            onClick={(event) => {
+              event.preventDefault()
+              onOpenFileRef({
+                path: httpUrl,
+                label: childText || httpUrl,
+              })
+            }}
+          >
+            {children}
+          </a>
+        )
+      }
       return (
         <a
           {...rest}

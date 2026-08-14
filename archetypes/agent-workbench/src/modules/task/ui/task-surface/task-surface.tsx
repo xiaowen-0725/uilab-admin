@@ -20,7 +20,7 @@ import {
   ApprovalDock,
   findPendingApproval,
 } from '../approval-dock/approval-dock'
-import { Composer } from '../composer/composer'
+import { Composer, type ComposerProjectPicker } from '../composer/composer'
 import { ContextPanel } from '../context-panel/context-panel'
 import { EmptyHub } from '../empty-hub/empty-hub'
 import { ExecutionStream } from '../execution-stream/execution-stream'
@@ -72,6 +72,8 @@ export interface TaskSurfaceComposerRuntime {
   capabilityTaskId?: string | null
   /** Open the shared global capability management Surface. */
   onManageCapabilities?: () => void
+  /** Same Project catalog + Host commands as Navigator. */
+  projectPicker?: ComposerProjectPicker | null
 }
 
 export interface TaskSurfaceProps {
@@ -193,7 +195,6 @@ export function TaskSurface({
             />
           ) : (
             <EmptyHub
-              projectName={view.projectName}
               actions={view.launchActions}
               onSelectAction={handleLaunch}
             />
@@ -218,6 +219,7 @@ export function TaskSurface({
                 composerRuntime?.capabilityTaskId ?? view.taskId
               }
               onManageCapabilities={composerRuntime?.onManageCapabilities}
+              projectPicker={composerRuntime?.projectPicker}
               // Codex top-rail stack: rail always on for depth; project chip only on empty hub.
               showContextBar
               showProjectChip={view.mode === 'empty'}

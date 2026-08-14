@@ -13,6 +13,7 @@ export {
   createDefaultProject,
   createTaskCatalogRow,
   isBlankDraftTask,
+  isSpecifiedWorkProject,
   normalizeProjectRecord,
   sortProjects,
   sortTasksByUpdatedAt,
@@ -83,6 +84,11 @@ export type {
   ProjectCatalogListener,
 } from './application/project-catalog-controller'
 export { useProjectCatalog } from './application/use-project-catalog'
+export { buildNavigatorTaskRail } from './application/navigator-task-rail'
+export type {
+  NavigatorProjectGroup,
+  NavigatorTaskRail,
+} from './application/navigator-task-rail'
 export {
   createProjectLocalRootCommands,
 } from './application/project-local-root-commands'

@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils'
 import type { LaunchAction } from '../../model/types'
 
 export interface EmptyHubProps {
-  projectName: string
   actions: LaunchAction[]
   onSelectAction: (action: LaunchAction) => void
 }
@@ -22,12 +21,8 @@ const ACTION_VISUAL = {
   fix: { Icon: Bug, className: 'text-orange-400' },
 } as const
 
-/**
- * Empty / new-task hub: project question + launch cards (shadcn Card).
- * Clicks are fixture-honest (parent loads a capture or prompt stub).
- */
+/** New-task hub: greeting + launch cards. Project is chosen on the Composer chip. */
 export function EmptyHub({
-  projectName,
   actions,
   onSelectAction,
 }: EmptyHubProps) {
@@ -44,11 +39,7 @@ export function EmptyHub({
         className='max-w-xl text-center text-xl font-medium tracking-tight text-foreground'
         data-testid='empty-hub-title'
       >
-        要在{' '}
-        <span className='underline decoration-dotted underline-offset-4'>
-          {projectName}
-        </span>{' '}
-        内开发什么？
+        今天帮你做些什么？
       </h2>
 
       <div

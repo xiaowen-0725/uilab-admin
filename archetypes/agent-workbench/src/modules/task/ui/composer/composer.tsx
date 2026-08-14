@@ -126,6 +126,28 @@ export interface ComposerProps {
   capabilityTaskId?: string | null
   /** Open the shared global capability management Surface. */
   onManageCapabilities?: () => void
+  /**
+   * Product catalog + Host commands (same face as Navigator).
+   * When set, create/open/select do not use the local-sim fixture catalog.
+   */
+  projectPicker?: ComposerProjectPicker | null
+}
+
+export interface ComposerProjectOption {
+  id: string
+  name: string
+  /** User-opened/created work root. Unspecified auto/default stay off the list. */
+  specified?: boolean
+}
+
+export interface ComposerProjectPicker {
+  projects: ComposerProjectOption[]
+  selectedProjectId: string | null
+  hostAvailable: boolean
+  onSelectProject: (projectId: string) => void
+  onOpenLocalFolder: () => void
+  onCreateProject: (name?: string) => void
+  onClearProject: () => void
 }
 
 const EFFORT_LABELS = ['最低', '低', '标准', '高', '极高'] as const
@@ -147,6 +169,7 @@ const FIXTURE_PROJECT_NAMES = [
   'parking-agent',
   'ake-hermes-agent',
 ] as const
+const SELECT_PROJECT_CHIP_LABEL = '选择项目'
 
 type SlashKind = 'command' | 'mode' | 'skill'
 
@@ -254,6 +277,22 @@ function uniqueProjectNames(
   )
 }
 
+function isSpecifiedProjectOption(item: ComposerProjectOption): boolean {
+  return item.specified !== false
+}
+
+function resolveSpecifiedProjectName(
+  picker: ComposerProjectPicker | null | undefined,
+  fixtureProject: string | null,
+): string | null {
+  if (!picker) return fixtureProject
+  const selected = picker.projects.find(
+    (item) => item.id === picker.selectedProjectId,
+  )
+  if (!selected || !isSpecifiedProjectOption(selected)) return null
+  return selected.name
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -337,6 +376,7 @@ export function TaskComposer({
   capabilityController = null,
   capabilityTaskId = null,
   onManageCapabilities,
+  projectPicker = null,
 }: ComposerProps) {
   const honesty = VOLTAGENT_RUNTIME_HONESTY_COPY
   const noticeId = useId()
@@ -597,11 +637,21 @@ export function TaskComposer({
     </span>
   )
 
+  const pickerProjects = projectPicker?.projects ?? null
+  const specifiedProjectName = resolveSpecifiedProjectName(projectPicker, project)
+  const projectChipLabel = specifiedProjectName ?? SELECT_PROJECT_CHIP_LABEL
+  const showClearProject = specifiedProjectName != null
+
   const filteredProjects = useMemo(() => {
     const q = projectQuery.trim().toLowerCase()
+    if (pickerProjects) {
+      const specified = pickerProjects.filter(isSpecifiedProjectOption)
+      if (!q) return specified
+      return specified.filter((item) => item.name.toLowerCase().includes(q))
+    }
     if (!q) return projectCatalog
     return projectCatalog.filter((name) => name.toLowerCase().includes(q))
-  }, [projectCatalog, projectQuery])
+  }, [pickerProjects, projectCatalog, projectQuery])
 
   const selectProject = useCallback((name: string, noticeText: string) => {
     setProject(name)
@@ -617,24 +667,38 @@ export function TaskComposer({
   }, [])
 
   const openCreateProjectDialog = useCallback(() => {
+    if (projectPicker && !projectPicker.hostAvailable) return
     setProjectOpen(false)
     setCreateProjectName('')
     setCreateProjectOpen(true)
-  }, [])
+  }, [projectPicker])
 
   const confirmCreateProject = useCallback(() => {
     const name = createProjectName.trim()
     if (!name) return
+    if (projectPicker) {
+      projectPicker.onCreateProject(name)
+      setCreateProjectOpen(false)
+      setCreateProjectName('')
+      setProjectOpen(false)
+      setNotice(`已新建项目「${name}」`)
+      return
+    }
     selectProject(
       name,
       `已新建项目「${name}」（本地模拟，未真实创建磁盘文件夹）`
     )
     setCreateProjectOpen(false)
     setCreateProjectName('')
-  }, [createProjectName, selectProject])
+  }, [createProjectName, projectPicker, selectProject])
 
   const openLocalFolder = useCallback(async () => {
     setProjectOpen(false)
+    if (projectPicker) {
+      if (!projectPicker.hostAvailable) return
+      projectPicker.onOpenLocalFolder()
+      return
+    }
     const name = await pickLocalDirectoryName()
     if (!name) {
       setNotice('未选择文件夹（已取消或浏览器不支持）')
@@ -644,7 +708,7 @@ export function TaskComposer({
       name,
       `已打开本地文件夹「${name}」（仅记录目录名，未挂载完整文件系统）`
     )
-  }, [selectProject])
+  }, [projectPicker, selectProject])
 
   const stripTrailingSlash = useCallback(() => {
     const q = getTrailingSlashQuery(text)
@@ -1089,10 +1153,10 @@ export function TaskComposer({
                 label={
                   <span className='flex items-center gap-1.5'>
                     <Folder className='size-4' />
-                    {project ?? '选择项目'}
+                    {projectChipLabel}
                   </span>
                 }
-                aria-label={project ? '切换项目' : '选择项目'}
+                aria-label={specifiedProjectName ? '切换项目' : '选择项目'}
                 align='start'
                 open={projectOpen}
                 onOpenChange={setProjectOpen}
@@ -1109,7 +1173,7 @@ export function TaskComposer({
                       type='search'
                       value={projectQuery}
                       onChange={(e) => setProjectQuery(e.target.value)}
-                      placeholder='搜索工作空间'
+                      placeholder='搜索项目'
                       data-testid='composer-project-search'
                       className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground'
                       onKeyDown={(e) => e.stopPropagation()}
@@ -1125,19 +1189,31 @@ export function TaskComposer({
                         无匹配项目
                       </p>
                     ) : (
-                      filteredProjects.map((name) => {
-                        const selected = name === project
+                      filteredProjects.map((item) => {
+                        const option =
+                          typeof item === 'string'
+                            ? { id: item, name: item }
+                            : item
+                        const selected = projectPicker
+                          ? option.id === projectPicker.selectedProjectId
+                          : option.name === project
                         return (
                           <button
-                            key={name}
+                            key={option.id}
                             type='button'
-                            data-testid={`composer-project-option-${name}`}
-                            onClick={() =>
+                            data-testid={`composer-project-option-${option.id}`}
+                            onClick={() => {
+                              if (projectPicker) {
+                                projectPicker.onSelectProject(option.id)
+                                setProjectOpen(false)
+                                setNotice(`项目已切换为「${option.name}」`)
+                                return
+                              }
                               selectProject(
-                                name,
-                                `项目已切换为「${name}」（本地，未接远程）`
+                                option.name,
+                                `项目已切换为「${option.name}」（本地，未接远程）`
                               )
-                            }
+                            }}
                             className='flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-[var(--wb-hover)]'
                           >
                             <Folder
@@ -1145,7 +1221,7 @@ export function TaskComposer({
                               aria-hidden
                             />
                             <span className='min-w-0 flex-1 truncate'>
-                              {name}
+                              {option.name}
                             </span>
                             {selected ? (
                               <Check
@@ -1167,6 +1243,12 @@ export function TaskComposer({
                   <ComposerMenuItem
                     icon={<Plus className='size-4' />}
                     onSelect={openCreateProjectDialog}
+                    disabled={Boolean(projectPicker && !projectPicker.hostAvailable)}
+                    title={
+                      projectPicker && !projectPicker.hostAvailable
+                        ? '当前是浏览器环境，新建项目需要桌面宿主'
+                        : '新建项目'
+                    }
                     data-testid='composer-project-create'
                   >
                     新建项目
@@ -1176,12 +1258,26 @@ export function TaskComposer({
                     onSelect={() => {
                       void openLocalFolder()
                     }}
+                    disabled={Boolean(projectPicker && !projectPicker.hostAvailable)}
+                    title={
+                      projectPicker && !projectPicker.hostAvailable
+                        ? '当前是浏览器环境，打开本地文件夹需要桌面宿主'
+                        : '打开本地文件夹'
+                    }
                     data-testid='composer-project-open-folder'
                   >
                     打开本地文件夹
                   </ComposerMenuItem>
+                  {projectPicker && !projectPicker.hostAvailable ? (
+                    <p
+                      className='px-2 py-1.5 text-[11px] leading-4 text-muted-foreground'
+                      data-testid='composer-project-host-unavailable'
+                    >
+                      浏览器环境无法选择本地文件夹，桌面宿主下可打开或新建项目
+                    </p>
+                  ) : null}
 
-                  {project ? (
+                  {showClearProject ? (
                     <>
                       <div
                         className='my-1 h-px bg-[var(--wb-divider)]'
@@ -1189,7 +1285,15 @@ export function TaskComposer({
                       />
                       <ComposerMenuItem
                         icon={<FolderX className='size-4' />}
-                        onSelect={clearProject}
+                        onSelect={() => {
+                          if (projectPicker) {
+                            projectPicker.onClearProject()
+                            setProjectOpen(false)
+                            setNotice('已取消使用项目')
+                            return
+                          }
+                          clearProject()
+                        }}
                         data-testid='composer-project-clear'
                       >
                         不使用项目
@@ -1527,7 +1631,9 @@ export function TaskComposer({
           <DialogHeader>
             <DialogTitle>新建项目</DialogTitle>
             <DialogDescription>
-              为项目命名。当前为本地模拟：不会在磁盘创建同名文件夹，仅写入工作台状态。
+              {projectPicker
+                ? '将在 Projects Home 下创建同名文件夹，并设为当前项目。'
+                : '为项目命名。当前为本地模拟：不会在磁盘创建同名文件夹，仅写入工作台状态。'}
             </DialogDescription>
           </DialogHeader>
           <Input

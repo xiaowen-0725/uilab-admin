@@ -231,6 +231,28 @@ export class ProjectCatalogController {
   }
 
   /**
+   * Drop a project and its catalog tasks. Does not touch the filesystem.
+   * Returns removed task ids so Composition can cascade EventStore data.
+   */
+  async removeProject(projectId: ProjectId): Promise<TaskId[]> {
+    if (!this.projects.some((row) => row.id === projectId)) return []
+    const taskIds = this.tasks
+      .filter((row) => row.projectId === projectId)
+      .map((row) => row.id)
+    for (const taskId of taskIds) {
+      await this.catalog.deleteTaskRow(taskId)
+    }
+    await this.catalog.deleteProject(projectId)
+    this.tasks = this.tasks.filter((row) => row.projectId !== projectId)
+    this.projects = this.projects.filter((row) => row.id !== projectId)
+    if (this.focusedProjectId === projectId) {
+      this.focusedProjectId = this.projects[0]?.id ?? null
+    }
+    this.emit()
+    return taskIds
+  }
+
+  /**
    * Remove catalog row from local state after durable cascade delete.
    * Prefer Composition calling deleteTaskCascade on IDB shell, then this.
    */

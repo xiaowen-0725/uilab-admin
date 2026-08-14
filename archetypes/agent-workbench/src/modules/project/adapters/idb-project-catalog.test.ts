@@ -56,4 +56,16 @@ describe('IdbProjectCatalog root fields', () => {
     )
     db.close()
   })
+
+  it('deleteProject removes the project row', async () => {
+    const db = await openWorkbenchIdb({ name: DB_NAME })
+    const catalog = createIdbProjectCatalog(db)
+    await catalog.putProject(createDefaultProject())
+    expect(await catalog.getProject(DEFAULT_PROJECT_ID)).toBeTruthy()
+
+    await catalog.deleteProject(DEFAULT_PROJECT_ID)
+    expect(await catalog.getProject(DEFAULT_PROJECT_ID)).toBeNull()
+    expect(await catalog.listProjects()).toHaveLength(0)
+    db.close()
+  })
 })

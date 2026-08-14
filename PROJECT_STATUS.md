@@ -1,6 +1,6 @@
 # uilab-admin 项目状态快照
 
-> 更新时间：2026-08-04
+> 更新时间：2026-08-14
 > 分支：`main`
 > 架构基线提交：`81731f8`
 > Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C `c84be8d`
@@ -14,7 +14,7 @@
 
 ## 1. 一句话定位
 
-仓库已演进为中立 **Template Platform**：可运行 Archetype 为 Admin Console（`archetypes/admin`）与 Agent Workbench Phase 3 静态 Shell（`archetypes/agent-workbench`）。技术栈：Vite + React 19 + TS + Tailwind 4 + 官方 shadcn **Base UI** + TanStack。
+仓库已演进为中立 **Template Platform**：可运行 Archetype 为 Admin Console（`archetypes/admin`）与 Agent Workbench（`archetypes/agent-workbench`：Shell + Project/Task 目录 + 本机 VoltAgent 侧车 + Spec-α Electron）。技术栈：Vite + React 19 + TS + Tailwind 4 + 官方 shadcn **Base UI** + TanStack。
 
 ## 2. 当前阶段判断
 
@@ -31,9 +31,9 @@
 | Agent Workbench 架构 | **Phase 0 Done** | 领域语言、ADR、目录蓝图、路线图与 Admin baseline 已落盘 |
 | Template Platform Monorepo | **Phase 1 Done（through 1C）** | Admin 源、tooling、Admin assets 与合同已对齐 |
 | Minimal Foundation seam | **Phase 2A Done** | `@uilab/foundation` Button/Input/tokens；Admin + Workbench 均经 `@/components/ui/*` 兼容 re-export；`check:foundation`；init copy-and-own |
-| Agent Workbench Shell | **Phase 3 Done** | 静态 Shell / task-scoped layout / placeholder Host；`check:workbench`；Playwright 证据；**无** Runtime / 具体 Surface |
-| Workbench inset layout polish | **Phase 3A Done** | sidebar 平面 + 272px Navigator + 8px inset Workspace + 合并顶栏 + pointer/keyboard 分源动效；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
-| Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Codex 语义图标；Context 140ms entry；Playwright/动效证据；**无** Runtime / Surface / Phase 4 |
+| Agent Workbench Shell | **Phase 3 Done** | Navigator + Task Surface + Composer + Context + Work Surface Host；`check:workbench` |
+| Workbench inset layout polish | **Phase 3A Done** | sidebar 平面 + 272px Navigator + 8px inset Workspace + 合并顶栏 + pointer/keyboard 分源动效 |
+| Workbench pane chrome + motion | **Phase 3B Done** | Task/Work 44px peer toolbars；右锚定 Work drawer vs keyboard instant；Context 140ms entry |
 | Workbench Composer fidelity | **Phase 3C Done** | UI Lab `agent-composer`；context rail；项目 picker；`/` palette；本地交互完整、远程诚实 |
 | Phase 4A Codex observation | **Approve 12/12** | controlled observation sealed; readiness Approve; raw external-only |
 | Phase 4B Runtime Kernel | **Done (scaffold, Fake 已移除 ADR-0018)** | domain/protocol/ports；Fake Runtime + VirtualClock 已删；VoltAgent 唯一默认；evidence `docs/evidence/phase-4b-runtime-kernel-fake.md`（历史） |
@@ -41,14 +41,16 @@
 | Phase 4D–4F Runtime path | **Done (template)** | 4D reasoning/tool/approval/input; 4E EventStore + queue/steer/reconcile; 4F fold + smart scroll；Fake 已移除（ADR-0018）；evidence `docs/evidence/phase-4-fake-complete.md`（历史） |
 | Sidecar Plugin System (#17–#25) | **Done (local MVP)** | PluginRegistry + MCP/Skills/CLI/auth/discovery/doctor；office 装配仅经 Registry；证据 `docs/evidence/sidecar-plugin-system-closeout-2026-08-06.md`；**非**远程生产 Runtime / OAuth 产品化 |
 | Full Phase 2 Foundation | **Not complete** | 第二消费者已有；仍缺更广 primitives/providers 与共享 theme Provider |
-| Electron/Tauri host | **Not started** | 仅 L1+L2 host-ready |
+| Electron Desktop Host | **Spec-α Done** | 最小 Electron：选目录 / Projects Home / 按项目根 spawn 侧车；**无**安装器 / 更新 / 签名；Tauri 未开始 |
+| Workbench IndexedDB | **Done（产品默认）** | 统一 `uilab-agent-workbench`（目录 + EventStore）；测试默认 Memory（ADR-0015） |
+| Document / Browser Surface | **Done（打开文件 MVP）** | 点 Timeline 文件 / URL 打开；无 Artifact 目录、无 Review / Terminal / 可编辑 Editor |
 | Browser test suite | **Green** | Workbench 单元 + 集成 + 视觉矩阵测试；Foundation/Admin 基线见既有证据 |
 | Capability Surface 可复现基线 (#56) | **Done** | 7 状态确定性 fixture + 视觉矩阵截图（`tests/visual/baselines/`）+ 键盘路径回归；从干净 checkout 可重现 |
 | 模板“产品打磨/去 demo 化” | **In progress** | Workbench Composer 本地产品体验已推进；Admin 去 demo 仍 planned |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**
-Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B / 3C Shell** 已完成。**Phase 4A–4F Runtime path** 已 template-complete（ADR-0018 移除 Deterministic Fake Runtime，VoltAgent 唯一默认）：4D 投影深度 + 4E EventStore 队列/恢复 + 4F 折叠/滚动。**本机 VoltAgent 侧车 Plugin 体系 (#17–#25)** 已 MVP 收口（Registry 装配 MCP/Skills/领域 CLI/auth）。**仍无** production Agent Runtime / IndexedDB / Surface / OAuth 产品化。完整 Phase 2、CLI Workbench 生成仍未开始。`agent-desktop` 仅作 Admin 兼容基线。
+Phase 1、**Phase 2A Foundation seam**、**Phase 3 / 3A / 3B / 3C Shell**、**Phase 4A–4F Runtime path**（ADR-0018，VoltAgent 唯一默认）、**本机侧车 Plugin MVP**、**统一 IndexedDB**、**Document/Browser 打开文件 MVP**、**Spec-α Electron** 已落地。本轮验收清单见 `docs/plans/workbench-acceptance-round-2026-08-14.md`。**仍无** production Agent Runtime、Artifact 目录、Review/Terminal/可编辑 Editor、OAuth 产品化、安装器。完整 Phase 2、CLI Workbench 生成仍未开始。`agent-desktop` 仅作 Admin 兼容基线。
 
 ## 3. 已锁定决策（勿回退）
 
@@ -225,15 +227,15 @@ uilab-templates/
 ### P1（下一阶段优化优先）
 
 1. **Phase 2 remainder**（共享 theme Provider / 更广 primitives；Workbench 第二消费者已有）
-2. **Phase 4 VoltAgent Runtime** 与 Task lifecycle
-3. **模板去 demo 化**
+2. ~~**Phase 4 VoltAgent Runtime** 与 Task lifecycle~~（template-complete；本机侧车，非生产集群）
+3. **模板去 demo 化**（Workbench 本轮验收 + 中圈 UI；Admin 仍 planned）
 4. **scenario 质量**（agent-desktop 噪音入口等）
 5. **CLI 体验**（npm 发布、`auth-page` add、Workbench init 属 Phase 8）
 
 ### P2
 
 1. agent-desktop 主画布仍是 mock，未接真实 Agent runtime
-2. desktop host（Electron/Tauri）未实现
+2. ~~desktop host（Electron）未实现~~（Spec-α 已有；Tauri / 安装器未做）
 3. OpenAPI → list scaffold 未做
 4. UI Lab registry 正式 `shadcn add` 发布链（当前 Workbench 为源码同步 `components/motion/agent-composer`）
 5. 更强 `check:ai`（页面三件套静态扫描、禁止 Select 主筛选等）
@@ -268,8 +270,8 @@ uilab-templates/
 
 1. ~~独立 `archetypes/agent-workbench` Shell 骨架~~（Phase 3）
 2. ~~Composer 产品保真（agent-composer / context rail / + / `/` / 项目 picker）~~（Phase 3C）
-3. Phase 4 VoltAgent Runtime + projection
-4. Phase 5–6 Surface Registry + Document/Browser/Review
+3. ~~Phase 4 VoltAgent Runtime + projection~~
+4. Phase 5–6 补 Review / Terminal / Artifact 目录（Document/Browser 打开文件 MVP 已有）
 5. UI Lab 真源正式发布与 `shadcn add` 回装流程固化
 
 ### Wave C — 装配系统增强

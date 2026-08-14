@@ -150,6 +150,19 @@ export function isBlankDraftTask(row: Pick<TaskCatalogRow, 'title'>): boolean {
   return row.title === NEW_TASK_TITLE
 }
 
+/**
+ * User explicitly chose a work-project path (open folder / create).
+ * Auto-created roots and the no-root Web fixture stay in the flat 任务 list.
+ */
+export function isSpecifiedWorkProject(
+  project: Pick<ProjectRecord, 'localRoot' | 'rootSource'>,
+): boolean {
+  return (
+    project.localRoot != null &&
+    (project.rootSource === 'opened' || project.rootSource === 'created')
+  )
+}
+
 /** Sort projects: pinned first, then sortOrder asc, then name. */
 export function sortProjects(projects: readonly ProjectRecord[]): ProjectRecord[] {
   return [...projects].sort((a, b) => {

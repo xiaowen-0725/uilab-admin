@@ -1,6 +1,6 @@
 /**
  * Real Task Lifecycle — Runtime vertical slice (product default path).
- * Cold start: empty shell; new chat → Runtime empty hub → submit → Timeline.
+ * Cold start: Composer-first empty hub → submit → Timeline.
  * Submit → 「已处理」needs a live sidecar; default `pnpm test` skips it (ADR-0018).
  * Live: `pnpm dev:workbench-runtime` then `pnpm --filter @uilab/agent-workbench test:live-runtime`.
  */
@@ -49,21 +49,32 @@ async function openNewChat() {
 }
 
 describe('Workbench Real Task Lifecycle — Runtime path', () => {
-  it('cold start: default project, zero tasks, no capture seed (A8/A10)', async () => {
+  it('cold start: default project and Composer 新对话, no capture seed', async () => {
     await render(<WorkbenchApp persistence='memory' />)
     await waitBooted()
 
+    expect(document.querySelector('[data-testid="project-name"]')).toBeNull()
     await expect
-      .element(page.getByTestId('project-name'))
-      .toHaveTextContent('默认项目')
+      .element(page.getByTestId('composer-chip-project'))
+      .toHaveTextContent('选择项目')
+    await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
     await expect
-      .element(page.getByTestId('workspace-empty-shell'))
-      .toBeInTheDocument()
-    await expect
-      .element(page.getByTestId('navigator-tasks-empty'))
-      .toBeInTheDocument()
+      .element(page.getByTestId('composer'))
+      .toHaveAttribute('data-composer-mode', 'runtime')
+    const taskButtons = document.querySelectorAll(
+      '[data-testid^="task-task-"]',
+    )
+    expect(
+      [...taskButtons].some((el) => el.textContent?.includes('新对话')),
+    ).toBe(true)
     expect(document.querySelector('[data-testid="execution-stream"]')).toBeNull()
     expect(document.querySelector('[data-testid="navigator-utilities"]')).toBeNull()
+    expect(
+      document.querySelector('[data-testid="navigator-project-trigger"]'),
+    ).toBeNull()
+    expect(
+      document.querySelector('[data-testid="navigator-projects"]'),
+    ).toBeNull()
   })
 
   it('new chat → 新对话 catalog + Runtime empty hub (A2)', async () => {
@@ -186,10 +197,12 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
       .toHaveTextContent(/无法恢复|移除任务/)
     await userEvent.click(page.getByTestId('delete-task-confirm'))
 
-    await expect
-      .element(page.getByTestId('workspace-empty-shell'))
-      .toBeInTheDocument()
     expect(document.querySelector(`[data-testid="task-${taskId}"]`)).toBeNull()
+    await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
+    const remaining = document.querySelectorAll('[data-testid^="task-task-"]')
+    expect(
+      [...remaining].some((el) => el.textContent?.includes('新对话')),
+    ).toBe(true)
   })
 
   it('launch card submits Runtime prompt (not capture stream)', async () => {

@@ -13,13 +13,15 @@ import {
 import { launchActions } from '@/config/fixtures'
 import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
+  buildNavigatorTaskRail,
   createProjectLocalRootCommands,
   createWorkbenchHostPort,
   DEFAULT_PROJECT_ID,
+  isBlankDraftTask,
+  isSpecifiedWorkProject,
   NEW_TASK_TITLE,
   type HostPort,
   type ProjectSummary,
-  type TaskSummary,
   useProjectCatalog,
 } from '@/modules/project'
 import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
@@ -32,6 +34,7 @@ import {
 import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { DeleteProjectConfirmDialog } from './delete-project-confirm-dialog'
 import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
 import { useBusyTaskIds, useWorkbenchRuntimeWiring } from './runtime-wiring'
 import { useWorkbenchSurfaceAssembly } from './surface-assembly'
@@ -39,6 +42,7 @@ import {
   createNewChatTask,
   decideNewChat,
   hardDeleteTask,
+  removeProjectFromList,
 } from './task-lifecycle-commands'
 import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
 
@@ -76,6 +80,18 @@ function runtimeContext(): [] {
   return []
 }
 
+function actionErrorMessage(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : ''
+  const nested = raw
+    .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '')
+    .trim()
+  const text = nested || raw
+  if (/侧车启动超时|工作根尚未就绪|startRuntime/i.test(text)) {
+    return '项目工作根切换超时，请稍后重试'
+  }
+  return text || fallback
+}
+
 export function WorkbenchApp({
   persistence: persistenceProp,
   idbName,
@@ -94,6 +110,8 @@ export function WorkbenchApp({
   const [projectActionError, setProjectActionError] = useState<string | null>(
     null
   )
+  const setProjectActionErrorRef = useRef(setProjectActionError)
+  setProjectActionErrorRef.current = setProjectActionError
 
   // --- Boot ---
   const boot = useWorkbenchBoot({
@@ -110,15 +128,17 @@ export function WorkbenchApp({
     eventStore,
   } = boot
 
+  // --- Catalog + selection ---
+  const catalogView = useProjectCatalog(catalogController)
+  const projectId = session.view.selectedProjectId
+
   // --- Document source (module-owned bind UI) ---
   const documentSource = useWorkspaceDocumentSource({
     runtimeMode: 'voltagent',
     voltAgentBaseUrl: resolveVoltAgentBaseUrl(),
+    preferredHint:
+      catalogController?.getProjectRecord(projectId ?? '')?.localRoot ?? null,
   })
-
-  // --- Catalog + selection ---
-  const catalogView = useProjectCatalog(catalogController)
-  const projectId = session.view.selectedProjectId
 
   useEffect(() => {
     catalogController?.setFocusedProject(projectId)
@@ -127,7 +147,17 @@ export function WorkbenchApp({
   const currentProject: ProjectSummary | null =
     catalogView.projects.find((p) => p.id === projectId) ?? null
 
-  const tasks: TaskSummary[] = catalogView.tasks
+  const taskRail = useMemo(() => {
+    if (!catalogController) {
+      return { looseTasks: [], projectGroups: [] }
+    }
+    return buildNavigatorTaskRail({
+      projects: catalogView.projects,
+      getRecord: (id) => catalogController.getProjectRecord(id),
+      listTasks: (id) => catalogController.listTasksInProject(id),
+    })
+  }, [catalogController, catalogView.projects, catalogView.tasks])
+
   const taskId = session.view.selectedTaskId
   const selectedTaskRow = taskId
     ? (catalogController?.getTaskRow(taskId) ?? null)
@@ -250,7 +280,7 @@ export function WorkbenchApp({
               text: string,
               composerContext?: Parameters<typeof runtime.submitText>[1],
             ) => {
-              const gate = await localRootRef.current?.assertWritableRuntime()
+              const gate = await localRootRef.current?.waitForWritableRuntime()
               if (gate && !gate.ok) {
                 setProjectActionError(gate.message)
                 return null
@@ -302,7 +332,7 @@ export function WorkbenchApp({
     (action: LaunchAction) => {
       if (!taskId || !action.promptStub) return
       void (async () => {
-        const gate = await localRootRef.current?.assertWritableRuntime()
+        const gate = await localRootRef.current?.waitForWritableRuntime()
         if (gate && !gate.ok) {
           setProjectActionError(gate.message)
           return
@@ -319,8 +349,47 @@ export function WorkbenchApp({
   const selectedProjectIdRef = useRef(session.view.selectedProjectId)
   selectedProjectIdRef.current = session.view.selectedProjectId
   const newTaskCounterRef = useRef(0)
+  const openingDraftRef = useRef(false)
   const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(
     null
+  )
+  const [removeConfirmProjectId, setRemoveConfirmProjectId] = useState<
+    string | null
+  >(null)
+
+  const bindSelectedProject = useCallback(
+    (nextProjectId: string) => {
+      catalogController?.setFocusedProject(nextProjectId)
+      selectedProjectIdRef.current = nextProjectId
+
+      const current = selectedTaskIdRef.current
+        ? catalogController?.getTaskRow(selectedTaskIdRef.current)
+        : null
+      if (current?.projectId === nextProjectId) {
+        session.commands.selectProject(nextProjectId, current.id)
+        return
+      }
+
+      const inProject = catalogController?.listTasksInProject(nextProjectId) ?? []
+      const blank = inProject.find(isBlankDraftTask)
+      const remembered = session.view.lastTaskByProject[nextProjectId]
+      const rememberedRow = remembered
+        ? catalogController?.getTaskRow(remembered)
+        : null
+      const nextTaskId =
+        blank?.id ??
+        (rememberedRow?.projectId === nextProjectId ? rememberedRow.id : null) ??
+        inProject[0]?.id ??
+        null
+
+      selectedTaskIdRef.current = nextTaskId
+      session.commands.selectProject(nextProjectId, nextTaskId)
+    },
+    [
+      catalogController,
+      session.commands,
+      session.view.lastTaskByProject,
+    ],
   )
 
   const localRootCommands = useMemo(() => {
@@ -329,68 +398,98 @@ export function WorkbenchApp({
       catalog: catalogController,
       host: hostPort,
       getSelectedProjectId: () => selectedProjectIdRef.current,
-      selectProject: (nextProjectId) => {
-        catalogController.setFocusedProject(nextProjectId)
-        session.commands.selectProject(nextProjectId)
-      },
+      selectProject: bindSelectedProject,
       fetchWorkspaceRoot: () => fetchWorkspaceHint(resolveVoltAgentBaseUrl()),
+      onRuntimeError: (err) => {
+        setProjectActionErrorRef.current(
+          actionErrorMessage(err, '无法切换项目运行时'),
+        )
+      },
     })
-  }, [catalogController, hostPort, session.commands])
+  }, [bindSelectedProject, catalogController, hostPort])
   localRootRef.current = localRootCommands
 
   const onNewChat = useCallback(async () => {
     if (!catalogController || !localRootCommands) return
+    if (openingDraftRef.current) return
+    openingDraftRef.current = true
 
-    let project
     try {
-      project = await localRootCommands.ensureProjectForNewChat()
+      let project
+      try {
+        project = await localRootCommands.ensureProjectForNewChat()
+      } catch (err) {
+        setProjectActionError(actionErrorMessage(err, '无法准备项目'))
+        return
+      }
       setProjectActionError(null)
-    } catch (err) {
-      setProjectActionError(
-        err instanceof Error ? err.message : '无法准备项目',
-      )
-      return
+
+      const selected = selectedTaskIdRef.current
+        ? catalogController.getTaskRow(selectedTaskIdRef.current)
+        : null
+      const decision = decideNewChat({
+        selectedProjectId: project.id,
+        selectedTask: selected,
+        blankDraftInProject:
+          catalogController
+            .listTasksInProject(project.id)
+            .find(isBlankDraftTask) ?? null,
+      })
+      if (decision.kind === 'reselect') {
+        session.commands.selectTask(decision.taskId)
+        return
+      }
+
+      newTaskCounterRef.current += 1
+      const row = await createNewChatTask({
+        catalog: catalogController,
+        projectId: project.id,
+        sequence: newTaskCounterRef.current,
+      })
+      session.commands.ensureTaskLayout(row.id)
+      session.commands.selectTask(row.id)
+    } finally {
+      openingDraftRef.current = false
     }
-
-    const selectedId = selectedTaskIdRef.current
-    const selected = selectedId
-      ? catalogController.getTaskRow(selectedId)
-      : null
-
-    const decision = decideNewChat({
-      selectedProjectId: project.id,
-      selectedTask:
-        selected?.projectId === project.id ? selected : null,
-    })
-    if (decision.kind === 'reselect') {
-      session.commands.selectTask(decision.taskId)
-      return
-    }
-
-    newTaskCounterRef.current += 1
-    const row = await createNewChatTask({
-      catalog: catalogController,
-      projectId: project.id,
-      sequence: newTaskCounterRef.current,
-    })
-    session.commands.ensureTaskLayout(row.id)
-    session.commands.selectTask(row.id)
   }, [catalogController, localRootCommands, session.commands])
+
+  useEffect(() => {
+    if (!bootReady || !localRootCommands || !catalogController) return
+    if (session.view.selectedTaskId) return
+    void onNewChat()
+  }, [
+    bootReady,
+    catalogController,
+    localRootCommands,
+    onNewChat,
+    session.view.selectedTaskId,
+  ])
+
+  const startRuntimeForSelected = useCallback(() => {
+    void localRootCommands
+      ?.ensureRuntimeForSelectedProject()
+      .then(() => setProjectActionError(null))
+      .catch((err: unknown) => {
+        setProjectActionError(actionErrorMessage(err, '无法切换项目运行时'))
+      })
+  }, [localRootCommands])
 
   const onSelectProject = useCallback(
     (nextProjectId: string) => {
-      catalogController?.setFocusedProject(nextProjectId)
-      session.commands.selectProject(nextProjectId)
-      const record = catalogController?.getProjectRecord(nextProjectId)
-      if (hostPort.isAvailable() && record?.localRoot) {
-        void hostPort.startRuntime(record.localRoot).catch((err: unknown) => {
-          setProjectActionError(
-            err instanceof Error ? err.message : '无法切换项目运行时',
-          )
-        })
-      }
+      bindSelectedProject(nextProjectId)
+      startRuntimeForSelected()
+      if (!selectedTaskIdRef.current) void onNewChat()
     },
-    [catalogController, hostPort, session.commands]
+    [bindSelectedProject, onNewChat, startRuntimeForSelected],
+  )
+
+  const onNewProjectChat = useCallback(
+    (nextProjectId: string) => {
+      bindSelectedProject(nextProjectId)
+      startRuntimeForSelected()
+      void onNewChat()
+    },
+    [bindSelectedProject, onNewChat, startRuntimeForSelected],
   )
 
   const onOpenLocalFolder = useCallback(async () => {
@@ -399,23 +498,31 @@ export function WorkbenchApp({
       await localRootCommands.openLocalFolder()
       setProjectActionError(null)
     } catch (err) {
-      setProjectActionError(
-        err instanceof Error ? err.message : '无法打开本地文件夹',
-      )
+      setProjectActionError(actionErrorMessage(err, '无法打开本地文件夹'))
     }
   }, [localRootCommands])
 
-  const onCreateProject = useCallback(async () => {
+  const onCreateProject = useCallback(async (name?: string) => {
     if (!localRootCommands) return
     try {
-      await localRootCommands.createProject()
+      await localRootCommands.createProject(name)
       setProjectActionError(null)
     } catch (err) {
-      setProjectActionError(
-        err instanceof Error ? err.message : '无法新建项目',
-      )
+      setProjectActionError(actionErrorMessage(err, '无法新建项目'))
     }
   }, [localRootCommands])
+
+  const onClearProject = useCallback(async () => {
+    if (!localRootCommands) return
+    try {
+      await localRootCommands.useUnspecifiedProject()
+      setProjectActionError(null)
+    } catch (err) {
+      setProjectActionError(actionErrorMessage(err, '无法取消项目'))
+      return
+    }
+    void onNewChat()
+  }, [localRootCommands, onNewChat])
 
   const performDeleteTask = useCallback(
     async (deleteTaskId: string) => {
@@ -471,8 +578,98 @@ export function WorkbenchApp({
     ]
   )
 
+  const onSelectCatalogTask = useCallback(
+    (nextTaskId: string) => {
+      if (!catalogController) return
+      const row = catalogController.getTaskRow(nextTaskId)
+      if (!row) return
+      selectedTaskIdRef.current = nextTaskId
+      if (row.projectId !== selectedProjectIdRef.current) {
+        catalogController.setFocusedProject(row.projectId)
+        selectedProjectIdRef.current = row.projectId
+        session.commands.selectProject(row.projectId, nextTaskId)
+        void localRootCommands
+          ?.ensureRuntimeForSelectedProject()
+          .then(() => setProjectActionError(null))
+          .catch((err: unknown) => {
+            setProjectActionError(
+              actionErrorMessage(err, '无法切换项目运行时'),
+            )
+          })
+        return
+      }
+      session.commands.selectTask(nextTaskId)
+    },
+    [catalogController, localRootCommands, session.commands],
+  )
+
+  const performRemoveProject = useCallback(
+    async (projectId: string) => {
+      if (!catalogController) return
+
+      const result = await removeProjectFromList({
+        projectId,
+        catalog: catalogController,
+        eventStore,
+        runStatusIndex,
+        runtimeController,
+        activeTaskId: taskId,
+        selectedTaskId: session.view.selectedTaskId,
+        selectedProjectId: session.view.selectedProjectId,
+        lastTaskByProject: session.view.lastTaskByProject,
+        activeRunStatus: runtime.runStatus,
+        onTaskDeleted: (deletedTaskId) => {
+          capabilityController.clearTask(deletedTaskId)
+        },
+      })
+
+      for (const removedTaskId of result.removedTaskIds) {
+        session.commands.removeTaskLayout(removedTaskId)
+      }
+      selectedProjectIdRef.current = result.nextSelectedProjectId
+      selectedTaskIdRef.current = result.nextSelectedTaskId
+      session.commands.hydratePointers({
+        selectedProjectId: result.nextSelectedProjectId,
+        selectedTaskId: result.nextSelectedTaskId,
+        lastTaskByProject: result.lastTaskByProject,
+        navigatorOpen: session.view.navigatorOpen,
+      })
+      setRemoveConfirmProjectId(null)
+
+      if (result.selectionChanged && result.nextSelectedProjectId) {
+        void localRootCommands
+          ?.ensureRuntimeForSelectedProject()
+          .then(() => setProjectActionError(null))
+          .catch((err: unknown) => {
+            setProjectActionError(
+              actionErrorMessage(err, '无法切换项目运行时'),
+            )
+          })
+      }
+    },
+    [
+      catalogController,
+      capabilityController,
+      eventStore,
+      localRootCommands,
+      runStatusIndex,
+      runtime.runStatus,
+      runtimeController,
+      session.commands,
+      session.view.lastTaskByProject,
+      session.view.navigatorOpen,
+      session.view.selectedProjectId,
+      session.view.selectedTaskId,
+      taskId,
+    ],
+  )
+
   const onDeleteTask = useCallback((id: string) => {
     setDeleteConfirmTaskId(id)
+  }, [])
+
+  const onRemoveProject = useCallback((id: string) => {
+    setRemoveConfirmProjectId(id)
   }, [])
 
   if (!bootReady) {
@@ -495,19 +692,44 @@ export function WorkbenchApp({
           view={session.view}
           commands={session.commands}
           taskView={taskView}
-          project={currentProject}
-          projects={catalogView.projects}
-          tasks={tasks}
+          looseTasks={taskRail.looseTasks}
+          projectGroups={taskRail.projectGroups}
           busyTaskIds={busyTaskIds}
           onLaunchAction={onLaunchAction}
           onNewChat={() => void onNewChat()}
+          onSelectTask={onSelectCatalogTask}
           onDeleteTask={onDeleteTask}
-          onSelectProject={onSelectProject}
-          hostAvailable={hostAvailable}
+          onRemoveProject={onRemoveProject}
+          onNewProjectChat={onNewProjectChat}
           projectActionError={projectActionError}
-          onOpenLocalFolder={() => void onOpenLocalFolder()}
-          onCreateProject={() => void onCreateProject()}
-          composerRuntime={composerRuntime}
+          composerRuntime={
+            composerRuntime
+              ? {
+                  ...composerRuntime,
+                  projectPicker: {
+                    projects: catalogView.projects.map((item) => {
+                      const record = catalogController?.getProjectRecord(
+                        item.id,
+                      )
+                      return {
+                        id: item.id,
+                        name: item.name,
+                        specified: record
+                          ? isSpecifiedWorkProject(record)
+                          : false,
+                      }
+                    }),
+                    selectedProjectId: session.view.selectedProjectId,
+                    hostAvailable,
+                    onSelectProject,
+                    onOpenLocalFolder: () => void onOpenLocalFolder(),
+                    onCreateProject: (name?: string) =>
+                      void onCreateProject(name),
+                    onClearProject: () => void onClearProject(),
+                  },
+                }
+              : undefined
+          }
           capabilityController={capabilityController}
           surfaceRegistry={surface.surfaceRegistry}
           onOpenFileRef={surface.onOpenFileRef}
@@ -520,6 +742,21 @@ export function WorkbenchApp({
           onConfirm={() => {
             if (deleteConfirmTaskId) {
               void performDeleteTask(deleteConfirmTaskId)
+            }
+          }}
+        />
+        <DeleteProjectConfirmDialog
+          open={removeConfirmProjectId != null}
+          projectName={
+            removeConfirmProjectId
+              ? (catalogController?.getProjectRecord(removeConfirmProjectId)
+                  ?.name ?? null)
+              : null
+          }
+          onCancel={() => setRemoveConfirmProjectId(null)}
+          onConfirm={() => {
+            if (removeConfirmProjectId) {
+              void performRemoveProject(removeConfirmProjectId)
             }
           }}
         />

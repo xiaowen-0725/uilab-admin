@@ -898,6 +898,8 @@ export interface ComposerMenuItemProps {
   /** Muted one-liner rendered inline after the name, truncated when tight. */
   description?: ReactNode;
   onSelect?: () => void;
+  disabled?: boolean;
+  title?: string;
   children?: ReactNode;
   className?: string;
   "data-testid"?: string;
@@ -908,6 +910,8 @@ export function ComposerMenuItem({
   icon,
   description,
   onSelect,
+  disabled,
+  title,
   children,
   className,
   "data-testid": dataTestId,
@@ -916,10 +920,14 @@ export function ComposerMenuItem({
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
+      title={title}
+      aria-disabled={disabled || undefined}
       data-testid={dataTestId}
       className={cn(
         "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors",
         "hover:bg-[var(--wb-hover)]",
+        "disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
     >

@@ -24,6 +24,11 @@ export type UseWorkspaceDocumentSourceOptions = {
   runtimeMode: WorkspaceDocumentRuntimeMode
   /** Used when runtimeMode === 'voltagent' */
   voltAgentBaseUrl: string
+  /**
+   * Desktop: selected Project `localRoot`. Wins over the one-shot sidecar
+   * `/workspace/info` fetch so Host project switches stay honest.
+   */
+  preferredHint?: string | null
 }
 
 export type WorkspaceDocumentSource = {
@@ -88,6 +93,11 @@ export type WorkspaceDocumentSourceController = {
   pickLocalFolder: () => Promise<void>
   clearLocalFolder: () => void
   /**
+   * Prefer this label over sidecar fetch (Host Project root).
+   * Pass null to fall back to `/workspace/info`.
+   */
+  setPreferredHint: (hint: string | null) => void
+  /**
    * Mount side-effects (voltagent workspace hint fetch).
    * Returns cleanup; call once when the source is active.
    */
@@ -109,11 +119,12 @@ export function createWorkspaceDocumentSourceController(
 
   let state: WorkspaceDocumentSourceState = {
     content: defaultContent,
-    workspaceHint: null,
+    workspaceHint: options.preferredHint?.trim() || null,
     localFolderBound: false,
     pickerSupported,
     bindNotice: null,
   }
+  let preferredHint = options.preferredHint?.trim() || null
   const listeners = new Set<() => void>()
 
   function emit() {
@@ -123,6 +134,18 @@ export function createWorkspaceDocumentSourceController(
   function setState(patch: Partial<WorkspaceDocumentSourceState>) {
     state = { ...state, ...patch }
     emit()
+  }
+
+  function applySidecarHint(hint: string | null) {
+    if (!hint || state.localFolderBound || preferredHint) return
+    setState({ workspaceHint: hint })
+  }
+
+  function refreshSidecarHint() {
+    if (options.runtimeMode !== 'voltagent' || preferredHint) return
+    void d.fetchHint(options.voltAgentBaseUrl).then((hint) => {
+      applySidecarHint(hint)
+    })
   }
 
   return {
@@ -155,24 +178,30 @@ export function createWorkspaceDocumentSourceController(
     clearLocalFolder() {
       setState({
         content: createDefaultContent(options, d),
-        workspaceHint: null,
+        workspaceHint: preferredHint,
         localFolderBound: false,
         bindNotice: null,
       })
+    },
+    setPreferredHint(hint: string | null) {
+      preferredHint = hint?.trim() || null
+      if (state.localFolderBound) return
+      if (preferredHint) {
+        setState({ workspaceHint: preferredHint })
+        return
+      }
+      refreshSidecarHint()
     },
     mount() {
       if (options.runtimeMode !== 'voltagent') {
         return () => {}
       }
       let cancelled = false
-      void d.fetchHint(options.voltAgentBaseUrl).then((hint) => {
-        if (!cancelled && hint) {
-          // Do not clobber a later local bind (voltagent never binds, but keep safe).
-          if (!state.localFolderBound) {
-            setState({ workspaceHint: hint })
-          }
-        }
-      })
+      if (!preferredHint) {
+        void d.fetchHint(options.voltAgentBaseUrl).then((hint) => {
+          if (!cancelled) applySidecarHint(hint)
+        })
+      }
       return () => {
         cancelled = true
       }
@@ -182,7 +211,8 @@ export function createWorkspaceDocumentSourceController(
 
 /**
  * React binding for {@link createWorkspaceDocumentSourceController}.
- * Composition: pass runtimeMode + voltAgentBaseUrl only.
+ * Composition: pass runtimeMode + voltAgentBaseUrl; optional preferredHint
+ * for the selected Project root.
  */
 export function useWorkspaceDocumentSource(
   options: UseWorkspaceDocumentSourceOptions,
@@ -192,11 +222,15 @@ export function useWorkspaceDocumentSource(
       createWorkspaceDocumentSourceController({
         runtimeMode: options.runtimeMode,
         voltAgentBaseUrl: options.voltAgentBaseUrl,
+        preferredHint: options.preferredHint,
       }),
     [options.runtimeMode, options.voltAgentBaseUrl],
   )
 
   useEffect(() => controller.mount(), [controller])
+  useEffect(() => {
+    controller.setPreferredHint(options.preferredHint ?? null)
+  }, [controller, options.preferredHint])
 
   const snap = useSyncExternalStore(
     controller.subscribe,

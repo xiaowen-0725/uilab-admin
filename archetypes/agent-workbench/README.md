@@ -1,23 +1,25 @@
 # Agent Workbench（`@uilab/agent-workbench`）
 
-生产级 Agent Workbench Archetype 的 **Phase 3 静态 Shell 骨架**，含 **Phase 3A inset 布局** 与 **Phase 3B pane chrome / motion**。
-独立于 Admin Console，不共享 UniversalShell。
+桌面优先的 Agent Workbench Archetype：Workbench Shell + **Project / Task 目录** + 本机 **VoltAgent 侧车** Runtime 投影。独立于 Admin Console，不共享 UniversalShell。
+
+本机侧车 ≠ 远程生产集群。最小 Electron（Spec-α）≠ 安装器 / 自动更新 / 签名。
 
 ## 当前状态（shipped vs planned）
 
-| 能力                                                      | 状态                                               |
-| --------------------------------------------------------- | -------------------------------------------------- |
-| Workbench Shell + Navigator                               | **shipped**（Phase 3）                             |
-| Inset Workspace 空间模型 + Navigator 动效                 | **shipped**（Phase 3A layout polish）              |
-| Task/Work pane chrome + right-anchored drawer             | **shipped**（Phase 3B；Playwright/动效证据已落盘） |
-| Task Surface + Composer + Adaptive Context Panel          | **shipped**（静态 fixture）                        |
-| Work Surface Host（Single-pane + Tabs，显隐/调宽/最大化） | **shipped**（占位内容）                            |
-| Capability Surface（连接器/技能/专家管理 + 视觉回归矩阵）| **shipped**（#53–#59；视觉回归基线见 `tests/visual/`） |
-| Agent Runtime / 流式投影                                  | **planned**（Phase 4，当前暂停）                   |
-| Surface Registry                                          | **planned**（Phase 5）                             |
-| Document / Browser / Review Surfaces                      | **planned**（Phase 6）                             |
-| `uilab-admin init` 生成 Workbench                         | **planned**（Phase 8）                             |
-| Electron / Tauri desktop host                             | **not started**                                    |
+| 能力 | 状态 |
+| --- | --- |
+| Workbench Shell + Navigator + inset / pane chrome | **shipped** |
+| Project / Task 目录（产品默认 IndexedDB） | **shipped** |
+| 本机 VoltAgent Runtime → Timeline 投影（ADR-0018） | **shipped**（需侧车；无侧车时报错事实，不装 Fake） |
+| Permission Preset + Approval Dock | **shipped**（帮我批准 / 完全访问） |
+| Plan 只读投影（Context + Timeline） | **shipped**（需侧车 `update_plan`） |
+| Work Surface Host + Document / Browser | **shipped**（点文件 / URL 打开；无 Artifact 目录） |
+| Capability Surface（连接器 / 技能 / 专家） | **shipped**（打开 / 状态 / 选用；OAuth 产品化未做） |
+| 最小 Electron Desktop Host（Spec-α） | **shipped**（`dev:desktop`；无安装器） |
+| Review / Terminal / 可编辑 Editor / Spreadsheet | **planned** |
+| Artifact 实体目录、steer、Runtime retry | **planned** |
+| `uilab-admin init` 生成 Workbench | **planned**（Phase 8） |
+| Tauri / 安装器 / 自动更新 / 签名 | **not started** |
 
 ## 快速开始
 
@@ -25,20 +27,25 @@
 
 ```bash
 pnpm install
-pnpm dev:workbench
+pnpm dev:workbench              # Web（无 Host：打开文件夹禁用，默认项目夹具）
+pnpm dev:workbench-desktop      # 桌面优先验收（Spec-α Electron）
+pnpm dev:workbench-runtime      # 仅侧车；桌面路径通常由 Host 按项目根 spawn
 ```
 
 包级：
 
 ```bash
 pnpm --filter @uilab/agent-workbench dev
+pnpm --filter @uilab/agent-workbench dev:desktop
 pnpm --filter @uilab/agent-workbench typecheck
 pnpm --filter @uilab/agent-workbench build
 pnpm --filter @uilab/agent-workbench test
 ```
 
-- Dev：`http://localhost:5174/`
+- Web Dev：`http://localhost:5174/`
 - Preview：`pnpm preview:workbench`（根）或包内 `preview`（4174）
+- 桌面：见 [`desktop/electron/README.md`](./desktop/electron/README.md)
+- 本轮验收清单：[`docs/plans/workbench-acceptance-round-2026-08-14.md`](../../docs/plans/workbench-acceptance-round-2026-08-14.md)
 
 ## 空间模型（Phase 3A + 3B）
 
@@ -52,7 +59,7 @@ Sidebar background plane
         │   └── Task Surface（content-only：execution · Composer · Context）
         └── Work pane（Work Surface Host）
             ├── 44px tab toolbar + maximize/close icons
-            └── placeholder panel
+            └── Document / Browser（或空态）
 ```
 
 - 根背景为 `sidebar` plane；Workspace 为唯一前景平面（desktop/medium：8px inset、12px radius、border/shadow；narrow full-bleed）。
@@ -95,6 +102,7 @@ Composer 使用 `@/components/ui/textarea`（shadcn）；Foundation 仍仅公开
 
 - 平台合同：仓库根 [`AGENTS.md`](../../AGENTS.md)
 - 本应用合同：[`AGENTS.md`](./AGENTS.md)、[`APP_BRIEF.md`](./APP_BRIEF.md)
+- 本轮验收：[`docs/plans/workbench-acceptance-round-2026-08-14.md`](../../docs/plans/workbench-acceptance-round-2026-08-14.md)
 - 模块布局：[`docs/architecture/agent-workbench-module-layout.md`](../../docs/architecture/agent-workbench-module-layout.md)
 - 路线图：[`docs/plans/agent-workbench-template-roadmap.md`](../../docs/plans/agent-workbench-template-roadmap.md)
 - Phase 3A work order：[`docs/plans/phase-3a-workbench-inset-layout-polish-work-order.md`](../../docs/plans/phase-3a-workbench-inset-layout-polish-work-order.md)

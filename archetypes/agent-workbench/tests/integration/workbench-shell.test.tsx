@@ -86,33 +86,23 @@ async function renderWorkbench() {
   return result
 }
 
-/** Product path: open one Runtime task (empty hub). */
+/** Product path: cold start already opens a Runtime empty-hub 新对话. */
 async function renderWorkbenchWithTask() {
   await renderWorkbench()
-  // Workspace CTA works when Navigator is overlay/closed (medium/narrow).
-  const emptyCta = document.querySelector(
-    '[data-testid="workspace-empty-new-chat"]'
-  )
-  if (emptyCta) {
-    await userEvent.click(page.getByTestId('workspace-empty-new-chat'))
-  } else {
-    await userEvent.click(page.getByTestId('navigator-new-chat'))
-  }
   await expect.element(page.getByTestId('task-surface')).toBeInTheDocument()
+  await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
 }
 
 describe('Workbench Shell integration (visible behavior)', () => {
-  it('renders project, left-rail chrome, empty shell then Runtime hub', async () => {
+  it('renders project, left-rail chrome, and Composer-first empty hub', async () => {
     await renderWorkbench()
 
     await expect
       .element(page.getByTestId('workbench-shell'))
       .toBeInTheDocument()
-    await expect
-      .element(page.getByTestId('project-name'))
-      .toHaveTextContent('默认项目')
+    expect(document.querySelector('[data-testid="project-name"]')).toBeNull()
 
-    // A — left rail: real catalog only (no mock utilities)
+    // A — left rail: real catalog only (no mock utilities / no project picker)
     await expect
       .element(page.getByTestId('navigator-new-chat'))
       .toHaveTextContent('新对话')
@@ -122,22 +112,27 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(
       document.querySelector('[data-testid="navigator-utilities"]')
     ).toBeNull()
-    await expect
-      .element(page.getByTestId('workspace-empty-shell'))
-      .toBeInTheDocument()
+    expect(
+      document.querySelector('[data-testid="navigator-project-trigger"]')
+    ).toBeNull()
+    expect(
+      document.querySelector('[data-testid="navigator-projects"]')
+    ).toBeNull()
 
-    // B — new chat → Runtime empty hub
-    await userEvent.click(page.getByTestId('navigator-new-chat'))
+    // B — cold start lands on Runtime empty hub + Composer
     await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
     await expect
       .element(page.getByTestId('empty-hub-title'))
-      .toHaveTextContent('默认项目')
+      .toHaveTextContent('今天帮你做些什么？')
     await expect
       .element(page.getByTestId('empty-hub-action-explore'))
       .toBeInTheDocument()
     await expect
       .element(page.getByTestId('composer'))
       .toHaveAttribute('data-composer-mode', 'runtime')
+    await expect
+      .element(page.getByTestId('composer-chip-project'))
+      .toHaveTextContent('选择项目')
 
     // C — Work drawer closed by default
     expect(
@@ -1028,7 +1023,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .toBeInTheDocument()
     await expect
       .element(page.getByTestId('composer-chip-project'))
-      .toHaveTextContent('默认项目')
+      .toHaveTextContent('选择项目')
     await expect
       .element(page.getByTestId('composer-model'))
       .toHaveTextContent('本地侧车模型')

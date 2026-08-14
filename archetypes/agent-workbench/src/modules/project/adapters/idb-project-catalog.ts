@@ -76,6 +76,17 @@ export class IdbProjectCatalog implements ProjectCatalogPort {
     }
   }
 
+  async deleteProject(projectId: ProjectId): Promise<void> {
+    try {
+      await runTransaction(this.db, STORE_PROJECTS, 'readwrite', async (tx) => {
+        const store = tx.objectStore(STORE_PROJECTS)
+        await idbRequest(store.delete(projectId))
+      })
+    } catch (err) {
+      throw toCatalogError(err)
+    }
+  }
+
   async listTasks(projectId?: ProjectId): Promise<readonly TaskCatalogRow[]> {
     try {
       const rows = await runTransaction(

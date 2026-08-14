@@ -4,9 +4,13 @@
 
 桌面优先的 Agent 工作台：以 Task 为中心编排对话/执行流，并按需展开工作面查看产物。
 
-## Phase 3 范围
+## 当前（2026-08-14）
 
-交付**可运行、可测试**的静态 Shell，证明空间模型与 Task 作用域布局状态，**不接**真实 Agent Runtime。
+已超出 Phase 3 静态 Shell：Project/Task 目录、本机 VoltAgent 侧车、Permission Preset、只读 Plan、Document/Browser 打开文件、Spec-α Electron。诚实边界与验收圈见 [`docs/plans/workbench-acceptance-round-2026-08-14.md`](../../docs/plans/workbench-acceptance-round-2026-08-14.md)。下面 Phase 3 段落保留为历史范围，不再代表当前 shipped。
+
+## Phase 3 范围（历史）
+
+当时交付**可运行、可测试**的静态 Shell，证明空间模型与 Task 作用域布局状态，**不接**真实 Agent Runtime。
 
 ### 用户可感知
 

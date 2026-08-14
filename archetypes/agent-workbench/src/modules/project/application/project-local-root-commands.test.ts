@@ -92,10 +92,60 @@ describe('Project local-root command face', () => {
 
     const project = await commands.createProject()
     expect(project.rootSource).toBe('created')
-    expect(project.name).toBe('未命名项目')
     expect(project.localRoot).toMatch(/^\/virtual\/AgentWorkbench\/未命名项目-/)
+    expect(project.name).toBe(project.localRoot!.split('/').pop())
     expect(selected.id).toBe(project.id)
     expect(host.directories.has(project.localRoot!)).toBe(true)
+  })
+
+  it('useUnspecifiedProject reuses the auto project and does not create another', async () => {
+    const { controller, commands, selected, host } = setup(fake())
+    await controller.hydrate({ seedDefaultProject: false })
+    const auto = await commands.ensureProjectForNewChat()
+    const specified = await commands.createProject('桌面项目')
+    expect(selected.id).toBe(specified.id)
+
+    const unspecified = await commands.useUnspecifiedProject()
+    expect(unspecified.id).toBe(auto.id)
+    expect(unspecified.rootSource).toBe('auto')
+    expect(selected.id).toBe(auto.id)
+    expect(
+      host.calls.filter((call) => call.method === 'createProjectDirectory'),
+    ).toHaveLength(2)
+  })
+
+  it('useUnspecifiedProject prefers the Web default fixture', async () => {
+    const { controller, commands, selected } = setup(
+      createUnavailableHostPort(),
+    )
+    await controller.hydrate()
+    selected.id = (
+      await controller.createProject('指定项目', {
+        localRoot: '/tmp/specified',
+        rootSource: 'created',
+      })
+    ).id
+
+    const unspecified = await commands.useUnspecifiedProject()
+    expect(unspecified.id).toBe('project-default')
+    expect(selected.id).toBe('project-default')
+  })
+
+  it('ensureProjectForNewChat returns immediately when sidecar start is slow', async () => {
+    const host = fake({ startDelayMs: 5_000 })
+    const { controller, commands, selected } = setup(host)
+    await controller.hydrate({ seedDefaultProject: false })
+    const project = await controller.createProject('仓库', {
+      localRoot: '/virtual/AgentWorkbench/仓库',
+      rootSource: 'created',
+    })
+    selected.id = project.id
+    host.setRuntimeStatus('stopped')
+
+    const startedAt = Date.now()
+    const result = await commands.ensureProjectForNewChat()
+    expect(result.id).toBe(project.id)
+    expect(Date.now() - startedAt).toBeLessThan(400)
   })
 
   it('ensureProjectForNewChat: unselected → auto project; selected → reuse', async () => {
@@ -176,6 +226,91 @@ describe('Project local-root command face', () => {
 
     liveRoot = '/Users/me/new-repo/'
     expect(await gated.assertWritableRuntime()).toEqual({ ok: true })
+  })
+
+  it('ensureRuntimeForSelectedProject coalesces concurrent starts on the same root', async () => {
+    const host = fake({ startDelayMs: 40 })
+    const { controller, commands, selected } = setup(host)
+    await controller.hydrate({ seedDefaultProject: false })
+    const project = await controller.createProject('仓库', {
+      localRoot: '/virtual/AgentWorkbench/仓库',
+      rootSource: 'created',
+    })
+    selected.id = project.id
+    host.setRuntimeStatus('stopped')
+
+    await Promise.all([
+      commands.ensureRuntimeForSelectedProject(),
+      commands.ensureRuntimeForSelectedProject(),
+    ])
+    expect(
+      host.calls.filter((call) => call.method === 'startRuntime'),
+    ).toHaveLength(1)
+  })
+
+  it('ensureRuntimeForSelectedProject does not restart a ready runtime on the same root', async () => {
+    const { controller, commands, host } = setup(fake())
+    await controller.hydrate({ seedDefaultProject: false })
+    await commands.createProject('仓库')
+    const starts = host.calls.filter((call) => call.method === 'startRuntime')
+    expect(starts.length).toBe(1)
+
+    await commands.ensureRuntimeForSelectedProject()
+    await commands.ensureRuntimeForSelectedProject()
+    expect(
+      host.calls.filter((call) => call.method === 'startRuntime'),
+    ).toHaveLength(1)
+  })
+
+  it('waitForWritableRuntime joins an in-flight start instead of failing immediately', async () => {
+    const host = fake({ startDelayMs: 80 })
+    const { controller, commands, selected } = setup(host)
+    await controller.hydrate({ seedDefaultProject: false })
+    const project = await controller.createProject('仓库', {
+      localRoot: '/virtual/AgentWorkbench/仓库',
+      rootSource: 'created',
+    })
+    selected.id = project.id
+    host.setRuntimeStatus('stopped')
+
+    const starting = commands.ensureRuntimeForSelectedProject()
+    const immediate = await commands.assertWritableRuntime()
+    expect(immediate.ok).toBe(false)
+
+    const waited = await commands.waitForWritableRuntime()
+    expect(waited).toEqual({ ok: true })
+    await starting
+    expect(
+      host.calls.filter((call) => call.method === 'startRuntime'),
+    ).toHaveLength(1)
+  })
+
+  it('waitForWritableRuntime waits for the sidecar root to catch up', async () => {
+    const host = fake()
+    let liveRoot = '/virtual/old-repo'
+    const { controller, selected } = setup(host)
+    const gated = createProjectLocalRootCommands({
+      catalog: controller,
+      host,
+      getSelectedProjectId: () => selected.id,
+      selectProject: (projectId) => {
+        selected.id = projectId
+      },
+      fetchWorkspaceRoot: async () => liveRoot,
+    })
+    await controller.hydrate({ seedDefaultProject: false })
+    const project = await controller.createProject('新仓库', {
+      localRoot: '/virtual/new-repo',
+      rootSource: 'opened',
+    })
+    selected.id = project.id
+    host.setRuntimeStatus('ready')
+    window.setTimeout(() => {
+      liveRoot = '/virtual/new-repo/'
+    }, 40)
+
+    const gate = await gated.waitForWritableRuntime({ timeoutMs: 500 })
+    expect(gate).toEqual({ ok: true })
   })
 
   it('assertWritableRuntime allows writes on no-Host web degradation', async () => {

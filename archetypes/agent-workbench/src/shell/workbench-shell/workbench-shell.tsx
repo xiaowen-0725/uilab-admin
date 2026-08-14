@@ -4,7 +4,7 @@ import {
   CapabilityManagementSurface,
   type CapabilityController,
 } from '@/modules/capabilities'
-import type { ProjectSummary, TaskSummary } from '@/modules/project'
+import type { NavigatorProjectGroup, TaskSummary } from '@/modules/project'
 import type {
   LaunchAction,
   TaskSurfaceComposerRuntime,
@@ -23,7 +23,6 @@ import {
   PanelLeftIcon,
   SlidersHorizontal,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
 import { Navigator } from '../navigator/navigator'
 import {
@@ -90,19 +89,18 @@ export interface WorkbenchShellProps {
   commands: WorkbenchSessionCommands
   /** Assembled Task view from Composition Root; null when no selected task. */
   taskView: TaskSurfaceView | null
-  /** Catalog projection from Project Module. */
-  project: ProjectSummary | null
-  projects: ProjectSummary[]
-  tasks: TaskSummary[]
+  /** Unspecified-project conversations for the flat 任务 list. */
+  looseTasks: TaskSummary[]
+  /** User-specified work projects (opened/created) with nested tasks. */
+  projectGroups: NavigatorProjectGroup[]
   busyTaskIds?: ReadonlySet<string>
   onLaunchAction?: (action: LaunchAction) => void
   onNewChat?: () => void
+  onSelectTask?: (taskId: string) => void
   onDeleteTask?: (taskId: string) => void
-  onSelectProject?: (projectId: string) => void
-  hostAvailable?: boolean
+  onRemoveProject?: (projectId: string) => void
+  onNewProjectChat?: (projectId: string) => void
   projectActionError?: string | null
-  onOpenLocalFolder?: () => void
-  onCreateProject?: () => void
   /** Runtime composer props for product Runtime path. */
   composerRuntime?: TaskSurfaceComposerRuntime
   /** Capability catalog controller assembled by Composition Root. */
@@ -137,18 +135,16 @@ export function WorkbenchShell({
   view,
   commands,
   taskView,
-  project,
-  projects,
-  tasks,
+  looseTasks,
+  projectGroups,
   busyTaskIds,
   onLaunchAction,
   onNewChat,
+  onSelectTask,
   onDeleteTask,
-  onSelectProject,
-  hostAvailable = false,
+  onRemoveProject,
+  onNewProjectChat,
   projectActionError = null,
-  onOpenLocalFolder,
-  onCreateProject,
   composerRuntime,
   capabilityController,
   surfaceRegistry,
@@ -273,9 +269,10 @@ export function WorkbenchShell({
       showTask()
       setContextMotion('instant')
       setPaneInstant()
-      commands.selectTask(taskId)
+      if (onSelectTask) onSelectTask(taskId)
+      else commands.selectTask(taskId)
     },
-    [commands, setPaneInstant, showTask]
+    [commands, onSelectTask, setPaneInstant, showTask]
   )
 
   /** Slot width only — ignore bubbled child transitions. */
@@ -348,19 +345,17 @@ export function WorkbenchShell({
   const widthAnimating = paneMotionSource === 'animated'
 
   const navigatorShared = {
-    project,
-    projects,
-    tasks,
+    looseTasks,
+    projectGroups,
+    selectedProjectId: view.selectedProjectId,
     selectedTaskId: view.selectedTaskId,
     busyTaskIds,
     open: view.navigatorOpen,
     onNewChat: startNewChatFromShell,
     onDeleteTask,
-    onSelectProject,
-    hostAvailable,
+    onRemoveProject,
+    onNewProjectChat,
     projectActionError,
-    onOpenLocalFolder,
-    onCreateProject,
     onOpenSettings: openSettings,
     activeDestination,
     onOpenCapabilities: openCapabilities,
@@ -454,7 +449,7 @@ export function WorkbenchShell({
 
                 <div className='min-w-0 flex-1'>
                   <h1 className='truncate text-sm leading-none font-semibold'>
-                    {taskView?.title ?? '还没有任务'}
+                    {taskView?.title ?? '新对话'}
                   </h1>
                 </div>
 
@@ -506,15 +501,9 @@ export function WorkbenchShell({
                     className='flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
                     data-testid='workspace-empty-shell'
                   >
-                    <p className='text-sm text-muted-foreground'>还没有任务</p>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      data-testid='workspace-empty-new-chat'
-                      onClick={() => onNewChat?.()}
-                    >
-                      新对话
-                    </Button>
+                    <p className='text-sm text-muted-foreground'>
+                      正在打开新对话…
+                    </p>
                   </div>
                 )}
               </div>

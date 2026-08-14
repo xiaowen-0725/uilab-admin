@@ -36,6 +36,10 @@ export class MemoryProjectCatalog implements ProjectCatalogPort {
     this.projects.set(project.id, { ...project })
   }
 
+  async deleteProject(projectId: ProjectId): Promise<void> {
+    this.projects.delete(projectId)
+  }
+
   async listTasks(projectId?: ProjectId): Promise<readonly TaskCatalogRow[]> {
     const all = [...this.tasks.values()]
     const filtered = projectId

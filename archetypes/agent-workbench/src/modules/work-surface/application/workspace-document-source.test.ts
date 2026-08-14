@@ -61,6 +61,61 @@ describe('createWorkspaceDocumentSourceController', () => {
     expect(ctrl.getState().content).not.toBe(memory)
   })
 
+  it('preferredHint wins over sidecar fetch and later updates', async () => {
+    const fetchHint = vi.fn(async () => '/tmp/stale-sidecar')
+    const ctrl = createWorkspaceDocumentSourceController(
+      {
+        runtimeMode: 'voltagent',
+        voltAgentBaseUrl: '/va',
+        preferredHint: '/Users/me/AgentWorkbench/demo',
+      },
+      {
+        createHttp: () => stubPort('http'),
+        fetchHint,
+      },
+    )
+    expect(ctrl.getState().workspaceHint).toBe(
+      '/Users/me/AgentWorkbench/demo',
+    )
+    const unmount = ctrl.mount()
+    await Promise.resolve()
+    expect(fetchHint).not.toHaveBeenCalled()
+    expect(ctrl.getState().workspaceHint).toBe(
+      '/Users/me/AgentWorkbench/demo',
+    )
+
+    ctrl.setPreferredHint('/Users/me/AgentWorkbench/other')
+    expect(ctrl.getState().workspaceHint).toBe(
+      '/Users/me/AgentWorkbench/other',
+    )
+    unmount()
+  })
+
+  it('sidecar fetch does not clobber a preferredHint set after mount', async () => {
+    let resolveHint!: (value: string) => void
+    const fetchHint = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveHint = resolve
+        }),
+    )
+    const ctrl = createWorkspaceDocumentSourceController(
+      { runtimeMode: 'voltagent', voltAgentBaseUrl: '/va' },
+      {
+        createHttp: () => stubPort('http'),
+        fetchHint,
+      },
+    )
+    const unmount = ctrl.mount()
+    ctrl.setPreferredHint('/Users/me/AgentWorkbench/live')
+    resolveHint('/tmp/stale-sidecar')
+    await Promise.resolve()
+    expect(ctrl.getState().workspaceHint).toBe(
+      '/Users/me/AgentWorkbench/live',
+    )
+    unmount()
+  })
+
   it('voltagent mount fetches workspace hint', async () => {
     const ctrl = createWorkspaceDocumentSourceController(
       { runtimeMode: 'voltagent', voltAgentBaseUrl: '/va' },

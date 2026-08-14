@@ -104,6 +104,33 @@ describe('MemoryProjectCatalog + ProjectCatalogController', () => {
     expect(legacy?.rootSource).toBeNull()
   })
 
+  it('removeProject drops the project and its task rows without touching other projects', async () => {
+    const catalog = createMemoryProjectCatalog()
+    const controller = new ProjectCatalogController(catalog)
+    await controller.hydrate()
+    const extra = await controller.createProject('侧边项目', {
+      localRoot: '/virtual/AgentWorkbench/侧边项目',
+      rootSource: 'created',
+    })
+    const kept = await controller.createTask({
+      projectId: DEFAULT_PROJECT_ID,
+      taskId: 'task-keep',
+    })
+    const dropped = await controller.createTask({
+      projectId: extra.id,
+      taskId: 'task-drop',
+    })
+
+    const removed = await controller.removeProject(extra.id)
+    expect(removed).toEqual([dropped.id])
+    expect(controller.getProjectRecord(extra.id)).toBeNull()
+    expect(await catalog.getProject(extra.id)).toBeNull()
+    expect(controller.getTaskRow(dropped.id)).toBeNull()
+    expect(await catalog.getTask(dropped.id)).toBeNull()
+    expect(controller.getTaskRow(kept.id)).toBeTruthy()
+    expect(controller.getView().projects).toHaveLength(1)
+  })
+
   it('hydrate({ seedDefaultProject: false }) leaves an empty catalog', async () => {
     const catalog = createMemoryProjectCatalog()
     const controller = new ProjectCatalogController(catalog)

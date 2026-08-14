@@ -45,6 +45,24 @@ describe('open channels', () => {
     )
   })
 
+  it('user channel opens https Timeline ref as browser', () => {
+    const registry = createWorkbenchSurfaceRegistry(stubDocumentContent())
+    const open = vi.fn()
+    const ok = openWorkSurfaceFromFileRef(registry, open, {
+      path: 'https://example.com/',
+      label: '示例',
+    })
+    expect(ok).toBe(true)
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'user',
+        kind: 'browser',
+        resourceKey: expect.stringMatching(/^https:\/\/example\.com\/?$/),
+        title: '示例',
+      }),
+    )
+  })
+
   it('user channel rejects empty ref', () => {
     const registry = createWorkbenchSurfaceRegistry(stubDocumentContent())
     const open = vi.fn()

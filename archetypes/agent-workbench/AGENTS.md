@@ -18,10 +18,11 @@
 - **Real Task Lifecycle（会话管理）**：
   - `modules/project`：Project 实体 + Task **目录**权威；`ProjectCatalogPort`（Memory / IndexedDB）；**单根 `localRoot` / `rootSource`**；**HostPort**（选目录 / Projects Home / 侧车生命周期）
   - `modules/workbench-session`：仅 `selectedProjectId | null` + `selectedTaskId | null` + layout chrome + `lastTaskByProject`
-  - 冷启动：有 Desktop Host 时允许未选 Project（首次新对话自动建带根项目）；无 Host（Web/测试）保留「默认项目」夹具
+  - 冷启动：**Composer-first** — 无选中 Task 时自动打开「新对话」empty hub，不把「还没有任务」当门闸。有 Desktop Host 且未选 Project 时自动建带根默认项目；无 Host（Web/测试）保留「默认项目」夹具
   - 新对话 → 目录 title「新对话」→ **Runtime** empty hub（产品默认路径）；未选 Project 时先 `ensureProjectForNewChat`
-  - 硬删 Task（目录 + events + snapshot；确认文案强调不可恢复）
-  - Navigator：**仅**真目录；当前项目名可见；「打开本地文件夹」「新建项目」绑定命令面
+  - 硬删 Task（目录 + events + snapshot；确认文案强调不可恢复）；删光后再次自动打开「新对话」
+  - Navigator：**仅**真目录。未指定工作根的对话在扁平「任务」；用户打开/新建的路径项目在「项目」文件夹下分组。侧栏文件夹只展开/收起，不切工作根；文件夹上的会话按钮在该项目下开新对话并切工作根；文件夹菜单可「从列表中移除」（不删本地文件夹）
+  - 项目选择 / 打开本地文件夹 / 新建项目 / 不使用项目：只在 Composer 空态 chip，接到 Host 命令面。未指定工作根时 chip 显示「选择项目」，菜单不出现「不使用项目」（自动/默认项目仍挂对话，不出现在菜单列表）。已选指定项目后 chip 显示项目名，菜单才出现「不使用项目」。选项目只切工作根并回到该项目已有对话，不强制新开；文件夹上的会话按钮才新开对话
   - 统一 IndexedDB `uilab-agent-workbench`（目录 + EventStore 一 open）；测试默认 Memory
 - **Runtime path（产品默认）**：本机 VoltAgent 侧车 → projection → Timeline（ADR-0018 移除了 Deterministic Fake Runtime）
 - **Phase 4B–4F Kernel**：Commands/Events、RuntimePort、VirtualClock、reasoning/tool/approval、queue/steer、长文折叠/滚动
@@ -43,7 +44,7 @@
 
 - 云上多租户 Agent Runtime、Surface Registry 真实现、Document/Browser/Review
 - Resource Explorer、Git 全量集成、Tauri、完整安装器/自动更新/签名
-- 删除 Project 及级联、跨标签页 IDB 同步、会话导出/导入
+- 磁盘级联删除 Project、跨标签页 IDB 同步、会话导出/导入
 - Spec-α 已交付最小 Electron Host（`desktop/electron/`，dev-mode）；不等于产品级桌面安装体验
 
 ## 目录约定

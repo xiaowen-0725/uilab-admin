@@ -1,13 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import type { ProjectSummary, TaskSummary } from '@/modules/project'
+import type { NavigatorProjectGroup, TaskSummary } from '@/modules/project'
 import {
   ChevronDown,
-  FolderOpen,
-  FolderPlus,
   Filter,
+  Folder,
   Kanban,
   Loader2,
   MessageSquarePlus,
+  MoreHorizontal,
   PanelLeft,
   Puzzle,
   Search,
@@ -32,9 +32,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { NavigatorUserMenu } from './navigator-user-menu'
 
 export interface NavigatorProps {
-  project: ProjectSummary | null
-  projects?: ProjectSummary[]
-  tasks: TaskSummary[]
+  looseTasks: TaskSummary[]
+  projectGroups: NavigatorProjectGroup[]
+  selectedProjectId: string | null
   selectedTaskId: string | null
   busyTaskIds?: ReadonlySet<string>
   open: boolean
@@ -42,12 +42,9 @@ export interface NavigatorProps {
   onSelectTask: (taskId: string) => void
   onNewChat?: () => void
   onDeleteTask?: (taskId: string) => void
-  onSelectProject?: (projectId: string) => void
-  onRenameProject?: (projectId: string, name: string) => void
-  hostAvailable?: boolean
+  onRemoveProject?: (projectId: string) => void
+  onNewProjectChat?: (projectId: string) => void
   projectActionError?: string | null
-  onOpenLocalFolder?: () => void
-  onCreateProject?: () => void
   onClose?: () => void
   /** Collapse / open left rail (control lives on the rail, not Task chrome). */
   onToggleNavigator?: () => void
@@ -108,9 +105,9 @@ const iconBtnClass =
 
 /** Left rail: toolbar → brand → IA menu → task list. */
 export function Navigator({
-  project,
-  projects,
-  tasks,
+  looseTasks,
+  projectGroups,
+  selectedProjectId,
   selectedTaskId,
   busyTaskIds,
   open,
@@ -118,33 +115,52 @@ export function Navigator({
   onSelectTask,
   onNewChat,
   onDeleteTask,
-  onSelectProject,
+  onRemoveProject,
+  onNewProjectChat,
   onClose,
   onToggleNavigator,
   onOpenSettings,
   activeDestination = 'task',
   onOpenCapabilities,
-  hostAvailable = false,
   projectActionError = null,
-  onOpenLocalFolder,
-  onCreateProject,
 }: NavigatorProps) {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
-  const [projectQuery, setProjectQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
   const [tasksExpanded, setTasksExpanded] = useState(true)
+  const [projectsExpanded, setProjectsExpanded] = useState(true)
+  const [projectFoldOverride, setProjectFoldOverride] = useState<
+    Record<string, boolean>
+  >({})
 
   const filterActive = statusFilter !== 'all' || timeFilter !== 'all'
-  const projectName = project?.name ?? '未选择项目'
   const tabIndex = open ? 0 : -1
+  const taskQuery = query.trim().toLowerCase()
 
-  const filteredTasks = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return tasks
-    return tasks.filter((task) => task.title.toLowerCase().includes(q))
-  }, [tasks, query])
+  const filteredLooseTasks = useMemo(() => {
+    if (!taskQuery) return looseTasks
+    return looseTasks.filter((task) =>
+      task.title.toLowerCase().includes(taskQuery),
+    )
+  }, [looseTasks, taskQuery])
+
+  const filteredProjectGroups = useMemo(() => {
+    if (!taskQuery) return projectGroups
+    return projectGroups
+      .map((group) => ({
+        ...group,
+        tasks: group.tasks.filter((task) =>
+          task.title.toLowerCase().includes(taskQuery),
+        ),
+      }))
+      .filter((group) => group.tasks.length > 0)
+  }, [projectGroups, taskQuery])
+
+  const isProjectGroupExpanded = (projectId: string) => {
+    if (projectId in projectFoldOverride) return projectFoldOverride[projectId]
+    return projectId === selectedProjectId
+  }
 
   const handleNavClick = (item: NavItem) => {
     if (item.action === 'new-chat') onNewChat?.()
@@ -265,13 +281,6 @@ export function Navigator({
           Workbench
           <span className='ms-1.5 text-foreground/60'>{DISPLAY_VERSION}</span>
         </p>
-        <p
-          className='mt-0.5 truncate text-[12px] leading-4 text-foreground/80'
-          data-testid='project-name'
-          title={projectName}
-        >
-          {projectName}
-        </p>
       </div>
 
       {searchOpen ? (
@@ -335,114 +344,14 @@ export function Navigator({
         </ul>
       </div>
 
-      <div className='px-2.5 pb-2' data-testid='navigator-project-list'>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type='button'
-                className='flex h-8 w-full items-center justify-between gap-1 rounded-md border border-border/60 bg-sidebar-accent/30 px-2 text-xs text-foreground outline-none hover:bg-sidebar-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50'
-                tabIndex={tabIndex}
-                data-testid='navigator-project-trigger'
-                aria-label='选择项目'
-              />
-            }
-          >
-            <span className='min-w-0 truncate'>{projectName}</span>
-            <ChevronDown className='size-3.5 shrink-0 opacity-70' aria-hidden />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align='start'
-            side='bottom'
-            className='w-[var(--navigator-width)] max-w-72'
-            data-testid='navigator-project-menu'
-          >
-            <div className='px-1.5 pb-1.5'>
-              <label className='sr-only' htmlFor='navigator-project-search'>
-                搜索项目
-              </label>
-              <Input
-                id='navigator-project-search'
-                data-testid='navigator-project-search'
-                placeholder='搜索项目…'
-                value={projectQuery}
-                className='h-8 bg-sidebar-accent/40 text-xs shadow-none'
-                onChange={(e) => setProjectQuery(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-              />
-            </div>
-            <DropdownMenuGroup>
-              {(projects ?? [])
-                .filter((item) => {
-                  const q = projectQuery.trim().toLowerCase()
-                  if (!q) return true
-                  return item.name.toLowerCase().includes(q)
-                })
-                .map((item) => (
-                  <DropdownMenuItem
-                    key={item.id}
-                    data-testid={`navigator-project-item-${item.id}`}
-                    onClick={() => onSelectProject?.(item.id)}
-                  >
-                    {item.name}
-                  </DropdownMenuItem>
-                ))}
-            </DropdownMenuGroup>
-            {(projects ?? []).length === 0 ? (
-              <p
-                className='px-2 py-1.5 text-xs text-muted-foreground'
-                data-testid='navigator-project-empty'
-              >
-                还没有项目
-              </p>
-            ) : null}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={!hostAvailable}
-              data-testid='navigator-open-folder'
-              title={
-                hostAvailable
-                  ? '打开本地文件夹'
-                  : '当前是浏览器环境，打开本地文件夹需要桌面宿主'
-              }
-              onClick={() => onOpenLocalFolder?.()}
-            >
-              <FolderOpen className='size-3.5' aria-hidden />
-              打开本地文件夹
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!hostAvailable}
-              data-testid='navigator-create-project'
-              title={
-                hostAvailable
-                  ? '新建项目'
-                  : '当前是浏览器环境，新建项目需要桌面宿主'
-              }
-              onClick={() => onCreateProject?.()}
-            >
-              <FolderPlus className='size-3.5' aria-hidden />
-              新建项目
-            </DropdownMenuItem>
-            {!hostAvailable ? (
-              <p
-                className='px-2 py-1.5 text-[11px] leading-4 text-muted-foreground'
-                data-testid='navigator-host-unavailable'
-              >
-                浏览器环境无法选择本地文件夹，桌面宿主下可打开或新建项目
-              </p>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {projectActionError ? (
-          <p
-            className='mt-1 px-0.5 text-[11px] leading-4 text-destructive'
-            data-testid='project-action-error'
-          >
-            {projectActionError}
-          </p>
-        ) : null}
-      </div>
+      {projectActionError ? (
+        <p
+          className='px-2.5 pb-1 text-[11px] leading-4 text-destructive'
+          data-testid='project-action-error'
+        >
+          {projectActionError}
+        </p>
+      ) : null}
 
       <ScrollArea className='min-h-0 flex-1 px-2 pb-2'>
         <section data-testid='navigator-tasks' className='pt-2'>
@@ -457,7 +366,7 @@ export function Navigator({
             <span>
               任务
               <span className='ms-0.5 text-foreground/50 tabular-nums'>
-                ({filteredTasks.length})
+                ({filteredLooseTasks.length})
               </span>
             </span>
             <ChevronDown
@@ -479,7 +388,7 @@ export function Navigator({
                   筛选仅 UI 占位
                 </p>
               ) : null}
-              {filteredTasks.length === 0 ? (
+              {filteredLooseTasks.length === 0 ? (
                 <p
                   className='px-2.5 py-2 text-[13px] leading-5 text-foreground/60'
                   data-testid='navigator-tasks-empty'
@@ -488,7 +397,7 @@ export function Navigator({
                 </p>
               ) : (
                 <ul className='flex flex-col gap-px'>
-                  {filteredTasks.map((task) => (
+                  {filteredLooseTasks.map((task) => (
                     <TaskRow
                       key={task.id}
                       task={task}
@@ -504,6 +413,157 @@ export function Navigator({
             </>
           ) : null}
         </section>
+
+        {filteredProjectGroups.length > 0 ? (
+          <section data-testid='navigator-projects' className='pt-3'>
+            <button
+              type='button'
+              className='mb-0.5 flex h-7 w-full items-center gap-1 rounded-md px-2 text-[12px] leading-4 text-foreground/70 outline-none hover:bg-sidebar-accent/50 hover:text-foreground'
+              tabIndex={tabIndex}
+              aria-expanded={projectsExpanded}
+              data-testid='navigator-projects-toggle'
+              onClick={() => setProjectsExpanded((v) => !v)}
+            >
+              <span>
+                项目
+                <span className='ms-0.5 text-foreground/50 tabular-nums'>
+                  ({filteredProjectGroups.length})
+                </span>
+              </span>
+              <ChevronDown
+                className={cn(
+                  'size-3.5 shrink-0 text-foreground/55 transition-transform',
+                  !projectsExpanded && '-rotate-90'
+                )}
+                aria-hidden
+              />
+            </button>
+
+            {projectsExpanded
+              ? filteredProjectGroups.map((group) => {
+                  const expanded = isProjectGroupExpanded(group.project.id)
+                  return (
+                    <div
+                      key={group.project.id}
+                      data-testid={`navigator-project-group-${group.project.id}`}
+                    >
+                      <div className='group/project flex h-8 items-center rounded-md hover:bg-sidebar-accent/70'>
+                        <button
+                          type='button'
+                          className='flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] leading-5 text-foreground/90 outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
+                          tabIndex={tabIndex}
+                          aria-expanded={expanded}
+                          data-testid={`navigator-project-group-toggle-${group.project.id}`}
+                          onClick={() =>
+                            setProjectFoldOverride((prev) => ({
+                              ...prev,
+                              [group.project.id]: !expanded,
+                            }))
+                          }
+                        >
+                          <Folder
+                            className='size-3.5 shrink-0 text-foreground/55'
+                            aria-hidden
+                          />
+                          <span className='min-w-0 flex-1 truncate'>
+                            {group.project.name}
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              'size-3.5 shrink-0 text-foreground/55 transition-transform',
+                              !expanded && '-rotate-90'
+                            )}
+                            aria-hidden
+                          />
+                        </button>
+                        {onRemoveProject ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <button
+                                  type='button'
+                                  className={cn(
+                                    iconBtnClass,
+                                    'opacity-0 group-hover/project:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100',
+                                  )}
+                                  tabIndex={tabIndex}
+                                  aria-label={`${group.project.name} 项目操作`}
+                                  data-testid={`navigator-project-menu-${group.project.id}`}
+                                  title='项目操作'
+                                />
+                              }
+                            >
+                              <MoreHorizontal
+                                className='size-3.5'
+                                aria-hidden
+                              />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align='start'
+                              side='bottom'
+                              className='min-w-44'
+                              data-testid={`navigator-project-menu-content-${group.project.id}`}
+                            >
+                              <DropdownMenuItem
+                                variant='destructive'
+                                data-testid={`navigator-project-remove-${group.project.id}`}
+                                onClick={() =>
+                                  onRemoveProject(group.project.id)
+                                }
+                              >
+                                <Trash2 aria-hidden />
+                                <span>从列表中移除</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
+                        {onNewProjectChat ? (
+                          <button
+                            type='button'
+                            className={cn(
+                              iconBtnClass,
+                              'me-0.5 opacity-0 group-hover/project:opacity-100 focus-visible:opacity-100',
+                            )}
+                            tabIndex={tabIndex}
+                            aria-label={`在 ${group.project.name} 中新建对话`}
+                            data-testid={`navigator-project-new-chat-${group.project.id}`}
+                            title='新建对话'
+                            onClick={() => {
+                              setProjectFoldOverride((prev) => ({
+                                ...prev,
+                                [group.project.id]: true,
+                              }))
+                              onNewProjectChat(group.project.id)
+                            }}
+                          >
+                            <MessageSquarePlus
+                              className='size-3.5'
+                              aria-hidden
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+                      {expanded ? (
+                        <ul className='flex flex-col gap-px ps-3'>
+                          {group.tasks.map((task) => (
+                            <TaskRow
+                              key={task.id}
+                              task={task}
+                              selected={task.id === selectedTaskId}
+                              busy={busyTaskIds?.has(task.id) ?? false}
+                              tabIndex={tabIndex}
+                              onSelect={onSelectTask}
+                              onDelete={onDeleteTask}
+                            />
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  )
+                })
+              : null}
+          </section>
+        ) : null}
       </ScrollArea>
 
       <NavigatorUserMenu interactive={open} onOpenSettings={onOpenSettings} />

@@ -11,6 +11,7 @@ import {
   createNewChatTask,
   decideNewChat,
   hardDeleteTask,
+  removeProjectFromList,
 } from './task-lifecycle-commands'
 
 describe('decideNewChat / blank-draft once', () => {
@@ -28,6 +29,24 @@ describe('decideNewChat / blank-draft once', () => {
       },
     })
     expect(decision).toEqual({ kind: 'reselect', taskId: 'task-1' })
+  })
+
+  it('reselects an existing blank draft in the project when nothing is selected', () => {
+    expect(
+      decideNewChat({
+        selectedProjectId: DEFAULT_PROJECT_ID,
+        selectedTask: null,
+        blankDraftInProject: {
+          id: 'task-draft',
+          projectId: DEFAULT_PROJECT_ID,
+          title: NEW_TASK_TITLE,
+          titleSource: 'local',
+          lastAcceptedSuggestionVersion: 0,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+    ).toEqual({ kind: 'reselect', taskId: 'task-draft' })
   })
 
   it('creates when selection is null or renamed', () => {
@@ -235,5 +254,132 @@ describe('hardDeleteTask', () => {
     expect(result.nextSelectedTaskId).toBeNull()
     expect(result.lastTaskByProject[DEFAULT_PROJECT_ID]).toBeNull()
     expect(detach).toHaveBeenCalled()
+  })
+})
+
+describe('removeProjectFromList', () => {
+  it('removes the selected project and retargets to a remaining project', async () => {
+    const catalogPort = createMemoryProjectCatalog()
+    const catalog = new ProjectCatalogController(catalogPort)
+    await catalog.hydrate()
+    const specified = await catalog.createProject('桌面项目', {
+      localRoot: '/virtual/AgentWorkbench/桌面项目',
+      rootSource: 'created',
+    })
+    const task = await catalog.createTask({
+      projectId: specified.id,
+      taskId: 'task-desk',
+      title: '问候',
+    })
+    const leftover = await catalog.createTask({
+      projectId: DEFAULT_PROJECT_ID,
+      taskId: 'task-default',
+      title: '默认对话',
+    })
+
+    const runStatusIndex = createRunStatusIndex()
+    const onTaskDeleted = vi.fn()
+
+    const result = await removeProjectFromList({
+      projectId: specified.id,
+      catalog,
+      eventStore: createMemoryEventStore(),
+      runStatusIndex,
+      runtimeController: null,
+      activeTaskId: task.id,
+      selectedTaskId: task.id,
+      selectedProjectId: specified.id,
+      lastTaskByProject: {
+        [specified.id]: task.id,
+        [DEFAULT_PROJECT_ID]: leftover.id,
+      },
+      onTaskDeleted,
+    })
+
+    expect(catalog.getProjectRecord(specified.id)).toBeNull()
+    expect(catalog.getTaskRow(task.id)).toBeNull()
+    expect(catalog.getTaskRow(leftover.id)).toBeTruthy()
+    expect(result.removedTaskIds).toEqual([task.id])
+    expect(result.selectionChanged).toBe(true)
+    expect(result.nextSelectedProjectId).toBe(DEFAULT_PROJECT_ID)
+    expect(result.nextSelectedTaskId).toBe(leftover.id)
+    expect(result.lastTaskByProject[specified.id]).toBeUndefined()
+    expect(result.lastTaskByProject[DEFAULT_PROJECT_ID]).toBe(leftover.id)
+    expect(runStatusIndex.get(task.id)).toBeNull()
+    expect(onTaskDeleted).toHaveBeenCalledWith(task.id)
+  })
+
+  it('keeps the current selection when removing another project', async () => {
+    const catalogPort = createMemoryProjectCatalog()
+    const catalog = new ProjectCatalogController(catalogPort)
+    await catalog.hydrate()
+    const other = await catalog.createProject('旁路项目', {
+      localRoot: '/virtual/AgentWorkbench/旁路项目',
+      rootSource: 'opened',
+    })
+    const current = await catalog.createTask({
+      projectId: DEFAULT_PROJECT_ID,
+      taskId: 'task-current',
+      title: '当前',
+    })
+    const dropped = await catalog.createTask({
+      projectId: other.id,
+      taskId: 'task-dropped',
+      title: '将被移除',
+    })
+
+    const result = await removeProjectFromList({
+      projectId: other.id,
+      catalog,
+      eventStore: createMemoryEventStore(),
+      runStatusIndex: createRunStatusIndex(),
+      runtimeController: null,
+      activeTaskId: current.id,
+      selectedTaskId: current.id,
+      selectedProjectId: DEFAULT_PROJECT_ID,
+      lastTaskByProject: {
+        [DEFAULT_PROJECT_ID]: current.id,
+        [other.id]: dropped.id,
+      },
+    })
+
+    expect(catalog.getProjectRecord(other.id)).toBeNull()
+    expect(catalog.getTaskRow(dropped.id)).toBeNull()
+    expect(result.selectionChanged).toBe(false)
+    expect(result.nextSelectedProjectId).toBe(DEFAULT_PROJECT_ID)
+    expect(result.nextSelectedTaskId).toBe(current.id)
+    expect(result.lastTaskByProject[other.id]).toBeUndefined()
+  })
+
+  it('clears selection when the last project is removed', async () => {
+    const catalogPort = createMemoryProjectCatalog()
+    const catalog = new ProjectCatalogController(catalogPort)
+    await catalog.hydrate({ seedDefaultProject: false })
+    const only = await catalog.createProject('唯一项目', {
+      localRoot: '/virtual/AgentWorkbench/唯一项目',
+      rootSource: 'created',
+    })
+    const task = await catalog.createTask({
+      projectId: only.id,
+      taskId: 'task-only',
+      title: '仅有',
+    })
+
+    const result = await removeProjectFromList({
+      projectId: only.id,
+      catalog,
+      eventStore: createMemoryEventStore(),
+      runStatusIndex: createRunStatusIndex(),
+      runtimeController: null,
+      activeTaskId: task.id,
+      selectedTaskId: task.id,
+      selectedProjectId: only.id,
+      lastTaskByProject: { [only.id]: task.id },
+    })
+
+    expect(catalog.getView().projects).toHaveLength(0)
+    expect(result.nextSelectedProjectId).toBeNull()
+    expect(result.nextSelectedTaskId).toBeNull()
+    expect(result.lastTaskByProject).toEqual({})
   })
 })
