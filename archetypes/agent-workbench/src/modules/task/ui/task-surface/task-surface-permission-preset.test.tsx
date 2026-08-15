@@ -66,7 +66,6 @@ function ApprovalHarness({
     title: result.readModel.title,
     projectName: '测试项目',
     mode: 'runtime',
-    stream: null,
     readModel: result.readModel,
     launchActions: [],
     contextSections: [],

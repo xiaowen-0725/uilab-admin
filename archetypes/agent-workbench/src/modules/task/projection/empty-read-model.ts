@@ -25,6 +25,7 @@ export function emptyTaskReadModel(options: EmptyReadModelOptions): TaskReadMode
     liveStatus: null,
     liveStatusKind: null,
     plan: null,
+    deliverables: [],
     timeline: [],
     recoveryRequired: false,
     lastTaskSequence: 0,
@@ -39,5 +40,6 @@ export function emptyProjectionState(options: EmptyReadModelOptions): Projection
   return {
     readModel: emptyTaskReadModel(options),
     seenEventIds: new Set<string>(),
+    hasStepBoundaries: false,
   }
 }

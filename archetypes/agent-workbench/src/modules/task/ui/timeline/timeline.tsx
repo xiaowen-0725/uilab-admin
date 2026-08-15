@@ -30,12 +30,14 @@ import { cn } from '@/lib/utils'
 import { formatDurationMs } from '../../model/stream-events'
 import type { RunStatus } from '../../model/lifecycle'
 import type {
+  DeliverableRef,
   TaskReadModel,
   TimelineItem,
   TimelineItemMeta,
   ProcessSummary,
 } from '../../projection/types'
 import { FileChangeSummaryCard } from '../markdown/file-change-summary-card'
+import { FileReferenceChip } from '../markdown/file-reference-chip'
 import { SimpleMarkdown } from '../markdown/simple-markdown'
 import { formatToolClusterCopy } from '../../projection/tool-activity-copy'
 import { runtimeHonestyCopy } from '../../runtime/runtime-honesty'
@@ -108,7 +110,7 @@ function isActiveRunStatus(status: RunStatus | null): boolean {
  * Status wins over title for active runs. Projection may historically stamp title
  * 「已处理」while status is still `running` (Codex-shaped "Worked for Xs"); in Chinese
  * that past-tense reads as completed — never show 「已处理」until status is completed.
- * Align present-tense with ExecutionStream / liveStatus (「正在思考」/「处理中」).
+ * Align present-tense with liveStatus (「正在思考」/「处理中」).
  */
 export function chineseStatusLabel(item: TimelineItem): string {
   switch (item.status) {
@@ -365,6 +367,10 @@ export function Timeline({
                   streamItems={seg.bodyItems}
                   runActive={runActive && isLast}
                   liveStatus={isLast ? readModel.liveStatus : null}
+                  deliverables={
+                    seg.terminal?.meta?.deliverables ??
+                    (isLast ? readModel.deliverables : undefined)
+                  }
                   onOpenFileRef={onOpenFileRef}
                   onRespondToQuestion={onRespondToQuestion}
                 />
@@ -402,11 +408,59 @@ function emptyWorkingBlock(): Extract<TimelineViewBlock, { kind: 'working' }> {
   }
 }
 
+function deliverableChipLabel(item: DeliverableRef): string {
+  const base = item.path.split('/').pop() || item.path
+  if (item.changeKind === 'deleted') return `已删除 ${base}`
+  if (item.title && item.title !== item.path) return item.title
+  return base
+}
+
+function DeliverableZone({
+  items,
+  onOpenFileRef,
+}: {
+  items: readonly DeliverableRef[]
+  onOpenFileRef?: (info: TimelineOpenFileRef) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <div
+      className='flex flex-col gap-2'
+      data-testid='timeline-deliverables'
+      data-kind='deliverables'
+    >
+      <p className='text-sm leading-5 text-muted-foreground'>
+        本次产出 · {items.length} 个文件
+      </p>
+      <div className='flex flex-wrap gap-x-3 gap-y-1.5'>
+        {items.map((item) => (
+          <FileReferenceChip
+            key={item.path}
+            label={deliverableChipLabel(item)}
+            path={item.path}
+            onOpen={
+              onOpenFileRef
+                ? (info) =>
+                    onOpenFileRef({
+                      path: info.path ?? item.path,
+                      line: info.line,
+                      label: item.path.split('/').pop() || item.path,
+                    })
+                : undefined
+            }
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TimelineTurnBlock({
   latestTerminal,
   streamItems,
   runActive,
   liveStatus,
+  deliverables,
   onOpenFileRef,
   onRespondToQuestion,
 }: {
@@ -414,6 +468,7 @@ function TimelineTurnBlock({
   streamItems: TimelineItem[]
   runActive: boolean
   liveStatus: string | null | undefined
+  deliverables?: readonly DeliverableRef[]
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
   onRespondToQuestion?: QuestionRespondHandler
 }) {
@@ -480,6 +535,10 @@ function TimelineTurnBlock({
               : ''}
           </span>
         </div>
+      ) : null}
+
+      {completed && deliverables && deliverables.length > 0 ? (
+        <DeliverableZone items={deliverables} onOpenFileRef={onOpenFileRef} />
       ) : null}
     </div>
   )
@@ -906,11 +965,12 @@ function FileDiffCard({
   const base = path.split('/').pop() || path
 
   return (
-    <div data-kind='file-change' data-category='file-change'>
+    <div data-kind={item.category} data-category={item.category}>
       <FileChangeSummaryCard
         path={path}
         additions={additions}
         deletions={deletions}
+        changeKind={meta?.changeKind}
         previewLines={previewLines}
         testId={`timeline-item-${item.id}`}
         onOpen={
@@ -1044,6 +1104,7 @@ const TimelineRow = memo(function TimelineRow({
         </div>
       )
     case 'file-change':
+    case 'artifact':
       return <FileDiffCard item={item} onOpenFileRef={onOpenFileRef} />
     case 'source-group':
       return (

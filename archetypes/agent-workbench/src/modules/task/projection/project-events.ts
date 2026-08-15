@@ -33,6 +33,8 @@ import {
   toolKindHint,
 } from './tool-activity-copy'
 import type {
+  DeliverableRef,
+  FileChangeKind,
   LiveStatusKind,
   ProjectionState,
   TaskReadModel,
@@ -46,7 +48,16 @@ import type {
 type MutableState = {
   readModel: TaskReadModel
   seenEventIds: Set<string>
+  hasStepBoundaries: boolean
+  activeStepId?: string
 }
+
+const WORKING_STEP_CATEGORIES = new Set<TimelineItemCategory>([
+  'reasoning-section',
+  'tool-group',
+  'command-execution',
+  'plan-update',
+])
 
 const STREAMING_DELTA_EVENT_TYPES = new Set([
   'output.delta',
@@ -73,6 +84,8 @@ function cloneState(state: ProjectionState): MutableState {
       timeline: state.readModel.timeline.slice(),
     },
     seenEventIds: new Set(state.seenEventIds),
+    hasStepBoundaries: state.hasStepBoundaries === true,
+    activeStepId: state.activeStepId,
   }
 }
 
@@ -102,7 +115,31 @@ function freezeState(state: MutableState): ProjectionState {
   return {
     readModel: state.readModel,
     seenEventIds: state.seenEventIds,
+    hasStepBoundaries: state.hasStepBoundaries,
+    activeStepId: state.activeStepId,
   }
+}
+
+function markStepBoundary(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  stepId?: string | null,
+): void {
+  state.hasStepBoundaries = true
+  if (stepId) state.activeStepId = stepId
+  sealOpenAssistant(state, envelope)
+}
+
+function withActiveStep(
+  state: MutableState,
+  category: TimelineItemCategory,
+  meta: TimelineItemMeta | undefined,
+): TimelineItemMeta | undefined {
+  if (!state.activeStepId || !WORKING_STEP_CATEGORIES.has(category)) {
+    return meta
+  }
+  if (meta?.stepId) return meta
+  return mergeMeta(meta, { stepId: state.activeStepId })
 }
 
 function asRecord(payload: unknown): Record<string, unknown> {
@@ -434,6 +471,7 @@ function isProcessBreakingCategory(category: TimelineItemCategory): boolean {
     category === 'source-group' ||
     category === 'approval-request' ||
     category === 'file-change' ||
+    category === 'artifact' ||
     category === 'input-request' ||
     category === 'user-message' ||
     category === 'error' ||
@@ -457,26 +495,31 @@ function appendAssistantDelta(
   const runId = envelope.runId as RunId | undefined
   const version = state.readModel.projectionVersion
   const timeline = state.readModel.timeline
+  const useHeuristic = !state.hasStepBoundaries
 
   let openIdx = -1
   for (let i = timeline.length - 1; i >= 0; i--) {
     const item = timeline[i]!
     if (runId && item.runId && item.runId !== runId) continue
     if (item.category !== 'assistant-message') {
-      if (isProcessBreakingCategory(item.category)) break
+      if (useHeuristic && isProcessBreakingCategory(item.category)) break
       continue
     }
     // text-end/output.completed seals a segment. A later text-delta is a new
     // narrative segment even when no tool row appears between them.
     if (item.status === 'completed') break
-    const brokenAfter = timeline
-      .slice(i + 1)
-      .some(
-        (x) =>
-          (!runId || !x.runId || x.runId === runId) &&
-          isProcessBreakingCategory(x.category),
-      )
-    if (!brokenAfter) openIdx = i
+    if (useHeuristic) {
+      const brokenAfter = timeline
+        .slice(i + 1)
+        .some(
+          (x) =>
+            (!runId || !x.runId || x.runId === runId) &&
+            isProcessBreakingCategory(x.category),
+        )
+      if (!brokenAfter) openIdx = i
+    } else {
+      openIdx = i
+    }
     break
   }
 
@@ -546,6 +589,95 @@ function finalizeAssistant(
   }
 }
 
+/** Seal the open assistant segment so the next delta starts a new one. */
+function sealOpenAssistant(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const runId = envelope.runId as RunId | undefined
+  const version = state.readModel.projectionVersion
+  for (let i = state.readModel.timeline.length - 1; i >= 0; i--) {
+    const item = state.readModel.timeline[i]!
+    if (item.category !== 'assistant-message') continue
+    if (runId && item.runId && item.runId !== runId) continue
+    if (item.status === 'completed') return
+    replaceItem(state, i, {
+      ...touchItem(item, envelope, version),
+      status: 'completed',
+    })
+    return
+  }
+}
+
+function parseChangeKind(value: unknown): FileChangeKind | undefined {
+  if (value === 'created' || value === 'updated' || value === 'deleted') {
+    return value
+  }
+  return undefined
+}
+
+function collectRunDeliverables(
+  state: MutableState,
+  runId: RunId | undefined,
+): DeliverableRef[] {
+  const byPath = new Map<string, DeliverableRef>()
+  for (const item of state.readModel.timeline) {
+    if (runId && item.runId && item.runId !== runId) continue
+    if (item.category === 'file-change') {
+      const path = item.meta?.path ?? item.title
+      if (!path) continue
+      const prev = byPath.get(path)
+      byPath.set(path, {
+        path,
+        title: prev?.title ?? item.title ?? path,
+        kind: prev?.kind,
+        changeKind: item.meta?.changeKind ?? prev?.changeKind,
+        source: prev?.source ?? 'file',
+        additions: item.meta?.additions ?? prev?.additions,
+        deletions: item.meta?.deletions ?? prev?.deletions,
+      })
+      continue
+    }
+    if (item.category === 'artifact') {
+      const path = item.meta?.path ?? item.title
+      if (!path) continue
+      const prev = byPath.get(path)
+      byPath.set(path, {
+        path,
+        title: item.title ?? prev?.title ?? path,
+        kind: item.meta?.kind ?? prev?.kind,
+        changeKind: prev?.changeKind ?? item.meta?.changeKind,
+        source: 'artifact',
+        additions: prev?.additions,
+        deletions: prev?.deletions,
+      })
+    }
+  }
+  return [...byPath.values()]
+}
+
+function attachRunDeliverables(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const runId = envelope.runId as RunId | undefined
+  const deliverables = collectRunDeliverables(state, runId)
+  state.readModel = { ...state.readModel, deliverables }
+  if (deliverables.length === 0) return
+  const idx = findIndex(
+    state.readModel.timeline,
+    (item) =>
+      item.category === 'run-terminal' &&
+      (runId ? item.runId === runId : true),
+  )
+  if (idx < 0) return
+  const terminal = state.readModel.timeline[idx]!
+  replaceItem(state, idx, {
+    ...terminal,
+    meta: mergeMeta(terminal.meta, { deliverables }),
+  })
+}
+
 /** Mark this run's assistant segments completed. Does not write commentary. */
 function completeAssistantsOnRunComplete(
   state: MutableState,
@@ -612,10 +744,10 @@ function openReasoningSection(
       body: delta ?? '',
       status: completed ? 'completed' : 'streaming',
       runId,
-      meta: {
+      meta: withActiveStep(state, 'reasoning-section', {
         startedAt: envelopeTime(envelope),
         endedAt: completed ? envelopeTime(envelope) : undefined,
-      },
+      }),
     }),
   )
 }
@@ -741,7 +873,7 @@ function replaceByKey(
       title: patch.title,
       body: patch.body,
       status: patch.status,
-      meta: patch.meta,
+      meta: withActiveStep(state, category, patch.meta),
     }),
   )
 }
@@ -787,7 +919,7 @@ function upsertByKey(
       title: patch.title,
       body: patch.body,
       status: patch.status,
-      meta: patch.meta,
+      meta: withActiveStep(state, category, patch.meta),
     }),
   )
 }
@@ -1001,6 +1133,28 @@ export function applyRuntimeEvent(
       finalizeAssistant(next, envelope, text)
       break
     }
+    case 'output.segment_started': {
+      markStepBoundary(next, envelope)
+      break
+    }
+    case 'step.started': {
+      markStepBoundary(
+        next,
+        envelope,
+        payloadString(envelope.payload, 'stepId') ?? payloadString(envelope.payload, 'id'),
+      )
+      break
+    }
+    case 'step.completed': {
+      markStepBoundary(
+        next,
+        envelope,
+        payloadString(envelope.payload, 'stepId') ??
+          payloadString(envelope.payload, 'id') ??
+          next.activeStepId,
+      )
+      break
+    }
     case 'run.completed': {
       completeAssistantsOnRunComplete(next, envelope)
       setRunStatus(next, 'completed', envelope)
@@ -1008,6 +1162,7 @@ export function applyRuntimeEvent(
       ensureRunTerminal(next, envelope, 'completed', '已处理', {
         durationMs: durationMs ?? undefined,
       })
+      attachRunDeliverables(next, envelope)
       break
     }
     case 'run.cancel_requested': {
@@ -1299,10 +1454,19 @@ export function applyRuntimeEvent(
     case 'file.changed': {
       const path = payloadString(envelope.payload, 'path') ?? 'file'
       const summary = payloadString(envelope.payload, 'summary') ?? ''
+      const changeKind = parseChangeKind(rec.changeKind)
       const additions =
-        typeof rec.additions === 'number' ? rec.additions : undefined
+        changeKind === 'deleted'
+          ? undefined
+          : typeof rec.additions === 'number'
+            ? rec.additions
+            : undefined
       const deletions =
-        typeof rec.deletions === 'number' ? rec.deletions : undefined
+        changeKind === 'deleted'
+          ? undefined
+          : typeof rec.deletions === 'number'
+            ? rec.deletions
+            : undefined
       const diffLines = parseDiffLines(rec.diffLines)
       const children = parseChildren(rec.children ?? rec.items)
       pushItem(
@@ -1312,9 +1476,10 @@ export function applyRuntimeEvent(
           category: 'file-change',
           title: path,
           body: summary,
-          status: 'changed',
+          status: changeKind === 'deleted' ? 'deleted' : 'changed',
           meta: {
             path,
+            changeKind,
             additions,
             deletions,
             diffLines,
@@ -1322,7 +1487,42 @@ export function applyRuntimeEvent(
           },
         }),
       )
-      setLiveStatus(next, '正在写入结果…', 'tool')
+      setLiveStatus(
+        next,
+        changeKind === 'deleted' ? '正在删除文件…' : '正在写入结果…',
+        'tool',
+      )
+      break
+    }
+    case 'artifact.created':
+    case 'artifact.updated':
+    case 'artifact.linked': {
+      const path =
+        payloadString(envelope.payload, 'path') ??
+        payloadString(envelope.payload, 'uri') ??
+        'artifact'
+      const kind = payloadString(envelope.payload, 'kind') ?? undefined
+      const title =
+        payloadString(envelope.payload, 'title') ??
+        payloadString(envelope.payload, 'name') ??
+        path
+      const changeKind =
+        parseChangeKind(rec.changeKind) ??
+        (type === 'artifact.created'
+          ? 'created'
+          : type === 'artifact.updated'
+            ? 'updated'
+            : undefined)
+      upsertByKey(next, envelope, 'artifact', path, {
+        title,
+        status: type === 'artifact.linked' ? 'linked' : changeKind ?? 'created',
+        meta: {
+          path,
+          kind,
+          title,
+          changeKind,
+        },
+      })
       break
     }
     case 'source.grouped': {
@@ -1447,9 +1647,6 @@ export function applyRuntimeEvent(
     case 'runtime.snapshot_applied':
     case 'environment.selected':
     case 'capability.changed':
-    case 'artifact.created':
-    case 'artifact.updated':
-    case 'artifact.linked':
     // Work Surface open is Session/Composition concern — never a timeline row / openTabs fact.
     case 'work_surface.open_requested':
       break

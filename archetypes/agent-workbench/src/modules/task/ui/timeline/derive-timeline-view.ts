@@ -191,6 +191,11 @@ export function deriveTimelineView(
 
   for (const item of bodyItems) {
     if (isWorkingItem(item)) {
+      const prevStep = working[working.length - 1]?.meta?.stepId
+      const nextStep = item.meta?.stepId
+      if (nextStep && prevStep !== nextStep) {
+        flushWorking()
+      }
       working.push(item)
       continue
     }

@@ -102,6 +102,50 @@ describe('deriveTimelineView', () => {
     })
   })
 
+  it('closes a working block when the next tool belongs to a later step', () => {
+    const blocks = deriveTimelineView([
+      item({
+        id: 'r1',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'read', stepId: 'step-1' },
+      }),
+      item({
+        id: 'w1',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'write', stepId: 'step-2' },
+      }),
+    ])
+
+    expect(kinds(blocks)).toEqual(['working[single:r1]', 'working[single:w1]'])
+  })
+
+  it('still merges consecutive tools that share a step or have no step id', () => {
+    const blocks = deriveTimelineView([
+      item({
+        id: 'r1',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'read', stepId: 'step-1' },
+      }),
+      item({
+        id: 'r2',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'read', stepId: 'step-1' },
+      }),
+      item({
+        id: 'r3',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'read' },
+      }),
+    ])
+
+    expect(kinds(blocks)).toEqual(['working[cluster:read:3]'])
+  })
+
   it('closes a working block when prose interrupts, then opens a new one', () => {
     const blocks = deriveTimelineView([
       item({

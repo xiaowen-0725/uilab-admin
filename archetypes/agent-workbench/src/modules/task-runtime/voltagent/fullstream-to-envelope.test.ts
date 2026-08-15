@@ -185,6 +185,63 @@ describe('mapFullStreamChunks', () => {
     })
   })
 
+  it('maps start-step / finish-step / text-start to step and segment envelopes', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        { type: 'start' },
+        { type: 'start-step', id: 'step-1' },
+        { type: 'text-start', id: 'text-1' },
+        { type: 'text-delta', delta: '先看目录。' },
+        { type: 'text-end', content: '先看目录。' },
+        { type: 'finish-step', id: 'step-1' },
+        { type: 'start-step', id: 'step-2' },
+        { type: 'text-start', id: 'text-2' },
+        { type: 'text-delta', delta: '目录是空的。' },
+        { type: 'text-end', content: '目录是空的。' },
+        { type: 'finish-step', id: 'step-2' },
+        { type: 'finish', finishReason: 'stop' },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((e) => e.eventType)).toEqual([
+      'run.started',
+      'step.started',
+      'output.segment_started',
+      'output.delta',
+      'output.completed',
+      'step.completed',
+      'step.started',
+      'output.segment_started',
+      'output.delta',
+      'output.completed',
+      'step.completed',
+      'run.completed',
+    ])
+    expect(envelopes[1]?.payload).toMatchObject({ stepId: 'step-1' })
+    expect(envelopes[2]?.payload).toMatchObject({ id: 'text-1' })
+    expect(envelopes[5]?.payload).toMatchObject({ stepId: 'step-1' })
+  })
+
+  it('keeps a legacy stream without step/text-start chunks on the same envelope types', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        { type: 'start' },
+        { type: 'text-delta', delta: '你' },
+        { type: 'text-delta', delta: '好' },
+        { type: 'text-end', content: '你好' },
+        { type: 'finish', finishReason: 'stop', usage: { totalTokens: 3 } },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((e) => e.eventType)).toEqual([
+      'run.started',
+      'output.delta',
+      'output.delta',
+      'output.completed',
+      'run.completed',
+    ])
+  })
+
   it('maps write tool result to tool.completed + file.changed', () => {
     const { envelopes } = mapFullStreamChunks(
       [
@@ -209,6 +266,7 @@ describe('mapFullStreamChunks', () => {
     expect(envelopes[2]?.payload).toMatchObject({
       path: 'flychess/README.md',
       additions: 10,
+      changeKind: 'created',
     })
   })
 
@@ -284,7 +342,9 @@ describe('mapFullStreamChunks', () => {
     expect(envelopes[8]?.payload).toMatchObject({
       path: '/notes/old.md',
       toolName: 'delete_file',
+      changeKind: 'deleted',
     })
+    expect(envelopes[8]?.payload).not.toHaveProperty('additions')
   })
 
   it('keeps Chinese CLI login hints on auth_revoked tool results for Timeline', () => {

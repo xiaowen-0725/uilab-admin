@@ -91,7 +91,6 @@ function renderPlanSurface(
     title: readModel.title,
     projectName: '测试项目',
     mode: 'runtime',
-    stream: null,
     readModel,
     launchActions: [],
     contextSections: [],

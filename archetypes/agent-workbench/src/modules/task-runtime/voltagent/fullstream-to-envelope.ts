@@ -106,6 +106,20 @@ function isWriteTool(name: string): boolean {
   )
 }
 
+function isDeleteTool(name: string): boolean {
+  return /^(delete_file|deleteFile|rmdir)$/i.test(name)
+}
+
+function isEditTool(name: string): boolean {
+  return /^(edit|edit_file|editFile)$/i.test(name)
+}
+
+function fileChangeKind(name: string): 'created' | 'updated' | 'deleted' {
+  if (isDeleteTool(name)) return 'deleted'
+  if (isEditTool(name)) return 'updated'
+  return 'created'
+}
+
 function isUpdatePlanTool(name: string): boolean {
   return name === 'update_plan'
 }
@@ -251,6 +265,28 @@ export function mapFullStreamChunk(
       push('run.started', { source: 'voltagent', chunkType: type })
       break
 
+    case 'start-step':
+      push('step.started', {
+        stepId: asString(chunk.id) ?? asString(chunk.stepId),
+        chunkType: type,
+      })
+      break
+
+    case 'finish-step':
+      push('step.completed', {
+        stepId: asString(chunk.id) ?? asString(chunk.stepId),
+        finishReason: chunk.finishReason,
+        chunkType: type,
+      })
+      break
+
+    case 'text-start':
+      push('output.segment_started', {
+        id: asString(chunk.id),
+        chunkType: type,
+      })
+      break
+
     case 'text-delta': {
       const delta = textDelta(chunk)
       if (delta) {
@@ -384,24 +420,28 @@ export function mapFullStreamChunk(
       if (!isError && isWriteTool(name)) {
         const filePath = extractToolPath(args, output)
         if (filePath) {
+          const changeKind = fileChangeKind(name)
           const additions =
-            typeof output === 'object' &&
-            output &&
-            typeof (output as { additions?: unknown }).additions === 'number'
-              ? (output as { additions: number }).additions
-              : undefined
+            changeKind === 'deleted'
+              ? undefined
+              : typeof output === 'object' &&
+                  output &&
+                  typeof (output as { additions?: unknown }).additions === 'number'
+                ? (output as { additions: number }).additions
+                : undefined
           const deletions =
-            typeof output === 'object' &&
-            output &&
-            typeof (output as { deletions?: unknown }).deletions === 'number'
-              ? (output as { deletions: number }).deletions
-              : /delete_file|rmdir/i.test(name)
-                ? 1
+            changeKind === 'deleted'
+              ? undefined
+              : typeof output === 'object' &&
+                  output &&
+                  typeof (output as { deletions?: unknown }).deletions === 'number'
+                ? (output as { deletions: number }).deletions
                 : undefined
           push('file.changed', {
             path: filePath,
-            additions,
-            deletions,
+            changeKind,
+            ...(additions != null ? { additions } : {}),
+            ...(deletions != null ? { deletions } : {}),
             toolCallId: callId,
             toolName: name,
           })

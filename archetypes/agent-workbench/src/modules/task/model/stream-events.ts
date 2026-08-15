@@ -1,6 +1,7 @@
 /**
  * Capture-driven task event stream (fixture / replay only — not a live Runtime).
- * Pure fold: StreamEvent[] → TurnViewModel for unit tests and UI.
+ * `foldCaptureToView` remains for capture JSON unit tests.
+ * UI replay goes through `captureToEnvelopes` → projection → Timeline.
  */
 
 export type StreamEventType =

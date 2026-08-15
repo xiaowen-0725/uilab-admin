@@ -1,15 +1,13 @@
 /**
- * Progressive wall-clock playback of a capture stream (true timed replay).
- * Maps capture event `ts` (ms from start) through `playbackRate` to real time.
+ * Progressive wall-clock playback of a capture stream (test harness / explicit dev).
+ * Capture JSON → envelopes → the same projection Timeline uses.
  */
 
 import { useEffect, useMemo, useState } from 'react'
 import type { EventStreamCapture } from '../../model/stream-events'
-import {
-  captureMaxTs,
-  foldCaptureToView,
-  type StreamViewModel,
-} from '../../model/stream-events'
+import { captureMaxTs } from '../../model/stream-events'
+import { projectCapture } from '../../projection/project-capture'
+import type { TaskReadModel } from '../../projection/types'
 
 export interface CapturePlaybackOptions {
   /** Real-time multiplier (default 4 = 4× faster than recorded ts). */
@@ -19,7 +17,7 @@ export interface CapturePlaybackOptions {
 }
 
 export interface CapturePlaybackResult {
-  view: StreamViewModel
+  readModel: TaskReadModel
   /** Playback progress 0..1 */
   progress: number
   /** Virtual stream clock (ms along capture timeline). */
@@ -30,7 +28,7 @@ export interface CapturePlaybackResult {
 }
 
 /**
- * Replay capture events in time order. Intermediate folds update as wall clock advances.
+ * Replay capture events in time order through the shared projection.
  */
 export function useCapturePlayback(
   capture: EventStreamCapture | null,
@@ -41,7 +39,6 @@ export function useCapturePlayback(
   const maxTs = capture ? captureMaxTs(capture) : 0
   const [currentTs, setCurrentTs] = useState(0)
 
-  // Reset when capture changes.
   useEffect(() => {
     setCurrentTs(0)
   }, [capture?.id])
@@ -67,14 +64,13 @@ export function useCapturePlayback(
 
   return useMemo(() => {
     if (!capture) return null
-    // When progressive replay is disabled (tests / skip), always full fold.
     const ts = enabled ? currentTs : maxTs
-    const view = foldCaptureToView(capture, {
+    const readModel = projectCapture(capture, {
       untilTs: enabled ? ts : undefined,
     })
     const playing = enabled && ts < maxTs
     return {
-      view,
+      readModel,
       progress: maxTs > 0 ? Math.min(1, (enabled ? ts : maxTs) / maxTs) : 1,
       currentTs: enabled ? ts : maxTs,
       maxTs,

@@ -33,6 +33,9 @@ export type AgentRuntimeEventType =
   | 'message.accepted'
   | 'output.delta'
   | 'output.completed'
+  | 'output.segment_started'
+  | 'step.started'
+  | 'step.completed'
   // reasoning/plan (declared; optional in Fake 4B)
   | 'reasoning.started'
   | 'reasoning.delta'
@@ -95,6 +98,9 @@ export const AGENT_RUNTIME_EVENT_TYPES = [
   'message.accepted',
   'output.delta',
   'output.completed',
+  'output.segment_started',
+  'step.started',
+  'step.completed',
   'reasoning.started',
   'reasoning.delta',
   'reasoning.section_completed',

@@ -29,11 +29,11 @@ export type {
 export { LiveStatusLine } from './ui/live-status-line'
 export type { LiveStatusLineProps } from './ui/live-status-line'
 
-export { useCapturePlayback } from './ui/execution-stream/use-capture-playback'
+export { useCapturePlayback } from './ui/timeline/use-capture-playback'
 export type {
   CapturePlaybackOptions,
   CapturePlaybackResult,
-} from './ui/execution-stream/use-capture-playback'
+} from './ui/timeline/use-capture-playback'
 
 export type {
   ContextSection,
@@ -47,6 +47,9 @@ export {
   foldCaptureToView,
   formatDurationMs,
 } from './model/stream-events'
+export { captureToEnvelopes } from './model/capture-to-envelopes'
+export type { CaptureToEnvelopesOptions } from './model/capture-to-envelopes'
+export { projectCapture } from './projection/project-capture'
 export type {
   EventStreamCapture,
   StreamEvent,
@@ -168,6 +171,9 @@ export type {
   TimelineItem,
   TimelineItemMeta,
   TimelineItemSourceRange,
+  FileChangeKind,
+  DeliverableSource,
+  DeliverableRef,
   ProcessStepKind,
   ProcessSummary,
   PlanSnapshot,

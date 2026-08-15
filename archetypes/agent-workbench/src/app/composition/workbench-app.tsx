@@ -252,8 +252,6 @@ export function WorkbenchApp({
       title: displayTitle,
       projectName: currentProject?.name ?? '未选择项目',
       mode,
-      stream: null,
-      streamPlaying: false,
       readModel: isRuntimePath ? runtime.readModel : null,
       launchActions,
       contextSections: runtimeContext(),

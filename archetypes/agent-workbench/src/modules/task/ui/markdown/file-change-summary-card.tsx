@@ -7,12 +7,14 @@ import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { FileChangeKind } from '../../projection/types'
 import { ToolActivityIcon } from '../tool-activity-icon'
 
 export type FileChangeSummaryCardProps = {
   path: string
   additions?: number
   deletions?: number
+  changeKind?: FileChangeKind
   /** Optional preview lines for expanded body */
   previewLines?: string[]
   className?: string
@@ -20,10 +22,17 @@ export type FileChangeSummaryCardProps = {
   onOpen?: (path: string) => void
 }
 
+function changeVerb(changeKind: FileChangeKind | undefined): string {
+  if (changeKind === 'deleted') return '已删除'
+  if (changeKind === 'created') return '已创建'
+  return '已编辑'
+}
+
 export function FileChangeSummaryCard({
   path,
   additions,
   deletions,
+  changeKind,
   previewLines,
   className,
   testId = 'file-change-summary',
@@ -31,6 +40,8 @@ export function FileChangeSummaryCard({
 }: FileChangeSummaryCardProps) {
   const [open, setOpen] = useState(false)
   const base = path.split('/').pop() || path
+  const showCounts =
+    changeKind !== 'deleted' && (additions != null || deletions != null)
 
   return (
     <div
@@ -61,9 +72,9 @@ export function FileChangeSummaryCard({
           </span>
           <span className='min-w-0 flex-1'>
             <span className='block truncate text-sm font-[445] leading-5 text-foreground'>
-              已编辑 {base}
+              {changeVerb(changeKind)} {base}
             </span>
-            {(additions != null || deletions != null) && (
+            {showCounts && (
               <span className='mt-0.5 block font-mono text-xs tabular-nums'>
                 {additions != null ? (
                   <span className='text-[var(--wb-success)]'>+{additions}</span>

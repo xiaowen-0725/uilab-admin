@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
 import type { RunStatus } from '../../model/lifecycle'
-import type { StreamViewModel } from '../../model/stream-events'
 import type {
   ContextSection,
   LaunchAction,
@@ -24,7 +23,6 @@ import {
 import { Composer, type ComposerProjectPicker } from '../composer/composer'
 import { ContextPanel } from '../context-panel/context-panel'
 import { EmptyHub } from '../empty-hub/empty-hub'
-import { ExecutionStream } from '../execution-stream/execution-stream'
 import { Timeline, type TimelineOpenFileRef } from '../timeline/timeline'
 
 export interface TaskSurfaceView {
@@ -33,11 +31,7 @@ export interface TaskSurfaceView {
   subtitle?: string
   projectName: string
   mode: TaskContentMode
-  stream: StreamViewModel | null
-  /** Progressive capture replay (true timed playback). */
-  streamPlaying?: boolean
-  streamProgress?: number
-  /** Present when mode === 'runtime'. */
+  /** Present for Runtime and capture-projected replay. */
   readModel?: TaskReadModel | null
   launchActions: LaunchAction[]
   contextSections: ContextSection[]
@@ -185,19 +179,14 @@ export function TaskSurface({
     >
       <div className='relative flex min-h-0 flex-1'>
         <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
-          {view.mode === 'runtime' && view.readModel ? (
+          {(view.mode === 'runtime' || view.mode === 'stream') &&
+          view.readModel ? (
             <Timeline
               readModel={view.readModel}
               onRetryTurn={composerRuntime?.onRetryTurn}
               onFollowModeChange={composerRuntime?.onFollowModeChange}
               onOpenFileRef={onOpenFileRef}
               onRespondToQuestion={composerRuntime?.onRespondToQuestion}
-            />
-          ) : view.mode === 'stream' && view.stream ? (
-            <ExecutionStream
-              stream={view.stream}
-              playing={view.streamPlaying}
-              progress={view.streamProgress}
             />
           ) : (
             <EmptyHub

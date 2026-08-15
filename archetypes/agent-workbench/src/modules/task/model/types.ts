@@ -26,5 +26,5 @@ export interface LaunchAction {
   icon: 'explore' | 'build' | 'review' | 'fix'
 }
 
-/** empty = hub, stream = capture replay, runtime = Fake Runtime timeline */
+/** empty = hub, stream = capture-projected Timeline, runtime = VoltAgent Timeline */
 export type TaskContentMode = 'empty' | 'stream' | 'runtime'

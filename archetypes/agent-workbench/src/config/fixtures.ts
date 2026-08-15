@@ -9,10 +9,12 @@ import {
 } from '@/config/captures'
 import {
   foldCaptureToView,
+  projectCapture,
   type ContextSection,
   type LaunchAction,
   type StreamViewModel,
   type TaskContentMode,
+  type TaskReadModel,
 } from '@/modules/task'
 import type { WorkbenchSessionSeed } from '@/modules/workbench-session'
 
@@ -206,6 +208,21 @@ export function getStreamViewForTask(
   if (!captureId) return null
   const capture = getEventStreamCapture(captureId)
   return foldCaptureToView(capture, {
+    untilEventId: overrideCaptureId ? undefined : fixture.untilEventId,
+  })
+}
+
+/** Capture JSON → envelopes → shared projection (Timeline path). */
+export function getCaptureReadModelForTask(
+  taskId: string,
+  overrideCaptureId?: string,
+): TaskReadModel | null {
+  const fixture = getTaskFixture(taskId)
+  const captureId = overrideCaptureId ?? fixture.captureId
+  if (!captureId) return null
+  const capture = getEventStreamCapture(captureId)
+  return projectCapture(capture, {
+    taskId,
     untilEventId: overrideCaptureId ? undefined : fixture.untilEventId,
   })
 }

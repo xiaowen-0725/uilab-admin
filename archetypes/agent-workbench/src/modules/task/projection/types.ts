@@ -21,6 +21,7 @@ export type TimelineItemCategory =
   | 'tool-group'
   | 'command-execution'
   | 'file-change'
+  | 'artifact'
   | 'source-group'
   | 'approval-request'
   | 'input-request'
@@ -57,17 +58,42 @@ export interface ProcessSummary {
   counts: Partial<Record<ProcessStepKind, number>>
 }
 
+export type FileChangeKind = 'created' | 'updated' | 'deleted'
+
+export type DeliverableSource = 'file' | 'artifact'
+
+/** Aggregated file / artifact produced by one completed run. */
+export interface DeliverableRef {
+  path: string
+  title?: string
+  kind?: string
+  changeKind?: FileChangeKind
+  source: DeliverableSource
+  additions?: number
+  deletions?: number
+}
+
 /** Optional presentation meta (file diffs, tool children, turn duration). */
 export interface TimelineItemMeta {
   /** File-change: line additions / deletions. */
   additions?: number
   deletions?: number
+  /** File-change / artifact: created vs edited vs deleted. */
+  changeKind?: FileChangeKind
+  /** Artifact kind (document / image / …). */
+  kind?: string
+  /** Run-terminal: files + artifacts produced in this run. */
+  deliverables?: DeliverableRef[]
   /** File-change: green/red card lines. */
   diffLines?: Array<{ type: 'add' | 'del' | 'context'; text: string; line?: number }>
   /** Tool / file collapsible child labels (paths, search titles). */
   children?: string[]
   /** File path when distinct from title. */
   path?: string
+  /** Artifact / file display title when distinct from path. */
+  title?: string
+  /** VoltAgent step id; used to seal working blocks across steps. */
+  stepId?: string
   /** ISO start time for live elapsed duration while run is active. */
   startedAt?: string
   /** Run duration for completed turn chrome (ms). */
@@ -155,6 +181,11 @@ export interface TaskReadModel {
    * Progress is derived; UI must not treat it as independent state.
    */
   plan: PlanSnapshot | null
+  /**
+   * Files + artifacts from the latest completed run.
+   * Empty until `run.completed` aggregates `file.changed` / `artifact.*`.
+   */
+  deliverables: DeliverableRef[]
   timeline: TimelineItem[]
   recoveryRequired: boolean
   lastTaskSequence: number
@@ -169,4 +200,11 @@ export interface TaskReadModel {
 export interface ProjectionState {
   readModel: TaskReadModel
   seenEventIds: ReadonlySet<string>
+  /**
+   * True after this task has seen `step.*` / `output.segment_started`.
+   * Assistant lookback heuristic stays off once real step boundaries exist.
+   */
+  hasStepBoundaries: boolean
+  /** Current VoltAgent step; stamped onto working-row meta. */
+  activeStepId?: string
 }
