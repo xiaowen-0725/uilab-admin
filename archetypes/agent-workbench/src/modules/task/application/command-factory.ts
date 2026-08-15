@@ -8,6 +8,7 @@ import type {
   CommandActor,
   CreateTaskCommand,
   ProvideRunInputCommand,
+  QuestionAnswer,
   QueueFollowUpCommand,
   ReconcileInterruptedRunCommand,
   RespondToApprovalCommand,
@@ -163,6 +164,7 @@ export class CommandFactory {
     requestId?: string
     turnId?: string
     runId?: string
+    answer?: QuestionAnswer
   }): ProvideRunInputCommand {
     return {
       type: 'provideRunInput',
@@ -172,6 +174,7 @@ export class CommandFactory {
       requestId: input.requestId,
       turnId: input.turnId,
       runId: input.runId,
+      answer: input.answer,
     }
   }
 

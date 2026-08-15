@@ -4,6 +4,7 @@
  */
 
 import type { ProjectId, RunId, RunStatus, TaskId, TitleSource, TurnId } from '../model/lifecycle'
+import type { QuestionAnswer, QuestionRequest } from '../protocol/question-answer'
 import type { PlanSnapshot } from './plan-snapshot'
 
 export type { PlanProgress, PlanSnapshot, PlanStep, PlanStepStatus } from './plan-snapshot'
@@ -78,6 +79,10 @@ export interface TimelineItemMeta {
   processKind?: ProcessStepKind
   /** Structured plan for Timeline plan-update cards (snapshot without derived progress). */
   plan?: Omit<PlanSnapshot, 'progress'>
+  /** Structured Question Request (present when `run.input_requested` carried options). */
+  question?: QuestionRequest
+  /** Structured answer after `run.input_provided`. */
+  answer?: QuestionAnswer
   /** Run-terminal deterministic summary, counted by logical row id. */
   processSummary?: ProcessSummary
   /**

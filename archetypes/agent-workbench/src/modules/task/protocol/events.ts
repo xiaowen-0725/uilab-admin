@@ -46,7 +46,16 @@ export type AgentRuntimeEventType =
   | 'tool.completed'
   | 'approval.requested'
   | 'approval.resolved'
+  /**
+   * Structured Question Request or legacy free-text prompt.
+   * Payload: `{ requestId, question, options: Array<{id,label}>, allowMultiple }`
+   * or the older `{ requestId, prompt }` form.
+   */
   | 'run.input_requested'
+  /**
+   * User answered or skipped. Payload: `{ requestId, answer, answeredAt }`.
+   * Skip uses `answer.kind = 'skipped'` — no separate event.
+   */
   | 'run.input_provided'
   // command/file/source
   | 'command.started'

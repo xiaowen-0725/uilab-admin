@@ -12,6 +12,7 @@
 | Project / Task 目录（产品默认 IndexedDB） | **shipped** |
 | 本机 VoltAgent Runtime → Timeline 投影（ADR-0018） | **shipped**（需侧车；无侧车时报错事实，不装 Fake） |
 | Permission Preset + Approval Dock | **shipped**（帮我批准 / 完全访问） |
+| Question Request（`ask_user_question`） | **shipped**（Timeline 内联卡片；`provideRunInput` 已转正；Preset 不得自动作答） |
 | Plan 只读投影（Context + Timeline） | **shipped**（需侧车 `update_plan`） |
 | Work Surface Host + Document / Browser | **shipped**（点文件 / URL 打开；无 Artifact 目录） |
 | Capability Surface（连接器 / 技能 / 专家） | **shipped**（打开 / 状态 / 选用；OAuth 产品化未做） |

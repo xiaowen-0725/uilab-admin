@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { RunStatus } from '../model/lifecycle'
 import type {
   CommandAcknowledgement,
+  QuestionAnswer,
   TurnComposerContext,
 } from '../protocol/commands'
 import { emptyTaskReadModel } from '../projection/empty-read-model'
@@ -28,6 +29,10 @@ export interface UseTaskRuntimeResult {
     reason?: string,
   ) => Promise<CommandAcknowledgement | null>
   provideRunInput: (text: string, requestId?: string) => Promise<void>
+  respondToQuestion: (
+    requestId: string,
+    answer: QuestionAnswer,
+  ) => Promise<CommandAcknowledgement | null>
   retryTurn: () => Promise<void>
   setFollowMode: (mode: TimelineFollowMode) => void
   ready: boolean
@@ -113,6 +118,14 @@ export function useTaskRuntime(
     [controller, enabled],
   )
 
+  const respondToQuestion = useCallback(
+    async (requestId: string, answer: QuestionAnswer) => {
+      if (!controller || !enabled) return null
+      return controller.respondToQuestion(requestId, answer)
+    },
+    [controller, enabled],
+  )
+
   const retryTurn = useCallback(async () => {
     if (!controller || !enabled) return
     await controller.retryTurn()
@@ -137,6 +150,7 @@ export function useTaskRuntime(
       cancelActiveRun,
       respondToApproval,
       provideRunInput,
+      respondToQuestion,
       retryTurn,
       setFollowMode,
     }
@@ -152,6 +166,7 @@ export function useTaskRuntime(
     cancelActiveRun,
     respondToApproval,
     provideRunInput,
+    respondToQuestion,
     retryTurn,
     setFollowMode,
   }

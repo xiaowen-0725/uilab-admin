@@ -9,6 +9,7 @@ import type {
 import type { TaskReadModel } from '../../projection/types'
 import type {
   CommandAcknowledgement,
+  QuestionAnswer,
   TurnComposerContext,
 } from '../../protocol/commands'
 import {
@@ -60,6 +61,10 @@ export interface TaskSurfaceComposerRuntime {
     requestId: string,
   ) => void | Promise<void | CommandAcknowledgement | null>
   onProvideInput?: (requestId: string, text: string) => void | Promise<void>
+  onRespondToQuestion?: (
+    requestId: string,
+    answer: QuestionAnswer,
+  ) => void | Promise<void | CommandAcknowledgement | null>
   onRetryTurn?: () => void | Promise<void>
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
   /** Runtime-owned label; runtime mode does not pretend a local picker is wired. */
@@ -186,6 +191,7 @@ export function TaskSurface({
               onRetryTurn={composerRuntime?.onRetryTurn}
               onFollowModeChange={composerRuntime?.onFollowModeChange}
               onOpenFileRef={onOpenFileRef}
+              onRespondToQuestion={composerRuntime?.onRespondToQuestion}
             />
           ) : view.mode === 'stream' && view.stream ? (
             <ExecutionStream

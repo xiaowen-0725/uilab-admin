@@ -86,6 +86,7 @@ export const MINIMAL_TOOL_NAMES = [
   'write_file',
   'run_command',
   'update_plan',
+  'ask_user_question',
 ] as const
 
 /** Office honesty list: FS tools + skills toolkit (no DIY run_command). */
@@ -94,6 +95,7 @@ export const OFFICE_TOOL_NAMES = [
   ...OFFICE_SKILL_TOOL_NAMES,
   'execute_command',
   'update_plan',
+  'ask_user_question',
 ] as const
 
 export function toolsForProfile(profile: AgentProfile): readonly string[] {

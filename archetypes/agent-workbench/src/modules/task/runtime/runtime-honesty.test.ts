@@ -12,6 +12,8 @@ describe('VOLTAGENT_RUNTIME_HONESTY_COPY', () => {
     expect(c.banner).toMatch(/非远程生产集群/)
     expect(c.timelineAriaLabel).toMatch(/本机 VoltAgent/)
     expect(c.banner).not.toMatch(/Fake/)
+    expect(c.waitingInput).toMatch(/回答|直接回复/)
+    expect(c.waitingInput).not.toMatch(/provideRunInput|Fake/i)
     expect(c.submitAccepted).not.toMatch(/Fake/)
     expect(c.cancelAccepted).toMatch(/本机 VoltAgent/)
     expect(c.cancelAccepted).toMatch(/非远程生产集群/)

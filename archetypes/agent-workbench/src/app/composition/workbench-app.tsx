@@ -304,6 +304,10 @@ export function WorkbenchApp({
               runtime.respondToApproval(requestId, 'rejected'),
             onProvideInput: (requestId: string, text: string) =>
               runtime.provideRunInput(text, requestId),
+            onRespondToQuestion: (
+              requestId: string,
+              answer: Parameters<typeof runtime.respondToQuestion>[1],
+            ) => runtime.respondToQuestion(requestId, answer),
             onRetryTurn: () => runtime.retryTurn(),
             onFollowModeChange: runtime.setFollowMode,
             capabilityController,
@@ -318,6 +322,7 @@ export function WorkbenchApp({
       runtime.notice,
       runtime.respondToApproval,
       runtime.provideRunInput,
+      runtime.respondToQuestion,
       runtime.retryTurn,
       runtime.setFollowMode,
       bootError,

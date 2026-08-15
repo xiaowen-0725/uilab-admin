@@ -17,6 +17,10 @@ import {
   type TurnId,
 } from '../model/lifecycle'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
+import {
+  parseQuestionAnswer,
+  parseQuestionRequest,
+} from '../protocol/question-answer'
 import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
 import { parsePlanSnapshot } from './plan-snapshot'
@@ -1263,19 +1267,23 @@ export function applyRuntimeEvent(
     }
     case 'run.input_requested': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
+      const structured = parseQuestionRequest(envelope.payload, requestId)
       const prompt = payloadString(envelope.payload, 'prompt') ?? '请补充输入'
       setRunStatus(next, 'waiting_for_input', envelope)
       ensureRunTerminal(next, envelope, 'waiting_for_input', '等待输入')
       setLiveStatus(next, '等待输入')
       upsertByKey(next, envelope, 'input-request', requestId, {
-        title: '需要补充信息',
-        body: prompt,
+        title: structured?.question ?? '需要补充信息',
+        body: structured ? undefined : prompt,
         status: 'waiting',
+        meta: structured ? { question: structured } : undefined,
       })
       break
     }
     case 'run.input_provided': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
+      const rec = asRecord(envelope.payload)
+      const answer = parseQuestionAnswer(rec.answer)
       const text = payloadText(envelope.payload, ['text', 'inputText']) ?? ''
       setRunStatus(next, 'running', envelope)
       ensureRunTerminal(next, envelope, 'running', '正在思考')
@@ -1283,6 +1291,7 @@ export function applyRuntimeEvent(
       upsertByKey(next, envelope, 'input-request', requestId, {
         status: 'provided',
         body: text ? `\n已提供：${text}` : undefined,
+        meta: answer ? { answer } : undefined,
       })
       break
     }

@@ -34,6 +34,10 @@ import {
   resolveWorkspaceRoot,
   toolsForProfile,
 } from './profile.js'
+import {
+  ASK_TOOL_INSTRUCTIONS,
+  askUserQuestionTool,
+} from './ask-user-question-tool.js'
 import { workbenchTools } from './tools.js'
 import {
   PLAN_TOOL_INSTRUCTIONS,
@@ -52,6 +56,10 @@ import { createOfficeWorkspaceSandbox } from './runtime-shell/office-workspace-s
 import type { ConnectorCommandAccess } from './runtime-shell/connector-aware-sandbox.js'
 
 const planToolkit: Toolkit = { name: 'update_plan', tools: [updatePlanTool] }
+const askToolkit: Toolkit = {
+  name: 'ask_user_question',
+  tools: [askUserQuestionTool],
+}
 
 export type CreateWorkbenchAgentOptions = {
   profile: AgentProfile
@@ -256,9 +264,10 @@ export async function createWorkbenchAgent(
         'Prefer planning briefly, then read before write. Writes and deletes require user approval.',
         'Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar.',
         PLAN_TOOL_INSTRUCTIONS,
+        ASK_TOOL_INSTRUCTIONS,
       ].join(' '),
       model: options.model,
-      toolkits: [planToolkit],
+      toolkits: [planToolkit, askToolkit],
       workspace,
       workspaceToolkits: {
         filesystem: {},
@@ -333,10 +342,11 @@ export async function createWorkbenchAgent(
     instructions: [
       'You are the local Agent Runtime for UI Lab Agent Workbench.',
       'Respond in Chinese unless the user writes in another language.',
-      'You may use read_file, write_file (requires approval), run_command, and update_plan tools when helpful.',
+      'You may use read_file, write_file (requires approval), run_command, update_plan, and ask_user_question tools when helpful.',
       'Prefer concise answers. Stay within the workspace tools for file access.',
       'This is a local demo sidecar, not a remote production cluster.',
       PLAN_TOOL_INSTRUCTIONS,
+      ASK_TOOL_INSTRUCTIONS,
     ].join(' '),
     model: options.model,
     toolkits: [planToolkit],

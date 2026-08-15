@@ -9,6 +9,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
+import { askUserQuestionTool } from './ask-user-question-tool.js'
 import { resolveWorkspaceRoot } from './profile.js'
 import {
   resolveCreatablePathWithinRoot,
@@ -79,4 +80,9 @@ export const runCommandTool = createTool({
   },
 })
 
-export const workbenchTools = [readFileTool, writeFileTool, runCommandTool]
+export const workbenchTools = [
+  readFileTool,
+  writeFileTool,
+  runCommandTool,
+  askUserQuestionTool,
+]

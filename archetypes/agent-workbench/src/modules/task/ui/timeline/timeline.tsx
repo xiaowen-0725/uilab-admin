@@ -29,6 +29,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { formatDurationMs } from '../../model/stream-events'
 import type { RunStatus } from '../../model/lifecycle'
+import type { QuestionAnswer } from '../../protocol/question-answer'
 import type {
   TaskReadModel,
   TimelineItem,
@@ -41,6 +42,7 @@ import { SimpleMarkdown } from '../markdown/simple-markdown'
 import { runtimeHonestyCopy } from '../../runtime/runtime-honesty'
 import { groupTimelineIntoTurns } from './group-timeline-turns'
 import { PlanUpdateCard } from './plan-update-card'
+import { QuestionCard } from './question-card'
 import { ToolActivityIcon } from '../tool-activity-icon'
 
 export const TIMELINE_FOLD_THRESHOLD = 600
@@ -82,6 +84,10 @@ export interface TimelineProps {
    * Must be wired by Composition through Session; Task never owns openTabs.
    */
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onRespondToQuestion?: (
+    requestId: string,
+    answer: QuestionAnswer,
+  ) => void | Promise<unknown>
 }
 
 function isActiveRunStatus(status: RunStatus | null): boolean {
@@ -205,6 +211,7 @@ export function Timeline({
   onRetryTurn,
   onFollowModeChange,
   onOpenFileRef,
+  onRespondToQuestion,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -349,8 +356,7 @@ export function Timeline({
             aria-live='polite'
             data-testid='runtime-input-notice'
           >
-            当前 Run 等待补充输入。请在下方 Composer 发送澄清内容（将路由到
-            provideRunInput）。
+            {honesty.waitingInput}
           </p>
         ) : null}
 
@@ -393,6 +399,7 @@ export function Timeline({
                       item={item}
                       runActive={runActive && isLast}
                       onOpenFileRef={onOpenFileRef}
+                      onRespondToQuestion={onRespondToQuestion}
                     />
                   ))}
 
@@ -402,6 +409,7 @@ export function Timeline({
                     runActive={runActive && isLast}
                     liveStatus={isLast ? readModel.liveStatus : null}
                     onOpenFileRef={onOpenFileRef}
+                    onRespondToQuestion={onRespondToQuestion}
                   />
                 </div>
               )
@@ -439,12 +447,17 @@ function TimelineTurnBlock({
   runActive,
   liveStatus,
   onOpenFileRef,
+  onRespondToQuestion,
 }: {
   latestTerminal: TimelineItem | undefined
   streamItems: TimelineItem[]
   runActive: boolean
   liveStatus: string | null | undefined
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onRespondToQuestion?: (
+    requestId: string,
+    answer: QuestionAnswer,
+  ) => void | Promise<unknown>
 }) {
   const completed = latestTerminal?.status === 'completed' && !runActive
   const processItems = streamItems.filter(isProcessFoldItem)
@@ -505,6 +518,7 @@ function TimelineTurnBlock({
                 (!runActive && completed) || item.status === 'completed'
               }
               onOpenFileRef={onOpenFileRef}
+              onRespondToQuestion={onRespondToQuestion}
             />
           ))}
           {liveForBar ? (
@@ -520,6 +534,7 @@ function TimelineTurnBlock({
           item={item}
           runActive={runActive}
           onOpenFileRef={onOpenFileRef}
+          onRespondToQuestion={onRespondToQuestion}
         />
       ))}
     </>
@@ -929,11 +944,16 @@ function TimelineRow({
   runActive,
   forceToolCollapsed = false,
   onOpenFileRef,
+  onRespondToQuestion,
 }: {
   item: TimelineItem
   runActive: boolean
   forceToolCollapsed?: boolean
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onRespondToQuestion?: (
+    requestId: string,
+    answer: QuestionAnswer,
+  ) => void | Promise<unknown>
 }) {
   switch (item.category) {
     case 'user-message':
@@ -1047,10 +1067,19 @@ function TimelineRow({
     }
     case 'input-request': {
       const requestId = requestIdFromItem(item, 'input-request:')
+      if (item.meta?.question) {
+        return (
+          <QuestionCard
+            item={item}
+            requestId={requestId}
+            onRespond={onRespondToQuestion}
+          />
+        )
+      }
       const waiting = item.status === 'waiting'
       return (
         <div
-          className='mb-2 rounded-md border border-sky-500/30 bg-sky-500/5 px-3 py-2 text-sm'
+          className='mb-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm'
           data-kind='input-request'
           data-testid={`timeline-item-${item.id}`}
           data-category='input-request'
@@ -1065,7 +1094,7 @@ function TimelineRow({
           ) : null}
           {waiting ? (
             <p className='mt-2 text-xs text-muted-foreground'>
-              请在 Composer 中输入并发送（将调用 provideRunInput）
+              请在下方输入框直接回复
             </p>
           ) : (
             <div className='mt-1 text-xs text-muted-foreground'>已提供</div>

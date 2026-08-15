@@ -114,6 +114,40 @@ export function approvalRequestedScenario(
   }
 }
 
+/** Structured Question Request pause — used by question-card / preset lock tests. */
+export function questionRequestedScenario(
+  taskId: string,
+  runId: string,
+  turnId: string,
+  requestId: string,
+  options?: {
+    question?: string
+    choices?: Array<{ id: string; label: string }>
+    allowMultiple?: boolean
+  },
+): ScriptedScenario {
+  return {
+    events: [
+      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
+      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
+      envelope(taskId, 'run.input_requested', {
+        taskSequence: 3,
+        runId,
+        turnId,
+        payload: {
+          requestId,
+          question: options?.question ?? '用哪种语气写纪要？',
+          options: options?.choices ?? [
+            { id: 'formal', label: '正式' },
+            { id: 'casual', label: '轻松' },
+          ],
+          allowMultiple: options?.allowMultiple === true,
+        },
+      }),
+    ],
+  }
+}
+
 export type CreateScriptedRuntimePortOptions = {
   /** Default scenario producer; called per startRun if no per-task scenario is set. */
   defaultScenario?: (taskId: string, runId: string, turnId: string) => ScriptedScenario
@@ -186,6 +220,25 @@ export function createScriptedRuntimePort(
               requestId: command.payload.requestId,
               decision: command.payload.decision,
               reason: command.payload.reason,
+            },
+          }),
+        ])
+      }
+      if (command.type === 'provideRunInput') {
+        const taskId = command.taskId
+        const seq = (lastSeq.get(taskId) ?? 0) + 1
+        emit(taskId, [
+          envelope(taskId, 'run.input_provided', {
+            taskSequence: seq,
+            runId: command.runId,
+            turnId: command.turnId,
+            payload: {
+              requestId: command.requestId,
+              answer: command.answer ?? {
+                kind: 'freeText',
+                text: command.inputText,
+              },
+              answeredAt: new Date().toISOString(),
             },
           }),
         ])

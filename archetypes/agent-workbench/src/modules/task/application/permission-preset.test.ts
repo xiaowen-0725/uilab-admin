@@ -22,6 +22,10 @@ describe('decideApprovalResponse', () => {
     expect(decideApprovalResponse('auto-approve', null)).toBe('dock')
     expect(decideApprovalResponse('auto-approve', undefined)).toBe('dock')
     expect(decideApprovalResponse('auto-approve', '')).toBe('dock')
+    expect(AUTO_APPROVE_WRITE_TOOLS).not.toContain('ask_user_question')
+    expect(decideApprovalResponse('auto-approve', 'ask_user_question')).toBe(
+      'dock',
+    )
   })
 
   it('full-access: every tool name (including unknown) approves', () => {

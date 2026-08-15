@@ -83,6 +83,7 @@ describe('toolsForProfile', () => {
     assert.ok(tools.includes('workspace_read_skill'))
     assert.ok(!tools.includes('run_command'))
     assert.ok(tools.includes('update_plan'))
+    assert.ok(tools.includes('ask_user_question'))
     for (const name of OFFICE_FS_TOOL_NAMES) {
       assert.ok(tools.includes(name), `missing FS tool ${name}`)
     }
@@ -92,7 +93,13 @@ describe('toolsForProfile', () => {
     const tools = toolsForProfile('minimal')
     assert.deepEqual(
       [...tools],
-      ['read_file', 'write_file', 'run_command', 'update_plan'],
+      [
+        'read_file',
+        'write_file',
+        'run_command',
+        'update_plan',
+        'ask_user_question',
+      ],
     )
   })
 })

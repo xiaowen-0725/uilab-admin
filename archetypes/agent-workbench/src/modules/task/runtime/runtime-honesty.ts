@@ -16,6 +16,7 @@ export interface RuntimeHonestyCopy {
   readonly clarifyingSubmit: (preview: string) => string
   readonly submitWithPreview: (preview: string) => string
   readonly waitingApproval: string
+  readonly waitingInput: string
   readonly approvalApproved: string
   readonly approvalRejected: string
   readonly inputProvided: string
@@ -38,6 +39,7 @@ export const VOLTAGENT_RUNTIME_HONESTY_COPY = {
     `已提交到本机 VoltAgent Runtime（非远程生产集群）：${preview}`,
   waitingApproval:
     '当前 Run 等待审批。请在底部授权卡片选择「允许一次」或「拒绝」（本机侧车；批准后可能写入工作区文件）。',
+  waitingInput: '当前 Run 等待你的回答。可在时间线卡片上选择，或在下方直接回复。',
   approvalApproved: '已允许一次（本机侧车；批准后可能写入工作区文件）',
   approvalRejected: '已拒绝（本机侧车，未执行写操作）',
   inputProvided: '已提供补充输入（本机 VoltAgent Runtime）',

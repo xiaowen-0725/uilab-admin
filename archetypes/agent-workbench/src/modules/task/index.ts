@@ -102,6 +102,10 @@ export type {
   RetryTurnCommand,
   RespondToApprovalCommand,
   ProvideRunInputCommand,
+  QuestionAnswer,
+  QuestionOption,
+  QuestionRequest,
+  QuestionToolOutput,
   QueueFollowUpCommand,
   SteerRunCommand,
   ReconcileInterruptedRunCommand,
@@ -112,6 +116,14 @@ export type {
   AgentRuntimeEventType,
 } from './protocol/events'
 export { AGENT_RUNTIME_EVENT_TYPES } from './protocol/events'
+export {
+  formatQuestionAnswerLabel,
+  parseQuestionAnswer,
+  parseQuestionOptions,
+  parseQuestionRequest,
+  questionAnswerToInputText,
+  questionAnswerToToolOutput,
+} from './protocol/question-answer'
 
 // --- Phase 4B Kernel: ports ---
 export type {

@@ -6,6 +6,7 @@
 import type { AgentRuntimeEventEnvelope } from '@/modules/task'
 import {
   normalizeToolOutput,
+  parseQuestionOptions,
   sanitizeToolOutputForEnvelope,
 } from '@/modules/task'
 
@@ -107,6 +108,27 @@ function isWriteTool(name: string): boolean {
 
 function isUpdatePlanTool(name: string): boolean {
   return name === 'update_plan'
+}
+
+function isAskUserQuestionTool(name: string): boolean {
+  return name === 'ask_user_question'
+}
+
+function parseAskUserQuestionArgs(args: unknown): {
+  question: string
+  options: Array<{ id: string; label: string }>
+  allowMultiple: boolean
+} {
+  const rec = asRecord(args)
+  const question =
+    typeof rec.question === 'string' && rec.question.trim()
+      ? rec.question.trim()
+      : '请选择'
+  return {
+    question,
+    options: parseQuestionOptions(rec.options),
+    allowMultiple: rec.allow_multiple === true || rec.allowMultiple === true,
+  }
 }
 
 function planCallIds(ctx: MapFullStreamContext): Set<string> {
@@ -268,6 +290,16 @@ export function mapFullStreamChunk(
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
       const args = chunk.args ?? chunk.input ?? chunk.arguments
+      if (isAskUserQuestionTool(name)) {
+        const parsed = parseAskUserQuestionArgs(args)
+        push('run.input_requested', {
+          requestId: callId,
+          question: parsed.question,
+          options: parsed.options,
+          allowMultiple: parsed.allowMultiple,
+        })
+        break
+      }
       if (isUpdatePlanTool(name)) {
         rememberUpdatePlanCall(ctx, callId)
         push('plan.updated', planUpdatedPayload(args))
@@ -304,6 +336,9 @@ export function mapFullStreamChunk(
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
       const output = chunk.output ?? chunk.result ?? chunk.content
+      if (isAskUserQuestionTool(name)) {
+        break
+      }
       if (consumeUpdatePlanCall(ctx, name, callId)) {
         if (chunk.isError === true || chunk.error != null) {
           push(
@@ -379,15 +414,20 @@ export function mapFullStreamChunk(
       break
     }
 
+    case 'tool-output-denied':
     case 'tool-error': {
       const name = toolName(chunk)
       const callId = toolCallId(chunk)
-      const error = chunk.error ?? chunk.message
+      const error = chunk.error ?? chunk.message ?? chunk.output
+      if (isAskUserQuestionTool(name)) {
+        break
+      }
       if (consumeUpdatePlanCall(ctx, name, callId)) {
         push('warning', updatePlanWarningPayload(name, callId, error))
         break
       }
-      const failed = error ?? 'tool error'
+      const denied = type === 'tool-output-denied'
+      const failed = error ?? (denied ? 'tool output denied' : 'tool error')
       const completed = {
         toolId: callId,
         toolCallId: callId,
@@ -396,7 +436,7 @@ export function mapFullStreamChunk(
         error: failed,
         summary: normalizeToolOutput(failed).summary,
         isError: true,
-        status: 'error',
+        status: denied ? 'denied' : 'error',
       }
       if (isShellTool(name)) {
         push('command.completed', { ...completed, commandId: callId })

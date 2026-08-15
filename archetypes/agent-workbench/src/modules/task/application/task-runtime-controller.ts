@@ -26,8 +26,10 @@ import type {
 import type {
   ApplicationCommand,
   CommandAcknowledgement,
+  QuestionAnswer,
   TurnComposerContext,
 } from '../protocol/commands'
+import { questionAnswerToInputText } from '../protocol/question-answer'
 import { runtimeHonestyCopy } from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
@@ -300,7 +302,10 @@ export class TaskRuntimeController {
 
     // waiting_for_input: route to provideRunInput
     if (this.projection.readModel.runStatus === 'waiting_for_input') {
-      return this.provideRunInput(trimmed)
+      return this.provideRunInput(trimmed, undefined, {
+        kind: 'freeText',
+        text: trimmed,
+      })
     }
 
     // waiting_for_approval: do not accept free-form submit as turn
@@ -411,7 +416,11 @@ export class TaskRuntimeController {
     )
   }
 
-  async provideRunInput(text: string, requestId?: string): Promise<CommandAcknowledgement | null> {
+  async provideRunInput(
+    text: string,
+    requestId?: string,
+    answer?: QuestionAnswer,
+  ): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
     const rid = requestId ?? pendingInputRequestId(this.projection.readModel)
@@ -427,6 +436,7 @@ export class TaskRuntimeController {
         requestId: rid,
         runId: this.projection.readModel.activeRunId ?? undefined,
         turnId: this.projection.readModel.activeTurnId ?? undefined,
+        answer,
       }),
       (ack) => {
         if (ack.status === 'accepted' || ack.status === 'duplicate') {
@@ -436,6 +446,22 @@ export class TaskRuntimeController {
         }
       },
     )
+  }
+
+  async respondToQuestion(
+    requestId: string,
+    answer: QuestionAnswer,
+  ): Promise<CommandAcknowledgement | null> {
+    const item = this.projection.readModel.timeline.find(
+      (row) =>
+        row.category === 'input-request' &&
+        row.id === `input-request:${requestId}`,
+    )
+    const inputText = questionAnswerToInputText(
+      answer,
+      item?.meta?.question?.options ?? [],
+    )
+    return this.provideRunInput(inputText, requestId, answer)
   }
 
   async retryTurn(turnId?: string): Promise<CommandAcknowledgement | null> {

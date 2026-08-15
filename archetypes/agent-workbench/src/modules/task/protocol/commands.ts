@@ -10,6 +10,9 @@ import type {
   TaskId,
   TurnId,
 } from '../model/lifecycle'
+import type { QuestionAnswer } from './question-answer'
+
+export type { QuestionAnswer, QuestionOption, QuestionRequest, QuestionToolOutput } from './question-answer'
 
 export type CommandActor = 'user' | 'system' | 'runtime'
 
@@ -118,13 +121,17 @@ export interface RespondToApprovalCommand extends CommandEnvelope {
   }
 }
 
+/** VoltAgent Adapter supports this (`features.runInput = true`). */
 export interface ProvideRunInputCommand extends CommandEnvelope {
   type: 'provideRunInput'
   taskId: TaskId
   turnId?: TurnId
   runId?: RunId
+  /** Display echo for Timeline / notices. */
   inputText: string
   requestId?: string
+  /** Structured Question Request answer. Composer free-text uses `{ kind: 'freeText' }`. */
+  answer?: QuestionAnswer
 }
 
 /**

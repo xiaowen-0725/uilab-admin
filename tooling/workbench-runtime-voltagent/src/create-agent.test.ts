@@ -17,6 +17,7 @@ import {
   createWorkbenchAgent,
   officeFilesystemToolConfig,
 } from './create-agent.js'
+import { askUserQuestionTool } from './ask-user-question-tool.js'
 import { updatePlanTool } from './update-plan-tool.js'
 import {
   CONNECTOR_FEISHU_ID,
@@ -499,6 +500,7 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.tools.includes('write_file'))
     assert.ok(bundle.tools.includes('execute_command'))
     assert.ok(bundle.tools.includes('update_plan'))
+    assert.ok(bundle.tools.includes('ask_user_question'))
     assert.ok(!bundle.tools.includes('run_command'))
 
     // O2 first-run bootstrap
@@ -547,6 +549,7 @@ describe('createWorkbenchAgent', () => {
       `expected generic Workspace Shell, got: ${toolNames.join(',')}`,
     )
     assertRegisteredUpdatePlan(fullState)
+    assertRegisteredAskUserQuestion(fullState)
 
     // Discover skills via Workspace API (no LLM).
     assert.ok(bundle.workspace?.skills, 'workspace.skills present')
@@ -620,7 +623,13 @@ describe('createWorkbenchAgent', () => {
     assert.deepEqual(connectorInspection.snapshot.descriptors, [])
     assert.deepEqual(
       [...bundle.tools],
-      ['read_file', 'write_file', 'run_command', 'update_plan'],
+      [
+        'read_file',
+        'write_file',
+        'run_command',
+        'update_plan',
+        'ask_user_question',
+      ],
     )
 
     const fullState = await bundle.agent.getFullState()
@@ -631,6 +640,7 @@ describe('createWorkbenchAgent', () => {
     assert.ok(toolNames.includes('write_file'))
     assert.ok(toolNames.includes('run_command'))
     assertRegisteredUpdatePlan(fullState)
+    assertRegisteredAskUserQuestion(fullState)
   })
 })
 
@@ -643,6 +653,23 @@ function assertRegisteredUpdatePlan(fullState: {
   assert.equal(planTool.description, updatePlanTool.description)
   assert.equal(planTool.needsApproval, false)
   assertPlanGuidance(fullState.instructions)
+}
+
+function assertRegisteredAskUserQuestion(fullState: {
+  instructions?: string
+  tools: Array<{
+    name?: string
+    description?: string
+    needsApproval?: unknown
+    execute?: unknown
+  }>
+}) {
+  const askTool = fullState.tools.find((tool) => tool.name === 'ask_user_question')
+  assert.ok(askTool, 'ask_user_question must be registered')
+  assert.equal(askTool.description, askUserQuestionTool.description)
+  assert.ok(askTool.needsApproval == null || askTool.needsApproval === false)
+  assert.match(fullState.instructions ?? '', /ask_user_question/)
+  assert.match(fullState.instructions ?? '', /exactly one question/)
 }
 
 function assertPlanGuidance(instructions: string | undefined) {

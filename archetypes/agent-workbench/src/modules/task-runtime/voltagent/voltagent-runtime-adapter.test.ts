@@ -912,4 +912,297 @@ describe('VoltAgentRuntimeAdapter', () => {
       expect(Math.min(...seqs)).toBeGreaterThanOrEqual(11)
     })
   })
+
+  it('ask_user_question tool-call emits run.input_requested and suppresses run.completed', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        sseBody([
+          {
+            type: 'tool-call',
+            toolCallId: 'call-ask',
+            toolName: 'ask_user_question',
+            args: {
+              question: '用哪种语气？',
+              options: [
+                { id: 'formal', label: '正式' },
+                { id: 'casual', label: '轻松' },
+              ],
+            },
+          },
+          { type: 'finish', finishReason: 'tool-calls' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-15T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-ask')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-ask',
+      issuedAt: '2026-08-15T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-ask',
+      schemaVersion: 1,
+      taskId: 'task-ask',
+      inputText: '问我一个单选题',
+      proposedTurnId: 'turn-ask',
+      proposedRunId: 'run-ask',
+    })
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('run.input_requested')
+    })
+    await new Promise((r) => setTimeout(r, 30))
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).not.toContain('tool.called')
+    expect(types).not.toContain('run.completed')
+    const requested = events.find(
+      (e) => e.kind === 'event' && e.envelope.eventType === 'run.input_requested',
+    )
+    expect(requested && requested.kind === 'event' ? requested.envelope.payload : null).toMatchObject({
+      requestId: 'call-ask',
+      question: '用哪种语气？',
+    })
+  })
+
+  it('provideRunInput resumes with output-available tool part and synthesizes input_provided', async () => {
+    let call = 0
+    let resumeBody = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        return new Response(
+          sseBody([
+            {
+              type: 'tool-call',
+              toolCallId: 'call-ask-2',
+              toolName: 'ask_user_question',
+              args: {
+                question: '用哪种语气？',
+                options: [
+                  { id: 'formal', label: '正式' },
+                  { id: 'casual', label: '轻松' },
+                ],
+              },
+            },
+            { type: 'finish', finishReason: 'tool-calls' },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      resumeBody = String(init?.body ?? '')
+      return new Response(
+        sseBody([
+          { type: 'text-delta', delta: '好的，按正式语气写。' },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-15T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-ask-2')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-ask-s',
+      issuedAt: '2026-08-15T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-ask-s',
+      schemaVersion: 1,
+      taskId: 'task-ask-2',
+      inputText: '问我一个单选题',
+      proposedTurnId: 'turn-ask-2',
+      proposedRunId: 'run-ask-2',
+    })
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('run.input_requested')
+    })
+    await new Promise((r) => setTimeout(r, 20))
+
+    const ack = await adapter.sendCommand({
+      type: 'provideRunInput',
+      commandId: 'cmd-ask-a',
+      issuedAt: '2026-08-15T12:00:01.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-ask-a',
+      schemaVersion: 1,
+      taskId: 'task-ask-2',
+      inputText: '正式',
+      requestId: 'call-ask-2',
+      answer: { kind: 'options', selectedOptionIds: ['formal'] },
+    })
+    expect(ack.status).toBe('accepted')
+
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('run.input_provided')
+      expect(types).toContain('output.delta')
+      expect(types).toContain('run.completed')
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const request = JSON.parse(resumeBody) as {
+      input: Array<{ role: string; parts: Array<Record<string, unknown>> }>
+    }
+    expect(request.input[1]?.parts[0]).toMatchObject({
+      type: 'tool-ask_user_question',
+      toolCallId: 'call-ask-2',
+      state: 'output-available',
+      output: {
+        status: 'answered',
+        selected: [{ id: 'formal', label: '正式' }],
+      },
+    })
+  })
+
+  it('provideRunInput maps skipped and free-text answers to tool output', async () => {
+    const bodies: string[] = []
+    let call = 0
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1 || call === 3) {
+        return new Response(
+          sseBody([
+            {
+              type: 'tool-call',
+              toolCallId: call === 1 ? 'call-skip' : 'call-free',
+              toolName: 'ask_user_question',
+              args: {
+                question: '用哪种语气？',
+                options: [
+                  { id: 'formal', label: '正式' },
+                  { id: 'casual', label: '轻松' },
+                ],
+              },
+            },
+            { type: 'finish', finishReason: 'tool-calls' },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      bodies.push(String(init?.body ?? ''))
+      return new Response(
+        sseBody([{ type: 'finish', finishReason: 'stop' }]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-15T12:00:00.000Z',
+    })
+    collectEvents(adapter, 'task-ask-skip')
+    collectEvents(adapter, 'task-ask-free')
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-skip-s',
+      issuedAt: '2026-08-15T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-skip-s',
+      schemaVersion: 1,
+      taskId: 'task-ask-skip',
+      inputText: '提问',
+      proposedTurnId: 'turn-skip',
+      proposedRunId: 'run-skip',
+    })
+    await vi.waitFor(() => expect(call).toBe(1))
+    await new Promise((r) => setTimeout(r, 20))
+    await adapter.sendCommand({
+      type: 'provideRunInput',
+      commandId: 'cmd-skip-a',
+      issuedAt: '2026-08-15T12:00:01.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-skip-a',
+      schemaVersion: 1,
+      taskId: 'task-ask-skip',
+      inputText: '已跳过',
+      requestId: 'call-skip',
+      answer: { kind: 'skipped' },
+    })
+    await vi.waitFor(() => expect(call).toBe(2))
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-free-s',
+      issuedAt: '2026-08-15T12:00:02.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-free-s',
+      schemaVersion: 1,
+      taskId: 'task-ask-free',
+      inputText: '提问',
+      proposedTurnId: 'turn-free',
+      proposedRunId: 'run-free',
+    })
+    await vi.waitFor(() => expect(call).toBe(3))
+    await new Promise((r) => setTimeout(r, 20))
+    await adapter.sendCommand({
+      type: 'provideRunInput',
+      commandId: 'cmd-free-a',
+      issuedAt: '2026-08-15T12:00:03.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-free-a',
+      schemaVersion: 1,
+      taskId: 'task-ask-free',
+      inputText: '按你的建议',
+      requestId: 'call-free',
+      answer: { kind: 'freeText', text: '按你的建议' },
+    })
+
+    await vi.waitFor(() => expect(bodies).toHaveLength(2))
+    const skipPart = (
+      JSON.parse(bodies[0]!) as {
+        input: Array<{ parts: Array<Record<string, unknown>> }>
+      }
+    ).input[1]?.parts[0]
+    const freePart = (
+      JSON.parse(bodies[1]!) as {
+        input: Array<{ parts: Array<Record<string, unknown>> }>
+      }
+    ).input[1]?.parts[0]
+    expect(skipPart).toMatchObject({
+      type: 'tool-ask_user_question',
+      state: 'output-available',
+      output: { status: 'skipped' },
+    })
+    expect(freePart).toMatchObject({
+      type: 'tool-ask_user_question',
+      state: 'output-available',
+      output: { status: 'replied', text: '按你的建议' },
+    })
+  })
+
+  it('getCapabilities marks runInput as supported', async () => {
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+      tools: ['ask_user_question'],
+    })
+    const caps = await adapter.getCapabilities('proj', 'local')
+    expect(caps.features.runInput).toBe(true)
+    expect(caps.features.steer).toBe(false)
+  })
 })

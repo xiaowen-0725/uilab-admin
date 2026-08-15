@@ -1444,7 +1444,11 @@ export function TaskComposer({
             }}
             onKeyDown={onComposerKeyDown}
             onSubmit={handleSend}
-            placeholder='随心输入，输入 / 调用命令与技能'
+            placeholder={
+              runStatus === 'waiting_for_input'
+                ? '或直接回复…'
+                : '随心输入，输入 / 调用命令与技能'
+            }
             aria-label='编写消息'
             leading={
               skillTokens.length > 0

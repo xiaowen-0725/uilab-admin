@@ -703,4 +703,61 @@ describe('mapFullStreamChunks', () => {
       },
     })
   })
+
+  it('maps ask_user_question tool-call to run.input_requested without tool.called', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-call',
+          toolCallId: 'call-ask-1',
+          toolName: 'ask_user_question',
+          args: {
+            question: '用哪种语气写纪要？',
+            options: [
+              { id: 'formal', label: '正式' },
+              { id: 'casual', label: '轻松' },
+            ],
+            allow_multiple: false,
+          },
+        },
+        { type: 'finish', finishReason: 'tool-calls' },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes.map((event) => event.eventType)).toEqual([
+      'run.input_requested',
+      'run.completed',
+    ])
+    expect(envelopes[0]?.payload).toMatchObject({
+      requestId: 'call-ask-1',
+      question: '用哪种语气写纪要？',
+      options: [
+        { id: 'formal', label: '正式' },
+        { id: 'casual', label: '轻松' },
+      ],
+      allowMultiple: false,
+    })
+  })
+
+  it('maps tool-output-denied to a denied tool terminal', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        {
+          type: 'tool-output-denied',
+          toolCallId: 'call-deny',
+          toolName: 'write_file',
+          error: 'user denied',
+        },
+      ],
+      baseCtx(),
+    )
+    expect(envelopes).toHaveLength(1)
+    expect(envelopes[0]?.eventType).toBe('tool.completed')
+    expect(envelopes[0]?.payload).toMatchObject({
+      toolCallId: 'call-deny',
+      toolName: 'write_file',
+      status: 'denied',
+      isError: true,
+    })
+  })
 })
