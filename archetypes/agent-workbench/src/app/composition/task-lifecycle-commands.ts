@@ -11,10 +11,10 @@ import {
   type ProjectCatalogController,
   type TaskCatalogRow,
 } from '@/modules/project'
-import type { EventStorePort, RunStatus } from '@/modules/task'
+import type { EventStorePort, TurnStatus } from '@/modules/task'
 import {
   isNavigatorBusyStatus,
-  type RunStatusIndex,
+  type TurnStatusIndex,
   type TaskRuntimeController,
 } from '@/modules/task'
 import type { WorkbenchPersistence } from './workbench-boot'
@@ -76,7 +76,7 @@ export interface HardDeleteTaskInput {
   eventStore: EventStorePort | null
   db: IDBDatabase | null
   persistence: WorkbenchPersistence
-  runStatusIndex: RunStatusIndex
+  runStatusIndex: TurnStatusIndex
   runtimeController: TaskRuntimeController | null
   /** Currently attached/selected task (for cancel + detach). */
   activeTaskId: string | null
@@ -85,7 +85,7 @@ export interface HardDeleteTaskInput {
   lastTaskByProject: Record<string, string | null>
   navigatorOpen?: boolean
   /** Live run status when deleting the active task. */
-  activeRunStatus?: RunStatus | null
+  activeRunStatus?: TurnStatus | null
   cancelTimeoutMs?: number
   onTaskDeleted?: (taskId: string) => void | Promise<void>
 }
@@ -200,13 +200,13 @@ export interface RemoveProjectFromListInput {
   projectId: string
   catalog: ProjectCatalogController
   eventStore: EventStorePort | null
-  runStatusIndex: RunStatusIndex
+  runStatusIndex: TurnStatusIndex
   runtimeController: TaskRuntimeController | null
   activeTaskId: string | null
   selectedTaskId: string | null
   selectedProjectId: string | null
   lastTaskByProject: Record<string, string | null>
-  activeRunStatus?: RunStatus | null
+  activeRunStatus?: TurnStatus | null
   cancelTimeoutMs?: number
   onTaskDeleted?: (taskId: string) => void | Promise<void>
 }

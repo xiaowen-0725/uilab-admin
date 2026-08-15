@@ -220,11 +220,11 @@ export function parseSseDataLine(
   }
 }
 
-function isTerminalRunEvent(eventType: string): boolean {
+function isTerminalTurnEvent(eventType: string): boolean {
   return (
-    eventType === 'run.completed' ||
-    eventType === 'run.failed' ||
-    eventType === 'run.cancelled'
+    eventType === 'turn.completed' ||
+    eventType === 'turn.failed' ||
+    eventType === 'turn.cancelled'
   )
 }
 
@@ -267,7 +267,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.baseUrl = options.baseUrl.replace(/\/$/, '')
     this.agentId = options.agentId
     this.projectId = options.projectId
-    this.schemaVersion = options.schemaVersion ?? 1
+    this.schemaVersion = options.schemaVersion ?? 2
     this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis)
     this.userId = options.userId ?? 'workbench-user'
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
@@ -309,15 +309,11 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     }
   }
 
-  async getSnapshot(
-    taskId: string,
-    runId?: string
-  ): Promise<RuntimeSnapshot | null> {
+  async getSnapshot(taskId: string): Promise<RuntimeSnapshot | null> {
     const state = this.taskState.get(taskId)
     if (!state) return null
     return {
       taskId,
-      runId: runId ?? state.lastRunId ?? undefined,
       protocolVersion: this.schemaVersion,
       lastTaskSequence: Math.max(0, state.nextSequence - 1),
     }
@@ -378,9 +374,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   ): Promise<CommandAcknowledgement> {
     this.ensureTask(input.taskId)
     const state = this.taskState.get(input.taskId)!
-    state.lastRunId = input.proposedRunId
     state.lastTurnId = input.turnId
-    return accepted(`start-${input.proposedRunId}`, this.nowIso())
+    state.lastRunId = input.turnId
+    return accepted(`start-${input.turnId}`, this.nowIso())
   }
 
   async sendCommand(
@@ -454,12 +450,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   }
 
   /**
-   * Allocate sequence + emit one envelope. eventId = `${idPrefix}-${runId}-${seq}`.
+   * Allocate sequence + emit one envelope. eventId = `${idPrefix}-${turnId}-${seq}`.
    * `freshReceivedAt` matches cancel-path historical dual nowIso() calls.
    */
   private pushTaskEnvelope(
     taskId: string,
-    ids: { turnId?: string; runId: string },
+    ids: { turnId: string },
     idPrefix: string,
     eventType: string,
     payload: unknown,
@@ -469,13 +465,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const occurredAt = this.nowIso()
     const receivedAt = opts?.freshReceivedAt ? this.nowIso() : occurredAt
     this.emitEnvelope(taskId, {
-      eventId: `${idPrefix}-${ids.runId}-${state.nextSequence}`,
+      eventId: `${idPrefix}-${ids.turnId}-${state.nextSequence}`,
       eventType,
       schemaVersion: this.schemaVersion,
       projectId: this.projectId,
       taskId,
       turnId: ids.turnId,
-      runId: ids.runId,
       taskSequence: state.nextSequence,
       occurredAt,
       receivedAt,
@@ -488,25 +483,17 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.seq += 1
     const turnId =
       command.proposedTurnId ?? command.turnId ?? `turn-${taskId}-${this.seq}`
-    const runId =
-      command.proposedRunId ?? command.runId ?? `run-${taskId}-${this.seq}`
-    return { turnId, runId }
+    return { turnId }
   }
 
   private pushBookkeeping(
     taskId: string,
     turnId: string,
-    runId: string,
     inputText: string
   ): void {
-    const ids = { turnId, runId }
-    this.pushTaskEnvelope(taskId, ids, 'va-book', 'turn.created', { turnId })
-    this.pushTaskEnvelope(taskId, ids, 'va-book', 'message.accepted', {
+    this.pushTaskEnvelope(taskId, { turnId }, 'va-book', 'turn.started', {
+      inputText,
       text: inputText,
-      role: 'user',
-    })
-    this.pushTaskEnvelope(taskId, ids, 'va-book', 'run.queued', {})
-    this.pushTaskEnvelope(taskId, ids, 'va-book', 'run.started', {
       source: 'voltagent-adapter',
     })
   }
@@ -540,12 +527,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       return rejected(
         command.commandId,
         'task_busy',
-        '当前任务已有进行中的 Run'
+        '当前任务已有进行中的轮次'
       )
     }
 
-    const { turnId, runId } = this.allocateIds(taskId, command)
-    state.lastRunId = runId
+    const { turnId } = this.allocateIds(taskId, command)
+    state.lastRunId = turnId
     state.lastTurnId = turnId
     const modelInput = modelInputWithComposerContext(
       command.inputText,
@@ -562,11 +549,11 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     state.pendingApprovals.clear()
     state.pendingQuestions.clear()
 
-    this.pushBookkeeping(taskId, turnId, runId, command.inputText)
+    this.pushBookkeeping(taskId, turnId, command.inputText)
     this.launchStream({
       taskId,
       turnId,
-      runId,
+      runId: turnId,
       input: modelInput,
       capabilityConnectorIds: state.lastCapabilityConnectorIds,
       completeIfNoTerminal: true,
@@ -581,16 +568,15 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   ): Promise<CommandAcknowledgement> {
     const state = this.taskState.get(taskId)
     if (!state) {
-      return rejected(commandId, 'no_active_run', '没有可取消的 Run')
+      return rejected(commandId, 'no_active_run', '没有可取消的轮次')
     }
     if (
       !state.activeAbort &&
       state.pendingApprovals.size === 0 &&
       state.pendingQuestions.size === 0
     ) {
-      return rejected(commandId, 'no_active_run', '没有可取消的 Run')
+      return rejected(commandId, 'no_active_run', '没有可取消的轮次')
     }
-    const runId = state.lastRunId ?? `run-${taskId}`
     const turnId = state.lastTurnId ?? undefined
     if (state.activeAbort) {
       state.activeAbort.abort('user_cancel')
@@ -599,15 +585,15 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     state.pendingApprovals.clear()
     state.pendingQuestions.clear()
 
-    const ids = { turnId, runId }
-    this.pushTaskEnvelope(taskId, ids, 'va-cancel', 'run.cancel_requested', {
+    const ids = { turnId: turnId ?? `turn-${taskId}` }
+    this.pushTaskEnvelope(taskId, ids, 'va-cancel', 'turn.cancel_requested', {
       reason: 'user_cancel',
     })
     this.pushTaskEnvelope(
       taskId,
       ids,
       'va-cancelled',
-      'run.cancelled',
+      'turn.cancelled',
       { reason: 'user_cancel' },
       { freshReceivedAt: true }
     )
@@ -621,10 +607,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const state = this.ensureTask(taskId)
     const approvalId = command.payload.requestId
     const pending = state.pendingApprovals.get(approvalId)
-    const runId =
-      command.runId ?? pending?.runId ?? state.lastRunId ?? `run-${taskId}`
     const turnId =
       command.turnId ?? pending?.turnId ?? state.lastTurnId ?? `turn-${taskId}`
+    const runId = pending?.runId ?? state.lastRunId ?? turnId
     const approved = command.payload.decision === 'approved'
 
     // Validate resumability *before* mutating approval state (Codex P2).
@@ -650,7 +635,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     this.pushTaskEnvelope(
       taskId,
-      { turnId, runId },
+      { turnId },
       'va-apr',
       'approval.resolved',
       {
@@ -705,10 +690,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       )
     }
 
-    const runId =
-      command.runId ?? pending.runId ?? state.lastRunId ?? `run-${taskId}`
     const turnId =
       command.turnId ?? pending.turnId ?? state.lastTurnId ?? `turn-${taskId}`
+    const runId = pending.runId ?? state.lastRunId ?? turnId
     const answer: QuestionAnswer =
       command.answer ?? { kind: 'freeText', text: command.inputText }
     const output = questionAnswerToToolOutput(
@@ -725,9 +709,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     this.pushTaskEnvelope(
       taskId,
-      { turnId, runId },
+      { turnId },
       'va-input',
-      'run.input_provided',
+      'input.provided',
       {
         requestId,
         answer,
@@ -875,14 +859,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         this.failRun(
           taskId,
           turnId,
-          runId,
           `侧车 HTTP ${response.status}: ${body.slice(0, 200) || response.statusText}`
         )
         return
       }
 
       if (!response.body) {
-        this.failRun(taskId, turnId, runId, '侧车未返回流式 body')
+        this.failRun(taskId, turnId, '侧车未返回流式 body')
         return
       }
 
@@ -903,9 +886,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         }
         this.pushTaskEnvelope(
           taskId,
-          { turnId, runId },
+          { turnId },
           'va-complete',
-          'run.completed',
+          'turn.completed',
           { reason }
         )
         sawTerminalEvent = true
@@ -930,7 +913,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           projectId: this.projectId,
           taskId,
           turnId,
-          runId,
           nextSequence: state.nextSequence,
           schemaVersion: this.schemaVersion,
           nowIso: this.nowIso,
@@ -938,13 +920,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           updatePlanCallIds: state.updatePlanCallIds,
         })
         for (const env of mapped.envelopes) {
-          if (env.eventType === 'run.started') continue
-          const terminal = isTerminalRunEvent(env.eventType)
+          if (env.eventType === 'turn.started') continue
+          const terminal = isTerminalTurnEvent(env.eventType)
           if (terminal && (pausedForHitl || sawTerminalEvent)) continue
           this.emitEnvelope(taskId, {
             ...env,
             taskSequence: state.nextSequence,
-            eventId: `va-${runId}-${state.nextSequence}`,
+            eventId: `va-${turnId}-${state.nextSequence}`,
           })
           state.nextSequence += 1
           if (terminal) sawTerminalEvent = true
@@ -971,7 +953,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
       const message =
         err instanceof Error ? err.message : '连接 VoltAgent 侧车失败'
-      this.failRun(taskId, turnId, runId, message)
+      this.failRun(taskId, turnId, message)
       this.emit(taskId, {
         kind: 'error',
         code: 'voltagent_stream_error',
@@ -983,10 +965,9 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   private failRun(
     taskId: string,
     turnId: string,
-    runId: string,
     message: string
   ): void {
-    this.pushTaskEnvelope(taskId, { turnId, runId }, 'va-fail', 'run.failed', {
+    this.pushTaskEnvelope(taskId, { turnId }, 'va-fail', 'turn.failed', {
       message,
     })
   }

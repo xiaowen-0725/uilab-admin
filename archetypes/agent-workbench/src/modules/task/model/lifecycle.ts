@@ -1,13 +1,12 @@
 /**
- * Task Module domain lifecycle types (Phase 4B Kernel).
- * Project→Task→Turn→Run hierarchy; no Project entity lives here.
+ * Task Module domain lifecycle types (protocol v2).
+ * Project → Task → Turn → Step → event. No Run layer. No Project entity here.
  */
 
 /** Opaque string aliases (branded for type-safety without runtime cost). */
 export type ProjectId = string & { readonly __brand?: 'ProjectId' }
 export type TaskId = string & { readonly __brand?: 'TaskId' }
 export type TurnId = string & { readonly __brand?: 'TurnId' }
-export type RunId = string & { readonly __brand?: 'RunId' }
 
 export function asProjectId(id: string): ProjectId {
   return id as ProjectId
@@ -18,16 +17,13 @@ export function asTaskId(id: string): TaskId {
 export function asTurnId(id: string): TurnId {
   return id as TurnId
 }
-export function asRunId(id: string): RunId {
-  return id as RunId
-}
 
 /**
- * Exact RunStatus union from design §7.
- * Terminal: completed | failed | cancelled.
- * Recovery-local: interrupted (not a remote terminal; same Run never returns to running).
+ * Turn execution status. Terminal: completed | failed | cancelled.
+ * `queued` / `interrupted` remain for the local status machine; v2 emitters
+ * start at `running` via `turn.started` and do not emit those events.
  */
-export type RunStatus =
+export type TurnStatus =
   | 'queued'
   | 'running'
   | 'waiting_for_approval'
@@ -38,7 +34,7 @@ export type RunStatus =
   | 'cancelled'
   | 'interrupted'
 
-export const RUN_TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set([
+export const TURN_TERMINAL_STATUSES: ReadonlySet<TurnStatus> = new Set([
   'completed',
   'failed',
   'cancelled',
@@ -57,7 +53,7 @@ export interface Task {
   createdAt: string
 }
 
-/** One user intent cycle; may own multiple Run attempts. */
+/** One user submit → Agent finishes every action in that cycle. */
 export interface Turn {
   turnId: TurnId
   taskId: TaskId
@@ -66,24 +62,8 @@ export interface Turn {
   parentTurnId?: TurnId
   inputText: string
   createdAt: string
-  runIds: RunId[]
 }
 
-/** One concrete execution attempt of a Turn. */
-export interface Run {
-  runId: RunId
-  turnId: TurnId
-  taskId: TaskId
-  status: RunStatus
-  attempt: number
-  parentRunId?: RunId
-  agentId?: string
-  startedAt?: string
-  endedAt?: string
-  lastTaskSequence?: number
-  runtimeCursor?: string
-}
-
-export function isTerminalRunStatus(status: RunStatus): boolean {
-  return RUN_TERMINAL_STATUSES.has(status)
+export function isTerminalTurnStatus(status: TurnStatus): boolean {
+  return TURN_TERMINAL_STATUSES.has(status)
 }

@@ -7,7 +7,7 @@
 
 export const WORKBENCH_IDB_NAME = 'uilab-agent-workbench'
 /** Schema algebra — bump only on structure migrations. */
-export const WORKBENCH_IDB_VERSION = 1
+export const WORKBENCH_IDB_VERSION = 2
 
 export const STORE_PROJECTS = 'projects'
 export const STORE_TASKS = 'tasks'
@@ -55,8 +55,37 @@ export interface MetadataRecord {
   value: unknown
 }
 
+function createWorkbenchStores(db: IDBDatabase): void {
+  if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
+    db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
+  }
+  if (!db.objectStoreNames.contains(STORE_TASKS)) {
+    const tasks = db.createObjectStore(STORE_TASKS, { keyPath: 'id' })
+    tasks.createIndex('projectId', 'projectId', { unique: false })
+  }
+  if (!db.objectStoreNames.contains(STORE_EVENTS)) {
+    const events = db.createObjectStore(STORE_EVENTS, {
+      keyPath: ['taskId', 'taskSequence'],
+    })
+    events.createIndex('eventId', 'eventId', { unique: true })
+    events.createIndex('taskId', 'taskId', { unique: false })
+  }
+  if (!db.objectStoreNames.contains(STORE_SNAPSHOTS)) {
+    db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'taskId' })
+  }
+  if (!db.objectStoreNames.contains(STORE_COMMANDS)) {
+    db.createObjectStore(STORE_COMMANDS, { keyPath: 'commandId' })
+  }
+  if (!db.objectStoreNames.contains(STORE_SESSION)) {
+    db.createObjectStore(STORE_SESSION, { keyPath: 'id' })
+  }
+  if (!db.objectStoreNames.contains(STORE_METADATA)) {
+    db.createObjectStore(STORE_METADATA, { keyPath: 'key' })
+  }
+}
+
 /**
- * Create all object stores for version 1.
+ * Schema upgrades. Version 2 drops local v1 event protocol data (wipe + recreate).
  * Called only from the shared shell's onupgradeneeded.
  */
 export function upgradeWorkbenchIdb(
@@ -65,31 +94,14 @@ export function upgradeWorkbenchIdb(
   _newVersion: number | null,
 ): void {
   if (oldVersion < 1) {
-    if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
-      db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
+    createWorkbenchStores(db)
+    return
+  }
+
+  if (oldVersion < 2) {
+    for (const name of Array.from(db.objectStoreNames)) {
+      db.deleteObjectStore(name)
     }
-    if (!db.objectStoreNames.contains(STORE_TASKS)) {
-      const tasks = db.createObjectStore(STORE_TASKS, { keyPath: 'id' })
-      tasks.createIndex('projectId', 'projectId', { unique: false })
-    }
-    if (!db.objectStoreNames.contains(STORE_EVENTS)) {
-      const events = db.createObjectStore(STORE_EVENTS, {
-        keyPath: ['taskId', 'taskSequence'],
-      })
-      events.createIndex('eventId', 'eventId', { unique: true })
-      events.createIndex('taskId', 'taskId', { unique: false })
-    }
-    if (!db.objectStoreNames.contains(STORE_SNAPSHOTS)) {
-      db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'taskId' })
-    }
-    if (!db.objectStoreNames.contains(STORE_COMMANDS)) {
-      db.createObjectStore(STORE_COMMANDS, { keyPath: 'commandId' })
-    }
-    if (!db.objectStoreNames.contains(STORE_SESSION)) {
-      db.createObjectStore(STORE_SESSION, { keyPath: 'id' })
-    }
-    if (!db.objectStoreNames.contains(STORE_METADATA)) {
-      db.createObjectStore(STORE_METADATA, { keyPath: 'key' })
-    }
+    createWorkbenchStores(db)
   }
 }

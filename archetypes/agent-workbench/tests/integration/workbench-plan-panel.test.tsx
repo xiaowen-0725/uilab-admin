@@ -24,7 +24,7 @@ function envelope(
   eventType: string,
   fields: {
     taskSequence: number
-    runId: string
+
     turnId: string
     payload?: unknown
   },
@@ -32,11 +32,11 @@ function envelope(
   return {
     eventId: `${taskId}:e${fields.taskSequence}`,
     eventType,
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: 'p',
     taskId,
     turnId: fields.turnId,
-    runId: fields.runId,
+
     taskSequence: fields.taskSequence,
     occurredAt: '1970-01-01T00:00:00.000Z',
     receivedAt: '1970-01-01T00:00:00.000Z',
@@ -45,29 +45,23 @@ function envelope(
 }
 
 function planEvents(taskId: string): AgentRuntimeEventEnvelope[] {
-  const runId = 'run-plan'
   const turnId = 'turn-plan'
   return [
-    envelope(taskId, 'message.accepted', {
+    envelope(taskId, 'turn.started', {
       taskSequence: 1,
-      runId,
       turnId,
-      payload: { text: '接飞书审批', role: 'user' },
+      payload: { inputText: '接飞书审批', text: '接飞书审批' },
     }),
-    envelope(taskId, 'run.queued', { taskSequence: 2, runId, turnId }),
-    envelope(taskId, 'run.started', { taskSequence: 3, runId, turnId }),
     envelope(taskId, 'plan.updated', {
-      taskSequence: 4,
-      runId,
+      taskSequence: 2,
       turnId,
       payload: {
         explanation: '参数装配比预期复杂，拆出独立步骤',
         steps: PLAN_STEPS,
       },
     }),
-    envelope(taskId, 'tool.called', {
-      taskSequence: 5,
-      runId,
+    envelope(taskId, 'tool.started', {
+      taskSequence: 3,
       turnId,
       payload: {
         toolId: 'read-1',
@@ -101,7 +95,7 @@ function renderPlanSurface(
       view={view}
       composerRuntime={{
         mode: 'runtime',
-        runStatus: readModel.runStatus,
+        turnStatus: readModel.turnStatus,
       }}
     />,
   )
@@ -111,9 +105,9 @@ describe('Workbench plan panel + Timeline card', () => {
   it('shows the empty plan block before any plan.updated event', async () => {
     const taskId = 'task-plan-empty'
     renderPlanSurface(taskId, [
-      envelope(taskId, 'run.started', {
+      envelope(taskId, 'turn.started', {
         taskSequence: 1,
-        runId: 'run-empty',
+
         turnId: 'turn-empty',
       }),
     ])
@@ -147,7 +141,7 @@ describe('Workbench plan panel + Timeline card', () => {
       .element(page.getByTestId('context-panel-plan-step').nth(1))
       .toHaveAttribute('data-status', 'in_progress')
 
-    const card = page.getByTestId('timeline-item-plan-update:run-plan')
+    const card = page.getByTestId('timeline-item-plan-update:turn-plan')
     await expect.element(card).toHaveTextContent('计划已更新')
     await expect
       .element(card)
@@ -159,30 +153,23 @@ describe('Workbench plan panel + Timeline card', () => {
     expect(getComputedStyle(explanation!).fontStyle).toBe('italic')
 
     await expect
-      .element(page.getByTestId('timeline-run-status-label'))
+      .element(page.getByTestId('timeline-turn-status-label'))
       .toHaveTextContent(/已处理|读取|列出|命令|思考/)
     expect(
-      page.getByTestId('timeline-run-status-label').element().textContent ?? '',
+      page.getByTestId('timeline-turn-status-label').element().textContent ?? '',
     ).not.toMatch(/步/)
   })
 
   it('renders an empty-steps Timeline card as （无步骤）', async () => {
     const taskId = 'task-plan-no-steps'
     renderPlanSurface(taskId, [
-      envelope(taskId, 'message.accepted', {
+      envelope(taskId, 'turn.started', {
         taskSequence: 1,
-        runId: 'run-empty-steps',
         turnId: 'turn-empty-steps',
-        payload: { text: '简单问一句', role: 'user' },
-      }),
-      envelope(taskId, 'run.started', {
-        taskSequence: 2,
-        runId: 'run-empty-steps',
-        turnId: 'turn-empty-steps',
+        payload: { inputText: '简单问一句', text: '简单问一句' },
       }),
       envelope(taskId, 'plan.updated', {
-        taskSequence: 3,
-        runId: 'run-empty-steps',
+        taskSequence: 2,
         turnId: 'turn-empty-steps',
         payload: { steps: [] },
       }),
@@ -192,27 +179,21 @@ describe('Workbench plan panel + Timeline card', () => {
       .element(page.getByTestId('context-panel-plan-empty'))
       .toHaveTextContent('本次任务暂无计划')
     await expect
-      .element(page.getByTestId('timeline-item-plan-update:run-empty-steps'))
+      .element(page.getByTestId('timeline-item-plan-update:turn-empty-steps'))
       .toHaveTextContent('（无步骤）')
   })
 
   it('keeps a completed plan visible in the panel and shows warning body on Timeline', async () => {
     const taskId = 'task-plan-done'
     renderPlanSurface(taskId, [
-      envelope(taskId, 'message.accepted', {
+      envelope(taskId, 'turn.started', {
         taskSequence: 1,
-        runId: 'run-done',
         turnId: 'turn-done',
-        payload: { text: '做完审批连接器', role: 'user' },
-      }),
-      envelope(taskId, 'run.started', {
-        taskSequence: 2,
-        runId: 'run-done',
-        turnId: 'turn-done',
+        payload: { inputText: '做完审批连接器', text: '做完审批连接器' },
       }),
       envelope(taskId, 'plan.updated', {
         taskSequence: 3,
-        runId: 'run-done',
+
         turnId: 'turn-done',
         payload: {
           steps: [
@@ -223,7 +204,7 @@ describe('Workbench plan panel + Timeline card', () => {
       }),
       envelope(taskId, 'warning', {
         taskSequence: 4,
-        runId: 'run-done',
+
         turnId: 'turn-done',
         payload: {
           title: '计划更新失败',

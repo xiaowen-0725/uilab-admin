@@ -11,11 +11,11 @@ function mk(
   return {
     eventId: `e${seq}`,
     eventType: type,
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: 'p',
     taskId: 't',
     turnId: 'turn-1',
-    runId: 'run-1',
+
     taskSequence: seq,
     occurredAt: '1970-01-01T00:00:00.000Z',
     receivedAt: '1970-01-01T00:00:00.000Z',
@@ -26,9 +26,9 @@ function mk(
 describe('projectEvents sourceEventIds cap', () => {
   it('caps delta-coalesced assistant ids and keeps the sequence range', () => {
     const deltas = Array.from({ length: 20 }, (_, index) =>
-      mk(index + 2, 'output.delta', { text: String.fromCharCode(97 + (index % 26)) }),
+      mk(index + 2, 'message.delta', { text: String.fromCharCode(97 + (index % 26)) }),
     )
-    const events = [mk(1, 'run.started'), ...deltas]
+    const events = [mk(1, 'turn.started'), ...deltas]
     const live = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), events)
     const replayed = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
@@ -55,8 +55,8 @@ describe('projectEvents sourceEventIds cap', () => {
       }),
     )
     const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
-      mk(1, 'run.started'),
-      mk(2, 'tool.called', { toolId: 'write-1', name: 'write_file' }),
+      mk(1, 'turn.started'),
+      mk(2, 'tool.started', { toolId: 'write-1', name: 'write_file' }),
       ...progress,
     ])
 
@@ -68,9 +68,9 @@ describe('projectEvents sourceEventIds cap', () => {
 
   it('does not clone untouched timeline items when applying a later event', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
-    state = applyRuntimeEvent(state, mk(1, 'run.started'))
+    state = applyRuntimeEvent(state, mk(1, 'turn.started'))
     const terminal = state.readModel.timeline[0]
-    state = applyRuntimeEvent(state, mk(2, 'output.delta', { text: 'hi' }))
+    state = applyRuntimeEvent(state, mk(2, 'message.delta', { text: 'hi' }))
 
     expect(state.readModel.timeline[0]).toBe(terminal)
     expect(state.readModel.timeline[1]?.body).toBe('hi')
@@ -78,7 +78,7 @@ describe('projectEvents sourceEventIds cap', () => {
 
   it('does not mutate the input seenEventIds set', () => {
     const before = emptyProjectionState({ taskId: 't', projectId: 'p' })
-    const after = applyRuntimeEvent(before, mk(1, 'run.started'))
+    const after = applyRuntimeEvent(before, mk(1, 'turn.started'))
     expect(before.seenEventIds.has('e1')).toBe(false)
     expect(after.seenEventIds.has('e1')).toBe(true)
     expect(after.seenEventIds).not.toBe(before.seenEventIds)

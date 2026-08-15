@@ -13,7 +13,7 @@ export interface TimelineTurnSegment {
   key: string
   /** User bubbles for this turn (usually 0–1). */
   userMessages: TimelineItem[]
-  /** Latest run-terminal chrome for this turn, if any. */
+  /** Latest turn-terminal chrome for this turn, if any. */
   terminal: TimelineItem | undefined
   /** Everything else in order (tools, reasoning, assistant, approval…). */
   bodyItems: TimelineItem[]
@@ -51,11 +51,11 @@ export function groupTimelineIntoTurns(
     const userMessages = items.filter(
       (i) => i.category === 'user-message' && i.meta?.inlineResponse !== true,
     )
-    const terminals = items.filter((i) => i.category === 'run-terminal')
+    const terminals = items.filter((i) => i.category === 'turn-terminal')
     const terminal = terminals[terminals.length - 1]
     const bodyItems = items.filter(
       (i) =>
-        i.category !== 'run-terminal' &&
+        i.category !== 'turn-terminal' &&
         (i.category !== 'user-message' || i.meta?.inlineResponse === true),
     )
     const key =

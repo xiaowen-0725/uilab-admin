@@ -10,17 +10,16 @@ function mk(
   seq: number,
   type: string,
   payload: unknown,
-  runId = 'run-1',
+  _turnId = 'turn-1',
   occurredAt = `1970-01-01T00:00:0${Math.min(seq, 9)}.000Z`,
 ): AgentRuntimeEventEnvelope {
   return {
     eventId: `e${seq}`,
     eventType: type,
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: 'p',
     taskId: 't',
-    turnId: 'turn-1',
-    runId,
+    turnId: _turnId,
     taskSequence: seq,
     occurredAt,
     receivedAt: occurredAt,
@@ -33,13 +32,13 @@ describe('projectEvents liveStatus + file meta', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     expect(state.readModel.liveStatus).toBeNull()
 
-    state = applyRuntimeEvent(state, mk(1, 'run.started', {}))
+    state = applyRuntimeEvent(state, mk(1, 'turn.started', {}))
     expect(state.readModel.liveStatus).toBe('正在思考')
-    expect(state.readModel.runStatus).toBe('running')
+    expect(state.readModel.turnStatus).toBe('running')
 
     state = applyRuntimeEvent(
       state,
-      mk(2, 'tool.called', {
+      mk(2, 'tool.started', {
         toolId: 'r1',
         label: '读取 plan.txt',
         name: 'read_file',
@@ -87,18 +86,18 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(file?.meta?.diffLines?.[0]?.type).toBe('add')
     expect(file?.meta?.path).toBe('fixture/notes/workflow-result.md')
 
-    state = applyRuntimeEvent(state, mk(5, 'run.completed', {}))
+    state = applyRuntimeEvent(state, mk(5, 'turn.completed', {}))
     expect(state.readModel.liveStatus).toBeNull()
-    expect(state.readModel.runStatus).toBe('completed')
+    expect(state.readModel.turnStatus).toBe('completed')
     const terminal = state.readModel.timeline.find(
-      (t) => t.category === 'run-terminal',
+      (t) => t.category === 'turn-terminal',
     )
     expect(terminal?.title).toBe('已处理')
   })
 
   it('web search and plan update set Chinese liveStatus copy', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
-    state = applyRuntimeEvent(state, mk(1, 'run.started', {}))
+    state = applyRuntimeEvent(state, mk(1, 'turn.started', {}))
     state = applyRuntimeEvent(
       state,
       mk(2, 'plan.updated', { title: '计划', steps: ['a', 'b'] }),
@@ -107,7 +106,7 @@ describe('projectEvents liveStatus + file meta', () => {
 
     state = applyRuntimeEvent(
       state,
-      mk(3, 'tool.called', {
+      mk(3, 'tool.started', {
         toolId: 's1',
         label: '搜索网页',
         name: 'web_search',
@@ -119,8 +118,8 @@ describe('projectEvents liveStatus + file meta', () => {
   it('tool-group meta children from items', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
-      mk(1, 'run.started', {}),
-      mk(2, 'tool.called', {
+      mk(1, 'turn.started', {}),
+      mk(2, 'tool.started', {
         toolId: 't1',
         label: '读取',
         name: 'read',
@@ -139,8 +138,8 @@ describe('projectEvents liveStatus + file meta', () => {
   it('tool.completed falls back from raw output to expandable children', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
-      mk(1, 'run.started', {}),
-      mk(2, 'tool.called', {
+      mk(1, 'turn.started', {}),
+      mk(2, 'tool.started', {
         toolId: 'ls1',
         label: 'ls',
         name: 'ls',
@@ -164,8 +163,8 @@ describe('projectEvents liveStatus + file meta', () => {
   it('preserves unauthenticated CLI login hint on tool failure rows (acceptance 2.3)', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
-      mk(1, 'run.started', {}),
-      mk(2, 'tool.called', {
+      mk(1, 'turn.started', {}),
+      mk(2, 'tool.started', {
         toolId: 'cmd1',
         name: 'execute_command',
         label: 'execute_command',
@@ -189,8 +188,8 @@ describe('projectEvents liveStatus + file meta', () => {
 
   it('ls tool output projects to expandable tool-group children', () => {
     const envelopes: AgentRuntimeEventEnvelope[] = [
-      mk(1, 'run.started', {}),
-      mk(2, 'tool.called', { name: 'ls', toolId: 'ls-e2e', args: { path: '/' } }),
+      mk(1, 'turn.started', {}),
+      mk(2, 'tool.started', { name: 'ls', toolId: 'ls-e2e', args: { path: '/' } }),
       mk(3, 'tool.completed', {
         name: 'ls',
         toolId: 'ls-e2e',
@@ -198,7 +197,7 @@ describe('projectEvents liveStatus + file meta', () => {
         items: ['/notes/ (directory)', '/output/ (directory)'],
         status: 'completed',
       }),
-      mk(4, 'run.completed', {}),
+      mk(4, 'turn.completed', {}),
     ]
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, envelopes)
@@ -213,11 +212,11 @@ describe('projectEvents liveStatus + file meta', () => {
     ).toBe(true)
   })
 
-  it('tool.called without args uses items path for natural title', () => {
+  it('tool.started without args uses items path for natural title', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
-      mk(1, 'run.started', {}),
-      mk(2, 'tool.called', {
+      mk(1, 'turn.started', {}),
+      mk(2, 'tool.started', {
         toolId: 'r1',
         name: 'read_file',
         items: ['notes/a.md'],
@@ -231,9 +230,9 @@ describe('projectEvents liveStatus + file meta', () => {
   it('keeps mid-run assistant text as prose and never writes commentary', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
-      mk(1, 'run.started', {}),
-      mk(2, 'output.delta', { text: '先看目录。', phase: 'commentary' }),
-      mk(3, 'tool.called', {
+      mk(1, 'turn.started', {}),
+      mk(2, 'message.delta', { text: '先看目录。', phase: 'commentary' }),
+      mk(3, 'tool.started', {
         toolId: 'ls1',
         name: 'ls',
         args: { path: '/' },
@@ -243,9 +242,9 @@ describe('projectEvents liveStatus + file meta', () => {
         name: 'ls',
         args: { path: '/' },
       }),
-      mk(5, 'output.delta', { text: '目录是空的。', phase: 'commentary' }),
-      mk(6, 'output.delta', { text: '这是成稿。' }),
-      mk(7, 'run.completed', {}),
+      mk(5, 'message.delta', { text: '目录是空的。', phase: 'commentary' }),
+      mk(6, 'message.delta', { text: '这是成稿。' }),
+      mk(7, 'turn.completed', {}),
     ])
     const assistants = state.readModel.timeline.filter(
       (i) => i.category === 'assistant-message',
@@ -257,7 +256,7 @@ describe('projectEvents liveStatus + file meta', () => {
       expect(a.meta?.messageRole).not.toBe('commentary')
     }
     const terminal = state.readModel.timeline.find(
-      (i) => i.category === 'run-terminal',
+      (i) => i.category === 'turn-terminal',
     )
     expect(terminal?.title).toBe('已处理')
     expect(terminal?.meta?.startedAt || terminal?.meta?.path).toBeTruthy()
@@ -267,12 +266,12 @@ describe('projectEvents liveStatus + file meta', () => {
     const state = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
       [
-        mk(1, 'run.started', {}),
-        mk(2, 'output.delta', { text: '过程说明。', phase: 'commentary' }),
-        mk(3, 'output.completed', { text: '过程说明。' }),
-        mk(4, 'output.delta', { text: '最终回答。', phase: 'commentary' }),
-        mk(5, 'output.completed', { text: '最终回答。' }),
-        mk(6, 'run.completed', {}),
+        mk(1, 'turn.started', {}),
+        mk(2, 'message.delta', { text: '过程说明。', phase: 'commentary' }),
+        mk(3, 'message.completed', { text: '过程说明。' }),
+        mk(4, 'message.delta', { text: '最终回答。', phase: 'commentary' }),
+        mk(5, 'message.completed', { text: '最终回答。' }),
+        mk(6, 'turn.completed', {}),
       ],
     )
     const assistants = state.readModel.timeline.filter(
@@ -293,13 +292,13 @@ describe('projectEvents liveStatus + file meta', () => {
   it('does not let generic generating overwrite a tool liveStatus', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
-      mk(1, 'run.started', {}),
-      mk(2, 'tool.called', {
+      mk(1, 'turn.started', {}),
+      mk(2, 'tool.started', {
         toolId: 'r1',
         name: 'read_file',
         args: { path: 'a.md' },
       }),
-      mk(3, 'output.delta', { text: '读完再写。' }),
+      mk(3, 'message.delta', { text: '读完再写。' }),
     ])
     expect(state.readModel.liveStatus).toBe('正在读取 a.md')
     expect(state.readModel.liveStatusKind).toBe('tool')
@@ -309,11 +308,11 @@ describe('projectEvents liveStatus + file meta', () => {
     const state = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
       [
-        mk(1, 'run.started', {}),
+        mk(1, 'turn.started', {}),
         mk(2, 'reasoning.started', {}),
         mk(3, 'reasoning.delta', { text: '第一轮' }),
         mk(4, 'reasoning.completed', {}),
-        mk(5, 'run.input_requested', {
+        mk(5, 'input.requested', {
           requestId: 'q1',
           question: '选风格',
           options: [
@@ -321,7 +320,7 @@ describe('projectEvents liveStatus + file meta', () => {
             { id: 'casual', label: '轻松' },
           ],
         }),
-        mk(6, 'run.input_provided', {
+        mk(6, 'input.provided', {
           requestId: 'q1',
           answer: { kind: 'options', selectedOptionIds: ['formal'] },
         }),
@@ -334,23 +333,22 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(reasoning).toHaveLength(2)
     expect(reasoning[0]).toMatchObject({ body: '第一轮', status: 'completed' })
     expect(reasoning[1]).toMatchObject({ body: '恢复后', status: 'streaming' })
-    expect(reasoning[0]?.id).toBe('reasoning:run-1:1')
-    expect(reasoning[1]?.id).toBe('reasoning:run-1:2')
+    expect(reasoning[0]?.id).toBe('reasoning:turn-1:1')
+    expect(reasoning[1]?.id).toBe('reasoning:turn-1:2')
   })
 
-  it('keeps assistant prose chronological across plan, reasoning, and source boundaries', () => {
+  it('keeps assistant prose chronological across plan and reasoning boundaries', () => {
     const state = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
       [
-        mk(1, 'run.started', {}),
-        mk(2, 'output.delta', { text: '先制定计划。', phase: 'commentary' }),
+        mk(1, 'turn.started', {}),
+        mk(2, 'message.delta', { text: '先制定计划。', phase: 'commentary' }),
         mk(3, 'plan.updated', { steps: ['检查目录'] }),
-        mk(4, 'output.delta', { text: '计划已就绪。', phase: 'commentary' }),
+        mk(4, 'message.delta', { text: '计划已就绪。', phase: 'commentary' }),
         mk(5, 'reasoning.started', { id: 'reason-1' }),
         mk(6, 'reasoning.delta', { id: 'reason-1', text: '分析中' }),
         mk(7, 'reasoning.completed', { id: 'reason-1' }),
-        mk(8, 'source.grouped', { title: '来源', sources: ['/notes/a.md'] }),
-        mk(9, 'output.delta', { text: '开始执行。', phase: 'commentary' }),
+        mk(8, 'message.delta', { text: '开始执行。', phase: 'commentary' }),
       ],
     )
 
@@ -365,12 +363,11 @@ describe('projectEvents liveStatus + file meta', () => {
     )
     const categories = state.readModel.timeline.map((item) => item.category)
     expect(categories).toEqual([
-      'run-terminal',
+      'turn-terminal',
       'assistant-message',
       'plan-update',
       'assistant-message',
       'reasoning-section',
-      'source-group',
       'assistant-message',
     ])
   })
@@ -379,7 +376,7 @@ describe('projectEvents liveStatus + file meta', () => {
     const state = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
       [
-        mk(1, 'run.started', {}),
+        mk(1, 'turn.started', {}),
         mk(2, 'reasoning.started', { id: 'reason-1' }),
         mk(3, 'reasoning.delta', { id: 'reason-1', text: '第一段' }),
         mk(4, 'reasoning.completed', { id: 'reason-1' }),
@@ -399,8 +396,8 @@ describe('projectEvents liveStatus + file meta', () => {
     const state = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
       [
-        mk(1, 'run.started', {}),
-        mk(2, 'tool.called', {
+        mk(1, 'turn.started', {}),
+        mk(2, 'tool.started', {
           toolId: 'read-1',
           name: 'read_file',
           args: { path: '/notes/a.md' },
@@ -410,7 +407,7 @@ describe('projectEvents liveStatus + file meta', () => {
           name: 'read_file',
           args: { path: '/notes/a.md' },
         }),
-        mk(4, 'tool.called', {
+        mk(4, 'tool.started', {
           toolId: 'search-1',
           name: 'web_search',
           args: { query: 'agent ui' },
@@ -422,7 +419,7 @@ describe('projectEvents liveStatus + file meta', () => {
       ],
     )
     const terminal = state.readModel.timeline.find(
-      (item) => item.category === 'run-terminal',
+      (item) => item.category === 'turn-terminal',
     )
     expect(terminal?.meta?.processSummary).toEqual({
       stepCount: 3,

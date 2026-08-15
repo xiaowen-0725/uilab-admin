@@ -8,11 +8,11 @@ describe('captureToEnvelopes', () => {
 
   it('maps the workflow capture to envelopes the shared projection can fold', () => {
     const envelopes = captureToEnvelopes(capture)
-    expect(envelopes.map((event) => event.eventType)).toContain('message.accepted')
-    expect(envelopes.map((event) => event.eventType)).toContain('run.started')
-    expect(envelopes.map((event) => event.eventType)).toContain('tool.called')
+    expect(envelopes.map((event) => event.eventType)).toContain('message.delta')
+    expect(envelopes.map((event) => event.eventType)).toContain('turn.started')
+    expect(envelopes.map((event) => event.eventType)).toContain('tool.started')
     expect(envelopes.map((event) => event.eventType)).toContain('file.changed')
-    expect(envelopes.map((event) => event.eventType)).toContain('run.completed')
+    expect(envelopes.map((event) => event.eventType)).toContain('turn.completed')
 
     const file = envelopes.find((event) => event.eventType === 'file.changed')
     expect(file?.payload).toMatchObject({
@@ -24,7 +24,7 @@ describe('captureToEnvelopes', () => {
 
   it('projects capture replay onto the same read model Timeline uses', () => {
     const readModel = projectCapture(capture)
-    expect(readModel.runStatus).toBe('completed')
+    expect(readModel.turnStatus).toBe('completed')
     expect(readModel.timeline.some((item) => item.category === 'user-message')).toBe(
       true,
     )
@@ -44,7 +44,7 @@ describe('captureToEnvelopes', () => {
     const early = projectCapture(capture, { untilTs: 100 })
     const mid = projectCapture(capture, { untilTs: 4000 })
     const full = projectCapture(capture)
-    expect(early.runStatus).not.toBe('completed')
+    expect(early.turnStatus).not.toBe('completed')
     expect(mid.timeline.filter((item) => item.category === 'tool-group').length).toBeGreaterThan(
       0,
     )

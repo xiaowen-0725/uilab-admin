@@ -19,7 +19,6 @@ describe('ScriptedRuntimePort', () => {
       {
         taskId: 'task-a',
         turnId: 'turn-1',
-        proposedRunId: 'run-1',
         taskExecutionContextSnapshot: {} as never,
         capabilitiesSnapshot: null,
       },
@@ -30,12 +29,10 @@ describe('ScriptedRuntimePort', () => {
     await new Promise((r) => setTimeout(r, 10))
 
     expect(received).toEqual([
-      'run.queued',
-      'run.started',
-      'message.accepted',
-      'output.delta',
-      'output.completed',
-      'run.completed',
+      'turn.started',
+      'message.delta',
+      'message.completed',
+      'turn.completed',
     ])
   })
 
@@ -52,7 +49,6 @@ describe('ScriptedRuntimePort', () => {
       {
         taskId: 'task-a',
         turnId: 'turn-1',
-        proposedRunId: 'run-1',
         taskExecutionContextSnapshot: {} as never,
         capabilitiesSnapshot: null,
       },
@@ -60,7 +56,7 @@ describe('ScriptedRuntimePort', () => {
     )
     await new Promise((r) => setTimeout(r, 10))
 
-    expect(received).toContain('run.cancelled')
+    expect(received).toContain('turn.cancelled')
   })
 
   it('emits failed-run events', async () => {
@@ -76,7 +72,6 @@ describe('ScriptedRuntimePort', () => {
       {
         taskId: 'task-fail',
         turnId: 'turn-1',
-        proposedRunId: 'run-1',
         taskExecutionContextSnapshot: {} as never,
         capabilitiesSnapshot: null,
       },
@@ -84,7 +79,7 @@ describe('ScriptedRuntimePort', () => {
     )
     await new Promise((r) => setTimeout(r, 10))
 
-    expect(received).toContain('run.failed')
+    expect(received).toContain('turn.failed')
   })
 
   it('records received commands', async () => {
@@ -117,7 +112,6 @@ describe('ScriptedRuntimePort', () => {
       {
         taskId: 'task-a',
         turnId: 'turn-1',
-        proposedRunId: 'run-1',
         taskExecutionContextSnapshot: {} as never,
         capabilitiesSnapshot: null,
       },
@@ -125,8 +119,8 @@ describe('ScriptedRuntimePort', () => {
     )
     const snap = await runtime.getSnapshot('task-a')
     expect(snap).not.toBeNull()
-    expect(snap!.runStatus).toBe('completed')
-    expect(snap!.lastTaskSequence).toBe(6)
+    expect(snap!.turnStatus).toBe('completed')
+    expect(snap!.lastTaskSequence).toBe(4)
   })
 
   it('setScenario overrides default per task', async () => {
@@ -141,7 +135,6 @@ describe('ScriptedRuntimePort', () => {
       {
         taskId: 'task-custom',
         turnId: 'turn-1',
-        proposedRunId: 'run-1',
         taskExecutionContextSnapshot: {} as never,
         capabilitiesSnapshot: null,
       },
@@ -149,20 +142,18 @@ describe('ScriptedRuntimePort', () => {
     )
     await new Promise((r) => setTimeout(r, 10))
 
-    expect(received).toContain('run.cancelled')
-    expect(received).not.toContain('run.completed')
+    expect(received).toContain('turn.cancelled')
+    expect(received).not.toContain('turn.completed')
   })
 
   it('completedRunScenario produces correct sequence', () => {
     const scenario = completedRunScenario('task-a', 'run-1', 'turn-1')
-    expect(scenario.events).toHaveLength(6)
+    expect(scenario.events).toHaveLength(4)
     expect(scenario.events.map((e) => e.eventType)).toEqual([
-      'run.queued',
-      'run.started',
-      'message.accepted',
-      'output.delta',
-      'output.completed',
-      'run.completed',
+      'turn.started',
+      'message.delta',
+      'message.completed',
+      'turn.completed',
     ])
     // All envelopes should have monotonically increasing taskSequence
     const seqs = scenario.events.map((e) => e.taskSequence)

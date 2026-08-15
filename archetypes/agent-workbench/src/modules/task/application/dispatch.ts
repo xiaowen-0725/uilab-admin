@@ -74,11 +74,11 @@ export function validateCommand(
   }
 
   if (command.type === 'reconcileInterruptedRun') {
-    if (!command.turnId || !command.runId || !command.runtimeCursor) {
+    if (!command.turnId || !command.runtimeCursor) {
       return reject(
         command.commandId,
         'invalid_reconcile',
-        'reconcileInterruptedRun requires turnId, runId, and runtimeCursor',
+        'reconcileInterruptedRun requires turnId and runtimeCursor',
       )
     }
   }

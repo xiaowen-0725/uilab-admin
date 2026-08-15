@@ -1,7 +1,7 @@
 /**
  * Timeline — render TaskReadModel.timeline (Phase 4C–4F).
  * Codex-aligned density: user → turn chrome → tools/reasoning → assistant + live status.
- * UI never mutates Run status; presentation only.
+ * UI never mutates Turn status; presentation only.
  *
  * 4D: reasoning / plan / tool / command / file / source / approval / input / error
  * 4F: long-body fold (>600) + smart scroll (follow vs user-pinned)
@@ -28,12 +28,13 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { formatDurationMs } from '../../model/stream-events'
-import type { RunStatus } from '../../model/lifecycle'
+import type { TurnStatus } from '../../model/lifecycle'
 import type {
   DeliverableRef,
   TaskReadModel,
   TimelineItem,
   TimelineItemMeta,
+  TokenUsage,
   ProcessSummary,
 } from '../../projection/types'
 import { FileChangeSummaryCard } from '../markdown/file-change-summary-card'
@@ -65,6 +66,17 @@ const PROCESS_KIND_LABELS: Array<[
   ['other', '其他'],
 ]
 
+function formatUsageHover(usage?: TokenUsage | null): string | undefined {
+  if (!usage) return undefined
+  const parts: string[] = []
+  if (usage.inputTokens != null) parts.push(`输入 ${usage.inputTokens}`)
+  if (usage.outputTokens != null) parts.push(`输出 ${usage.outputTokens}`)
+  if (parts.length === 0 && usage.totalTokens != null) {
+    parts.push(`共 ${usage.totalTokens}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
 function processSummaryDetail(summary: ProcessSummary | undefined): string | null {
   if (!summary || summary.stepCount === 0) return null
   const parts = PROCESS_KIND_LABELS.flatMap(([kind, label]) => {
@@ -93,7 +105,7 @@ export interface TimelineProps {
   onRespondToQuestion?: QuestionRespondHandler
 }
 
-function isActiveRunStatus(status: RunStatus | null): boolean {
+function isActiveTurnStatus(status: TurnStatus | null): boolean {
   if (!status) return false
   return (
     status === 'queued' ||
@@ -184,10 +196,10 @@ export function Timeline({
   const followModeRef = useRef(followMode)
   const [localUnread, setLocalUnread] = useState(0)
 
-  const runActive = isActiveRunStatus(readModel.runStatus)
+  const runActive = isActiveTurnStatus(readModel.turnStatus)
   const runAttr =
-    runActive || readModel.runStatus
-      ? readModel.runStatus ?? 'unknown'
+    runActive || readModel.turnStatus
+      ? readModel.turnStatus ?? 'unknown'
       : undefined
 
   // Chronological turn segments (user → chrome → tools/assistant per turn).
@@ -222,7 +234,7 @@ export function Timeline({
     }
   }, [followMode, setMode])
 
-  // Follow actual rendered height, not only item count: output.delta updates an
+  // Follow actual rendered height, not only item count: message.delta updates an
   // existing item and Markdown/table layout may grow after the projection pass.
   useEffect(() => {
     const content = contentRef.current
@@ -260,8 +272,8 @@ export function Timeline({
       className='relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3'
       data-slot='task-timeline'
       data-testid='task-timeline'
-      data-runtime-run={runAttr}
-      data-run-status={readModel.runStatus ?? undefined}
+      data-runtime-turn={runAttr}
+      data-turn-status={readModel.turnStatus ?? undefined}
       data-recovery={readModel.recoveryRequired ? 'true' : undefined}
       data-follow-mode={followMode}
       data-honesty-mode="voltagent"
@@ -276,11 +288,11 @@ export function Timeline({
           className='sr-only'
           role='status'
           aria-live='polite'
-          data-testid='timeline-run-announcement'
+          data-testid='timeline-turn-announcement'
         >
-          {readModel.runStatus === 'completed'
+          {readModel.turnStatus === 'completed'
             ? '回复已完成'
-            : readModel.runStatus === 'failed'
+            : readModel.turnStatus === 'failed'
               ? '回复失败'
               : ''}
         </span>
@@ -299,7 +311,7 @@ export function Timeline({
           </p>
         ) : null}
 
-        {readModel.runStatus === 'waiting_for_approval' ? (
+        {readModel.turnStatus === 'waiting_for_approval' ? (
           <p
             className='sr-only'
             role='status'
@@ -310,7 +322,7 @@ export function Timeline({
           </p>
         ) : null}
 
-        {readModel.runStatus === 'waiting_for_input' ? (
+        {readModel.turnStatus === 'waiting_for_input' ? (
           <p
             className='sr-only'
             role='status'
@@ -321,7 +333,7 @@ export function Timeline({
           </p>
         ) : null}
 
-        {readModel.runStatus === 'failed' && onRetryTurn ? (
+        {readModel.turnStatus === 'failed' && onRetryTurn ? (
           <div className='flex items-center gap-2'>
             <Button
               type='button'
@@ -525,10 +537,14 @@ function TimelineTurnBlock({
           className='pt-1 text-base font-[445] leading-[22px] text-muted-foreground'
           data-kind='process-fold'
           data-testid={`timeline-item-${latestTerminal.id}`}
-          data-category='run-terminal'
+          data-category='turn-terminal'
           data-status={latestTerminal.status}
         >
-          <span data-testid='timeline-run-status-label'>
+          <span
+            data-testid='timeline-turn-status-label'
+            title={formatUsageHover(latestTerminal.meta?.usage)}
+            aria-label={formatUsageHover(latestTerminal.meta?.usage)}
+          >
             {chineseStatusLabel(latestTerminal)}
             {latestTerminal.meta?.durationMs != null
               ? ` ${formatDurationMs(latestTerminal.meta.durationMs)}`
@@ -617,13 +633,16 @@ function WorkingBlock({
     running ? 'text-foreground' : 'text-muted-foreground',
   )
 
+  const usageHover = formatUsageHover(terminal?.meta?.usage)
   const labelNode = (
     <span
-      data-testid={primaryChrome ? 'timeline-run-status-label' : undefined}
+      data-testid={primaryChrome ? 'timeline-turn-status-label' : undefined}
       className={cn(
         'inline-flex items-baseline gap-1',
         headerShimmer && 'wb-live-status-shimmer',
       )}
+      title={usageHover}
+      aria-label={usageHover}
     >
       {headerText}
     </span>
@@ -633,9 +652,9 @@ function WorkingBlock({
     <div
       data-kind='process-fold'
       data-testid='timeline-working-block'
-      data-category='run-terminal'
+      data-category='turn-terminal'
       data-status={running ? 'running' : 'completed'}
-      data-runtime-run={terminal?.status}
+      data-runtime-turn={terminal?.status}
       data-fold-open={open ? 'true' : 'false'}
     >
       {primaryChrome && terminal ? (
@@ -1219,16 +1238,16 @@ const TimelineRow = memo(function TimelineRow({
           ) : null}
         </div>
       )
-    case 'run-terminal':
+    case 'turn-terminal':
       return (
         <div
           className='pt-1 text-base font-[445] leading-[22px] text-muted-foreground'
-          data-kind='run-terminal'
+          data-kind='turn-terminal'
           data-testid={`timeline-item-${item.id}`}
-          data-category='run-terminal'
+          data-category='turn-terminal'
           data-status={item.status}
         >
-          <span data-testid='timeline-run-status-label'>
+          <span data-testid='timeline-turn-status-label'>
             {chineseStatusLabel(item)}
             {item.meta?.durationMs != null
               ? ` ${formatDurationMs(item.meta.durationMs)}`

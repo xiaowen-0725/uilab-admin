@@ -68,7 +68,7 @@ function QuestionHarness({
       view={view}
       composerRuntime={{
         mode: 'runtime',
-        runStatus: result.runStatus,
+        turnStatus: result.turnStatus,
         onSubmitText: (text) => result.submitText(text),
         onRespondToQuestion: (id, answer) =>
           result.respondToQuestion(id, answer),

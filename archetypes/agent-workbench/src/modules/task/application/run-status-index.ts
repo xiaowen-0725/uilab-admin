@@ -1,34 +1,34 @@
 /**
- * In-memory RunStatusIndex for Navigator busy indicators.
- * Not persisted (spec §9); refreshed runs start idle.
+ * In-memory TurnStatusIndex for Navigator busy indicators.
+ * Not persisted (spec §9); refreshed turns start idle.
  */
 
-import type { RunStatus } from '../model/lifecycle'
+import type { TurnStatus } from '../model/lifecycle'
 
-export type RunStatusIndexListener = () => void
+export type TurnStatusIndexListener = () => void
 
-const BUSY_STATUSES: ReadonlySet<RunStatus> = new Set([
+const BUSY_STATUSES: ReadonlySet<TurnStatus> = new Set([
   'queued',
   'running',
   'cancelling',
 ])
 
-export function isNavigatorBusyStatus(status: RunStatus | null | undefined): boolean {
+export function isNavigatorBusyStatus(status: TurnStatus | null | undefined): boolean {
   if (!status) return false
   return BUSY_STATUSES.has(status)
 }
 
 /**
- * Tracks runStatus per taskId for Navigator spinner (including non-selected tasks).
+ * Tracks turnStatus per taskId for Navigator spinner (including non-selected tasks).
  */
-export class RunStatusIndex {
-  private readonly byTask = new Map<string, RunStatus | null>()
-  private readonly listeners = new Set<RunStatusIndexListener>()
+export class TurnStatusIndex {
+  private readonly byTask = new Map<string, TurnStatus | null>()
+  private readonly listeners = new Set<TurnStatusIndexListener>()
   /** Monotonic revision for useSyncExternalStore stable getSnapshot. */
   private revision = 0
   private cachedBusyIds: ReadonlySet<string> = new Set()
 
-  subscribe(listener: RunStatusIndexListener): () => void {
+  subscribe(listener: TurnStatusIndexListener): () => void {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
@@ -39,7 +39,7 @@ export class RunStatusIndex {
     return this.revision
   }
 
-  set(taskId: string, status: RunStatus | null): void {
+  set(taskId: string, status: TurnStatus | null): void {
     const prev = this.byTask.get(taskId) ?? null
     if (prev === status) return
     if (status == null) {
@@ -52,7 +52,7 @@ export class RunStatusIndex {
     this.emit()
   }
 
-  get(taskId: string): RunStatus | null {
+  get(taskId: string): TurnStatus | null {
     return this.byTask.get(taskId) ?? null
   }
 
@@ -66,7 +66,7 @@ export class RunStatusIndex {
   }
 
   /** Snapshot map for debugging. */
-  snapshot(): ReadonlyMap<string, RunStatus | null> {
+  snapshot(): ReadonlyMap<string, TurnStatus | null> {
     return new Map(this.byTask)
   }
 
@@ -91,6 +91,6 @@ export class RunStatusIndex {
   }
 }
 
-export function createRunStatusIndex(): RunStatusIndex {
-  return new RunStatusIndex()
+export function createTurnStatusIndex(): TurnStatusIndex {
+  return new TurnStatusIndex()
 }

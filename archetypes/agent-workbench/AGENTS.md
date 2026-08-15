@@ -26,7 +26,7 @@
   - 统一 IndexedDB `uilab-agent-workbench`（目录 + EventStore 一 open）；测试默认 Memory
 - **Runtime path（产品默认）**：本机 VoltAgent 侧车 → projection → Timeline（ADR-0018 移除了 Deterministic Fake Runtime）
 - **Phase 4B–4F Kernel**：Commands/Events、RuntimePort、VirtualClock、reasoning/tool/approval、queue/steer、长文折叠/滚动
-- **Question Request**：侧车 `ask_user_question`（client-side tool，无 execute / 无 needsApproval）→ `run.input_requested` → Timeline 内联卡片；用户点选项 / Other / 跳过 / Composer 直接回复后走 `provideRunInput`（`runInput: true`）恢复 Run。任何 Permission Preset 都不得自动作答。steer 仍未交付。
+- **Question Request**：侧车 `ask_user_question`（client-side tool，无 execute / 无 needsApproval）→ `input.requested` → Timeline 内联卡片；用户点选项 / Other / 跳过 / Composer 直接回复后走 `provideRunInput`（`runInput: true`）恢复 Turn。任何 Permission Preset 都不得自动作答。steer 仍未交付。
 - **VoltAgent 侧车 ≠ 远程生产集群** — 本机执行；批准后可能写入工作区文件。无 Desktop Host（Web/测试降级）时，写盘范围由侧车自身 `WORKSPACE_ROOT` 环境决定，不受项目选择约束；桌面产品路径才有项目根写盘约束。
 
 ### 可选 Local VoltAgent 侧车
@@ -79,7 +79,7 @@ components.json        # shadcn 配置（base-nova）
 3. **禁止 dumping-ground** — 不建 `shared/`、`common/`、全局 `ports/`。
 4. **Task model 禁止 Project 实体** — 仅可有 `ProjectId`；目录权威在 `modules/project`。
 5. **Shell 禁止**直写 IDB / Runtime / 业务级联删除；只绑定公开 commands/views。
-6. **runStatus 不进 catalog/IDB** — 仅内存 RunStatusIndex。
+6. **turnStatus 不进 catalog/IDB** — 仅内存 TurnStatusIndex。
 7. **UI 复用顺序** — Module / Shell 已有 → UI Lab 复合块 → `@/components/ui/*` → 才允许 bespoke。
 8. **UI Lab 回流** — 改 UI Lab 能力时先/同步改 `ui-components` 真源。
 9. **Foundation** — Button/Input 只经 `@/components/ui/*` re-export；不扩 Foundation exports。

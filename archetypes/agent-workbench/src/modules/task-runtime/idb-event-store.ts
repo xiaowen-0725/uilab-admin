@@ -113,10 +113,7 @@ export class IdbEventStore implements EventStorePort {
     }
   }
 
-  async getSnapshot(
-    taskId: string,
-    _runId?: string,
-  ): Promise<RuntimeSnapshot | null> {
+  async getSnapshot(taskId: string): Promise<RuntimeSnapshot | null> {
     try {
       return await runTransaction(
         this.db,

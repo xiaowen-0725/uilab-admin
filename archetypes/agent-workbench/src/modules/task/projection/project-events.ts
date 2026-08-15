@@ -9,12 +9,11 @@
  */
 
 import {
-  isTerminalRunStatus,
-  type RunId,
-  type RunStatus,
+  isTerminalTurnStatus,
   type TaskId,
   type TitleSource,
   type TurnId,
+  type TurnStatus,
 } from '../model/lifecycle'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import {
@@ -42,6 +41,7 @@ import type {
   TimelineItem,
   TimelineItemCategory,
   TimelineItemMeta,
+  TokenUsage,
   ProcessStepKind,
 } from './types'
 
@@ -50,6 +50,7 @@ type MutableState = {
   seenEventIds: Set<string>
   hasStepBoundaries: boolean
   activeStepId?: string
+  workAnchorAt?: string
 }
 
 const WORKING_STEP_CATEGORIES = new Set<TimelineItemCategory>([
@@ -60,9 +61,9 @@ const WORKING_STEP_CATEGORIES = new Set<TimelineItemCategory>([
 ])
 
 const STREAMING_DELTA_EVENT_TYPES = new Set([
-  'output.delta',
+  'message.delta',
   'reasoning.delta',
-  'command.output',
+  'command.delta',
 ])
 
 const SOURCE_EVENT_IDS_CAP = 8
@@ -86,6 +87,7 @@ function cloneState(state: ProjectionState): MutableState {
     seenEventIds: new Set(state.seenEventIds),
     hasStepBoundaries: state.hasStepBoundaries === true,
     activeStepId: state.activeStepId,
+    workAnchorAt: state.workAnchorAt,
   }
 }
 
@@ -117,7 +119,43 @@ function freezeState(state: MutableState): ProjectionState {
     seenEventIds: state.seenEventIds,
     hasStepBoundaries: state.hasStepBoundaries,
     activeStepId: state.activeStepId,
+    workAnchorAt: state.workAnchorAt,
   }
+}
+
+
+/**
+ * Remember when the current working stretch began. Local sidecars deliver
+ * reasoning as a near-instant burst after the model finished thinking, so
+ * the wall-clock "thinking" time lives in the gap after the previous
+ * user-visible boundary (turn start / user answer / approval / prose end).
+ */
+function setWorkAnchor(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const time = envelopeTime(envelope)
+  if (time) state.workAnchorAt = time
+}
+
+/**
+ * Consume the pending work anchor for the first working row of a stretch.
+ * Returns the earlier of anchor and envelope time; the anchor is cleared so
+ * later rows in the same stretch use their own real timestamps.
+ */
+function takeWorkAnchor(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): string | undefined {
+  const anchor = state.workAnchorAt
+  state.workAnchorAt = undefined
+  const now = envelopeTime(envelope)
+  if (!anchor) return now
+  if (!now) return anchor
+  const anchorMs = Date.parse(anchor)
+  const nowMs = Date.parse(now)
+  if (!Number.isFinite(anchorMs) || !Number.isFinite(nowMs)) return now
+  return anchorMs < nowMs ? anchor : now
 }
 
 function markStepBoundary(
@@ -197,7 +235,6 @@ function touchItem(
     sourceEventRange: { from: sequenceFrom, to: sequenceTo },
     projectionVersion,
     turnId: (envelope.turnId as TurnId | undefined) ?? item.turnId,
-    runId: (envelope.runId as RunId | undefined) ?? item.runId,
   }
 }
 
@@ -258,22 +295,19 @@ function setLiveStatus(
   state.readModel = { ...state.readModel, liveStatus, liveStatusKind: kind }
 }
 
-function setRunStatus(
+function setTurnStatus(
   state: MutableState,
-  status: RunStatus | null,
+  status: TurnStatus | null,
   envelope: AgentRuntimeEventEnvelope,
 ): void {
   state.readModel = {
     ...state.readModel,
-    runStatus: status,
-    activeRunId: (envelope.runId as RunId | undefined) ?? state.readModel.activeRunId,
+    turnStatus: status,
     activeTurnId: (envelope.turnId as TurnId | undefined) ?? state.readModel.activeTurnId,
   }
-  // Terminal runs clear the active run pointer; interrupted is recovery state (also clear).
-  if (status != null && (isTerminalRunStatus(status) || status === 'interrupted')) {
+  if (status != null && (isTerminalTurnStatus(status) || status === 'interrupted')) {
     state.readModel = {
       ...state.readModel,
-      activeRunId: null,
       liveStatus: null,
       liveStatusKind: null,
     }
@@ -344,7 +378,6 @@ function baseItem(
     },
     taskId: envelope.taskId as TaskId,
     turnId: (envelope.turnId as TurnId | undefined) ?? partial.turnId,
-    runId: (envelope.runId as RunId | undefined) ?? partial.runId,
     sequenceFrom: envelope.taskSequence,
     sequenceTo: envelope.taskSequence,
     projectionVersion: version,
@@ -425,18 +458,18 @@ function ensureInlineUserResponse(
   )
 }
 
-function ensureRunTerminal(
+function ensureTurnTerminal(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
-  status: RunStatus,
+  status: TurnStatus,
   title: string,
   metaPatch?: TimelineItemMeta,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const version = state.readModel.projectionVersion
   const match = (item: TimelineItem) =>
-    item.category === 'run-terminal' &&
-    (runId ? item.runId === runId : item.id === `run-terminal:${envelope.eventId}`)
+    item.category === 'turn-terminal' &&
+    (turnId ? item.turnId === turnId : item.id === `turn-terminal:${envelope.eventId}`)
 
   const idx = findIndex(state.readModel.timeline, match)
   if (idx >= 0) {
@@ -452,11 +485,11 @@ function ensureRunTerminal(
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `run-terminal:${runId ?? envelope.eventId}`,
-      category: 'run-terminal',
+      id: `turn-terminal:${turnId ?? envelope.eventId}`,
+      category: 'turn-terminal',
       title,
       status,
-      runId,
+      turnId,
       meta: metaPatch,
     }),
   )
@@ -492,7 +525,7 @@ function appendAssistantDelta(
   envelope: AgentRuntimeEventEnvelope,
   delta: string,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const version = state.readModel.projectionVersion
   const timeline = state.readModel.timeline
   const useHeuristic = !state.hasStepBoundaries
@@ -500,7 +533,7 @@ function appendAssistantDelta(
   let openIdx = -1
   for (let i = timeline.length - 1; i >= 0; i--) {
     const item = timeline[i]!
-    if (runId && item.runId && item.runId !== runId) continue
+    if (turnId && item.turnId && item.turnId !== turnId) continue
     if (item.category !== 'assistant-message') {
       if (useHeuristic && isProcessBreakingCategory(item.category)) break
       continue
@@ -513,7 +546,7 @@ function appendAssistantDelta(
         .slice(i + 1)
         .some(
           (x) =>
-            (!runId || !x.runId || x.runId === runId) &&
+            (!turnId || !x.turnId || x.turnId === turnId) &&
             isProcessBreakingCategory(x.category),
         )
       if (!brokenAfter) openIdx = i
@@ -536,17 +569,17 @@ function appendAssistantDelta(
   const seg = timeline.filter(
     (i) =>
       i.category === 'assistant-message' &&
-      (!runId || i.runId === runId),
+      (!turnId || i.turnId === turnId),
   ).length
 
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `assistant:${runId ?? envelope.eventId}:${seg}`,
+      id: `assistant:${turnId ?? envelope.eventId}:${seg}`,
       category: 'assistant-message',
       body: delta,
       status: 'streaming',
-      runId,
+      turnId,
     }),
   )
 }
@@ -556,13 +589,13 @@ function finalizeAssistant(
   envelope: AgentRuntimeEventEnvelope,
   finalText: string | null,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const version = state.readModel.projectionVersion
   let idx = -1
   for (let i = state.readModel.timeline.length - 1; i >= 0; i--) {
     const item = state.readModel.timeline[i]!
     if (item.category !== 'assistant-message') continue
-    if (runId && item.runId && item.runId !== runId) continue
+    if (turnId && item.turnId && item.turnId !== turnId) continue
     idx = i
     break
   }
@@ -579,11 +612,11 @@ function finalizeAssistant(
     pushItem(
       state,
       baseItem(state, envelope, {
-        id: `assistant:${runId ?? envelope.eventId}:0`,
+        id: `assistant:${turnId ?? envelope.eventId}:0`,
         category: 'assistant-message',
         body: finalText,
         status: 'completed',
-        runId,
+        turnId,
       }),
     )
   }
@@ -594,12 +627,12 @@ function sealOpenAssistant(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const version = state.readModel.projectionVersion
   for (let i = state.readModel.timeline.length - 1; i >= 0; i--) {
     const item = state.readModel.timeline[i]!
     if (item.category !== 'assistant-message') continue
-    if (runId && item.runId && item.runId !== runId) continue
+    if (turnId && item.turnId && item.turnId !== turnId) continue
     if (item.status === 'completed') return
     replaceItem(state, i, {
       ...touchItem(item, envelope, version),
@@ -609,6 +642,51 @@ function sealOpenAssistant(
   }
 }
 
+function asUsageCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined
+}
+
+function parseUsage(payload: unknown): TokenUsage | null {
+  const rec = asRecord(payload)
+  const nested =
+    rec.usage != null && typeof rec.usage === 'object' && !Array.isArray(rec.usage)
+      ? asRecord(rec.usage)
+      : rec
+  const inputTokens =
+    asUsageCount(nested.inputTokens) ?? asUsageCount(nested.promptTokens)
+  const outputTokens =
+    asUsageCount(nested.outputTokens) ?? asUsageCount(nested.completionTokens)
+  const totalTokens = asUsageCount(nested.totalTokens)
+  if (inputTokens == null && outputTokens == null && totalTokens == null) {
+    return null
+  }
+  return { inputTokens, outputTokens, totalTokens }
+}
+
+function applyUsage(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  usage: TokenUsage | null,
+): void {
+  if (!usage) return
+  state.readModel = { ...state.readModel, usage }
+  const turnId = envelope.turnId as TurnId | undefined
+  const idx = findIndex(
+    state.readModel.timeline,
+    (item) =>
+      item.category === 'turn-terminal' &&
+      (turnId ? item.turnId === turnId : true),
+  )
+  if (idx < 0) return
+  const terminal = state.readModel.timeline[idx]!
+  replaceItem(state, idx, {
+    ...terminal,
+    meta: mergeMeta(terminal.meta, { usage }),
+  })
+}
+
 function parseChangeKind(value: unknown): FileChangeKind | undefined {
   if (value === 'created' || value === 'updated' || value === 'deleted') {
     return value
@@ -616,13 +694,13 @@ function parseChangeKind(value: unknown): FileChangeKind | undefined {
   return undefined
 }
 
-function collectRunDeliverables(
+function collectTurnDeliverables(
   state: MutableState,
-  runId: RunId | undefined,
+  turnId: TurnId | undefined,
 ): DeliverableRef[] {
   const byPath = new Map<string, DeliverableRef>()
   for (const item of state.readModel.timeline) {
-    if (runId && item.runId && item.runId !== runId) continue
+    if (turnId && item.turnId && item.turnId !== turnId) continue
     if (item.category === 'file-change') {
       const path = item.meta?.path ?? item.title
       if (!path) continue
@@ -656,19 +734,19 @@ function collectRunDeliverables(
   return [...byPath.values()]
 }
 
-function attachRunDeliverables(
+function attachTurnDeliverables(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
 ): void {
-  const runId = envelope.runId as RunId | undefined
-  const deliverables = collectRunDeliverables(state, runId)
+  const turnId = envelope.turnId as TurnId | undefined
+  const deliverables = collectTurnDeliverables(state, turnId)
   state.readModel = { ...state.readModel, deliverables }
   if (deliverables.length === 0) return
   const idx = findIndex(
     state.readModel.timeline,
     (item) =>
-      item.category === 'run-terminal' &&
-      (runId ? item.runId === runId : true),
+      item.category === 'turn-terminal' &&
+      (turnId ? item.turnId === turnId : true),
   )
   if (idx < 0) return
   const terminal = state.readModel.timeline[idx]!
@@ -679,14 +757,14 @@ function attachRunDeliverables(
 }
 
 /** Mark this run's assistant segments completed. Does not write commentary. */
-function completeAssistantsOnRunComplete(
+function completeAssistantsOnTurnComplete(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   state.readModel.timeline.forEach((item, i) => {
     if (item.category !== 'assistant-message') return
-    if (runId && item.runId && item.runId !== runId) return
+    if (turnId && item.turnId && item.turnId !== turnId) return
     if (item.status === 'completed' && item.meta?.messageRole !== 'commentary') {
       return
     }
@@ -700,23 +778,23 @@ function completeAssistantsOnRunComplete(
   })
 }
 
-function lastReasoningIndex(state: MutableState, runId: RunId | undefined): number {
+function lastReasoningIndex(state: MutableState, turnId: TurnId | undefined): number {
   return findIndex(
     state.readModel.timeline,
     (item) =>
       item.category === 'reasoning-section' &&
-      (!runId || item.runId === runId),
+      (!turnId || item.turnId === turnId),
   )
 }
 
 function reasoningHasInterveningItems(
   state: MutableState,
   reasoningIdx: number,
-  runId: RunId | undefined,
+  turnId: TurnId | undefined,
 ): boolean {
   return state.readModel.timeline.slice(reasoningIdx + 1).some(
     (item) =>
-      (!runId || !item.runId || item.runId === runId) &&
+      (!turnId || !item.turnId || item.turnId === turnId) &&
       item.category !== 'reasoning-section',
   )
 }
@@ -728,24 +806,24 @@ function openReasoningSection(
   title?: string | null,
   completed = false,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const seq =
     state.readModel.timeline.filter(
       (item) =>
         item.category === 'reasoning-section' &&
-        (!runId || item.runId === runId),
+        (!turnId || item.turnId === turnId),
     ).length + 1
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `reasoning:${runId ?? 'run'}:${seq}`,
+      id: `reasoning:${turnId ?? 'turn'}:${seq}`,
       category: 'reasoning-section',
       title: title || '思考过程',
       body: delta ?? '',
       status: completed ? 'completed' : 'streaming',
-      runId,
+      turnId,
       meta: withActiveStep(state, 'reasoning-section', {
-        startedAt: envelopeTime(envelope),
+        startedAt: takeWorkAnchor(state, envelope),
         endedAt: completed ? envelopeTime(envelope) : undefined,
       }),
     }),
@@ -781,21 +859,21 @@ function ensureReasoning(
   completed = false,
   openNew = false,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   if (openNew) {
     openReasoningSection(state, envelope, delta, title, completed)
     return
   }
-  const idx = lastReasoningIndex(state, runId)
+  const idx = lastReasoningIndex(state, turnId)
   const canReuse =
     idx >= 0 &&
-    !reasoningHasInterveningItems(state, idx, runId) &&
+    !reasoningHasInterveningItems(state, idx, turnId) &&
     state.readModel.timeline[idx]?.status !== 'completed'
   if (canReuse) {
     patchReasoningSection(state, envelope, idx, delta, title, completed)
     return
   }
-  if (completed && idx >= 0 && !reasoningHasInterveningItems(state, idx, runId)) {
+  if (completed && idx >= 0 && !reasoningHasInterveningItems(state, idx, turnId)) {
     patchReasoningSection(state, envelope, idx, delta, title, true)
     return
   }
@@ -806,19 +884,19 @@ function ensureReasoning(
 
 function syncProcessSummary(
   state: MutableState,
-  runId: RunId | undefined,
+  turnId: TurnId | undefined,
 ): void {
   const terminalIdx = findIndex(
     state.readModel.timeline,
     (item) =>
-      item.category === 'run-terminal' &&
-      (!runId || item.runId === runId),
+      item.category === 'turn-terminal' &&
+      (!turnId || item.turnId === turnId),
   )
   if (terminalIdx < 0) return
 
   const steps = state.readModel.timeline.filter(
     (item) =>
-      (!runId || item.runId === runId) &&
+      (!turnId || item.turnId === turnId) &&
       (item.category === 'tool-group' ||
         item.category === 'command-execution'),
   )
@@ -929,10 +1007,10 @@ function pushError(
   envelope: AgentRuntimeEventEnvelope,
   message: string,
 ): void {
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const idx = findIndex(
     state.readModel.timeline,
-    (item) => item.category === 'error' && item.runId === runId,
+    (item) => item.category === 'error' && item.turnId === turnId,
   )
   if (idx >= 0) {
     const base = touchItem(
@@ -950,12 +1028,12 @@ function pushError(
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `error:${runId ?? envelope.eventId}`,
+      id: `error:${turnId ?? envelope.eventId}`,
       category: 'error',
       title: '运行失败',
       body: message,
       status: 'failed',
-      runId,
+      turnId,
     }),
   )
 }
@@ -995,9 +1073,9 @@ function pushUnsupported(state: MutableState, envelope: AgentRuntimeEventEnvelop
 
 /**
  * Duration for completed turn chrome from payload.durationMs or
- * run-terminal meta.startedAt (legacy: meta.path `startedAt:ISO`).
+ * turn-terminal meta.startedAt (legacy: meta.path `startedAt:ISO`).
  */
-function computeRunDurationMs(
+function computeTurnDurationMs(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
 ): number | null {
@@ -1005,11 +1083,11 @@ function computeRunDurationMs(
   if (typeof rec.durationMs === 'number' && Number.isFinite(rec.durationMs)) {
     return Math.max(0, rec.durationMs)
   }
-  const runId = envelope.runId as RunId | undefined
+  const turnId = envelope.turnId as TurnId | undefined
   const terminal = state.readModel.timeline.find(
     (item) =>
-      item.category === 'run-terminal' &&
-      (runId ? item.runId === runId : true),
+      item.category === 'turn-terminal' &&
+      (turnId ? item.turnId === turnId : true),
   )
   const startedAt =
     terminal?.meta?.startedAt ??
@@ -1085,55 +1163,35 @@ export function applyRuntimeEvent(
       next.readModel = { ...next.readModel, title, titleSource }
       break
     }
-    case 'turn.created': {
+    case 'turn.started': {
       const text = payloadText(envelope.payload, ['inputText', 'text'])
       if (text) ensureUserMessage(next, envelope, text)
-      if (envelope.turnId) {
-        next.readModel = {
-          ...next.readModel,
-          activeTurnId: envelope.turnId as TurnId,
-        }
-      }
-      break
-    }
-    case 'message.accepted': {
-      const text = payloadText(envelope.payload, ['text', 'inputText'])
-      if (text) ensureUserMessage(next, envelope, text)
-      break
-    }
-    case 'run.queued': {
-      setRunStatus(next, 'queued', envelope)
-      ensureRunTerminal(next, envelope, 'queued', '排队中')
-      setLiveStatus(next, '排队中')
-      break
-    }
-    case 'run.started': {
-      setRunStatus(next, 'running', envelope)
+      setTurnStatus(next, 'running', envelope)
       const startedAt =
         typeof envelope.occurredAt === 'string' ? envelope.occurredAt : null
-      // Present-tense title while running (not 「已处理」— that is completed-only Chinese).
-      ensureRunTerminal(next, envelope, 'running', '正在思考', {
+      ensureTurnTerminal(next, envelope, 'running', '正在思考', {
         startedAt: startedAt ?? undefined,
-        // Legacy stamp for older duration readers.
         path: startedAt ? `startedAt:${startedAt}` : undefined,
       })
       setLiveStatus(next, '正在思考')
+      setWorkAnchor(next, envelope)
       break
     }
-    case 'output.delta': {
+    case 'message.delta': {
       const delta = payloadText(envelope.payload, ['text', 'delta']) ?? ''
       if (delta) appendAssistantDelta(next, envelope, delta)
-      if (next.readModel.runStatus === 'running') {
+      if (next.readModel.turnStatus === 'running') {
         setLiveStatus(next, '正在生成回复…', 'generic')
       }
       break
     }
-    case 'output.completed': {
+    case 'message.completed': {
       const text = payloadText(envelope.payload, ['text'])
       finalizeAssistant(next, envelope, text)
+      setWorkAnchor(next, envelope)
       break
     }
-    case 'output.segment_started': {
+    case 'message.started': {
       markStepBoundary(next, envelope)
       break
     }
@@ -1155,34 +1213,37 @@ export function applyRuntimeEvent(
       )
       break
     }
-    case 'run.completed': {
-      completeAssistantsOnRunComplete(next, envelope)
-      setRunStatus(next, 'completed', envelope)
-      const durationMs = computeRunDurationMs(next, envelope)
-      ensureRunTerminal(next, envelope, 'completed', '已处理', {
+    case 'turn.completed': {
+      completeAssistantsOnTurnComplete(next, envelope)
+      setTurnStatus(next, 'completed', envelope)
+      const durationMs = computeTurnDurationMs(next, envelope)
+      const usage = parseUsage(envelope.payload)
+      ensureTurnTerminal(next, envelope, 'completed', '已处理', {
         durationMs: durationMs ?? undefined,
+        usage: usage ?? undefined,
       })
-      attachRunDeliverables(next, envelope)
+      if (usage) next.readModel = { ...next.readModel, usage }
+      attachTurnDeliverables(next, envelope)
       break
     }
-    case 'run.cancel_requested': {
-      setRunStatus(next, 'cancelling', envelope)
-      ensureRunTerminal(next, envelope, 'cancelling', '取消中')
+    case 'turn.cancel_requested': {
+      setTurnStatus(next, 'cancelling', envelope)
+      ensureTurnTerminal(next, envelope, 'cancelling', '取消中')
       setLiveStatus(next, '取消中')
       break
     }
-    case 'run.cancelled': {
-      setRunStatus(next, 'cancelled', envelope)
-      const durationMs = computeRunDurationMs(next, envelope)
-      ensureRunTerminal(next, envelope, 'cancelled', '已取消', {
+    case 'turn.cancelled': {
+      setTurnStatus(next, 'cancelled', envelope)
+      const durationMs = computeTurnDurationMs(next, envelope)
+      ensureTurnTerminal(next, envelope, 'cancelled', '已取消', {
         durationMs: durationMs ?? undefined,
       })
       break
     }
-    case 'run.failed': {
-      setRunStatus(next, 'failed', envelope)
-      const durationMs = computeRunDurationMs(next, envelope)
-      ensureRunTerminal(next, envelope, 'failed', '失败', {
+    case 'turn.failed': {
+      setTurnStatus(next, 'failed', envelope)
+      const durationMs = computeTurnDurationMs(next, envelope)
+      ensureTurnTerminal(next, envelope, 'failed', '失败', {
         durationMs: durationMs ?? undefined,
       })
       const message =
@@ -1190,29 +1251,6 @@ export function applyRuntimeEvent(
         payloadString(envelope.payload, 'reasonCode') ??
         '运行失败'
       pushError(next, envelope, message)
-      break
-    }
-    case 'run.interrupted': {
-      setRunStatus(next, 'interrupted', envelope)
-      ensureRunTerminal(next, envelope, 'interrupted', '已中断')
-      break
-    }
-    case 'run.reconciled': {
-      // Reconcile does not invent a new terminal by itself; status comes from follow-up events.
-      const version = next.readModel.projectionVersion
-      const runId = envelope.runId as RunId | undefined
-      const idx = findIndex(
-        next.readModel.timeline,
-        (item) => item.category === 'run-terminal' && item.runId === runId,
-      )
-      if (idx >= 0) {
-        const base = touchItem(next.readModel.timeline[idx]!, envelope, version)
-        replaceItem(next, idx, {
-          ...base,
-          title: base.title ?? '已恢复对账',
-          body: payloadString(envelope.payload, 'outcome') ?? base.body,
-        })
-      }
       break
     }
     case 'reasoning.started': {
@@ -1231,17 +1269,6 @@ export function applyRuntimeEvent(
       const delta = payloadText(envelope.payload, ['text', 'delta']) ?? ''
       ensureReasoning(next, envelope, delta, null, false, false)
       setLiveStatus(next, '正在思考', 'generic')
-      break
-    }
-    case 'reasoning.section_completed': {
-      ensureReasoning(
-        next,
-        envelope,
-        null,
-        payloadString(envelope.payload, 'title'),
-        false,
-        false,
-      )
       break
     }
     case 'reasoning.completed': {
@@ -1263,7 +1290,7 @@ export function applyRuntimeEvent(
         next,
         envelope,
         'plan-update',
-        String(envelope.runId ?? envelope.eventId),
+        String(envelope.turnId ?? envelope.eventId),
         {
           title: '计划已更新',
           body: snapshot.explanation,
@@ -1279,7 +1306,7 @@ export function applyRuntimeEvent(
       setLiveStatus(next, '正在更新计划…', 'tool')
       break
     }
-    case 'tool.called': {
+    case 'tool.started': {
       const toolId = payloadString(envelope.payload, 'toolId') ?? envelope.eventId
       const label =
         payloadString(envelope.payload, 'label') ??
@@ -1304,10 +1331,10 @@ export function applyRuntimeEvent(
             ? 'other'
             : kind,
           children,
-          startedAt: envelopeTime(envelope),
+          startedAt: takeWorkAnchor(next, envelope),
         },
       })
-      syncProcessSummary(next, envelope.runId as RunId | undefined)
+      syncProcessSummary(next, envelope.turnId as TurnId | undefined)
       setLiveStatus(next, liveStatusForToolActivity(activity), 'tool')
       break
     }
@@ -1328,7 +1355,7 @@ export function applyRuntimeEvent(
         status: 'running',
         meta: children ? { children } : undefined,
       })
-      syncProcessSummary(next, envelope.runId as RunId | undefined)
+      syncProcessSummary(next, envelope.turnId as TurnId | undefined)
       setLiveStatus(next, liveStatusForToolActivity(activity), 'tool')
       break
     }
@@ -1368,7 +1395,7 @@ export function applyRuntimeEvent(
           endedAt: envelopeTime(envelope),
         },
       })
-      syncProcessSummary(next, envelope.runId as RunId | undefined)
+      syncProcessSummary(next, envelope.turnId as TurnId | undefined)
       break
     }
     case 'command.started': {
@@ -1389,10 +1416,10 @@ export function applyRuntimeEvent(
         meta: {
           toolKind: 'command',
           processKind: 'command',
-          startedAt: envelopeTime(envelope),
+          startedAt: takeWorkAnchor(next, envelope),
         },
       })
-      syncProcessSummary(next, envelope.runId as RunId | undefined)
+      syncProcessSummary(next, envelope.turnId as TurnId | undefined)
       setLiveStatus(
         next,
         liveStatusForToolActivity({
@@ -1403,14 +1430,14 @@ export function applyRuntimeEvent(
       )
       break
     }
-    case 'command.output': {
+    case 'command.delta': {
       const commandId = payloadString(envelope.payload, 'commandId') ?? envelope.eventId
       const text = payloadText(envelope.payload, ['text', 'output']) ?? ''
       upsertByKey(next, envelope, 'command-execution', commandId, {
         body: text,
         status: 'running',
       })
-      syncProcessSummary(next, envelope.runId as RunId | undefined)
+      syncProcessSummary(next, envelope.turnId as TurnId | undefined)
       break
     }
     case 'command.completed': {
@@ -1448,7 +1475,7 @@ export function applyRuntimeEvent(
           endedAt: envelopeTime(envelope),
         },
       })
-      syncProcessSummary(next, envelope.runId as RunId | undefined)
+      syncProcessSummary(next, envelope.turnId as TurnId | undefined)
       break
     }
     case 'file.changed': {
@@ -1525,31 +1552,6 @@ export function applyRuntimeEvent(
       })
       break
     }
-    case 'source.grouped': {
-      const title = payloadString(envelope.payload, 'title') ?? '来源'
-      const sources = rec.sources
-      const body = Array.isArray(sources)
-        ? sources
-            .map((s) => {
-              if (s && typeof s === 'object' && 'path' in s) {
-                return String((s as { path: unknown }).path)
-              }
-              return String(s)
-            })
-            .join('\n')
-        : ''
-      pushItem(
-        next,
-        baseItem(next, envelope, {
-          id: `source-group:${envelope.eventId}`,
-          category: 'source-group',
-          title,
-          body,
-          status: 'grouped',
-        }),
-      )
-      break
-    }
     case 'approval.requested': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
       const toolName =
@@ -1568,8 +1570,8 @@ export function applyRuntimeEvent(
       const detail =
         payloadString(envelope.payload, 'detail') ??
         (target ? `目标：${target}` : toolName ? `工具：${toolName}` : '')
-      setRunStatus(next, 'waiting_for_approval', envelope)
-      ensureRunTerminal(next, envelope, 'waiting_for_approval', '等待审批')
+      setTurnStatus(next, 'waiting_for_approval', envelope)
+      ensureTurnTerminal(next, envelope, 'waiting_for_approval', '等待审批')
       setLiveStatus(next, '等待审批')
       upsertByKey(next, envelope, 'approval-request', requestId, {
         title,
@@ -1584,9 +1586,10 @@ export function applyRuntimeEvent(
       const decision = payloadString(envelope.payload, 'decision')
       const reason = payloadString(envelope.payload, 'reason')
       if (decision === 'approved') {
-        setRunStatus(next, 'running', envelope)
-        ensureRunTerminal(next, envelope, 'running', '正在思考')
+        setTurnStatus(next, 'running', envelope)
+        ensureTurnTerminal(next, envelope, 'running', '正在思考')
         setLiveStatus(next, '正在思考')
+        setWorkAnchor(next, envelope)
       }
       const decisionLabel = approvalDecisionLabel(decision, reason)
       let extra = decisionLabel ? `\n决定：${decisionLabel}` : ''
@@ -1597,12 +1600,12 @@ export function applyRuntimeEvent(
       })
       break
     }
-    case 'run.input_requested': {
+    case 'input.requested': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
       const structured = parseQuestionRequest(envelope.payload, requestId)
       const prompt = payloadString(envelope.payload, 'prompt') ?? '请补充输入'
-      setRunStatus(next, 'waiting_for_input', envelope)
-      ensureRunTerminal(next, envelope, 'waiting_for_input', '等待输入')
+      setTurnStatus(next, 'waiting_for_input', envelope)
+      ensureTurnTerminal(next, envelope, 'waiting_for_input', '等待输入')
       setLiveStatus(next, '等待输入')
       upsertByKey(next, envelope, 'input-request', requestId, {
         title: structured?.question ?? '需要补充信息',
@@ -1612,20 +1615,29 @@ export function applyRuntimeEvent(
       })
       break
     }
-    case 'run.input_provided': {
+    case 'input.provided': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
       const provided = asRecord(envelope.payload)
       const answer = parseQuestionAnswer(provided.answer)
       const text = payloadText(envelope.payload, ['text', 'inputText']) ?? ''
-      setRunStatus(next, 'running', envelope)
-      ensureRunTerminal(next, envelope, 'running', '正在思考')
+      setTurnStatus(next, 'running', envelope)
+      ensureTurnTerminal(next, envelope, 'running', '正在思考')
       setLiveStatus(next, '正在思考', 'generic')
+      setWorkAnchor(next, envelope)
       upsertByKey(next, envelope, 'input-request', requestId, {
         status: 'provided',
         body: text ? `\n已提供：${text}` : undefined,
         meta: answer ? { answer } : undefined,
       })
       ensureInlineUserResponse(next, envelope, requestId, answer, text)
+      break
+    }
+    case 'task.archived': {
+      next.readModel = { ...next.readModel, archived: true }
+      break
+    }
+    case 'usage.updated': {
+      applyUsage(next, envelope, parseUsage(envelope.payload))
       break
     }
     case 'task.renamed':

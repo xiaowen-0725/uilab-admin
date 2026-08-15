@@ -1,9 +1,8 @@
 /**
- * Shared CommandAcknowledgement builders for Fake Runtime handlers.
+ * Shared CommandAcknowledgement builders for RuntimePort adapters.
  */
 
-import type { RunStatus } from '@/modules/task'
-import type { CommandAcknowledgement } from '@/modules/task'
+import type { CommandAcknowledgement, TurnStatus } from '@/modules/task'
 
 export function accepted(
   commandId: string,
@@ -16,14 +15,14 @@ export function rejected(
   commandId: string,
   reasonCode: string,
   message: string,
-  extra?: { currentRunStatus?: RunStatus; currentVersion?: number },
+  extra?: { currentTurnStatus?: TurnStatus; currentVersion?: number },
 ): CommandAcknowledgement {
   return {
     status: 'rejected',
     commandId,
     reasonCode,
     message,
-    currentRunStatus: extra?.currentRunStatus,
+    currentTurnStatus: extra?.currentTurnStatus,
     currentVersion: extra?.currentVersion,
   }
 }

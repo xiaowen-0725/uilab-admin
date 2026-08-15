@@ -183,7 +183,7 @@ export function WorkbenchApp({
   })
 
   // Busy projection lives in runtime-wiring (after live runStatus is known).
-  const busyTaskIds = useBusyTaskIds(runStatusIndex, taskId, runtime.runStatus)
+  const busyTaskIds = useBusyTaskIds(runStatusIndex, taskId, runtime.turnStatus)
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
@@ -273,7 +273,7 @@ export function WorkbenchApp({
         ? {
             mode: 'runtime' as const,
             modelLabel: '本地侧车模型',
-            runStatus: runtime.runStatus,
+            turnStatus: runtime.turnStatus,
             onSubmitText: async (
               text: string,
               composerContext?: Parameters<typeof runtime.submitText>[1],
@@ -311,7 +311,7 @@ export function WorkbenchApp({
         : undefined,
     [
       isRuntimePath,
-      runtime.runStatus,
+      runtime.turnStatus,
       runtime.submitText,
       runtime.cancelActiveRun,
       runtime.notice,
@@ -541,7 +541,7 @@ export function WorkbenchApp({
         selectedProjectId: session.view.selectedProjectId,
         lastTaskByProject: session.view.lastTaskByProject,
         navigatorOpen: session.view.navigatorOpen,
-        activeRunStatus: runtime.runStatus,
+        activeRunStatus: runtime.turnStatus,
         onTaskDeleted: (deletedTaskId) => {
           capabilityController.clearTask(deletedTaskId)
         },
@@ -567,7 +567,7 @@ export function WorkbenchApp({
       eventStore,
       persistence,
       runStatusIndex,
-      runtime.runStatus,
+      runtime.turnStatus,
       runtimeController,
       session.commands,
       session.view.lastTaskByProject,
@@ -617,7 +617,7 @@ export function WorkbenchApp({
         selectedTaskId: session.view.selectedTaskId,
         selectedProjectId: session.view.selectedProjectId,
         lastTaskByProject: session.view.lastTaskByProject,
-        activeRunStatus: runtime.runStatus,
+        activeRunStatus: runtime.turnStatus,
         onTaskDeleted: (deletedTaskId) => {
           capabilityController.clearTask(deletedTaskId)
         },
@@ -653,7 +653,7 @@ export function WorkbenchApp({
       eventStore,
       localRootCommands,
       runStatusIndex,
-      runtime.runStatus,
+      runtime.turnStatus,
       runtimeController,
       session.commands,
       session.view.lastTaskByProject,

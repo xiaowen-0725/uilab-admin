@@ -3,8 +3,8 @@
  * Illegal transitions return a diagnostic error object — never throw into UI.
  */
 
-import type { RunStatus } from './lifecycle'
-import { isTerminalRunStatus } from './lifecycle'
+import type { TurnStatus } from './lifecycle'
+import { isTerminalTurnStatus } from './lifecycle'
 
 /** Events that may drive a Run status change. */
 export type RunTransitionEvent =
@@ -21,14 +21,14 @@ export type RunTransitionEvent =
 
 export interface RunTransitionOk {
   ok: true
-  status: RunStatus
+  status: TurnStatus
 }
 
 export interface RunTransitionError {
   ok: false
   error: {
     code: 'illegal_transition'
-    from: RunStatus
+    from: TurnStatus
     event: RunTransitionEvent['type']
     message: string
   }
@@ -51,11 +51,11 @@ export type RunTransitionResult = RunTransitionOk | RunTransitionError
  * interrupted never returns to running on the same Run.
  */
 export function applyRunTransition(
-  from: RunStatus,
+  from: TurnStatus,
   event: RunTransitionEvent,
 ): RunTransitionResult {
-  if (isTerminalRunStatus(from)) {
-    return fail(from, event, `Run is terminal (${from}); transitions are not allowed`)
+  if (isTerminalTurnStatus(from)) {
+    return fail(from, event, `Turn is terminal (${from}); transitions are not allowed`)
   }
 
   switch (event.type) {
@@ -135,12 +135,12 @@ export function applyRunTransition(
   }
 }
 
-function ok(status: RunStatus): RunTransitionOk {
+function ok(status: TurnStatus): RunTransitionOk {
   return { ok: true, status }
 }
 
 function fail(
-  from: RunStatus,
+  from: TurnStatus,
   event: RunTransitionEvent,
   message: string,
 ): RunTransitionError {

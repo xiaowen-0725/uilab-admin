@@ -11,11 +11,11 @@ function mk(
   return {
     eventId: `e${seq}`,
     eventType: type,
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: 'p',
     taskId: 't',
     turnId: 'turn-1',
-    runId: 'run-1',
+
     taskSequence: seq,
     occurredAt: `1970-01-01T00:00:0${seq}.000Z`,
     receivedAt: `1970-01-01T00:00:0${seq}.000Z`,
@@ -28,7 +28,7 @@ describe('projectEvents approval reason', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = applyRuntimeEvent(
       state,
-      mk(1, 'run.started', {}),
+      mk(1, 'turn.started', {}),
     )
     state = applyRuntimeEvent(
       state,
@@ -62,7 +62,7 @@ describe('projectEvents approval reason', () => {
 
   it('keeps 允许一次 when a human resolves without an auto-approve reason', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
-    state = applyRuntimeEvent(state, mk(1, 'run.started', {}))
+    state = applyRuntimeEvent(state, mk(1, 'turn.started', {}))
     state = applyRuntimeEvent(
       state,
       mk(2, 'approval.requested', {

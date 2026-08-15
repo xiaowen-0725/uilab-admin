@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyRunTransition } from './run-transitions'
-import type { RunStatus } from './lifecycle'
+import type { TurnStatus } from './lifecycle'
 
 describe('applyRunTransition', () => {
   it('happy path: queued → running → completed', () => {
@@ -66,7 +66,7 @@ describe('applyRunTransition', () => {
   })
 
   it('interrupt from non-terminal active states', () => {
-    const sources: RunStatus[] = [
+    const sources: TurnStatus[] = [
       'queued',
       'running',
       'waiting_for_approval',

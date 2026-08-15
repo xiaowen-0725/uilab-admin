@@ -73,20 +73,35 @@ Desktop Host（或等价本机配置）管理的应用级默认父目录，用�
 _Avoid_: Workspace, Project, cwd, 默认工作空间（作风领域主名）
 
 **Task**:
-可持久化、可在 Navigator 中选择的工作单元，包含多个 Turn、Run 与相关 Artifact；外部 Runtime 的 Thread 映射到 Task。
-_Avoid_: Thread, Chat, Workbench Session
+可持久化、可在 Navigator 中选择的工作单元，包含多个 Turn 与相关 Artifact。协议与代码标识保持 Task；跨产品语义 ≡ Codex Thread / Claude Session。
+_Avoid_: Thread, Chat, Workbench Session（作代码标识）
 
 **Turn**:
-Task 中一次用户输入及其对应处理周期，可因重试或恢复产生多个 Run。
+Task 中一次用户提交到 Agent 完成全部动作的周期。协议与代码标识保持 Turn；跨产品语义 ≡ Codex Turn。
 _Avoid_: Message, Run
 
 **Run**:
-Agent Runtime 对一个 Turn 的单次执行尝试，由有序的 Agent Runtime Event 描述；子 Agent 默认表现为关联父 Run 的子 Run。
-_Avoid_: Turn, Task
+不再作为协议层。v1 中「一次执行尝试」已并入 Turn；信封不再有 `runId` / `parentRunId`。历史文档若仍写 Run，按 Turn 理解。
+_Avoid_: 新代码、新事件、新读模型字段
+
+**TimelineItem**:
+投影到时间线的一条可读条目，由一轮内的事件折叠而成。跨产品语义 ≡ Codex ThreadItem。
+_Avoid_: Runtime Event（原始信封）, Chat Message
 
 **Artifact**:
-由 Task 或具体 Run 产生、可在 Work Surface 中查看或操作的持久结果。
+由 Task 或具体 Turn 产生、可在 Work Surface 中查看或操作的持久结果。
 _Avoid_: Tool Surface, Runtime Event
+
+### 跨产品术语映射
+
+| Workbench | Codex | Claude Agent SDK |
+|---|---|---|
+| Task | Thread | Session |
+| Turn | Turn | 一次用户消息到 `ResultMessage` 的周期 |
+| TimelineItem | ThreadItem | 流式 `message` / tool 块（无独立 Item 层） |
+| `turn.started` / `turn.completed` / `turn.failed` | `turn.started` / `turn.completed` / `turn.failed` | `message_start` … `ResultMessage` |
+| `usage`（`turn.completed` / `usage.updated`） | `TokenCount` | `ResultMessage.usage` |
+| （无 Run 层） | 旧 `task_*` 已改名 `turn_*` | 无 Run |
 
 **Workbench Session**:
 工作台壳层会话：记住当前选中的 Project 与 Task（Task 可为空）、以及每 Task 的布局与 Work Surface 恢复；不拥有 Project/Task 目录，也不拥有 Agent Runtime。
@@ -149,7 +164,7 @@ _Avoid_: Plugin, IM Channel / messaging adapter, Expert, Skill, Work Surface, Ti
 _Avoid_: Tool, Connector, Expert, Prompt snippet, Slash command only
 
 **Expert**:
-可切换的专家配置包：角色说明（persona）+ 默认 Skills + 建议的 Connector/工具范围；改变后续 Turn 的能力偏好，不必然产生子 Agent 或子 Run。
+可切换的专家配置包：角色说明（persona）+ 默认 Skills + 建议的 Connector/工具范围；改变后续 Turn 的能力偏好，不必然产生子 Agent。
 _Avoid_: Persona（作主名）, Subagent, Supervisor, multi-agent routing, Plugin
 
 **Expert Profile**:

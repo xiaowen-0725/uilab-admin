@@ -7,12 +7,12 @@ function item(
     Partial<Omit<TimelineItem, 'status' | 'title'>>,
 ): TimelineItem {
   return {
-    id: partial.id ?? 'run-terminal:test',
-    category: partial.category ?? 'run-terminal',
+    id: partial.id ?? 'turn-terminal:test',
+    category: partial.category ?? 'turn-terminal',
     status: partial.status,
     title: partial.title,
     body: partial.body,
-    runId: partial.runId,
+
     meta: partial.meta,
     sourceEventIds: partial.sourceEventIds ?? [],
     taskId: partial.taskId ?? ('task-test' as TimelineItem['taskId']),

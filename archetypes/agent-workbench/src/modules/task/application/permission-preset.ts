@@ -66,7 +66,7 @@ export function isPermissionPreset(
 /**
  * Decide how the renderer should answer one approval request.
  * Unknown / missing tool names fail closed under `auto-approve`.
- * Question Request (`ask_user_question` / `run.input_requested`) never
+ * Question Request (`ask_user_question` / `input.requested`) never
  * enters this path — presets must not auto-answer questions.
  */
 export function decideApprovalResponse(

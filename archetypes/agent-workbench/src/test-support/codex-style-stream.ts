@@ -64,13 +64,13 @@ export function findEnvelope(
   return envelopes.find((e) => String(e.eventType) === eventType)
 }
 
-/** All payload.text / payload.delta strings for output.delta (streamed answer). */
+/** All payload.text / payload.delta strings for message.delta (streamed answer). */
 export function collectOutputDeltaTexts(
   envelopes: readonly AgentRuntimeEventEnvelope[],
 ): string[] {
   const out: string[] = []
   for (const e of envelopes) {
-    if (String(e.eventType) !== 'output.delta') continue
+    if (String(e.eventType) !== 'message.delta') continue
     const p = e.payload
     if (p && typeof p === 'object') {
       const rec = p as Record<string, unknown>

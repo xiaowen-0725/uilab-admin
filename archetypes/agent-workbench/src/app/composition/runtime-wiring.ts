@@ -25,11 +25,11 @@ import {
 import { DEFAULT_PROJECT_ID } from '@/modules/project'
 import type { EventStorePort, RuntimePort } from '@/modules/task'
 import {
-  createRunStatusIndex,
+  createTurnStatusIndex,
   isNavigatorBusyStatus,
   TaskRuntimeController,
-  type RunStatus,
-  type RunStatusIndex,
+  type TurnStatus,
+  type TurnStatusIndex,
 } from '@/modules/task'
 import { createVoltAgentRuntimeAdapter } from '@/modules/task-runtime'
 import type { WorkbenchPersistence } from './workbench-boot'
@@ -42,7 +42,7 @@ export interface CreateWorkbenchRuntimePortsOptions {
 
 export interface WorkbenchRuntimePorts {
   runtimePort: RuntimePort
-  runStatusIndex: RunStatusIndex
+  runStatusIndex: TurnStatusIndex
   /** Capability Surface snapshot port (VoltAgent HTTP). */
   capabilityPort: CapabilitySnapshotPort
   capabilityController: CapabilityController
@@ -71,7 +71,7 @@ export function createWorkbenchRuntimePorts(
 
   return {
     runtimePort,
-    runStatusIndex: createRunStatusIndex(),
+    runStatusIndex: createTurnStatusIndex(),
     capabilityPort,
     capabilityController,
   }
@@ -82,7 +82,7 @@ export interface EnsureTaskRuntimeControllerOptions {
   eventStore: EventStorePort
   projectId: string
   eventStoreKind: 'idb' | 'memory'
-  runStatusIndex: RunStatusIndex
+  runStatusIndex: TurnStatusIndex
   seed?: string
 }
 
@@ -99,7 +99,7 @@ export function createTaskRuntimeController(
     seed: options.seed ?? 'workbench',
     eventStoreKind: options.eventStoreKind,
   })
-  controller.setRunStatusListener((id, status) => {
+  controller.setTurnStatusListener((id, status) => {
     options.runStatusIndex.set(id, status)
   })
   return controller
@@ -118,12 +118,12 @@ export function ensureTaskRuntimeController(
 }
 
 /**
- * Merge RunStatusIndex busy set with selected-task live status (Navigator).
+ * Merge TurnStatusIndex busy set with selected-task live status (Navigator).
  */
 export function projectBusyTaskIds(
-  runStatusIndex: RunStatusIndex,
+  runStatusIndex: TurnStatusIndex,
   selectedTaskId: string | null,
-  selectedRunStatus: RunStatus | null | undefined
+  selectedRunStatus: TurnStatus | null | undefined
 ): ReadonlySet<string> {
   const base = runStatusIndex.getBusyTaskIds()
   if (selectedTaskId && isNavigatorBusyStatus(selectedRunStatus)) {
@@ -136,13 +136,13 @@ export function projectBusyTaskIds(
 }
 
 /**
- * Subscribe to RunStatusIndex + merge selected-task live status for Navigator.
+ * Subscribe to TurnStatusIndex + merge selected-task live status for Navigator.
  * Call after `useTaskRuntime` so live runStatus is available.
  */
 export function useBusyTaskIds(
-  runStatusIndex: RunStatusIndex,
+  runStatusIndex: TurnStatusIndex,
   selectedTaskId: string | null,
-  selectedRunStatus: RunStatus | null | undefined
+  selectedRunStatus: TurnStatus | null | undefined
 ): ReadonlySet<string> {
   const busyRevision = useSyncExternalStore(
     (cb) => runStatusIndex.subscribe(cb),
@@ -166,7 +166,7 @@ export interface UseWorkbenchRuntimeWiringOptions {
 
 export interface WorkbenchRuntimeWiring {
   controller: TaskRuntimeController | null
-  runStatusIndex: RunStatusIndex
+  runStatusIndex: TurnStatusIndex
   runtimePort: RuntimePort
   capabilityController: CapabilityController
 }

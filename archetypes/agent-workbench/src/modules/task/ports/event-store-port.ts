@@ -77,7 +77,7 @@ export interface EventStorePort {
   ): Promise<readonly AgentRuntimeEventEnvelope[]>
 
   /** Latest checkpoint for task (D5: one row per taskId). */
-  getSnapshot(taskId: string, runId?: string): Promise<RuntimeSnapshot | null>
+  getSnapshot(taskId: string): Promise<RuntimeSnapshot | null>
 
   putSnapshot(snapshot: RuntimeSnapshot): Promise<void>
 

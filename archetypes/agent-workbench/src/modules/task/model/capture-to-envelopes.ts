@@ -88,7 +88,6 @@ export function captureToEnvelopes(
 ): AgentRuntimeEventEnvelope[] {
   const projectId = options?.projectId ?? 'capture'
   const taskId = options?.taskId ?? capture.id
-  const runId = `run:${capture.id}`
   const turnId = `turn:${capture.id}`
   const envelopes: AgentRuntimeEventEnvelope[] = []
   let seq = 1
@@ -103,11 +102,10 @@ export function captureToEnvelopes(
     envelopes.push({
       eventId: `cap:${capture.id}:${event.id}:${suffix}:${event.ts}`,
       eventType,
-      schemaVersion: 1,
+      schemaVersion: 2,
       projectId,
       taskId,
       turnId,
-      runId,
       taskSequence: seq,
       occurredAt,
       receivedAt: occurredAt,
@@ -119,17 +117,18 @@ export function captureToEnvelopes(
   for (const event of takeEvents(capture.events, options)) {
     switch (event.type) {
       case 'user_message':
-        push(event, 'message.accepted', { text: event.text })
+        push(event, 'turn.started', { inputText: event.text, text: event.text })
         break
       case 'turn_status':
         if (event.status === 'running') {
-          push(event, 'run.started', { source: 'capture' })
+          push(event, 'turn.started', { source: 'capture' })
         } else if (event.status === 'completed') {
-          push(event, 'run.completed', {
+          push(event, 'turn.completed', {
+            outcome: 'completed',
             durationMs: event.durationMs,
           })
         } else {
-          push(event, 'run.failed', { message: event.label })
+          push(event, 'turn.failed', { message: event.label })
         }
         break
       case 'tool_activity': {
@@ -174,7 +173,7 @@ export function captureToEnvelopes(
           break
         }
         if (event.status === 'running') {
-          push(event, 'tool.called', {
+          push(event, 'tool.started', {
             toolId,
             toolCallId: toolId,
             toolName: name,
@@ -214,8 +213,8 @@ export function captureToEnvelopes(
         break
       }
       case 'assistant_message':
-        push(event, 'output.delta', { text: event.markdown }, 'delta')
-        push(event, 'output.completed', { text: event.markdown }, 'completed')
+        push(event, 'message.delta', { text: event.markdown }, 'delta')
+        push(event, 'message.completed', { text: event.markdown }, 'completed')
         break
     }
   }

@@ -22,7 +22,7 @@ describe('groupTimelineIntoTurns', () => {
   it('keeps a single turn as one segment in chronological order', () => {
     const timeline = [
       item({ id: 'u1', category: 'user-message', body: 'hello' }),
-      item({ id: 'rt1', category: 'run-terminal', status: 'completed' }),
+      item({ id: 'rt1', category: 'turn-terminal', status: 'completed' }),
       item({ id: 't1', category: 'tool-group', title: '已搜索' }),
       item({ id: 'a1', category: 'assistant-message', body: 'done' }),
     ]
@@ -36,10 +36,10 @@ describe('groupTimelineIntoTurns', () => {
   it('splits multi-turn so earlier assistant stays with earlier user', () => {
     const timeline = [
       item({ id: 'u1', category: 'user-message', body: 'first' }),
-      item({ id: 'rt1', category: 'run-terminal', status: 'completed' }),
+      item({ id: 'rt1', category: 'turn-terminal', status: 'completed' }),
       item({ id: 'a1', category: 'assistant-message', body: 'answer-1' }),
       item({ id: 'u2', category: 'user-message', body: 'second' }),
-      item({ id: 'rt2', category: 'run-terminal', status: 'completed' }),
+      item({ id: 'rt2', category: 'turn-terminal', status: 'completed' }),
       item({ id: 'a2', category: 'assistant-message', body: 'answer-2' }),
     ]
     const segs = groupTimelineIntoTurns(timeline)
@@ -55,7 +55,7 @@ describe('groupTimelineIntoTurns', () => {
   it('keeps inline question answers in the same turn body', () => {
     const timeline = [
       item({ id: 'u1', category: 'user-message', body: '写一篇推文' }),
-      item({ id: 'rt1', category: 'run-terminal', status: 'running' }),
+      item({ id: 'rt1', category: 'turn-terminal', status: 'running' }),
       item({ id: 'a1', category: 'assistant-message', body: '先确认受众。' }),
       item({ id: 'q1', category: 'input-request', title: '受众是谁？' }),
       item({

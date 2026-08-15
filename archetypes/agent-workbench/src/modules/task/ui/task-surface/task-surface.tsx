@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
-import type { RunStatus } from '../../model/lifecycle'
+import type { TurnStatus } from '../../model/lifecycle'
 import type {
   ContextSection,
   LaunchAction,
@@ -40,7 +40,7 @@ export interface TaskSurfaceView {
 
 export interface TaskSurfaceComposerRuntime {
   mode: 'local-sim' | 'runtime'
-  runStatus?: RunStatus | null
+  turnStatus?: TurnStatus | null
   onSubmitText?: (
     text: string,
     composerContext?: TurnComposerContext
@@ -204,7 +204,7 @@ export function TaskSurface({
             <Composer
               projectLabel={view.projectName}
               mode={composerMode}
-              runStatus={composerRuntime?.runStatus}
+              turnStatus={composerRuntime?.turnStatus}
               onSubmitText={composerRuntime?.onSubmitText}
               onCancelRun={composerRuntime?.onCancelRun}
               runtimeNotice={composerRuntime?.runtimeNotice}

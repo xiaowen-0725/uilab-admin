@@ -272,18 +272,8 @@ describe('TaskRuntimeController command transactions', () => {
     const controller = await attachController(runtime)
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'run.queued', {
+      envelope: envelope('task-c4', 'turn.started', {
         taskSequence: 1,
-        runId: 'run-c4',
-        turnId: 'turn-c4',
-        projectId: 'project-c4',
-      }),
-    })
-    runtime.push('task-c4', {
-      kind: 'event',
-      envelope: envelope('task-c4', 'run.started', {
-        taskSequence: 2,
-        runId: 'run-c4',
         turnId: 'turn-c4',
         projectId: 'project-c4',
       }),
@@ -304,9 +294,9 @@ describe('TaskRuntimeController command transactions', () => {
 
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'run.completed', {
-        taskSequence: 3,
-        runId: 'run-c4',
+      envelope: envelope('task-c4', 'turn.completed', {
+        taskSequence: 2,
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
       }),
@@ -332,18 +322,18 @@ describe('TaskRuntimeController projection coalescing', () => {
 
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'run.started', {
+      envelope: envelope('task-c4', 'turn.started', {
         taskSequence: 1,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
       }),
     })
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'output.delta', {
+      envelope: envelope('task-c4', 'message.delta', {
         taskSequence: 2,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
         payload: { text: '你好' },
@@ -351,9 +341,9 @@ describe('TaskRuntimeController projection coalescing', () => {
     })
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'output.delta', {
+      envelope: envelope('task-c4', 'message.delta', {
         taskSequence: 3,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
         payload: { text: '世界' },
@@ -372,7 +362,7 @@ describe('TaskRuntimeController projection coalescing', () => {
     expect(assistant?.body).toBe('你好世界')
   })
 
-  it('flushes buffered deltas before applying a tool.called event', async () => {
+  it('flushes buffered deltas before applying a tool.started event', async () => {
     const runtime = createBoundaryRuntime(async () => ({
       status: 'accepted',
       commandId: 'c4:command:2',
@@ -382,18 +372,18 @@ describe('TaskRuntimeController projection coalescing', () => {
 
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'run.started', {
+      envelope: envelope('task-c4', 'turn.started', {
         taskSequence: 1,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
       }),
     })
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'output.delta', {
+      envelope: envelope('task-c4', 'message.delta', {
         taskSequence: 2,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
         payload: { text: '先看目录。' },
@@ -401,9 +391,9 @@ describe('TaskRuntimeController projection coalescing', () => {
     })
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'tool.called', {
+      envelope: envelope('task-c4', 'tool.started', {
         taskSequence: 3,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
         payload: { toolId: 'ls-1', name: 'ls', args: { path: '/' } },
@@ -411,7 +401,7 @@ describe('TaskRuntimeController projection coalescing', () => {
     })
 
     const categories = controller.readModel.timeline.map((item) => item.category)
-    expect(categories).toEqual(['run-terminal', 'assistant-message', 'tool-group'])
+    expect(categories).toEqual(['turn-terminal', 'assistant-message', 'tool-group'])
     expect(
       controller.readModel.timeline.find((item) => item.category === 'assistant-message')
         ?.body,
@@ -431,18 +421,18 @@ describe('TaskRuntimeController projection coalescing', () => {
 
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'run.started', {
+      envelope: envelope('task-c4', 'turn.started', {
         taskSequence: 1,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
       }),
     })
     runtime.push('task-c4', {
       kind: 'event',
-      envelope: envelope('task-c4', 'output.delta', {
+      envelope: envelope('task-c4', 'message.delta', {
         taskSequence: 2,
-        runId: 'run-c4',
+
         turnId: 'turn-c4',
         projectId: 'project-c4',
         payload: { text: '不应出现在新任务' },

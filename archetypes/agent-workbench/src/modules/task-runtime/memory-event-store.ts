@@ -60,8 +60,7 @@ export class MemoryEventStore implements EventStorePort {
     return filtered
   }
 
-  async getSnapshot(taskId: string, _runId?: string): Promise<RuntimeSnapshot | null> {
-    // D5: one row per taskId (ignore runId for primary key)
+  async getSnapshot(taskId: string): Promise<RuntimeSnapshot | null> {
     return this.snapshots.get(taskId) ?? null
   }
 

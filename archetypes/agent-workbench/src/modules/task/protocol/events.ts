@@ -1,7 +1,10 @@
 /**
- * Append-only Agent Runtime event envelope + event type family (design §8).
- * Envelope is immutable; Fake may emit a subset of declared types.
+ * Append-only Agent Runtime event envelope + event type family (protocol v2).
+ * Hierarchy: Task > Turn > Step > event. No Run layer.
+ * Envelope is immutable; emitters may send a subset of declared types.
  */
+
+export const AGENT_RUNTIME_SCHEMA_VERSION = 2
 
 export interface AgentRuntimeEventEnvelope {
   eventId: string
@@ -9,9 +12,8 @@ export interface AgentRuntimeEventEnvelope {
   schemaVersion: number
   projectId: string
   taskId: string
-  turnId?: string
-  runId?: string
-  parentRunId?: string
+  /** Required turn ownership — every fact belongs to exactly one Turn. */
+  turnId: string
   /** Task-local monotonic sequence (1-based). */
   taskSequence: number
   runtimeCursor?: string
@@ -21,120 +23,107 @@ export interface AgentRuntimeEventEnvelope {
   payload: unknown
 }
 
-/** Declared event family; Fake 4B emits a subset (lifecycle + stream + cancel). */
+/**
+ * Declared event family. Each family follows started / delta|progress / completed
+ * where a stream exists. Projection rejects undeclared names as unsupported-event.
+ */
 export type AgentRuntimeEventType =
-  // lifecycle
+  // task (open container: active | archived — no task.completed)
   | 'task.created'
-  | 'turn.created'
-  | 'run.queued'
-  | 'run.started'
-  | 'run.completed'
-  // message/stream
-  | 'message.accepted'
-  | 'output.delta'
-  | 'output.completed'
-  | 'output.segment_started'
+  | 'task.renamed'
+  | 'task.title_suggested'
+  | 'task.archived'
+  // turn
+  | 'turn.started'
+  | 'turn.completed'
+  | 'turn.failed'
+  | 'turn.cancelled'
+  | 'turn.cancel_requested'
+  // assistant message stream
+  | 'message.started'
+  | 'message.delta'
+  | 'message.completed'
+  // step
   | 'step.started'
   | 'step.completed'
-  // reasoning/plan (declared; optional in Fake 4B)
+  // reasoning / plan
   | 'reasoning.started'
   | 'reasoning.delta'
-  | 'reasoning.section_completed'
   | 'reasoning.completed'
   | 'plan.updated'
   | 'warning'
-  // tool/approval/input
-  | 'tool.called'
+  // tool
+  | 'tool.started'
   | 'tool.progress'
   | 'tool.completed'
+  // approval
   | 'approval.requested'
   | 'approval.resolved'
-  /**
-   * Structured Question Request or legacy free-text prompt.
-   * Payload: `{ requestId, question, options: Array<{id,label}>, allowMultiple }`
-   * or the older `{ requestId, prompt }` form.
-   */
-  | 'run.input_requested'
-  /**
-   * User answered or skipped. Payload: `{ requestId, answer, answeredAt }`.
-   * Skip uses `answer.kind = 'skipped'` — no separate event.
-   */
-  | 'run.input_provided'
-  // command/file/source
+  // question / input (symmetric with approval.*)
+  | 'input.requested'
+  | 'input.provided'
+  // command
   | 'command.started'
-  | 'command.output'
+  | 'command.delta'
   | 'command.completed'
   | 'file.changed'
-  | 'source.grouped'
-  // control/reconcile
-  | 'run.cancel_requested'
-  | 'run.cancelled'
-  | 'run.interrupted'
-  | 'run.reconciled'
   // artifact
   | 'artifact.created'
   | 'artifact.updated'
   | 'artifact.linked'
   // work surface open request (Composition consumes; not a timeline fact)
   | 'work_surface.open_requested'
-  // error/recovery
-  | 'run.failed'
+  // usage (sidecar may emit; also carried on turn.completed)
+  | 'usage.updated'
+  // transport / recovery (declared; remote path not implemented)
   | 'runtime.disconnected'
   | 'runtime.reconnected'
   | 'runtime.gap_detected'
   | 'runtime.snapshot_applied'
   // metadata
-  | 'task.renamed'
-  | 'task.title_suggested'
   | 'environment.selected'
   | 'capability.changed'
 
 export const AGENT_RUNTIME_EVENT_TYPES = [
   'task.created',
-  'turn.created',
-  'run.queued',
-  'run.started',
-  'run.completed',
-  'message.accepted',
-  'output.delta',
-  'output.completed',
-  'output.segment_started',
+  'task.renamed',
+  'task.title_suggested',
+  'task.archived',
+  'turn.started',
+  'turn.completed',
+  'turn.failed',
+  'turn.cancelled',
+  'turn.cancel_requested',
+  'message.started',
+  'message.delta',
+  'message.completed',
   'step.started',
   'step.completed',
   'reasoning.started',
   'reasoning.delta',
-  'reasoning.section_completed',
   'reasoning.completed',
   'plan.updated',
   'warning',
-  'tool.called',
+  'tool.started',
   'tool.progress',
   'tool.completed',
   'approval.requested',
   'approval.resolved',
-  'run.input_requested',
-  'run.input_provided',
+  'input.requested',
+  'input.provided',
   'command.started',
-  'command.output',
+  'command.delta',
   'command.completed',
   'file.changed',
-  'source.grouped',
-  'run.cancel_requested',
-  'run.cancelled',
-  'run.interrupted',
-  'run.reconciled',
   'artifact.created',
   'artifact.updated',
   'artifact.linked',
   'work_surface.open_requested',
-  'run.failed',
+  'usage.updated',
   'runtime.disconnected',
   'runtime.reconnected',
   'runtime.gap_detected',
   'runtime.snapshot_applied',
-  'task.renamed',
-  'task.title_suggested',
   'environment.selected',
   'capability.changed',
 ] as const satisfies readonly AgentRuntimeEventType[]
-

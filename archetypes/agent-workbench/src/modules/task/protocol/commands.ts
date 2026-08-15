@@ -5,10 +5,9 @@
 import type { TaskExecutionContext } from '../model/execution-context'
 import type {
   ProjectId,
-  RunId,
-  RunStatus,
   TaskId,
   TurnId,
+  TurnStatus,
 } from '../model/lifecycle'
 import type { QuestionAnswer } from './question-answer'
 
@@ -24,7 +23,7 @@ export interface CommandEnvelope {
   idempotencyKey: string
   schemaVersion: number
   expectedProjectionVersion?: number
-  expectedRunStatus?: RunStatus
+  expectedTurnStatus?: TurnStatus
 }
 
 export interface CreateTaskCommand extends CommandEnvelope {
@@ -41,12 +40,10 @@ export interface SubmitTurnCommand extends CommandEnvelope {
   type: 'submitTurn'
   taskId: TaskId
   proposedTurnId?: TurnId
-  proposedRunId?: RunId
   inputText: string
   /** Safe composer metadata; attachment bytes are never embedded here. */
   composerContext?: TurnComposerContext
   turnId?: TurnId
-  runId?: RunId
   runtimeCursor?: string
 }
 
@@ -96,7 +93,6 @@ export interface CancelRunCommand extends CommandEnvelope {
   type: 'cancelRun'
   taskId: TaskId
   turnId?: TurnId
-  runId?: RunId
   runtimeCursor?: string
 }
 
@@ -104,8 +100,6 @@ export interface RetryTurnCommand extends CommandEnvelope {
   type: 'retryTurn'
   taskId: TaskId
   turnId: TurnId
-  /** Optional proposed id for the new Run attempt. */
-  proposedRunId?: RunId
   runtimeCursor?: string
 }
 
@@ -113,7 +107,6 @@ export interface RespondToApprovalCommand extends CommandEnvelope {
   type: 'respondToApproval'
   taskId: TaskId
   turnId?: TurnId
-  runId?: RunId
   payload: {
     decision: 'approved' | 'rejected'
     requestId: string
@@ -126,7 +119,6 @@ export interface ProvideRunInputCommand extends CommandEnvelope {
   type: 'provideRunInput'
   taskId: TaskId
   turnId?: TurnId
-  runId?: RunId
   /** Display echo for Timeline / notices. */
   inputText: string
   requestId?: string
@@ -150,19 +142,18 @@ export interface QueueFollowUpCommand extends CommandEnvelope {
 export interface SteerRunCommand extends CommandEnvelope {
   type: 'steerRun'
   taskId: TaskId
-  runId: RunId
+  turnId: TurnId
   inputText: string
 }
 
 /**
  * Recovery command (design §7). RuntimePort executes via sendCommand only.
- * Must include taskId, turnId, runId, runtimeCursor, idempotencyKey.
+ * Must include taskId, turnId, runtimeCursor, idempotencyKey.
  */
 export interface ReconcileInterruptedRunCommand extends CommandEnvelope {
   type: 'reconcileInterruptedRun'
   taskId: TaskId
   turnId: TurnId
-  runId: RunId
   runtimeCursor: string
 }
 
@@ -195,7 +186,7 @@ export interface CommandAcknowledgement {
   message?: string
   acceptedAt?: string
   currentVersion?: number
-  currentRunStatus?: RunStatus
+  currentTurnStatus?: TurnStatus
   originalCommandId?: string
   originalAcknowledgement?: {
     commandId: string

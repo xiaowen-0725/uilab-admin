@@ -77,7 +77,7 @@ function ApprovalHarness({
       view={view}
       composerRuntime={{
         mode: 'runtime',
-        runStatus: result.runStatus,
+        turnStatus: result.turnStatus,
         onApprove: (id, reason) =>
           result.respondToApproval(id, 'approved', reason),
         onReject: (id) => result.respondToApproval(id, 'rejected'),
@@ -182,19 +182,13 @@ describe('TaskSurface permission-preset auto-respond', () => {
         taskId={taskId}
         requestId='req-inject'
         events={[
-          envelope(taskId, 'run.queued', {
+          envelope(taskId, 'turn.started', {
             taskSequence: 1,
-            runId: 'run-1',
-            turnId: 'turn-1',
-          }),
-          envelope(taskId, 'run.started', {
-            taskSequence: 2,
-            runId: 'run-1',
             turnId: 'turn-1',
           }),
           envelope(taskId, 'approval.requested', {
             taskSequence: 3,
-            runId: 'run-1',
+
             turnId: 'turn-1',
             payload: {
               requestId: 'req-inject',

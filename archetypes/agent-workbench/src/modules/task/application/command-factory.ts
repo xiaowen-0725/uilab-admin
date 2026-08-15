@@ -94,7 +94,6 @@ export class CommandFactory {
     taskId: string
     inputText: string
     proposedTurnId?: string
-    proposedRunId?: string
     composerContext?: TurnComposerContext
   }): SubmitTurnCommand {
     return {
@@ -103,7 +102,6 @@ export class CommandFactory {
       taskId: input.taskId,
       inputText: input.inputText,
       proposedTurnId: input.proposedTurnId,
-      proposedRunId: input.proposedRunId,
       composerContext: input.composerContext,
     }
   }
@@ -111,28 +109,24 @@ export class CommandFactory {
   cancelRun(input: {
     taskId: string
     turnId?: string
-    runId?: string
   }): CancelRunCommand {
     return {
       type: 'cancelRun',
       ...this.envelope(),
       taskId: input.taskId,
       turnId: input.turnId,
-      runId: input.runId,
     }
   }
 
   retryTurn(input: {
     taskId: string
     turnId: string
-    proposedRunId?: string
   }): RetryTurnCommand {
     return {
       type: 'retryTurn',
       ...this.envelope(),
       taskId: input.taskId,
       turnId: input.turnId,
-      proposedRunId: input.proposedRunId,
     }
   }
 
@@ -142,14 +136,12 @@ export class CommandFactory {
     decision: 'approved' | 'rejected'
     reason?: string
     turnId?: string
-    runId?: string
   }): RespondToApprovalCommand {
     return {
       type: 'respondToApproval',
       ...this.envelope(),
       taskId: input.taskId,
       turnId: input.turnId,
-      runId: input.runId,
       payload: {
         decision: input.decision,
         requestId: input.requestId,
@@ -163,7 +155,6 @@ export class CommandFactory {
     inputText: string
     requestId?: string
     turnId?: string
-    runId?: string
     answer?: QuestionAnswer
   }): ProvideRunInputCommand {
     return {
@@ -173,7 +164,6 @@ export class CommandFactory {
       inputText: input.inputText,
       requestId: input.requestId,
       turnId: input.turnId,
-      runId: input.runId,
       answer: input.answer,
     }
   }
@@ -194,14 +184,14 @@ export class CommandFactory {
 
   steerRun(input: {
     taskId: string
-    runId: string
+    turnId: string
     inputText: string
   }): SteerRunCommand {
     return {
       type: 'steerRun',
       ...this.envelope(),
       taskId: input.taskId,
-      runId: input.runId,
+      turnId: input.turnId,
       inputText: input.inputText,
     }
   }
@@ -209,7 +199,6 @@ export class CommandFactory {
   reconcileInterruptedRun(input: {
     taskId: string
     turnId: string
-    runId: string
     runtimeCursor: string
   }): ReconcileInterruptedRunCommand {
     return {
@@ -217,7 +206,6 @@ export class CommandFactory {
       ...this.envelope(),
       taskId: input.taskId,
       turnId: input.turnId,
-      runId: input.runId,
       runtimeCursor: input.runtimeCursor,
     }
   }

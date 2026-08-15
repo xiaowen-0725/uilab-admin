@@ -171,7 +171,7 @@ function rememberTimelineView(
 
 /**
  * Group a turn's `bodyItems` into chronological render blocks.
- * Does not consume user-message turn openers or run-terminal chrome.
+ * Does not consume user-message turn openers or turn-terminal chrome.
  * Returns the previous array when item identities are unchanged.
  */
 export function deriveTimelineView(

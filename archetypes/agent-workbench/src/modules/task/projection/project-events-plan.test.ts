@@ -10,16 +10,14 @@ function mk(
   seq: number,
   type: string,
   payload: unknown,
-  runId = 'run-1',
 ): AgentRuntimeEventEnvelope {
   return {
     eventId: `e${seq}`,
     eventType: type,
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: 'p',
     taskId: 't',
     turnId: 'turn-1',
-    runId,
     taskSequence: seq,
     occurredAt: `1970-01-01T00:00:0${Math.min(seq, 9)}.000Z`,
     receivedAt: `1970-01-01T00:00:0${Math.min(seq, 9)}.000Z`,
@@ -36,7 +34,7 @@ const NEW_STEPS = [
 describe('projectEvents plan snapshot', () => {
   it('projects a structured plan.updated payload onto the read model and Timeline card', () => {
     const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
-      mk(1, 'run.started', {}),
+      mk(1, 'turn.started', {}),
       mk(2, 'plan.updated', {
         explanation: '先拆出鉴权',
         steps: NEW_STEPS,
@@ -77,9 +75,9 @@ describe('projectEvents plan snapshot', () => {
     })
   })
 
-  it('upserts the Timeline plan card per Run and replaces the snapshot', () => {
+  it('upserts the Timeline plan card per Turn and replaces the snapshot', () => {
     let state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
-      mk(1, 'run.started', {}),
+      mk(1, 'turn.started', {}),
       mk(2, 'plan.updated', {
         steps: [{ step: '调研', status: 'in_progress' }],
       }),
@@ -97,14 +95,14 @@ describe('projectEvents plan snapshot', () => {
 
     const cards = state.readModel.timeline.filter((item) => item.category === 'plan-update')
     expect(cards).toHaveLength(1)
-    expect(cards[0]?.id).toBe('plan-update:run-1')
+    expect(cards[0]?.id).toBe('plan-update:turn-1')
     expect(cards[0]?.body).toBe('拆出联调')
     expect(state.readModel.plan?.progress).toEqual({ completed: 1, total: 2 })
   })
 
   it('rebuilds the latest plan snapshot by replaying events', () => {
     const events = [
-      mk(1, 'run.started', {}),
+      mk(1, 'turn.started', {}),
       mk(2, 'plan.updated', {
         steps: [{ step: '调研', status: 'in_progress' }],
       }),
@@ -127,17 +125,17 @@ describe('projectEvents plan snapshot', () => {
 
   it('does not count plan.updated in ProcessSummary', () => {
     const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
-      mk(1, 'run.started', {}),
+      mk(1, 'turn.started', {}),
       mk(2, 'plan.updated', {
         steps: [{ step: '调研', status: 'in_progress' }],
       }),
-      mk(3, 'tool.called', {
+      mk(3, 'tool.started', {
         toolId: 'read-1',
         name: 'read_file',
         args: { path: '/notes/a.md' },
       }),
     ])
-    const terminal = state.readModel.timeline.find((item) => item.category === 'run-terminal')
+    const terminal = state.readModel.timeline.find((item) => item.category === 'turn-terminal')
     expect(terminal?.meta?.processSummary).toEqual({
       stepCount: 1,
       counts: { read: 1 },
@@ -146,7 +144,7 @@ describe('projectEvents plan snapshot', () => {
 
   it('projects a warning envelope as a Timeline warning row', () => {
     const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
-      mk(1, 'run.started', {}),
+      mk(1, 'turn.started', {}),
       mk(2, 'warning', {
         title: '计划更新失败',
         message: 'sidecar unavailable',

@@ -4,7 +4,7 @@ import {
   NEW_TASK_TITLE,
   ProjectCatalogController,
 } from '@/modules/project'
-import { createRunStatusIndex } from '@/modules/task'
+import { createTurnStatusIndex } from '@/modules/task'
 import { createMemoryEventStore } from '@/modules/task-runtime'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -136,7 +136,7 @@ describe('hardDeleteTask', () => {
         // Some stores require full envelope; delete still exercises cascade path
       })
 
-    const runStatusIndex = createRunStatusIndex()
+    const runStatusIndex = createTurnStatusIndex()
     runStatusIndex.set(a.id, 'running')
     const onTaskDeleted = vi.fn()
 
@@ -186,7 +186,7 @@ describe('hardDeleteTask', () => {
     // Make other newer so nextSelected would prefer it if we wrongly always used it
     await catalog.renameTask(other.id, 'Other2', 'user')
 
-    const runStatusIndex = createRunStatusIndex()
+    const runStatusIndex = createTurnStatusIndex()
     const result = await hardDeleteTask({
       taskId: other.id,
       catalog,
@@ -231,7 +231,7 @@ describe('hardDeleteTask', () => {
       detach,
     } as never
 
-    const runStatusIndex = createRunStatusIndex()
+    const runStatusIndex = createTurnStatusIndex()
     runStatusIndex.set(row.id, 'running')
 
     const result = await hardDeleteTask({
@@ -277,7 +277,7 @@ describe('removeProjectFromList', () => {
       title: '默认对话',
     })
 
-    const runStatusIndex = createRunStatusIndex()
+    const runStatusIndex = createTurnStatusIndex()
     const onTaskDeleted = vi.fn()
 
     const result = await removeProjectFromList({
@@ -332,7 +332,7 @@ describe('removeProjectFromList', () => {
       projectId: other.id,
       catalog,
       eventStore: createMemoryEventStore(),
-      runStatusIndex: createRunStatusIndex(),
+      runStatusIndex: createTurnStatusIndex(),
       runtimeController: null,
       activeTaskId: current.id,
       selectedTaskId: current.id,
@@ -369,7 +369,7 @@ describe('removeProjectFromList', () => {
       projectId: only.id,
       catalog,
       eventStore: createMemoryEventStore(),
-      runStatusIndex: createRunStatusIndex(),
+      runStatusIndex: createTurnStatusIndex(),
       runtimeController: null,
       activeTaskId: task.id,
       selectedTaskId: task.id,

@@ -1,18 +1,17 @@
 /**
- * Task Pane Projection types (Phase 4C).
- * Full Timeline taxonomy is declared; 4C implements a vertical-slice subset.
+ * Task Pane Projection types (protocol v2).
+ * TimelineItem aligns with Codex ThreadItem.
  */
 
-import type { ProjectId, RunId, RunStatus, TaskId, TitleSource, TurnId } from '../model/lifecycle'
+import type { ProjectId, TaskId, TitleSource, TurnId, TurnStatus } from '../model/lifecycle'
 import type { QuestionAnswer, QuestionRequest } from '../protocol/question-answer'
 import type { PlanSnapshot } from './plan-snapshot'
 
 export type { PlanProgress, PlanSnapshot, PlanStep, PlanStepStatus } from './plan-snapshot'
 
 /**
- * Design §9 taxonomy (full). Phase 4C must project at least:
- * user-message | assistant-message | run-terminal | unsupported-event.
- * Remaining categories land in 4D+.
+ * Design §9 taxonomy. Projection must cover:
+ * user-message | assistant-message | turn-terminal | unsupported-event.
  */
 export type TimelineItemCategory =
   | 'user-message'
@@ -28,7 +27,7 @@ export type TimelineItemCategory =
   | 'warning'
   | 'error'
   | 'assistant-message'
-  | 'run-terminal'
+  | 'turn-terminal'
   | 'unsupported-event'
 
 export interface TimelineItemSourceRange {
@@ -62,7 +61,14 @@ export type FileChangeKind = 'created' | 'updated' | 'deleted'
 
 export type DeliverableSource = 'file' | 'artifact'
 
-/** Aggregated file / artifact produced by one completed run. */
+/** Token usage for a turn (hover/detail only; not a standing status bar). */
+export interface TokenUsage {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+}
+
+/** Aggregated file / artifact produced by one completed turn. */
 export interface DeliverableRef {
   path: string
   title?: string
@@ -82,7 +88,7 @@ export interface TimelineItemMeta {
   changeKind?: FileChangeKind
   /** Artifact kind (document / image / …). */
   kind?: string
-  /** Run-terminal: files + artifacts produced in this run. */
+  /** Turn-terminal: files + artifacts produced in this turn. */
   deliverables?: DeliverableRef[]
   /** File-change: green/red card lines. */
   diffLines?: Array<{ type: 'add' | 'del' | 'context'; text: string; line?: number }>
@@ -94,9 +100,9 @@ export interface TimelineItemMeta {
   title?: string
   /** VoltAgent step id; used to seal working blocks across steps. */
   stepId?: string
-  /** ISO start time for live elapsed duration while run is active. */
+  /** ISO start time for live elapsed duration while the turn is active. */
   startedAt?: string
-  /** Run duration for completed turn chrome (ms). */
+  /** Turn duration for completed turn chrome (ms). */
   durationMs?: number
   /**
    * Tool kind hint for icon (read / web_search / command / generic).
@@ -108,11 +114,11 @@ export interface TimelineItemMeta {
   processKind?: ProcessStepKind
   /** Structured plan for Timeline plan-update cards (snapshot without derived progress). */
   plan?: Omit<PlanSnapshot, 'progress'>
-  /** Structured Question Request (present when `run.input_requested` carried options). */
+  /** Structured Question Request (present when `input.requested` carried options). */
   question?: QuestionRequest
-  /** Structured answer after `run.input_provided`. */
+  /** Structured answer after `input.provided`. */
   answer?: QuestionAnswer
-  /** Run-terminal deterministic summary, counted by logical row id. */
+  /** Turn-terminal deterministic summary, counted by logical row id. */
   processSummary?: ProcessSummary
   /**
    * Legacy assistant segment role. Projection no longer writes `commentary`.
@@ -125,6 +131,8 @@ export interface TimelineItemMeta {
   inlineResponse?: boolean
   /** ISO end time for a completed working-row (duration derivation). */
   endedAt?: string
+  /** Token usage shown on turn-terminal hover / detail. */
+  usage?: TokenUsage
 }
 
 export interface TimelineItem {
@@ -132,17 +140,16 @@ export interface TimelineItem {
   category: TimelineItemCategory
   title?: string
   body?: string
-  /** Run/chip status for run-terminal (and optional future rows). */
-  status?: RunStatus | 'streaming' | string
+  /** Chip status for turn-terminal (and optional future rows). */
+  status?: TurnStatus | 'streaming' | string
   sourceEventIds: string[]
   sourceEventRange?: TimelineItemSourceRange
   taskId: TaskId
   turnId?: TurnId
-  runId?: RunId
   sequenceFrom?: number
   sequenceTo?: number
   projectionVersion: number
-  /** Presentation extras (diffs, children, duration) — never mutates Run authority. */
+  /** Presentation extras (diffs, children, duration) — never mutates Turn authority. */
   meta?: TimelineItemMeta
 }
 
@@ -163,12 +170,15 @@ export interface TaskReadModel {
   title: string
   titleSource: TitleSource
   projectionVersion: number
-  runStatus: RunStatus | null
-  activeRunId: RunId | null
+  turnStatus: TurnStatus | null
   activeTurnId: TurnId | null
+  /** True after `task.archived`. Task is an open container otherwise. */
+  archived: boolean
+  /** Latest usage from `turn.completed` or `usage.updated`. */
+  usage: TokenUsage | null
   /**
    * Codex-like intermediate status under timeline / above composer.
-   * Chinese label while run is non-terminal; null when idle or terminal.
+   * Chinese label while the turn is non-terminal; null when idle or terminal.
    */
   liveStatus: string | null
   /**
@@ -182,8 +192,8 @@ export interface TaskReadModel {
    */
   plan: PlanSnapshot | null
   /**
-   * Files + artifacts from the latest completed run.
-   * Empty until `run.completed` aggregates `file.changed` / `artifact.*`.
+   * Files + artifacts from the latest completed turn.
+   * Empty until `turn.completed` aggregates `file.changed` / `artifact.*`.
    */
   deliverables: DeliverableRef[]
   timeline: TimelineItem[]
@@ -201,10 +211,16 @@ export interface ProjectionState {
   readModel: TaskReadModel
   seenEventIds: ReadonlySet<string>
   /**
-   * True after this task has seen `step.*` / `output.segment_started`.
+   * True after this task has seen `step.*` / `message.started`.
    * Assistant lookback heuristic stays off once real step boundaries exist.
    */
   hasStepBoundaries: boolean
   /** Current VoltAgent step; stamped onto working-row meta. */
   activeStepId?: string
+  /**
+   * ISO time of the last user-visible boundary (turn start / answer /
+   * approval / prose end). Consumed as `startedAt` by the next working row
+   * so burst-delivered reasoning still reports honest wall-clock duration.
+   */
+  workAnchorAt?: string
 }

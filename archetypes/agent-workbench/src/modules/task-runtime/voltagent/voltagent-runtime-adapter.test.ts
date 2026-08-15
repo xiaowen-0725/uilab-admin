@@ -198,7 +198,6 @@ describe('VoltAgentRuntimeAdapter', () => {
         },
       },
       proposedTurnId: 'turn-xhs',
-      proposedRunId: 'run-xhs',
     })
 
     await vi.waitFor(() => expect(firstBody).toContain(xhsInstruction))
@@ -243,7 +242,7 @@ describe('VoltAgentRuntimeAdapter', () => {
       idempotencyKey: 'idem-xhs-a',
       schemaVersion: 1,
       taskId: 'task-xhs-run',
-      runId: 'run-xhs',
+
       turnId: 'turn-xhs',
       payload: { requestId: 'apr-xhs', decision: 'approved' },
     })
@@ -287,7 +286,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-done',
       inputText: '你好',
       proposedTurnId: 'turn-done',
-      proposedRunId: 'run-done',
     })
 
     await vi.waitFor(() => {
@@ -295,7 +293,7 @@ describe('VoltAgentRuntimeAdapter', () => {
         events.filter(
           (event) =>
             event.kind === 'event' &&
-            event.envelope.eventType === 'run.completed'
+            event.envelope.eventType === 'turn.completed'
         )
       ).toHaveLength(1)
     })
@@ -335,7 +333,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-tail',
       inputText: '你好',
       proposedTurnId: 'turn-tail',
-      proposedRunId: 'run-tail',
     })
 
     await vi.waitFor(() => {
@@ -345,12 +342,12 @@ describe('VoltAgentRuntimeAdapter', () => {
       expect(
         envelopes.some(
           (event) =>
-            event.eventType === 'output.delta' &&
+            event.eventType === 'message.delta' &&
             (event.payload as { text?: string }).text === '尾帧'
         )
       ).toBe(true)
       expect(
-        envelopes.filter((event) => event.eventType === 'run.completed')
+        envelopes.filter((event) => event.eventType === 'turn.completed')
       ).toHaveLength(1)
     })
   })
@@ -386,7 +383,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-rt',
       inputText: '你好',
       proposedTurnId: 'turn-1',
-      proposedRunId: 'run-1',
     })
 
     expect(ack.status).toBe('accepted')
@@ -395,8 +391,8 @@ describe('VoltAgentRuntimeAdapter', () => {
       const types = events
         .filter((e) => e.kind === 'event')
         .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-      expect(types).toContain('output.delta')
-      expect(types).toContain('run.completed')
+      expect(types).toContain('message.delta')
+      expect(types).toContain('turn.completed')
     })
 
     expect(fetchImpl).toHaveBeenCalled()
@@ -453,7 +449,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-c',
       inputText: 'long',
       proposedTurnId: 'turn-c',
-      proposedRunId: 'run-c',
     })
 
     const cancelAck = await adapter.sendCommand({
@@ -464,17 +459,17 @@ describe('VoltAgentRuntimeAdapter', () => {
       idempotencyKey: 'idem-x',
       schemaVersion: 1,
       taskId: 'task-c',
-      runId: 'run-c',
+
     })
     expect(cancelAck.status).toBe('accepted')
 
     const types = events
       .filter((e) => e.kind === 'event')
       .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-    expect(types).toContain('run.cancelled')
+    expect(types).toContain('turn.cancelled')
   })
 
-  it('HTTP error emits run.failed', async () => {
+  it('HTTP error emits turn.failed', async () => {
     const fetchImpl = vi.fn(async () => new Response('down', { status: 503 }))
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',
@@ -493,14 +488,13 @@ describe('VoltAgentRuntimeAdapter', () => {
       schemaVersion: 1,
       taskId: 'task-e',
       inputText: 'hi',
-      proposedRunId: 'run-e',
       proposedTurnId: 'turn-e',
     })
     await vi.waitFor(() => {
       const types = events
         .filter((e) => e.kind === 'event')
         .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-      expect(types).toContain('run.failed')
+      expect(types).toContain('turn.failed')
     })
   })
 
@@ -519,7 +513,7 @@ describe('VoltAgentRuntimeAdapter', () => {
       idempotencyKey: 'idem-st',
       schemaVersion: 1,
       taskId: 'task-1',
-      runId: 'run-1',
+      turnId: 'turn-1',
       inputText: 'nudge',
     })
     expect(ack.status).toBe('unsupported')
@@ -536,7 +530,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     ).toMatchObject({ file_path: '/output/a.md', content: 'x' })
   })
 
-  it('approval pause does not emit run.completed before decision', async () => {
+  it('approval pause does not emit turn.completed before decision', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(
         sseBody([
@@ -573,7 +567,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-pause',
       inputText: 'write',
       proposedTurnId: 'turn-p',
-      proposedRunId: 'run-p',
     })
     await vi.waitFor(() => {
       const types = events
@@ -585,7 +578,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     const types = events
       .filter((e) => e.kind === 'event')
       .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-    expect(types).not.toContain('run.completed')
+    expect(types).not.toContain('turn.completed')
   })
 
   it('respondToApproval rejects when pending approval is missing', async () => {
@@ -669,7 +662,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-hang',
       inputText: '写个文件',
       proposedTurnId: 'turn-hang',
-      proposedRunId: 'run-hang',
     })
 
     await vi.waitFor(() => {
@@ -687,7 +679,7 @@ describe('VoltAgentRuntimeAdapter', () => {
       idempotencyKey: 'idem-hang-a',
       schemaVersion: 1,
       taskId: 'task-hang',
-      runId: 'run-hang',
+
       turnId: 'turn-hang',
       payload: { requestId: 'apr-hang', decision: 'approved' },
     })
@@ -701,8 +693,8 @@ describe('VoltAgentRuntimeAdapter', () => {
     const types = events
       .filter((e) => e.kind === 'event')
       .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-    expect(types).not.toContain('run.failed')
-    expect(types).not.toContain('run.cancelled')
+    expect(types).not.toContain('turn.failed')
+    expect(types).not.toContain('turn.cancelled')
   })
 
   it('getCapabilities loads tools from sidecar agent metadata', async () => {
@@ -829,7 +821,6 @@ describe('VoltAgentRuntimeAdapter', () => {
         ],
       },
       proposedTurnId: 'turn-ap',
-      proposedRunId: 'run-ap',
     })
 
     await vi.waitFor(() => {
@@ -851,7 +842,7 @@ describe('VoltAgentRuntimeAdapter', () => {
       idempotencyKey: 'idem-ap-a',
       schemaVersion: 1,
       taskId: 'task-ap',
-      runId: 'run-ap',
+
       turnId: 'turn-ap',
       payload: { requestId: 'apr-1', decision: 'approved' },
     })
@@ -863,8 +854,8 @@ describe('VoltAgentRuntimeAdapter', () => {
         .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
       expect(types).toContain('approval.resolved')
       expect(types).toContain('file.changed')
-      expect(types).toContain('output.delta')
-      expect(types).toContain('run.completed')
+      expect(types).toContain('message.delta')
+      expect(types).toContain('turn.completed')
     })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
@@ -901,7 +892,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-cur',
       inputText: 'hi',
       proposedTurnId: 'turn-cur',
-      proposedRunId: 'run-cur',
     })
 
     await vi.waitFor(() => {
@@ -913,7 +903,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     })
   })
 
-  it('ask_user_question tool-call emits run.input_requested and suppresses run.completed', async () => {
+  it('ask_user_question tool-call emits input.requested and suppresses turn.completed', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(
         sseBody([
@@ -952,22 +942,21 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-ask',
       inputText: '问我一个单选题',
       proposedTurnId: 'turn-ask',
-      proposedRunId: 'run-ask',
     })
     await vi.waitFor(() => {
       const types = events
         .filter((e) => e.kind === 'event')
         .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-      expect(types).toContain('run.input_requested')
+      expect(types).toContain('input.requested')
     })
     await new Promise((r) => setTimeout(r, 30))
     const types = events
       .filter((e) => e.kind === 'event')
       .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-    expect(types).not.toContain('tool.called')
-    expect(types).not.toContain('run.completed')
+    expect(types).not.toContain('tool.started')
+    expect(types).not.toContain('turn.completed')
     const requested = events.find(
-      (e) => e.kind === 'event' && e.envelope.eventType === 'run.input_requested',
+      (e) => e.kind === 'event' && e.envelope.eventType === 'input.requested',
     )
     expect(requested && requested.kind === 'event' ? requested.envelope.payload : null).toMatchObject({
       requestId: 'call-ask',
@@ -1027,13 +1016,12 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-ask-2',
       inputText: '问我一个单选题',
       proposedTurnId: 'turn-ask-2',
-      proposedRunId: 'run-ask-2',
     })
     await vi.waitFor(() => {
       const types = events
         .filter((e) => e.kind === 'event')
         .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-      expect(types).toContain('run.input_requested')
+      expect(types).toContain('input.requested')
     })
     await new Promise((r) => setTimeout(r, 20))
 
@@ -1055,9 +1043,9 @@ describe('VoltAgentRuntimeAdapter', () => {
       const types = events
         .filter((e) => e.kind === 'event')
         .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-      expect(types).toContain('run.input_provided')
-      expect(types).toContain('output.delta')
-      expect(types).toContain('run.completed')
+      expect(types).toContain('input.provided')
+      expect(types).toContain('message.delta')
+      expect(types).toContain('turn.completed')
     })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     const request = JSON.parse(resumeBody) as {
@@ -1125,7 +1113,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-ask-skip',
       inputText: '提问',
       proposedTurnId: 'turn-skip',
-      proposedRunId: 'run-skip',
     })
     await vi.waitFor(() => expect(call).toBe(1))
     await new Promise((r) => setTimeout(r, 20))
@@ -1153,7 +1140,6 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-ask-free',
       inputText: '提问',
       proposedTurnId: 'turn-free',
-      proposedRunId: 'run-free',
     })
     await vi.waitFor(() => expect(call).toBe(3))
     await new Promise((r) => setTimeout(r, 20))

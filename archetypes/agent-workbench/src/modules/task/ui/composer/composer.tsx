@@ -69,7 +69,7 @@ import {
   ComposerTextarea,
   ComposerToolbar,
 } from '@/components/motion/agent-composer'
-import type { RunStatus } from '../../model/lifecycle'
+import type { TurnStatus } from '../../model/lifecycle'
 import type {
   CommandAcknowledgement,
   TurnComposerContext,
@@ -106,11 +106,11 @@ export interface ComposerProps {
   showBranchChip?: boolean
   /**
    * `local-sim` (default): local timer feedback; notice contains「不会调用 Agent Runtime」.
-   * `runtime`: Application Command → Fake Runtime; no local timer as domain authority.
+   * `runtime`: Application Command → VoltAgent RuntimePort; no local timer as domain authority.
    */
   mode?: 'local-sim' | 'runtime'
   /** Active run status from TaskReadModel (runtime mode). */
-  runStatus?: RunStatus | null
+  turnStatus?: TurnStatus | null
   /** Runtime mode: submit user text via controller. */
   onSubmitText?: (
     text: string,
@@ -369,7 +369,7 @@ export function TaskComposer({
   showEnvironmentChip = false,
   showBranchChip = false,
   mode = 'local-sim',
-  runStatus = null,
+  turnStatus = null,
   onSubmitText,
   onCancelRun,
   runtimeNotice = null,
@@ -391,9 +391,9 @@ export function TaskComposer({
    */
   const sendActsAsStop =
     isRuntimeMode &&
-    (runStatus === 'running' ||
-      runStatus === 'queued' ||
-      runStatus === 'cancelling')
+    (turnStatus === 'running' ||
+      turnStatus === 'queued' ||
+      turnStatus === 'cancelling')
   /** null = no project selected → chip shows「选择项目」. */
   const [project, setProject] = useState<string | null>(projectLabel || null)
   const [projectCatalog, setProjectCatalog] = useState<string[]>(() =>
@@ -519,7 +519,7 @@ export function TaskComposer({
       }
       if (!text.trim()) return
       const payload = text.trim()
-      const clarifying = runStatus === 'waiting_for_input'
+      const clarifying = turnStatus === 'waiting_for_input'
       const preview = previewText(payload)
       setNotice(
         clarifying
@@ -611,7 +611,7 @@ export function TaskComposer({
     text,
     isRuntimeMode,
     sendActsAsStop,
-    runStatus,
+    turnStatus,
     onCancelRun,
     onSubmitText,
     honesty,
@@ -1445,7 +1445,7 @@ export function TaskComposer({
             onKeyDown={onComposerKeyDown}
             onSubmit={handleSend}
             placeholder={
-              runStatus === 'waiting_for_input'
+              turnStatus === 'waiting_for_input'
                 ? '或直接回复…'
                 : '随心输入，输入 / 调用命令与技能'
             }

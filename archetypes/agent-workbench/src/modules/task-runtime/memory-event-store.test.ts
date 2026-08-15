@@ -9,10 +9,11 @@ function envelope(
 ): AgentRuntimeEventEnvelope {
   return {
     eventId: eventId ?? `${taskId}:e${seq}`,
-    eventType: 'output.delta',
-    schemaVersion: 1,
+    eventType: 'message.delta',
+    schemaVersion: 2,
     projectId: 'p',
     taskId,
+    turnId: 'turn-1',
     taskSequence: seq,
     occurredAt: '1970-01-01T00:00:00.000Z',
     receivedAt: '1970-01-01T00:00:00.000Z',

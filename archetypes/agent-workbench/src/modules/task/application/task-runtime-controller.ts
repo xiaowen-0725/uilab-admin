@@ -8,13 +8,12 @@
  * UI must not mutate Run status except via projection from events.
  */
 
-import { isTerminalRunStatus, type RunStatus } from '../model/lifecycle'
+import { isTerminalTurnStatus, type TurnStatus } from '../model/lifecycle'
 import { localTitleFromPrompt } from '../model/title-policy'
 import type { EventStorePort } from '../ports/event-store-port'
 import type { RuntimePort, RuntimeSubscriptionEvent } from '../ports/runtime-port'
 import { emptyProjectionState } from '../projection/empty-read-model'
 import {
-  applyRuntimeEvent,
   isStreamingDeltaEvent,
   projectEvents,
   setTimelineFollowMode,
@@ -125,8 +124,8 @@ export class TaskRuntimeController {
    * Runtime also supports queueFollowUp; controller prefers dispatching to runtime.
    */
   private localFollowUps: string[] = []
-  /** Optional listener for runStatus changes (Navigator RunStatusIndex). */
-  private runStatusListener: ((taskId: string, status: RunStatus | null) => void) | null =
+  /** Optional listener for runStatus changes (Navigator TurnStatusIndex). */
+  private turnStatusListener: ((taskId: string, status: TurnStatus | null) => void) | null =
     null
   /**
    * Composition-only: work_surface.open_requested (does not mutate projection open set).
@@ -161,10 +160,10 @@ export class TaskRuntimeController {
     this.projectId = projectId
   }
 
-  setRunStatusListener(
-    listener: ((taskId: string, status: RunStatus | null) => void) | null,
+  setTurnStatusListener(
+    listener: ((taskId: string, status: TurnStatus | null) => void) | null,
   ): void {
-    this.runStatusListener = listener
+    this.turnStatusListener = listener
   }
 
   isPersistenceDegraded(): boolean {
@@ -182,13 +181,13 @@ export class TaskRuntimeController {
   /** True while a non-terminal Run is active or a command is in flight. */
   isBusy(): boolean {
     if (this.pending) return true
-    const status = this.projection.readModel.runStatus
+    const status = this.projection.readModel.turnStatus
     if (!status) return false
-    return !isTerminalRunStatus(status)
+    return !isTerminalTurnStatus(status)
   }
 
-  getRunStatus(): RunStatus | null {
-    return this.projection.readModel.runStatus
+  getRunStatus(): TurnStatus | null {
+    return this.projection.readModel.turnStatus
   }
 
   /** Stable snapshot key for React external store. */
@@ -253,7 +252,7 @@ export class TaskRuntimeController {
             this.projection = projectEvents(base, stored)
             cursor = this.projection.readModel.lastTaskSequence
             this.notice = this.rehydrateNotice()
-            this.emitRunStatus()
+            this.emitTurnStatus()
             this.emit()
           } else {
             cursor = snapshot.lastTaskSequence
@@ -268,12 +267,12 @@ export class TaskRuntimeController {
             this.projection = projectEvents(base, stored)
             cursor = this.projection.readModel.lastTaskSequence
             this.notice = this.rehydrateNotice()
-            this.emitRunStatus()
+            this.emitTurnStatus()
             this.emit()
           }
         }
 
-        // D8: non-terminal rehydrate → append run.interrupted fact then optional reconcile.
+        // Non-terminal rehydrate: notice only. v2 does not invent an interrupted fact.
         await this.ensureInterruptedOnRehydrate(taskId, generation)
         if (generation !== this.attachGeneration || this.taskId !== taskId) return
         cursor = this.projection.readModel.lastTaskSequence
@@ -318,7 +317,7 @@ export class TaskRuntimeController {
     if (!trimmed) return null
 
     // waiting_for_input: route to provideRunInput
-    if (this.projection.readModel.runStatus === 'waiting_for_input') {
+    if (this.projection.readModel.turnStatus === 'waiting_for_input') {
       return this.provideRunInput(trimmed, undefined, {
         kind: 'freeText',
         text: trimmed,
@@ -326,13 +325,13 @@ export class TaskRuntimeController {
     }
 
     // waiting_for_approval: do not accept free-form submit as turn
-    if (this.projection.readModel.runStatus === 'waiting_for_approval') {
+    if (this.projection.readModel.turnStatus === 'waiting_for_approval') {
       this.notice = '当前等待审批，请使用「允许一次」或「拒绝」'
       this.emit()
       return null
     }
 
-    if (this.isBusy() && this.projection.readModel.runStatus) {
+    if (this.isBusy() && this.projection.readModel.turnStatus) {
       // Prefer queue while busy (4E).
       return this.queueFollowUp(trimmed)
     }
@@ -384,12 +383,9 @@ export class TaskRuntimeController {
   async cancelActiveRun(): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
-    const runId = this.projection.readModel.activeRunId ?? undefined
-
     return this.runCommandTransaction(
       () => this.commands.cancelRun({
         taskId,
-        runId: runId ?? undefined,
         turnId: this.projection.readModel.activeTurnId ?? undefined,
       }),
       (ack) => {
@@ -417,7 +413,7 @@ export class TaskRuntimeController {
         requestId,
         decision,
         reason,
-        runId: this.projection.readModel.activeRunId ?? undefined,
+
         turnId: this.projection.readModel.activeTurnId ?? undefined,
       }),
       (ack) => {
@@ -451,7 +447,7 @@ export class TaskRuntimeController {
         taskId,
         inputText: text,
         requestId: rid,
-        runId: this.projection.readModel.activeRunId ?? undefined,
+
         turnId: this.projection.readModel.activeTurnId ?? undefined,
         answer,
       }),
@@ -534,16 +530,16 @@ export class TaskRuntimeController {
   async steerRun(text: string): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
-    const runId = this.projection.readModel.activeRunId
-    if (!runId) {
-      this.notice = '没有可转向的活动 Run'
+    const turnId = this.projection.readModel.activeTurnId
+    if (!turnId) {
+      this.notice = '没有可转向的活动轮次'
       this.emit()
       return null
     }
     return this.runCommandTransaction(
       () => this.commands.steerRun({
         taskId,
-        runId,
+        turnId,
         inputText: text,
       }),
       (ack) => {
@@ -558,15 +554,13 @@ export class TaskRuntimeController {
 
   async reconcileInterruptedRun(options?: {
     turnId?: string
-    runId?: string
     runtimeCursor?: string
   }): Promise<CommandAcknowledgement | null> {
     const taskId = this.taskId
     if (!taskId) return null
-    const runId = options?.runId ?? this.projection.readModel.activeRunId
     const turnId = options?.turnId ?? this.projection.readModel.activeTurnId
-    if (!runId || !turnId) {
-      this.notice = '缺少 runId/turnId，无法恢复'
+    if (!turnId) {
+      this.notice = '缺少 turnId，无法恢复'
       this.emit()
       return null
     }
@@ -576,7 +570,6 @@ export class TaskRuntimeController {
       () => this.commands.reconcileInterruptedRun({
         taskId,
         turnId,
-        runId,
         runtimeCursor: cursor,
       }),
       (ack) => {
@@ -716,12 +709,12 @@ export class TaskRuntimeController {
     if (options.persist) {
       this.enqueuePersist(envelopes)
     }
-    const status = this.projection.readModel.runStatus
-    if (status && isTerminalRunStatus(status)) {
+    const status = this.projection.readModel.turnStatus
+    if (status && isTerminalTurnStatus(status)) {
       this.maybeDrainLocalQueue()
     }
     if (options.emit) {
-      this.emitRunStatus()
+      this.emitTurnStatus()
       this.emit()
     }
   }
@@ -821,9 +814,9 @@ export class TaskRuntimeController {
     if (!this.eventStore) return
     const snapshot = {
       taskId: envelope.taskId,
-      runId: envelope.runId,
+
       protocolVersion: envelope.schemaVersion,
-      runStatus: this.projection.readModel.runStatus ?? undefined,
+      turnStatus: this.projection.readModel.turnStatus ?? undefined,
       lastTaskSequence: this.projection.readModel.lastTaskSequence,
       runtimeCursor: envelope.runtimeCursor,
       projectionVersion: this.projection.readModel.projectionVersion,
@@ -854,47 +847,28 @@ export class TaskRuntimeController {
   }
 
   /**
-   * When rehydrated run is non-terminal, append run.interrupted as recovery fact (D8).
+   * When a rehydrated turn is still non-terminal, surface a notice.
+   * v2 does not invent a `run.interrupted` fact.
    */
   private async ensureInterruptedOnRehydrate(
     taskId: string,
     generation: number,
   ): Promise<void> {
-    const status = this.projection.readModel.runStatus
-    if (!status || isTerminalRunStatus(status) || status === 'interrupted') {
+    const status = this.projection.readModel.turnStatus
+    if (!status || isTerminalTurnStatus(status)) {
       return
     }
-    if (!this.eventStore) return
-
-    const nextSeq = this.projection.readModel.lastTaskSequence + 1
-    const now = new Date().toISOString()
-    const envelope: AgentRuntimeEventEnvelope = {
-      eventId: `${taskId}:rehydrate-interrupt:${nextSeq}`,
-      eventType: 'run.interrupted',
-      schemaVersion: 1,
-      projectId: this.projectId,
-      taskId,
-      turnId: this.projection.readModel.activeTurnId ?? undefined,
-      runId: this.projection.readModel.activeRunId ?? undefined,
-      taskSequence: nextSeq,
-      occurredAt: now,
-      receivedAt: now,
-      payload: { reason: 'rehydrate' },
-    }
-
-    this.projection = applyRuntimeEvent(this.projection, envelope)
-    await this.persistEnvelope(envelope)
     if (generation !== this.attachGeneration || this.taskId !== taskId) return
     this.notice =
       (this.notice ? `${this.notice} · ` : '') +
-      '上次运行在刷新前未结束，已标记为中断'
-    this.emitRunStatus()
+      '上次轮次在刷新前未结束'
+    this.emitTurnStatus()
     this.emit()
   }
 
-  private emitRunStatus(): void {
-    if (!this.runStatusListener || !this.taskId) return
-    this.runStatusListener(this.taskId, this.projection.readModel.runStatus)
+  private emitTurnStatus(): void {
+    if (!this.turnStatusListener || !this.taskId) return
+    this.turnStatusListener(this.taskId, this.projection.readModel.turnStatus)
   }
 
   private async rememberAck(

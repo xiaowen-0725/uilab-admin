@@ -15,8 +15,9 @@
 import type { RuntimePort, RuntimeSubscriptionEvent, RuntimeCapabilities, RuntimeSnapshot, RunStartInput } from '../ports/runtime-port'
 import type { ApplicationCommand, CommandAcknowledgement } from '../protocol/commands'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
+import { AGENT_RUNTIME_SCHEMA_VERSION } from '../protocol/events'
 
-/** A scripted scenario: envelopes to emit for one Run, in order. */
+/** A scripted scenario: envelopes to emit for one Turn, in order. */
 export type ScriptedScenario = {
   /** Event envelopes to emit after startRun, in order. */
   events: AgentRuntimeEventEnvelope[]
@@ -32,11 +33,10 @@ export function envelope(
   return {
     eventId: `${taskId}:e${seq}`,
     eventType: eventType as AgentRuntimeEventEnvelope['eventType'],
-    schemaVersion: 1,
+    schemaVersion: AGENT_RUNTIME_SCHEMA_VERSION,
     projectId: fields.projectId ?? 'test-project',
     taskId,
-    turnId: fields.turnId,
-    runId: fields.runId,
+    turnId: fields.turnId ?? 'turn-1',
     taskSequence: seq,
     occurredAt: fields.occurredAt ?? '1970-01-01T00:00:00.000Z',
     receivedAt: fields.receivedAt ?? '1970-01-01T00:00:00.000Z',
@@ -44,50 +44,61 @@ export function envelope(
   }
 }
 
-/** Standard completed-run scenario: lifecycle + message + terminal. */
-export function completedRunScenario(taskId: string, runId: string, turnId: string): ScriptedScenario {
+/** Standard completed-turn scenario: lifecycle + message + terminal. */
+export function completedRunScenario(taskId: string, _runId: string, turnId: string): ScriptedScenario {
   return {
     events: [
-      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
-      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
-      envelope(taskId, 'message.accepted', { taskSequence: 3, runId, turnId }),
-      envelope(taskId, 'output.delta', { taskSequence: 4, runId, turnId, payload: { text: 'Hello' } }),
-      envelope(taskId, 'output.completed', { taskSequence: 5, runId, turnId }),
-      envelope(taskId, 'run.completed', { taskSequence: 6, runId, turnId }),
+      envelope(taskId, 'turn.started', {
+        taskSequence: 1,
+        turnId,
+        payload: { inputText: 'Hello' },
+      }),
+      envelope(taskId, 'message.delta', {
+        taskSequence: 2,
+        turnId,
+        payload: { text: 'Hello' },
+      }),
+      envelope(taskId, 'message.completed', { taskSequence: 3, turnId }),
+      envelope(taskId, 'turn.completed', {
+        taskSequence: 4,
+        turnId,
+        payload: { outcome: 'completed' },
+      }),
     ],
   }
 }
 
-/** Cancelled-run scenario. */
-export function cancelledRunScenario(taskId: string, runId: string, turnId: string): ScriptedScenario {
+/** Cancelled-turn scenario. */
+export function cancelledRunScenario(taskId: string, _runId: string, turnId: string): ScriptedScenario {
   return {
     events: [
-      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
-      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
-      envelope(taskId, 'run.cancel_requested', { taskSequence: 3, runId, turnId }),
-      envelope(taskId, 'run.cancelled', { taskSequence: 4, runId, turnId }),
+      envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
+      envelope(taskId, 'turn.cancel_requested', { taskSequence: 2, turnId }),
+      envelope(taskId, 'turn.cancelled', { taskSequence: 3, turnId }),
     ],
   }
 }
 
-/** Failed-run scenario. */
-export function failedRunScenario(taskId: string, runId: string, turnId: string, message = 'runtime error'): ScriptedScenario {
+/** Failed-turn scenario. */
+export function failedRunScenario(taskId: string, _runId: string, turnId: string, message = 'runtime error'): ScriptedScenario {
   return {
     events: [
-      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
-      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
-      envelope(taskId, 'run.failed', { taskSequence: 3, runId, turnId, payload: { message } }),
+      envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
+      envelope(taskId, 'turn.failed', { taskSequence: 3, turnId, payload: { message } }),
     ],
   }
 }
 
-/** Approval-required scenario: run pauses at waiting_for_approval. */
-export function approvalScenario(taskId: string, runId: string, turnId: string, requestId = 'req-1'): ScriptedScenario {
+/** Approval-required scenario: turn pauses at waiting_for_approval. */
+export function approvalScenario(taskId: string, _runId: string, turnId: string, requestId = 'req-1'): ScriptedScenario {
   return {
     events: [
-      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
-      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
-      envelope(taskId, 'tool.called', { taskSequence: 3, runId, turnId, payload: { tool: 'write_file', approvalRequestId: requestId } }),
+      envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
+      envelope(taskId, 'tool.started', {
+        taskSequence: 2,
+        turnId,
+        payload: { tool: 'write_file', approvalRequestId: requestId },
+      }),
     ],
   }
 }
@@ -95,18 +106,16 @@ export function approvalScenario(taskId: string, runId: string, turnId: string, 
 /** `approval.requested` pause — used by permission-preset auto-respond tests. */
 export function approvalRequestedScenario(
   taskId: string,
-  runId: string,
+  _runId: string,
   turnId: string,
   requestId: string,
   toolName: string,
 ): ScriptedScenario {
   return {
     events: [
-      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
-      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
+      envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
       envelope(taskId, 'approval.requested', {
-        taskSequence: 3,
-        runId,
+        taskSequence: 2,
         turnId,
         payload: { requestId, toolName },
       }),
@@ -117,7 +126,7 @@ export function approvalRequestedScenario(
 /** Structured Question Request pause — used by question-card / preset lock tests. */
 export function questionRequestedScenario(
   taskId: string,
-  runId: string,
+  _runId: string,
   turnId: string,
   requestId: string,
   options?: {
@@ -128,11 +137,9 @@ export function questionRequestedScenario(
 ): ScriptedScenario {
   return {
     events: [
-      envelope(taskId, 'run.queued', { taskSequence: 1, runId, turnId }),
-      envelope(taskId, 'run.started', { taskSequence: 2, runId, turnId }),
-      envelope(taskId, 'run.input_requested', {
-        taskSequence: 3,
-        runId,
+      envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
+      envelope(taskId, 'input.requested', {
+        taskSequence: 2,
         turnId,
         payload: {
           requestId,
@@ -214,7 +221,6 @@ export function createScriptedRuntimePort(
         emit(taskId, [
           envelope(taskId, 'approval.resolved', {
             taskSequence: seq,
-            runId: command.runId,
             turnId: command.turnId,
             payload: {
               requestId: command.payload.requestId,
@@ -227,9 +233,8 @@ export function createScriptedRuntimePort(
         const taskId = command.taskId
         const seq = (lastSeq.get(taskId) ?? 0) + 1
         emit(taskId, [
-          envelope(taskId, 'run.input_provided', {
+          envelope(taskId, 'input.provided', {
             taskSequence: seq,
-            runId: command.runId,
             turnId: command.turnId,
             payload: {
               requestId: command.requestId,
@@ -280,23 +285,19 @@ export function createScriptedRuntimePort(
     },
 
     async startRun(input: RunStartInput, idempotencyKey: string): Promise<CommandAcknowledgement> {
-      const { taskId, turnId, proposedRunId: runId } = input
-      const scenario = perTaskScenarios.get(taskId) ?? defaultScenario(taskId, runId, turnId)
+      const { taskId, turnId } = input
+      const scenario = perTaskScenarios.get(taskId) ?? defaultScenario(taskId, turnId, turnId)
 
-      // Store snapshot for rehydrate tests
       snapshots.set(taskId, {
         taskId,
-        runId,
-        protocolVersion: 1,
-        runStatus: 'completed',
+        protocolVersion: AGENT_RUNTIME_SCHEMA_VERSION,
+        turnStatus: 'completed',
         lastTaskSequence: scenario.events.length,
       })
 
-      // Emit events asynchronously so subscribe can be set up first
       if (eventDelayMs > 0) {
         setTimeout(() => emit(taskId, scenario.events), eventDelayMs)
       } else {
-        // Microtask delay so the caller can subscribe before events fire
         Promise.resolve().then(() => emit(taskId, scenario.events))
       }
 

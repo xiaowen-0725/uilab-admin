@@ -62,20 +62,17 @@ export type {
   ProjectId,
   TaskId,
   TurnId,
-  RunId,
-  RunStatus,
+  TurnStatus,
   TitleSource,
   Task,
   Turn,
-  Run,
 } from './model/lifecycle'
 export {
   asProjectId,
   asTaskId,
   asTurnId,
-  asRunId,
-  isTerminalRunStatus,
-  RUN_TERMINAL_STATUSES,
+  isTerminalTurnStatus,
+  TURN_TERMINAL_STATUSES,
 } from './model/lifecycle'
 
 export type { TaskExecutionContext } from './model/execution-context'
@@ -118,7 +115,10 @@ export type {
   AgentRuntimeEventEnvelope,
   AgentRuntimeEventType,
 } from './protocol/events'
-export { AGENT_RUNTIME_EVENT_TYPES } from './protocol/events'
+export {
+  AGENT_RUNTIME_EVENT_TYPES,
+  AGENT_RUNTIME_SCHEMA_VERSION,
+} from './protocol/events'
 export {
   formatQuestionAnswerLabel,
   parseQuestionAnswer,
@@ -174,6 +174,7 @@ export type {
   FileChangeKind,
   DeliverableSource,
   DeliverableRef,
+  TokenUsage,
   ProcessStepKind,
   ProcessSummary,
   PlanSnapshot,
@@ -221,8 +222,8 @@ export { useTaskRuntime } from './application/use-task-runtime'
 export type { UseTaskRuntimeResult } from './application/use-task-runtime'
 
 export {
-  RunStatusIndex,
-  createRunStatusIndex,
+  TurnStatusIndex,
+  createTurnStatusIndex,
   isNavigatorBusyStatus,
 } from './application/run-status-index'
-export type { RunStatusIndexListener } from './application/run-status-index'
+export type { TurnStatusIndexListener } from './application/run-status-index'

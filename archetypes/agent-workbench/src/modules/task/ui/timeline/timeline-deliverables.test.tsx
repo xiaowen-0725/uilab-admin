@@ -22,11 +22,11 @@ function envelope(
   return {
     eventId: `e${taskSequence}`,
     eventType,
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: 'p',
     taskId: 'task-deliv',
     turnId: 'turn-1',
-    runId: 'run-1',
+
     taskSequence,
     occurredAt: '1970-01-01T00:00:00.000Z',
     receivedAt: '1970-01-01T00:00:00.000Z',
@@ -66,7 +66,7 @@ function renderTimeline(
       onOpenFileRef={onOpenFileRef}
       composerRuntime={{
         mode: 'runtime',
-        runStatus: readModel.runStatus,
+        turnStatus: readModel.turnStatus,
       }}
     />,
   )
@@ -77,8 +77,7 @@ describe('Timeline deliverables', () => {
     const onOpenFileRef = vi.fn()
     renderTimeline(
       [
-        envelope('message.accepted', 1, { text: '写结果' }),
-        envelope('run.started', 2),
+        envelope('turn.started', 1, { inputText: '写结果', text: '写结果' }),
         envelope('file.changed', 3, {
           path: 'notes/result.md',
           additions: 10,
@@ -93,8 +92,8 @@ describe('Timeline deliverables', () => {
           kind: 'image',
           title: '对比图',
         }),
-        envelope('output.delta', 6, { text: '三个文件都齐了。' }),
-        envelope('run.completed', 7),
+        envelope('message.delta', 6, { text: '三个文件都齐了。' }),
+        envelope('turn.completed', 7),
       ],
       onOpenFileRef,
     )
@@ -122,10 +121,9 @@ describe('Timeline deliverables', () => {
 
   it('hides the deliverable zone when the run produced no files', async () => {
     renderTimeline([
-      envelope('message.accepted', 1, { text: '问好' }),
-      envelope('run.started', 2),
-      envelope('output.delta', 3, { text: '你好。' }),
-      envelope('run.completed', 4),
+      envelope('turn.started', 1, { inputText: '问好', text: '问好' }),
+      envelope('message.delta', 3, { text: '你好。' }),
+      envelope('turn.completed', 4),
     ])
 
     await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
@@ -173,14 +171,14 @@ describe('Timeline deliverables', () => {
 
   it('does not show +N on a deleted file-change card', async () => {
     renderTimeline([
-      envelope('run.started', 1),
+      envelope('turn.started', 1),
       envelope('file.changed', 2, {
         path: 'notes/old.md',
         changeKind: 'deleted',
         additions: 4,
         deletions: 4,
       }),
-      envelope('run.completed', 3),
+      envelope('turn.completed', 3),
     ])
 
     const card = page.getByTestId('timeline-item-file-change:e2')

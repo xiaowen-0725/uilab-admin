@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import type { RunStatus } from '../model/lifecycle'
+import type { TurnStatus } from '../model/lifecycle'
 import type {
   CommandAcknowledgement,
   QuestionAnswer,
@@ -17,7 +17,7 @@ export interface UseTaskRuntimeResult {
   readModel: TaskReadModel
   busy: boolean
   notice: string | null
-  runStatus: RunStatus | null
+  turnStatus: TurnStatus | null
   submitText: (
     text: string,
     composerContext?: TurnComposerContext,
@@ -144,7 +144,7 @@ export function useTaskRuntime(
       readModel: emptyTaskReadModel({ taskId, projectId: '', title }),
       busy: false,
       notice: null,
-      runStatus: null,
+      turnStatus: null,
       ready: false,
       submitText,
       cancelActiveRun,
@@ -160,7 +160,7 @@ export function useTaskRuntime(
     readModel: controller.readModel,
     busy: controller.isBusy(),
     notice: controller.getNotice(),
-    runStatus: controller.getRunStatus(),
+    turnStatus: controller.getRunStatus(),
     ready,
     submitText,
     cancelActiveRun,

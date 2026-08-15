@@ -4,7 +4,7 @@
  */
 
 import type { TaskExecutionContext } from '../model/execution-context'
-import type { RunStatus } from '../model/lifecycle'
+import type { TurnStatus } from '../model/lifecycle'
 import type {
   ApplicationCommand,
   CommandAcknowledgement,
@@ -12,13 +12,12 @@ import type {
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 
 /**
- * Binds task/turn/run ids to an immutable execution context snapshot.
+ * Binds task/turn ids to an immutable execution context snapshot.
  * TaskExecutionContext itself holds no IDs.
  */
 export interface RunStartInput {
   taskId: string
   turnId: string
-  proposedRunId: string
   taskExecutionContextSnapshot: TaskExecutionContext
   capabilitiesSnapshot: unknown
 }
@@ -26,9 +25,8 @@ export interface RunStartInput {
 /** Recovery-oriented snapshot; authority remains append-only events. */
 export interface RuntimeSnapshot {
   taskId: string
-  runId?: string
   protocolVersion: number
-  runStatus?: RunStatus
+  turnStatus?: TurnStatus
   lastTaskSequence: number
   runtimeCursor?: string
   projectionVersion?: number
@@ -64,7 +62,7 @@ export type RuntimeUnsubscribe = () => void
  * - subscribe: push immutable envelopes from cursor; may signal gap/error/reconnect
  * - getSnapshot: read-only recovery support (does not reconcile)
  * - getCapabilities: optional capability matrix
- * - startRun: create/start Run only; UI changes via events
+ * - startRun: start a Turn's execution; UI changes via events
  */
 export interface RuntimePort {
   sendCommand(command: ApplicationCommand): Promise<CommandAcknowledgement>
@@ -75,7 +73,7 @@ export interface RuntimePort {
     listener: (event: RuntimeSubscriptionEvent) => void,
   ): RuntimeUnsubscribe
 
-  getSnapshot(taskId: string, runId?: string): Promise<RuntimeSnapshot | null>
+  getSnapshot(taskId: string): Promise<RuntimeSnapshot | null>
 
   getCapabilities(
     projectId: string,

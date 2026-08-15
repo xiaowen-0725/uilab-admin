@@ -9,9 +9,9 @@ const baseCtx = (): MapFullStreamContext => ({
   projectId: 'proj-1',
   taskId: 'task-1',
   turnId: 'turn-1',
-  runId: 'run-1',
+
   nextSequence: 1,
-  schemaVersion: 1,
+  schemaVersion: 2,
   nowIso: () => '2026-08-05T00:00:00.000Z',
   eventIdPrefix: 'test',
 })
@@ -32,7 +32,7 @@ describe('mapFullStreamChunks', () => {
     )
 
     expect(envelopes.map((event) => event.eventType)).toEqual([
-      'tool.called',
+      'tool.started',
       'tool.completed',
     ])
     expect(envelopes[1]?.payload).toMatchObject({
@@ -43,7 +43,7 @@ describe('mapFullStreamChunks', () => {
     })
   })
 
-  it('maps text stream to output deltas and run.completed', () => {
+  it('maps text stream to message deltas and turn.completed with usage', () => {
     const { envelopes, nextSequence } = mapFullStreamChunks(
       [
         { type: 'start' },
@@ -57,21 +57,24 @@ describe('mapFullStreamChunks', () => {
 
     const types = envelopes.map((e) => e.eventType)
     expect(types).toEqual([
-      'run.started',
-      'output.delta',
-      'output.delta',
-      'output.completed',
-      'run.completed',
+      'message.delta',
+      'message.delta',
+      'message.completed',
+      'turn.completed',
     ])
-    expect(envelopes[1]?.payload).toMatchObject({ text: '你' })
-    expect(envelopes[1]?.payload).not.toHaveProperty('phase')
-    expect(envelopes[3]?.payload).not.toHaveProperty('phase')
+    expect(envelopes[0]?.payload).toMatchObject({ text: '你' })
+    expect(envelopes[0]?.payload).not.toHaveProperty('phase')
+    expect(envelopes[2]?.payload).not.toHaveProperty('phase')
     expect(envelopes[0]?.taskSequence).toBe(1)
-    expect(envelopes[4]?.taskSequence).toBe(5)
-    expect(nextSequence).toBe(6)
-    expect(envelopes.every((e) => e.taskId === 'task-1' && e.runId === 'run-1')).toBe(
+    expect(envelopes[3]?.taskSequence).toBe(4)
+    expect(nextSequence).toBe(5)
+    expect(envelopes.every((e) => e.taskId === 'task-1' && e.turnId === 'turn-1')).toBe(
       true,
     )
+    expect(envelopes[3]?.payload).toMatchObject({
+      outcome: 'completed',
+      usage: { totalTokens: 3 },
+    })
   })
 
   it('maps reasoning and tool call/result', () => {
@@ -100,7 +103,7 @@ describe('mapFullStreamChunks', () => {
       'reasoning.started',
       'reasoning.delta',
       'reasoning.completed',
-      'tool.called',
+      'tool.started',
       'tool.completed',
     ])
     // Projection merges on payload.toolId — must be stable across call/result.
@@ -204,22 +207,21 @@ describe('mapFullStreamChunks', () => {
       baseCtx(),
     )
     expect(envelopes.map((e) => e.eventType)).toEqual([
-      'run.started',
       'step.started',
-      'output.segment_started',
-      'output.delta',
-      'output.completed',
+      'message.started',
+      'message.delta',
+      'message.completed',
       'step.completed',
       'step.started',
-      'output.segment_started',
-      'output.delta',
-      'output.completed',
+      'message.started',
+      'message.delta',
+      'message.completed',
       'step.completed',
-      'run.completed',
+      'turn.completed',
     ])
-    expect(envelopes[1]?.payload).toMatchObject({ stepId: 'step-1' })
-    expect(envelopes[2]?.payload).toMatchObject({ id: 'text-1' })
-    expect(envelopes[5]?.payload).toMatchObject({ stepId: 'step-1' })
+    expect(envelopes[0]?.payload).toMatchObject({ stepId: 'step-1' })
+    expect(envelopes[1]?.payload).toMatchObject({ id: 'text-1' })
+    expect(envelopes[4]?.payload).toMatchObject({ stepId: 'step-1' })
   })
 
   it('keeps a legacy stream without step/text-start chunks on the same envelope types', () => {
@@ -234,11 +236,10 @@ describe('mapFullStreamChunks', () => {
       baseCtx(),
     )
     expect(envelopes.map((e) => e.eventType)).toEqual([
-      'run.started',
-      'output.delta',
-      'output.delta',
-      'output.completed',
-      'run.completed',
+      'message.delta',
+      'message.delta',
+      'message.completed',
+      'turn.completed',
     ])
   })
 
@@ -262,7 +263,7 @@ describe('mapFullStreamChunks', () => {
       baseCtx(),
     )
     const types = envelopes.map((e) => e.eventType)
-    expect(types).toEqual(['tool.called', 'tool.completed', 'file.changed'])
+    expect(types).toEqual(['tool.started', 'tool.completed', 'file.changed'])
     expect(envelopes[2]?.payload).toMatchObject({
       path: 'flychess/README.md',
       additions: 10,
@@ -321,13 +322,13 @@ describe('mapFullStreamChunks', () => {
     )
     const types = envelopes.map((e) => e.eventType)
     expect(types).toEqual([
-      'tool.called',
+      'tool.started',
       'tool.completed',
       'file.changed',
-      'tool.called',
+      'tool.started',
       'tool.completed',
       'file.changed',
-      'tool.called',
+      'tool.started',
       'tool.completed',
       'file.changed',
     ])
@@ -408,9 +409,9 @@ describe('mapFullStreamChunks', () => {
       baseCtx(),
     )
     expect(envelopes.map((e) => e.eventType)).toEqual([
-      'tool.called',
+      'tool.started',
       'tool.completed',
-      'tool.called',
+      'tool.started',
       'tool.completed',
     ])
     expect(envelopes[0]?.payload).toMatchObject({
@@ -487,7 +488,7 @@ describe('mapFullStreamChunks', () => {
     )
     expect(envelopes.map((event) => event.eventType)).toEqual([
       'plan.updated',
-      'tool.called',
+      'tool.started',
       'tool.completed',
     ])
   })
@@ -646,8 +647,8 @@ describe('mapFullStreamChunks', () => {
       baseCtx(),
     )
     expect(envelopes.map((e) => e.eventType)).toEqual([
-      'run.cancelled',
-      'run.failed',
+      'turn.cancelled',
+      'turn.failed',
     ])
   })
 
@@ -663,7 +664,7 @@ describe('mapFullStreamChunks', () => {
     )
 
     expect(envelopes).toHaveLength(1)
-    expect(envelopes[0]?.eventType).toBe('run.failed')
+    expect(envelopes[0]?.eventType).toBe('turn.failed')
     expect(envelopes[0]?.payload).toMatchObject({
       message: '模型在工具结果后失败',
     })
@@ -766,7 +767,7 @@ describe('mapFullStreamChunks', () => {
     })
   })
 
-  it('maps ask_user_question tool-call to run.input_requested without tool.called', () => {
+  it('maps ask_user_question tool-call to input.requested without tool.started', () => {
     const { envelopes } = mapFullStreamChunks(
       [
         {
@@ -787,8 +788,8 @@ describe('mapFullStreamChunks', () => {
       baseCtx(),
     )
     expect(envelopes.map((event) => event.eventType)).toEqual([
-      'run.input_requested',
-      'run.completed',
+      'input.requested',
+      'turn.completed',
     ])
     expect(envelopes[0]?.payload).toMatchObject({
       requestId: 'call-ask-1',

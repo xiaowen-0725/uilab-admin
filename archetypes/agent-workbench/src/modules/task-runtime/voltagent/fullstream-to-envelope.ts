@@ -3,7 +3,10 @@
  * No network; used by VoltAgentRuntimeAdapter and unit tests.
  */
 
-import type { AgentRuntimeEventEnvelope } from '@/modules/task'
+import {
+  AGENT_RUNTIME_SCHEMA_VERSION,
+  type AgentRuntimeEventEnvelope,
+} from '@/modules/task'
 import {
   normalizeToolOutput,
   parseQuestionOptionsFromInput,
@@ -14,7 +17,7 @@ export interface MapFullStreamContext {
   projectId: string
   taskId: string
   turnId: string
-  runId: string
+
   /** Next taskSequence (1-based). Mapper increments from this value. */
   nextSequence: number
   schemaVersion?: number
@@ -234,7 +237,7 @@ export function mapFullStreamChunk(
 ): MapFullStreamResult {
   const envelopes: AgentRuntimeEventEnvelope[] = []
   let seq = ctx.nextSequence
-  const schemaVersion = ctx.schemaVersion ?? 1
+  const schemaVersion = ctx.schemaVersion ?? AGENT_RUNTIME_SCHEMA_VERSION
   const nowIso = ctx.nowIso ?? (() => new Date().toISOString())
   const prefix = ctx.eventIdPrefix ?? 'va'
   let idCounter = 0
@@ -242,13 +245,13 @@ export function mapFullStreamChunk(
   const push = (eventType: string, payload: unknown): void => {
     const occurredAt = nowIso()
     envelopes.push({
-      eventId: `${prefix}-${ctx.runId}-${seq}-${idCounter++}`,
+      eventId: `${prefix}-${ctx.turnId}-${seq}-${idCounter++}`,
       eventType,
       schemaVersion,
       projectId: ctx.projectId,
       taskId: ctx.taskId,
       turnId: ctx.turnId,
-      runId: ctx.runId,
+
       taskSequence: seq,
       occurredAt,
       receivedAt: occurredAt,
@@ -261,8 +264,7 @@ export function mapFullStreamChunk(
 
   switch (type) {
     case 'start':
-      // Adapter also emits run.started at submit; stream start is optional.
-      push('run.started', { source: 'voltagent', chunkType: type })
+      // Adapter owns turn.started at submit; stream start is a no-op.
       break
 
     case 'start-step':
@@ -281,7 +283,7 @@ export function mapFullStreamChunk(
       break
 
     case 'text-start':
-      push('output.segment_started', {
+      push('message.started', {
         id: asString(chunk.id),
         chunkType: type,
       })
@@ -290,7 +292,7 @@ export function mapFullStreamChunk(
     case 'text-delta': {
       const delta = textDelta(chunk)
       if (delta) {
-        push('output.delta', {
+        push('message.delta', {
           text: delta,
           delta,
         })
@@ -299,7 +301,7 @@ export function mapFullStreamChunk(
     }
 
     case 'text-end':
-      push('output.completed', {
+      push('message.completed', {
         text: asString(chunk.content) ?? asString(chunk.text) ?? '',
       })
       break
@@ -324,7 +326,7 @@ export function mapFullStreamChunk(
       const args = chunk.args ?? chunk.input ?? chunk.arguments
       if (isAskUserQuestionTool(name)) {
         const parsed = parseAskUserQuestionArgs(args)
-        push('run.input_requested', {
+        push('input.requested', {
           requestId: callId,
           question: parsed.question,
           options: parsed.options,
@@ -351,7 +353,7 @@ export function mapFullStreamChunk(
           args,
         })
       } else {
-        push('tool.called', {
+        push('tool.started', {
           toolId: callId,
           toolCallId: callId,
           toolName: name,
@@ -483,20 +485,21 @@ export function mapFullStreamChunk(
     }
 
     case 'finish':
-      push('run.completed', {
+      push('turn.completed', {
+        outcome: 'completed',
         finishReason: chunk.finishReason,
         usage: chunk.usage,
       })
       break
 
     case 'abort':
-      push('run.cancelled', {
+      push('turn.cancelled', {
         reason: asString(chunk.reason) ?? asString(chunk.message) ?? 'aborted',
       })
       break
 
     case 'error':
-      push('run.failed', {
+      push('turn.failed', {
         message:
           asString(chunk.message) ??
           extractErrorMessage(chunk.error) ??
@@ -506,11 +509,7 @@ export function mapFullStreamChunk(
       break
 
     case 'source':
-      push('source.grouped', {
-        title: asString(chunk.title) ?? 'source',
-        url: asString(chunk.url),
-        sources: chunk.sources ?? chunk,
-      })
+      // v2 dropped source.grouped; ignore citation chunks.
       break
 
     // Approval is often UI-message stream; support explicit chunk types if present.
@@ -550,7 +549,7 @@ export function mapFullStreamChunk(
 
 /**
  * Map an ordered list of chunks (e.g. recorded fullStream).
- * Does not emit turn.created / message.accepted — Adapter owns submit bookkeeping.
+ * Does not emit turn.started — Adapter owns submit bookkeeping.
  */
 export function mapFullStreamChunks(
   chunks: readonly FullStreamChunk[],
