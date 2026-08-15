@@ -29,7 +29,6 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { formatDurationMs } from '../../model/stream-events'
 import type { RunStatus } from '../../model/lifecycle'
-import type { QuestionAnswer } from '../../protocol/question-answer'
 import type {
   TaskReadModel,
   TimelineItem,
@@ -42,7 +41,7 @@ import { SimpleMarkdown } from '../markdown/simple-markdown'
 import { runtimeHonestyCopy } from '../../runtime/runtime-honesty'
 import { groupTimelineIntoTurns } from './group-timeline-turns'
 import { PlanUpdateCard } from './plan-update-card'
-import { QuestionCard } from './question-card'
+import { QuestionCard, type QuestionRespondHandler } from './question-card'
 import { ToolActivityIcon } from '../tool-activity-icon'
 
 export const TIMELINE_FOLD_THRESHOLD = 600
@@ -84,10 +83,7 @@ export interface TimelineProps {
    * Must be wired by Composition through Session; Task never owns openTabs.
    */
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
-  onRespondToQuestion?: (
-    requestId: string,
-    answer: QuestionAnswer,
-  ) => void | Promise<unknown>
+  onRespondToQuestion?: QuestionRespondHandler
 }
 
 function isActiveRunStatus(status: RunStatus | null): boolean {
@@ -454,10 +450,7 @@ function TimelineTurnBlock({
   runActive: boolean
   liveStatus: string | null | undefined
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
-  onRespondToQuestion?: (
-    requestId: string,
-    answer: QuestionAnswer,
-  ) => void | Promise<unknown>
+  onRespondToQuestion?: QuestionRespondHandler
 }) {
   const completed = latestTerminal?.status === 'completed' && !runActive
   const processItems = streamItems.filter(isProcessFoldItem)
@@ -950,10 +943,7 @@ function TimelineRow({
   runActive: boolean
   forceToolCollapsed?: boolean
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
-  onRespondToQuestion?: (
-    requestId: string,
-    answer: QuestionAnswer,
-  ) => void | Promise<unknown>
+  onRespondToQuestion?: QuestionRespondHandler
 }) {
   switch (item.category) {
     case 'user-message':

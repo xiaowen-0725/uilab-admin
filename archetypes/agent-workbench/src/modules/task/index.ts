@@ -120,6 +120,7 @@ export {
   formatQuestionAnswerLabel,
   parseQuestionAnswer,
   parseQuestionOptions,
+  parseQuestionOptionsFromInput,
   parseQuestionRequest,
   questionAnswerToInputText,
   questionAnswerToToolOutput,

@@ -304,10 +304,7 @@ export function WorkbenchApp({
               runtime.respondToApproval(requestId, 'rejected'),
             onProvideInput: (requestId: string, text: string) =>
               runtime.provideRunInput(text, requestId),
-            onRespondToQuestion: (
-              requestId: string,
-              answer: Parameters<typeof runtime.respondToQuestion>[1],
-            ) => runtime.respondToQuestion(requestId, answer),
+            onRespondToQuestion: runtime.respondToQuestion,
             onRetryTurn: () => runtime.retryTurn(),
             onFollowModeChange: runtime.setFollowMode,
             capabilityController,

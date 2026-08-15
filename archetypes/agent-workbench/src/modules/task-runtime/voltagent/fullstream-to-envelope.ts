@@ -6,7 +6,7 @@
 import type { AgentRuntimeEventEnvelope } from '@/modules/task'
 import {
   normalizeToolOutput,
-  parseQuestionOptions,
+  parseQuestionOptionsFromInput,
   sanitizeToolOutputForEnvelope,
 } from '@/modules/task'
 
@@ -126,7 +126,7 @@ function parseAskUserQuestionArgs(args: unknown): {
       : '请选择'
   return {
     question,
-    options: parseQuestionOptions(rec.options),
+    options: parseQuestionOptionsFromInput(args),
     allowMultiple: rec.allow_multiple === true || rec.allowMultiple === true,
   }
 }

@@ -223,8 +223,7 @@ export function createScriptedRuntimePort(
             },
           }),
         ])
-      }
-      if (command.type === 'provideRunInput') {
+      } else if (command.type === 'provideRunInput') {
         const taskId = command.taskId
         const seq = (lastSeq.get(taskId) ?? 0) + 1
         emit(taskId, [

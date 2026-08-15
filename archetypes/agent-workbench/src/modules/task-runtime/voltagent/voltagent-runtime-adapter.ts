@@ -22,7 +22,7 @@ import type {
 import type { TurnComposerContext } from '@/modules/task'
 import type { AgentRuntimeEventEnvelope } from '@/modules/task'
 import {
-  parseQuestionOptions,
+  parseQuestionOptionsFromInput,
   questionAnswerToToolOutput,
 } from '@/modules/task'
 import { accepted, rejected, unsupported } from '../command-acks'
@@ -661,40 +661,24 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     )
 
     // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
-    const userText = pending.userText || state.lastUserText || ''
-    const toolPart: UiToolPart = {
-      type: `tool-${pending.toolName}`,
-      toolCallId: pending.toolCallId,
-      toolName: pending.toolName,
-      state: 'approval-responded',
-      input: pending.input,
-      approval: {
-        id: pending.approvalId,
-        approved,
-        reason: command.payload.reason,
-      },
-    }
-    const resumeInput: StreamInput = [
-      {
-        id: `user-${taskId}-${this.seq}`,
-        role: 'user',
-        parts: [{ type: 'text', text: userText }],
-      },
-      {
-        id: `asst-${taskId}-${this.seq}`,
-        role: 'assistant',
-        parts: [toolPart],
-      },
-    ]
-
-    this.launchStream({
+    this.resumeWithToolPart(
       taskId,
-      turnId,
       runId,
-      input: resumeInput,
-      capabilityConnectorIds: state.lastCapabilityConnectorIds,
-      completeIfNoTerminal: true,
-    })
+      turnId,
+      pending.userText || state.lastUserText || '',
+      {
+        type: `tool-${pending.toolName}`,
+        toolCallId: pending.toolCallId,
+        toolName: pending.toolName,
+        state: 'approval-responded',
+        input: pending.input,
+        approval: {
+          id: pending.approvalId,
+          approved,
+          reason: command.payload.reason,
+        },
+      }
+    )
 
     return accepted(command.commandId, this.nowIso())
   }
@@ -721,25 +705,23 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       )
     }
 
-    if (state.activeAbort) {
-      state.activeAbort.abort('question_resume')
-      state.activeAbort = null
-    }
-
-    state.pendingQuestions.delete(requestId)
-
     const runId =
       command.runId ?? pending.runId ?? state.lastRunId ?? `run-${taskId}`
     const turnId =
       command.turnId ?? pending.turnId ?? state.lastTurnId ?? `turn-${taskId}`
     const answer: QuestionAnswer =
       command.answer ?? { kind: 'freeText', text: command.inputText }
-    const options = parseQuestionOptions(
-      pending.input && typeof pending.input === 'object'
-        ? (pending.input as { options?: unknown }).options
-        : []
+    const output = questionAnswerToToolOutput(
+      answer,
+      parseQuestionOptionsFromInput(pending.input)
     )
-    const output = questionAnswerToToolOutput(answer, options)
+
+    if (state.activeAbort) {
+      state.activeAbort.abort('question_resume')
+      state.activeAbort = null
+    }
+
+    state.pendingQuestions.delete(requestId)
 
     this.pushTaskEnvelope(
       taskId,
@@ -753,38 +735,51 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
     )
 
-    const userText = pending.userText || state.lastUserText || ''
-    const toolPart: UiToolPart = {
-      type: 'tool-ask_user_question',
-      toolCallId: pending.toolCallId,
-      toolName: 'ask_user_question',
-      state: 'output-available',
-      input: pending.input,
-      output,
-    }
-    const resumeInput: StreamInput = [
+    this.resumeWithToolPart(
+      taskId,
+      runId,
+      turnId,
+      pending.userText || state.lastUserText || '',
       {
-        id: `user-${taskId}-${this.seq}`,
-        role: 'user',
-        parts: [{ type: 'text', text: userText }],
-      },
-      {
-        id: `asst-${taskId}-${this.seq}`,
-        role: 'assistant',
-        parts: [toolPart],
-      },
-    ]
+        type: 'tool-ask_user_question',
+        toolCallId: pending.toolCallId,
+        toolName: 'ask_user_question',
+        state: 'output-available',
+        input: pending.input,
+        output,
+      }
+    )
 
+    return accepted(command.commandId, this.nowIso())
+  }
+
+  private resumeWithToolPart(
+    taskId: string,
+    runId: string,
+    turnId: string,
+    userText: string,
+    toolPart: UiToolPart
+  ): void {
+    const state = this.ensureTask(taskId)
     this.launchStream({
       taskId,
       turnId,
       runId,
-      input: resumeInput,
+      input: [
+        {
+          id: `user-${taskId}-${this.seq}`,
+          role: 'user',
+          parts: [{ type: 'text', text: userText }],
+        },
+        {
+          id: `asst-${taskId}-${this.seq}`,
+          role: 'assistant',
+          parts: [toolPart],
+        },
+      ],
       capabilityConnectorIds: state.lastCapabilityConnectorIds,
       completeIfNoTerminal: true,
     })
-
-    return accepted(command.commandId, this.nowIso())
   }
 
   private rememberApprovalFromChunk(
@@ -823,17 +818,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     chunk: FullStreamChunk
   ): void {
     if (chunk.type !== 'tool-call') return
-    const name = pickString(chunk as unknown as Record<string, unknown>, [
-      'toolName',
-      'name',
-    ])
-    if (name !== 'ask_user_question') return
+    const rec = chunk as unknown as Record<string, unknown>
+    if (pickString(rec, ['toolName', 'name']) !== 'ask_user_question') return
     const state = this.ensureTask(taskId)
-    const callId =
-      pickString(chunk as unknown as Record<string, unknown>, [
-        'toolCallId',
-        'id',
-      ]) ?? 'tool-call'
+    const callId = pickString(rec, ['toolCallId', 'id']) ?? 'tool-call'
     const input = chunk.args ?? chunk.input ?? chunk.arguments
     state.pendingQuestions.set(callId, {
       requestId: callId,

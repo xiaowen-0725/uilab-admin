@@ -1,5 +1,5 @@
 import { Check, Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -7,10 +7,43 @@ import type { QuestionAnswer } from '../../protocol/question-answer'
 import { formatQuestionAnswerLabel } from '../../protocol/question-answer'
 import type { TimelineItem } from '../../projection/types'
 
+export type QuestionRespondHandler = (
+  requestId: string,
+  answer: QuestionAnswer,
+) => void | Promise<unknown>
+
 export interface QuestionCardProps {
   item: TimelineItem
   requestId: string
-  onRespond?: (requestId: string, answer: QuestionAnswer) => void | Promise<unknown>
+  onRespond?: QuestionRespondHandler
+}
+
+function QuestionCardFrame({
+  item,
+  requestId,
+  className,
+  children,
+}: {
+  item: TimelineItem
+  requestId: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        'mb-2 max-w-[46rem] rounded-lg border bg-muted/40 text-sm',
+        className,
+      )}
+      data-kind='input-request'
+      data-testid={`timeline-item-${item.id}`}
+      data-category='input-request'
+      data-status={item.status}
+      data-request-id={requestId}
+    >
+      {children}
+    </div>
+  )
 }
 
 export function QuestionCard({
@@ -33,25 +66,18 @@ export function QuestionCard({
       ? formatQuestionAnswerLabel(item.meta.answer, options)
       : '已提供'
     return (
-      <div
-        className='mb-2 max-w-[46rem] rounded-lg border bg-muted/40 px-4 py-3 text-sm'
-        data-kind='input-request'
-        data-testid={`timeline-item-${item.id}`}
-        data-category='input-request'
-        data-status={item.status}
-        data-request-id={requestId}
-      >
+      <QuestionCardFrame item={item} requestId={requestId} className='px-4 py-3'>
         <p className='text-muted-foreground'>{question.question}</p>
         <p className='mt-1 font-medium'>{answerLabel}</p>
-      </div>
+      </QuestionCardFrame>
     )
   }
 
-  const respond = (answer: QuestionAnswer) => {
+  function respond(answer: QuestionAnswer): void {
     void onRespond?.(requestId, answer)
   }
 
-  const toggleOption = (id: string) => {
+  function toggleOption(id: string): void {
     if (!allowMultiple) {
       respond({ kind: 'options', selectedOptionIds: [id] })
       return
@@ -64,7 +90,7 @@ export function QuestionCard({
   const otherTrimmed = otherText.trim()
   const submitCount = selected.length + (otherTrimmed ? 1 : 0)
 
-  const submitMultiple = () => {
+  function submitMultiple(): void {
     if (submitCount === 0) return
     respond({
       kind: 'options',
@@ -73,24 +99,20 @@ export function QuestionCard({
     })
   }
 
-  const submitOther = () => {
-    const text = otherText.trim()
-    if (!text) return
+  function submitOther(): void {
+    if (!otherTrimmed) return
     respond({
       kind: 'options',
       selectedOptionIds: allowMultiple ? selected : [],
-      otherText: text,
+      otherText: otherTrimmed,
     })
   }
 
   return (
-    <div
-      className='mb-2 max-w-[46rem] animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none rounded-lg border bg-muted/40 p-3 text-sm'
-      data-kind='input-request'
-      data-testid={`timeline-item-${item.id}`}
-      data-category='input-request'
-      data-status={item.status}
-      data-request-id={requestId}
+    <QuestionCardFrame
+      item={item}
+      requestId={requestId}
+      className='animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none p-3'
     >
       <div className='flex items-start justify-between gap-2'>
         <p className='font-medium'>{question.question}</p>
@@ -181,6 +203,6 @@ export function QuestionCard({
           </Button>
         </div>
       ) : null}
-    </div>
+    </QuestionCardFrame>
   )
 }

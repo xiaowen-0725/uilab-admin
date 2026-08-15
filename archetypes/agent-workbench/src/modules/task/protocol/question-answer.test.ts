@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatQuestionAnswerLabel,
   parseQuestionAnswer,
+  parseQuestionOptionsFromInput,
   parseQuestionRequest,
   questionAnswerToInputText,
   questionAnswerToToolOutput,
@@ -88,5 +89,11 @@ describe('question-answer helpers', () => {
       otherText: undefined,
     })
     expect(parseQuestionAnswer({ kind: 'unknown' })).toBeNull()
+  })
+
+  it('reads options from a tool-input object', () => {
+    expect(parseQuestionOptionsFromInput({ options })).toEqual(options)
+    expect(parseQuestionOptionsFromInput(null)).toEqual([])
+    expect(parseQuestionOptionsFromInput({ options: 'nope' })).toEqual([])
   })
 })
