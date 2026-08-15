@@ -140,11 +140,9 @@ describe('TaskSurface permission-preset auto-respond', () => {
     await expect
       .element(page.getByTestId('approval-dock'))
       .toBeInTheDocument()
-    expect(
-      document.querySelector(
-        '[data-testid="timeline-item-approval-request:req-cmd-dock"]',
-      ),
-    ).toBeNull()
+    await expect
+      .element(page.getByTestId('timeline-item-approval-request:req-cmd-dock'))
+      .toHaveTextContent('请在下方选择允许或拒绝')
   })
 
   it('auto-approves execute_command under full-access', async () => {
@@ -211,10 +209,8 @@ describe('TaskSurface permission-preset auto-respond', () => {
     await expect
       .element(page.getByTestId('approval-dock'))
       .toBeInTheDocument()
-    expect(
-      document.querySelector(
-        '[data-testid="timeline-item-approval-request:req-inject"]',
-      ),
-    ).toBeNull()
+    await expect
+      .element(page.getByTestId('timeline-item-approval-request:req-inject'))
+      .toHaveTextContent('请在下方选择允许或拒绝')
   })
 })

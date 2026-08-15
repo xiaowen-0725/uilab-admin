@@ -34,6 +34,7 @@ export function groupTimelineIntoTurns(
   for (const item of timeline) {
     const startsNewTurn =
       item.category === 'user-message' &&
+      item.meta?.inlineResponse !== true &&
       current.length > 0 &&
       current.some((i) => i.category !== 'user-message')
 
@@ -47,11 +48,15 @@ export function groupTimelineIntoTurns(
   if (current.length > 0) groups.push(current)
 
   return groups.map((items, index) => {
-    const userMessages = items.filter((i) => i.category === 'user-message')
+    const userMessages = items.filter(
+      (i) => i.category === 'user-message' && i.meta?.inlineResponse !== true,
+    )
     const terminals = items.filter((i) => i.category === 'run-terminal')
     const terminal = terminals[terminals.length - 1]
     const bodyItems = items.filter(
-      (i) => i.category !== 'user-message' && i.category !== 'run-terminal',
+      (i) =>
+        i.category !== 'run-terminal' &&
+        (i.category !== 'user-message' || i.meta?.inlineResponse === true),
     )
     const key =
       terminal?.id ??

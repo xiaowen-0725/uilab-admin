@@ -28,7 +28,7 @@ export function LiveStatusLine({
   return (
     <div
       className={cn(
-        'flex min-h-6 items-center px-0.5 py-1 text-[13px] leading-5',
+        'flex min-h-6 items-center px-0.5 py-1 text-sm leading-5',
         muted ? 'text-muted-foreground' : null,
         className,
       )}

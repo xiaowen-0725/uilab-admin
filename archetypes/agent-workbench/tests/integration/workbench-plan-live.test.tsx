@@ -143,7 +143,7 @@ describe('Workbench Plan live sidecar', () => {
       expect(toolText).not.toMatch(PLAN_TOOL_ROW_COPY)
 
       const runStatus = page.getByTestId('timeline-run-status-label')
-      await expect.element(runStatus).toHaveTextContent('个动作')
+      await expect.element(runStatus).toHaveTextContent(/已处理|读取|列出|命令|思考/)
       expect(runStatus.element().textContent ?? '').not.toMatch(/步/)
     },
   )

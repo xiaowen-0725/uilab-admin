@@ -13,6 +13,8 @@ export const ASK_TOOL_INSTRUCTIONS = [
   'Ask exactly one question per call, keep options short and concrete, put your recommended option first,',
   'and never call it for decisions you can resolve yourself or for confirmations of work already requested.',
   'After a skipped answer, proceed with your recommendation without asking again.',
+  'All questions to the user must go through ask_user_question; never ask in plain text.',
+  'Final text must not end with an unresolved question.',
 ].join(' ')
 
 export const askUserQuestionTool = createTool({

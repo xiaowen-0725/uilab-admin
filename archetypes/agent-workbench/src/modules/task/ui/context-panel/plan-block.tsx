@@ -56,7 +56,7 @@ export function PlanBlock({ plan }: PlanBlockProps) {
           aria-label={`${planStepStatusLabel(step.status)}：${step.step}`}
         >
           <StepIcon status={step.status} />
-          <span className={cn('text-[13px] leading-5', planStepTextClass(step.status))}>
+          <span className={cn('text-sm leading-5', planStepTextClass(step.status))}>
             {step.step}
           </span>
         </li>

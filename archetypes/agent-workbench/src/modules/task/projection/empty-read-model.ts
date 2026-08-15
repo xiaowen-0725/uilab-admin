@@ -23,6 +23,7 @@ export function emptyTaskReadModel(options: EmptyReadModelOptions): TaskReadMode
     activeRunId: null,
     activeTurnId: null,
     liveStatus: null,
+    liveStatusKind: null,
     plan: null,
     timeline: [],
     recoveryRequired: false,

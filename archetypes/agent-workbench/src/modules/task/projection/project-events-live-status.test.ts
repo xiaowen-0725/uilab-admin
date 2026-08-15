@@ -228,7 +228,7 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(state.readModel.liveStatus).toBe('正在读取 notes/a.md')
   })
 
-  it('mid-run output is commentary; run.completed promotes last assistant to final', () => {
+  it('keeps mid-run assistant text as prose and never writes commentary', () => {
     let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
     state = projectEvents(state, [
       mk(1, 'run.started', {}),
@@ -252,11 +252,9 @@ describe('projectEvents liveStatus + file meta', () => {
     )
     expect(assistants.length).toBeGreaterThanOrEqual(2)
     const last = assistants[assistants.length - 1]
-    expect(last?.meta?.messageRole).toBe('final')
     expect(last?.body).toContain('成稿')
-    const earlier = assistants.slice(0, -1)
-    for (const a of earlier) {
-      expect(a.meta?.messageRole).toBe('commentary')
+    for (const a of assistants) {
+      expect(a.meta?.messageRole).not.toBe('commentary')
     }
     const terminal = state.readModel.timeline.find(
       (i) => i.category === 'run-terminal',
@@ -283,15 +281,64 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(assistants).toHaveLength(2)
     expect(assistants[0]).toMatchObject({
       body: '过程说明。',
-      meta: { messageRole: 'commentary' },
     })
     expect(assistants[1]).toMatchObject({
       body: '最终回答。',
-      meta: { messageRole: 'final' },
     })
+    for (const a of assistants) {
+      expect(a.meta?.messageRole).not.toBe('commentary')
+    }
   })
 
-  it('keeps commentary chronological across plan, reasoning, and source boundaries', () => {
+  it('does not let generic generating overwrite a tool liveStatus', () => {
+    let state = emptyProjectionState({ taskId: 't', projectId: 'p' })
+    state = projectEvents(state, [
+      mk(1, 'run.started', {}),
+      mk(2, 'tool.called', {
+        toolId: 'r1',
+        name: 'read_file',
+        args: { path: 'a.md' },
+      }),
+      mk(3, 'output.delta', { text: '读完再写。' }),
+    ])
+    expect(state.readModel.liveStatus).toBe('正在读取 a.md')
+    expect(state.readModel.liveStatusKind).toBe('tool')
+  })
+
+  it('opens a new reasoning section after other items instead of backfilling', () => {
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'run.started', {}),
+        mk(2, 'reasoning.started', {}),
+        mk(3, 'reasoning.delta', { text: '第一轮' }),
+        mk(4, 'reasoning.completed', {}),
+        mk(5, 'run.input_requested', {
+          requestId: 'q1',
+          question: '选风格',
+          options: [
+            { id: 'formal', label: '正式' },
+            { id: 'casual', label: '轻松' },
+          ],
+        }),
+        mk(6, 'run.input_provided', {
+          requestId: 'q1',
+          answer: { kind: 'options', selectedOptionIds: ['formal'] },
+        }),
+        mk(7, 'reasoning.delta', { text: '恢复后' }),
+      ],
+    )
+    const reasoning = state.readModel.timeline.filter(
+      (item) => item.category === 'reasoning-section',
+    )
+    expect(reasoning).toHaveLength(2)
+    expect(reasoning[0]).toMatchObject({ body: '第一轮', status: 'completed' })
+    expect(reasoning[1]).toMatchObject({ body: '恢复后', status: 'streaming' })
+    expect(reasoning[0]?.id).toBe('reasoning:run-1:1')
+    expect(reasoning[1]?.id).toBe('reasoning:run-1:2')
+  })
+
+  it('keeps assistant prose chronological across plan, reasoning, and source boundaries', () => {
     const state = projectEvents(
       emptyProjectionState({ taskId: 't', projectId: 'p' }),
       [

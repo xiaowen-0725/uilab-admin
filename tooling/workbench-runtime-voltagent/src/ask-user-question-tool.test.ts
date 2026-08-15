@@ -67,6 +67,8 @@ describe('ask_user_question tool', () => {
     assert.match(ASK_TOOL_INSTRUCTIONS, /ask_user_question/)
     assert.match(ASK_TOOL_INSTRUCTIONS, /exactly one question/)
     assert.match(ASK_TOOL_INSTRUCTIONS, /skipped/)
+    assert.match(ASK_TOOL_INSTRUCTIONS, /All questions to the user must go through ask_user_question/)
+    assert.match(ASK_TOOL_INSTRUCTIONS, /Final text must not end with an unresolved question/)
   })
 })
 

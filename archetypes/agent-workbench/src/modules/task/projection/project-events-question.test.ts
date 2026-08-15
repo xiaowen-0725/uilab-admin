@@ -110,5 +110,13 @@ describe('projectEvents question request', () => {
       selectedOptionIds: ['formal'],
       otherText: undefined,
     })
+    const inline = state.readModel.timeline.find(
+      (row) => row.meta?.inlineResponse === true,
+    )
+    expect(inline).toMatchObject({
+      category: 'user-message',
+      body: '正式',
+      id: 'user:inline:call-q2',
+    })
   })
 })

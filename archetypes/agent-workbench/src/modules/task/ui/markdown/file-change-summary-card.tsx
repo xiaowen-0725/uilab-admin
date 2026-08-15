@@ -35,7 +35,7 @@ export function FileChangeSummaryCard({
   return (
     <div
       className={cn(
-        'mb-2 overflow-hidden rounded-2xl border border-border/50',
+        'overflow-hidden rounded-2xl border border-border/50',
         'bg-[color-mix(in_oklch,var(--muted)_55%,transparent)]',
         className,
       )}
@@ -60,11 +60,11 @@ export function FileChangeSummaryCard({
             />
           </span>
           <span className='min-w-0 flex-1'>
-            <span className='block truncate text-[13px] font-[445] leading-5 text-foreground'>
+            <span className='block truncate text-sm font-[445] leading-5 text-foreground'>
               已编辑 {base}
             </span>
             {(additions != null || deletions != null) && (
-              <span className='mt-0.5 block font-mono text-[12px] tabular-nums'>
+              <span className='mt-0.5 block font-mono text-xs tabular-nums'>
                 {additions != null ? (
                   <span className='text-[var(--wb-success)]'>+{additions}</span>
                 ) : null}
@@ -81,7 +81,7 @@ export function FileChangeSummaryCard({
             type='button'
             size='sm'
             variant='ghost'
-            className='h-8 gap-1 px-2 text-[12px] text-muted-foreground'
+            className='h-8 gap-1 px-2 text-xs text-muted-foreground'
             data-testid={`${testId}-undo`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -92,7 +92,7 @@ export function FileChangeSummaryCard({
             type='button'
             size='sm'
             variant='secondary'
-            className='h-8 px-3 text-[12px]'
+            className='h-8 px-3 text-xs'
             data-testid={`${testId}-review`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -101,7 +101,7 @@ export function FileChangeSummaryCard({
         </div>
       </div>
       {open && previewLines && previewLines.length > 0 ? (
-        <pre className='max-h-40 overflow-auto border-t border-border/40 px-3 py-2 font-mono text-[11px] leading-4 text-muted-foreground'>
+        <pre className='max-h-40 overflow-auto border-t border-border/40 px-3 py-2 font-mono text-xs leading-4 text-muted-foreground'>
           {previewLines.join('\n')}
         </pre>
       ) : null}

@@ -20,6 +20,7 @@ import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import {
   parseQuestionAnswer,
   parseQuestionRequest,
+  questionAnswerToInputText,
 } from '../protocol/question-answer'
 import { normalizeToolOutput } from '../runtime/tool-output-normalize'
 import { emptyProjectionState } from './empty-read-model'
@@ -32,7 +33,7 @@ import {
   toolKindHint,
 } from './tool-activity-copy'
 import type {
-  AssistantMessageRole,
+  LiveStatusKind,
   ProjectionState,
   TaskReadModel,
   TimelineFollowMode,
@@ -155,9 +156,38 @@ function pushItem(state: MutableState, item: TimelineItem): void {
   }
 }
 
-function setLiveStatus(state: MutableState, liveStatus: string | null): void {
-  if (state.readModel.liveStatus === liveStatus) return
-  state.readModel = { ...state.readModel, liveStatus }
+const SOFT_GENERIC_LIVE_STATUS = new Set(['正在思考', '正在生成回复…'])
+
+function setLiveStatus(
+  state: MutableState,
+  liveStatus: string | null,
+  kind: LiveStatusKind = 'generic',
+): void {
+  if (liveStatus == null) {
+    if (state.readModel.liveStatus === null && state.readModel.liveStatusKind == null) {
+      return
+    }
+    state.readModel = {
+      ...state.readModel,
+      liveStatus: null,
+      liveStatusKind: null,
+    }
+    return
+  }
+  if (
+    kind === 'generic' &&
+    state.readModel.liveStatusKind === 'tool' &&
+    SOFT_GENERIC_LIVE_STATUS.has(liveStatus)
+  ) {
+    return
+  }
+  if (
+    state.readModel.liveStatus === liveStatus &&
+    state.readModel.liveStatusKind === kind
+  ) {
+    return
+  }
+  state.readModel = { ...state.readModel, liveStatus, liveStatusKind: kind }
 }
 
 function setRunStatus(
@@ -177,6 +207,7 @@ function setRunStatus(
       ...state.readModel,
       activeRunId: null,
       liveStatus: null,
+      liveStatusKind: null,
     }
   }
 }
@@ -283,6 +314,49 @@ function ensureUserMessage(
   )
 }
 
+function ensureInlineUserResponse(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  requestId: string,
+  answer: ReturnType<typeof parseQuestionAnswer>,
+  fallbackText: string,
+): void {
+  const card = state.readModel.timeline.find(
+    (item) => item.category === 'input-request' && item.id === `input-request:${requestId}`,
+  )
+  const body = answer
+    ? questionAnswerToInputText(answer, card?.meta?.question?.options ?? [])
+    : fallbackText.trim()
+  if (!body) return
+  const id = `user:inline:${requestId}`
+  const existingIdx = findIndex(
+    state.readModel.timeline,
+    (item) => item.id === id,
+  )
+  if (existingIdx >= 0) {
+    const updated = touchItem(
+      state.readModel.timeline[existingIdx]!,
+      envelope,
+      state.readModel.projectionVersion,
+    )
+    replaceItem(state, existingIdx, {
+      ...updated,
+      body,
+      meta: mergeMeta(updated.meta, { inlineResponse: true }),
+    })
+    return
+  }
+  pushItem(
+    state,
+    baseItem(state, envelope, {
+      id,
+      category: 'user-message',
+      body,
+      meta: { inlineResponse: true },
+    }),
+  )
+}
+
 function ensureRunTerminal(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
@@ -329,32 +403,25 @@ function isProcessBreakingCategory(category: TimelineItemCategory): boolean {
     category === 'source-group' ||
     category === 'approval-request' ||
     category === 'file-change' ||
-    category === 'input-request'
+    category === 'input-request' ||
+    category === 'user-message' ||
+    category === 'error' ||
+    category === 'warning'
   )
 }
 
-function resolveOutputPhase(
-  envelope: AgentRuntimeEventEnvelope,
-  runStatus: RunStatus | null,
-): AssistantMessageRole {
-  const raw = payloadString(envelope.payload, 'phase')
-  if (raw === 'commentary' || raw === 'final') return raw
-  // Heuristic: mid-run text is commentary; idle/terminal defaults final.
-  if (runStatus === 'running' || runStatus === 'queued' || runStatus === 'cancelling') {
-    return 'commentary'
-  }
-  return 'final'
+function envelopeTime(envelope: AgentRuntimeEventEnvelope): string | undefined {
+  return typeof envelope.occurredAt === 'string' ? envelope.occurredAt : undefined
 }
 
 /**
- * Append assistant text. Opens a new segment after tools/approvals so
- * commentary can interleave with tool rows (Codex-style process fold).
+ * Append assistant text. Opens a new segment after tools / questions / cards.
+ * Projection never writes `commentary` — all assistant text is first-class prose.
  */
 function appendAssistantDelta(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
   delta: string,
-  role: AssistantMessageRole,
 ): void {
   const runId = envelope.runId as RunId | undefined
   const version = state.readModel.projectionVersion
@@ -368,12 +435,9 @@ function appendAssistantDelta(
       if (isProcessBreakingCategory(item.category)) break
       continue
     }
-    const itemRole = item.meta?.messageRole ?? 'final'
-    if (itemRole !== role) break
     // text-end/output.completed seals a segment. A later text-delta is a new
     // narrative segment even when no tool row appears between them.
     if (item.status === 'completed') break
-    // Nothing process-breaking after this assistant → keep appending.
     const brokenAfter = timeline
       .slice(i + 1)
       .some(
@@ -391,7 +455,6 @@ function appendAssistantDelta(
       ...base,
       body: `${base.body ?? ''}${delta}`,
       status: 'streaming',
-      meta: mergeMeta(base.meta, { messageRole: role }),
     })
     return
   }
@@ -399,19 +462,17 @@ function appendAssistantDelta(
   const seg = timeline.filter(
     (i) =>
       i.category === 'assistant-message' &&
-      (!runId || i.runId === runId) &&
-      (i.meta?.messageRole ?? 'final') === role,
+      (!runId || i.runId === runId),
   ).length
 
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `assistant:${runId ?? envelope.eventId}:${role}:${seg}`,
+      id: `assistant:${runId ?? envelope.eventId}:${seg}`,
       category: 'assistant-message',
       body: delta,
       status: 'streaming',
       runId,
-      meta: { messageRole: role },
     }),
   )
 }
@@ -423,7 +484,6 @@ function finalizeAssistant(
 ): void {
   const runId = envelope.runId as RunId | undefined
   const version = state.readModel.projectionVersion
-  // Prefer open commentary/final segment for this run (last assistant).
   let idx = -1
   for (let i = state.readModel.timeline.length - 1; i >= 0; i--) {
     const item = state.readModel.timeline[i]!
@@ -438,9 +498,6 @@ function finalizeAssistant(
       ...base,
       body: finalText && finalText.length > 0 ? finalText : base.body,
       status: 'completed',
-      meta: mergeMeta(base.meta, {
-        messageRole: base.meta?.messageRole ?? 'final',
-      }),
     })
     return
   }
@@ -448,81 +505,140 @@ function finalizeAssistant(
     pushItem(
       state,
       baseItem(state, envelope, {
-        id: `assistant:${runId ?? envelope.eventId}:final:0`,
+        id: `assistant:${runId ?? envelope.eventId}:0`,
         category: 'assistant-message',
         body: finalText,
         status: 'completed',
         runId,
-        meta: { messageRole: 'final' },
       }),
     )
   }
 }
 
-/** On run complete: last assistant segment → final; earlier ones → commentary. */
-function promoteAssistantRolesOnRunComplete(
+/** Mark this run's assistant segments completed. Does not write commentary. */
+function completeAssistantsOnRunComplete(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
 ): void {
   const runId = envelope.runId as RunId | undefined
-  const indices: number[] = []
   state.readModel.timeline.forEach((item, i) => {
     if (item.category !== 'assistant-message') return
     if (runId && item.runId && item.runId !== runId) return
-    indices.push(i)
-  })
-  if (indices.length === 0) return
-  const lastIdx = indices[indices.length - 1]!
-  for (const i of indices) {
-    // Do not touch sourceEventIds — role promotion is presentation-only.
-    const base = state.readModel.timeline[i]!
-    const role: AssistantMessageRole = i === lastIdx ? 'final' : 'commentary'
+    if (item.status === 'completed' && item.meta?.messageRole !== 'commentary') {
+      return
+    }
+    const nextMeta = { ...item.meta }
+    delete nextMeta.messageRole
     replaceItem(state, i, {
-      ...base,
+      ...item,
       status: 'completed',
-      meta: mergeMeta(base.meta, { messageRole: role }),
+      meta: Object.keys(nextMeta).length > 0 ? nextMeta : undefined,
     })
-  }
+  })
 }
 
-function ensureReasoning(
+function lastReasoningIndex(state: MutableState, runId: RunId | undefined): number {
+  return findIndex(
+    state.readModel.timeline,
+    (item) =>
+      item.category === 'reasoning-section' &&
+      (!runId || item.runId === runId),
+  )
+}
+
+function reasoningHasInterveningItems(
+  state: MutableState,
+  reasoningIdx: number,
+  runId: RunId | undefined,
+): boolean {
+  return state.readModel.timeline.slice(reasoningIdx + 1).some(
+    (item) =>
+      (!runId || !item.runId || item.runId === runId) &&
+      item.category !== 'reasoning-section',
+  )
+}
+
+function openReasoningSection(
   state: MutableState,
   envelope: AgentRuntimeEventEnvelope,
-  reasoningKey: string,
   delta: string | null,
   title?: string | null,
   completed = false,
 ): void {
   const runId = envelope.runId as RunId | undefined
-  const version = state.readModel.projectionVersion
-  const idx = findIndex(
-    state.readModel.timeline,
-    (item) =>
-      item.category === 'reasoning-section' &&
-      item.runId === runId &&
-      item.id === `reasoning:${runId ?? 'run'}:${reasoningKey}`,
-  )
-  if (idx >= 0) {
-    const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
-    replaceItem(state, idx, {
-      ...base,
-      title: title || base.title || '思考过程',
-      body: delta ? `${base.body ?? ''}${delta}` : base.body,
-      status: completed ? 'completed' : 'streaming',
-    })
-    return
-  }
+  const seq =
+    state.readModel.timeline.filter(
+      (item) =>
+        item.category === 'reasoning-section' &&
+        (!runId || item.runId === runId),
+    ).length + 1
   pushItem(
     state,
     baseItem(state, envelope, {
-      id: `reasoning:${runId ?? 'run'}:${reasoningKey}`,
+      id: `reasoning:${runId ?? 'run'}:${seq}`,
       category: 'reasoning-section',
       title: title || '思考过程',
       body: delta ?? '',
       status: completed ? 'completed' : 'streaming',
       runId,
+      meta: {
+        startedAt: envelopeTime(envelope),
+        endedAt: completed ? envelopeTime(envelope) : undefined,
+      },
     }),
   )
+}
+
+function patchReasoningSection(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  idx: number,
+  delta: string | null,
+  title?: string | null,
+  completed = false,
+): void {
+  const version = state.readModel.projectionVersion
+  const base = touchItem(state.readModel.timeline[idx]!, envelope, version)
+  replaceItem(state, idx, {
+    ...base,
+    title: title || base.title || '思考过程',
+    body: delta ? `${base.body ?? ''}${delta}` : base.body,
+    status: completed ? 'completed' : 'streaming',
+    meta: mergeMeta(base.meta, {
+      endedAt: completed ? envelopeTime(envelope) : base.meta?.endedAt,
+    }),
+  })
+}
+
+function ensureReasoning(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+  delta: string | null,
+  title?: string | null,
+  completed = false,
+  openNew = false,
+): void {
+  const runId = envelope.runId as RunId | undefined
+  if (openNew) {
+    openReasoningSection(state, envelope, delta, title, completed)
+    return
+  }
+  const idx = lastReasoningIndex(state, runId)
+  const canReuse =
+    idx >= 0 &&
+    !reasoningHasInterveningItems(state, idx, runId) &&
+    state.readModel.timeline[idx]?.status !== 'completed'
+  if (canReuse) {
+    patchReasoningSection(state, envelope, idx, delta, title, completed)
+    return
+  }
+  if (completed && idx >= 0 && !reasoningHasInterveningItems(state, idx, runId)) {
+    patchReasoningSection(state, envelope, idx, delta, title, true)
+    return
+  }
+  if (delta || !completed) {
+    openReasoningSection(state, envelope, delta, title, completed)
+  }
 }
 
 function syncProcessSummary(
@@ -843,26 +959,9 @@ export function applyRuntimeEvent(
     }
     case 'output.delta': {
       const delta = payloadText(envelope.payload, ['text', 'delta']) ?? ''
-      const phase = resolveOutputPhase(envelope, next.readModel.runStatus)
-      if (delta) appendAssistantDelta(next, envelope, delta, phase)
-      // Only show generic generating when no tool activity is more specific.
-      if (
-        next.readModel.runStatus === 'running' &&
-        phase === 'commentary' &&
-        !next.readModel.liveStatus?.startsWith('正在读') &&
-        !next.readModel.liveStatus?.startsWith('正在列') &&
-        !next.readModel.liveStatus?.startsWith('正在写') &&
-        !next.readModel.liveStatus?.startsWith('正在搜') &&
-        !next.readModel.liveStatus?.startsWith('正在执') &&
-        !next.readModel.liveStatus?.startsWith('正在调')
-      ) {
-        // Keep tool liveStatus if already set; else light generating hint.
-        if (
-          !next.readModel.liveStatus ||
-          next.readModel.liveStatus === '正在思考'
-        ) {
-          setLiveStatus(next, '正在生成回复…')
-        }
+      if (delta) appendAssistantDelta(next, envelope, delta)
+      if (next.readModel.runStatus === 'running') {
+        setLiveStatus(next, '正在生成回复…', 'generic')
       }
       break
     }
@@ -872,7 +971,7 @@ export function applyRuntimeEvent(
       break
     }
     case 'run.completed': {
-      promoteAssistantRolesOnRunComplete(next, envelope)
+      completeAssistantsOnRunComplete(next, envelope)
       setRunStatus(next, 'completed', envelope)
       const durationMs = computeRunDurationMs(next, envelope)
       ensureRunTerminal(next, envelope, 'completed', '已处理', {
@@ -934,36 +1033,27 @@ export function applyRuntimeEvent(
       ensureReasoning(
         next,
         envelope,
-        payloadString(envelope.payload, 'id') ?? 'default',
         null,
         payloadString(envelope.payload, 'title') ?? '思考过程',
         false,
+        true,
       )
-      setLiveStatus(next, '正在思考')
+      setLiveStatus(next, '正在思考', 'generic')
       break
     }
     case 'reasoning.delta': {
       const delta = payloadText(envelope.payload, ['text', 'delta']) ?? ''
-      ensureReasoning(
-        next,
-        envelope,
-        payloadString(envelope.payload, 'id') ?? 'default',
-        delta,
-        null,
-        false,
-      )
-      setLiveStatus(next, '正在思考')
+      ensureReasoning(next, envelope, delta, null, false, false)
+      setLiveStatus(next, '正在思考', 'generic')
       break
     }
     case 'reasoning.section_completed': {
       ensureReasoning(
         next,
         envelope,
-        payloadString(envelope.payload, 'id') ??
-          payloadString(envelope.payload, 'sectionId') ??
-          'default',
         null,
         payloadString(envelope.payload, 'title'),
+        false,
         false,
       )
       break
@@ -972,11 +1062,11 @@ export function applyRuntimeEvent(
       ensureReasoning(
         next,
         envelope,
-        payloadString(envelope.payload, 'id') ?? 'default',
         null,
         payloadString(envelope.payload, 'summary') ??
           payloadString(envelope.payload, 'title'),
         true,
+        false,
       )
       break
     }
@@ -1000,7 +1090,7 @@ export function applyRuntimeEvent(
           },
         },
       )
-      setLiveStatus(next, '正在更新计划…')
+      setLiveStatus(next, '正在更新计划…', 'tool')
       break
     }
     case 'tool.called': {
@@ -1028,10 +1118,11 @@ export function applyRuntimeEvent(
             ? 'other'
             : kind,
           children,
+          startedAt: envelopeTime(envelope),
         },
       })
       syncProcessSummary(next, envelope.runId as RunId | undefined)
-      setLiveStatus(next, liveStatusForToolActivity(activity))
+      setLiveStatus(next, liveStatusForToolActivity(activity), 'tool')
       break
     }
     case 'tool.progress': {
@@ -1052,7 +1143,7 @@ export function applyRuntimeEvent(
         meta: children ? { children } : undefined,
       })
       syncProcessSummary(next, envelope.runId as RunId | undefined)
-      setLiveStatus(next, liveStatusForToolActivity(activity))
+      setLiveStatus(next, liveStatusForToolActivity(activity), 'tool')
       break
     }
     case 'tool.completed': {
@@ -1088,6 +1179,7 @@ export function applyRuntimeEvent(
             ? 'other'
             : kind,
           children,
+          endedAt: envelopeTime(envelope),
         },
       })
       syncProcessSummary(next, envelope.runId as RunId | undefined)
@@ -1108,7 +1200,11 @@ export function applyRuntimeEvent(
       upsertByKey(next, envelope, 'command-execution', commandId, {
         title,
         status: 'running',
-        meta: { toolKind: 'command', processKind: 'command' },
+        meta: {
+          toolKind: 'command',
+          processKind: 'command',
+          startedAt: envelopeTime(envelope),
+        },
       })
       syncProcessSummary(next, envelope.runId as RunId | undefined)
       setLiveStatus(
@@ -1117,6 +1213,7 @@ export function applyRuntimeEvent(
           name: 'run_command',
           args: { command: commandLine },
         }),
+        'tool',
       )
       break
     }
@@ -1159,7 +1256,11 @@ export function applyRuntimeEvent(
           rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
             ? 'error'
             : 'completed',
-        meta: { toolKind: 'command', processKind: 'command' },
+        meta: {
+          toolKind: 'command',
+          processKind: 'command',
+          endedAt: envelopeTime(envelope),
+        },
       })
       syncProcessSummary(next, envelope.runId as RunId | undefined)
       break
@@ -1190,7 +1291,7 @@ export function applyRuntimeEvent(
           },
         }),
       )
-      setLiveStatus(next, '正在写入结果…')
+      setLiveStatus(next, '正在写入结果…', 'tool')
       break
     }
     case 'source.grouped': {
@@ -1282,17 +1383,18 @@ export function applyRuntimeEvent(
     }
     case 'run.input_provided': {
       const requestId = payloadString(envelope.payload, 'requestId') ?? envelope.eventId
-      const rec = asRecord(envelope.payload)
-      const answer = parseQuestionAnswer(rec.answer)
+      const provided = asRecord(envelope.payload)
+      const answer = parseQuestionAnswer(provided.answer)
       const text = payloadText(envelope.payload, ['text', 'inputText']) ?? ''
       setRunStatus(next, 'running', envelope)
       ensureRunTerminal(next, envelope, 'running', '正在思考')
-      setLiveStatus(next, '正在思考')
+      setLiveStatus(next, '正在思考', 'generic')
       upsertByKey(next, envelope, 'input-request', requestId, {
         status: 'provided',
         body: text ? `\n已提供：${text}` : undefined,
         meta: answer ? { answer } : undefined,
       })
+      ensureInlineUserResponse(next, envelope, requestId, answer, text)
       break
     }
     case 'task.renamed':

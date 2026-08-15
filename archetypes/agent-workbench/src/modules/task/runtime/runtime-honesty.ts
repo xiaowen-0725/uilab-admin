@@ -7,10 +7,11 @@
  */
 
 export interface RuntimeHonestyCopy {
-  /** Short banner on Timeline (11px quiet line). */
+  /** Short banner on Timeline / empty hub (quiet secondary line). */
   readonly banner: string
   /** aria-label for the timeline region. */
   readonly timelineAriaLabel: string
+  readonly emptyTimeline: string
   readonly submitAccepted: string
   readonly cancelAccepted: string
   readonly clarifyingSubmit: (preview: string) => string
@@ -31,6 +32,7 @@ export interface RuntimeHonestyCopy {
 export const VOLTAGENT_RUNTIME_HONESTY_COPY = {
   banner: '本机 VoltAgent Runtime · 非远程生产集群 · 本地侧车',
   timelineAriaLabel: '任务时间线（本机 VoltAgent Runtime）',
+  emptyTimeline: '还没有执行记录。发送后会出现在这里。',
   submitAccepted: '已提交到本机 VoltAgent Runtime（非远程生产集群）',
   cancelAccepted: '已请求取消（本机 VoltAgent Runtime，非远程生产集群）',
   clarifyingSubmit: (preview) =>

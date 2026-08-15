@@ -15,7 +15,7 @@ export function PlanUpdateCard({ item }: PlanUpdateCardProps) {
 
   return (
     <div
-      className='mb-2 max-w-[46rem] px-1 py-1.5 text-sm'
+      className='max-w-[46rem] px-1 py-1.5 text-sm leading-5'
       data-kind='plan-update'
       data-testid={`timeline-item-${item.id}`}
       data-category='plan-update'
@@ -26,7 +26,7 @@ export function PlanUpdateCard({ item }: PlanUpdateCardProps) {
         </span>
         <span className='font-semibold'>{item.title ?? '计划已更新'}</span>
       </div>
-      <div className='mt-1 flex flex-col gap-1 border-s ps-4 text-[13px]'>
+      <div className='mt-1 flex flex-col gap-1 border-s ps-4 text-sm'>
         {explanation ? (
           <p
             data-plan-explanation=''

@@ -36,10 +36,13 @@ export interface TimelineItemSourceRange {
 }
 
 /**
- * Assistant text role for process fold (Codex commentary vs final).
- * Optional on envelopes as output.phase; projection may also infer.
+ * Legacy assistant text role. Projection no longer writes `commentary`;
+ * the type remains so persisted / replayed items can still be read.
  */
 export type AssistantMessageRole = 'commentary' | 'final'
+
+/** Source of the current `liveStatus` line. Tool wins over generic hints. */
+export type LiveStatusKind = 'tool' | 'generic'
 
 export type ProcessStepKind =
   | 'read'
@@ -86,10 +89,16 @@ export interface TimelineItemMeta {
   /** Run-terminal deterministic summary, counted by logical row id. */
   processSummary?: ProcessSummary
   /**
-   * Assistant segment role: mid-turn narration vs final answer.
-   * Process fold shows commentary; final renders outside the fold.
+   * Legacy assistant segment role. Projection no longer writes `commentary`.
    */
   messageRole?: AssistantMessageRole
+  /**
+   * Mid-turn user reply to a Question Request. Stays in the same turn
+   * (`groupTimelineIntoTurns` does not split on this item).
+   */
+  inlineResponse?: boolean
+  /** ISO end time for a completed working-row (duration derivation). */
+  endedAt?: string
 }
 
 export interface TimelineItem {
@@ -136,6 +145,11 @@ export interface TaskReadModel {
    * Chinese label while run is non-terminal; null when idle or terminal.
    */
   liveStatus: string | null
+  /**
+   * Internal: which kind last wrote `liveStatus`.
+   * Tool-sourced status is not overwritten by generic thinking/generating hints.
+   */
+  liveStatusKind: LiveStatusKind | null
   /**
    * Latest Plan snapshot from `plan.updated`. Null until the first update.
    * Progress is derived; UI must not treat it as independent state.

@@ -3,6 +3,7 @@ import {
   classifyToolActivity,
   extractToolObject,
   formatToolActivityCopy,
+  formatToolClusterCopy,
   liveStatusForToolActivity,
 } from './tool-activity-copy'
 
@@ -72,5 +73,11 @@ describe('tool-activity-copy', () => {
     expect(classifyToolActivity('read_file', null)).toBe('read')
     expect(classifyToolActivity('write_file', null)).toBe('write')
     expect(classifyToolActivity('run_command', null)).toBe('command')
+  })
+
+  it('formats plural cluster titles by kind', () => {
+    expect(formatToolClusterCopy('read', 3)).toBe('读取了 3 个文件')
+    expect(formatToolClusterCopy('command', 2)).toBe('执行了 2 条命令')
+    expect(formatToolClusterCopy('other', 4)).toBe('调用了 4 个工具')
   })
 })

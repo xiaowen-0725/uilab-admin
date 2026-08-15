@@ -52,6 +52,31 @@ describe('groupTimelineIntoTurns', () => {
     expect(segs[1].terminal?.id).toBe('rt2')
   })
 
+  it('keeps inline question answers in the same turn body', () => {
+    const timeline = [
+      item({ id: 'u1', category: 'user-message', body: '写一篇推文' }),
+      item({ id: 'rt1', category: 'run-terminal', status: 'running' }),
+      item({ id: 'a1', category: 'assistant-message', body: '先确认受众。' }),
+      item({ id: 'q1', category: 'input-request', title: '受众是谁？' }),
+      item({
+        id: 'user:inline:q1',
+        category: 'user-message',
+        body: '职场新人',
+        meta: { inlineResponse: true },
+      }),
+      item({ id: 'a2', category: 'assistant-message', body: '好。' }),
+    ]
+    const segs = groupTimelineIntoTurns(timeline)
+    expect(segs).toHaveLength(1)
+    expect(segs[0].userMessages.map((i) => i.id)).toEqual(['u1'])
+    expect(segs[0].bodyItems.map((i) => i.id)).toEqual([
+      'a1',
+      'q1',
+      'user:inline:q1',
+      'a2',
+    ])
+  })
+
   it('does not split consecutive user messages before any non-user content', () => {
     const timeline = [
       item({ id: 'u1', category: 'user-message', body: 'a' }),

@@ -178,6 +178,8 @@ export type {
   TaskScrollMeta,
   TaskReadModel,
   ProjectionState,
+  LiveStatusKind,
+  AssistantMessageRole,
 } from './projection/types'
 export {
   emptyTaskReadModel,

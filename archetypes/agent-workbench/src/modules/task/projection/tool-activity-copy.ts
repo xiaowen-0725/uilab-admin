@@ -238,3 +238,32 @@ export function formatToolActivityCopy(input: ToolActivityInput): string {
 export function liveStatusForToolActivity(input: Omit<ToolActivityInput, 'status'>): string {
   return formatToolActivityCopy({ ...input, status: 'running' })
 }
+
+/**
+ * Collapsed title for a consecutive same-kind completed tool cluster.
+ * Single calls keep their original row title and do not use this helper.
+ */
+export function formatToolClusterCopy(
+  kind: ToolActivityKind | string,
+  count: number,
+): string {
+  const n = Math.max(0, count)
+  switch (kind) {
+    case 'read':
+      return `读取了 ${n} 个文件`
+    case 'write':
+      return `写入了 ${n} 个文件`
+    case 'list':
+      return `列出了 ${n} 个目录`
+    case 'search':
+      return `搜索了 ${n} 次`
+    case 'command':
+      return `执行了 ${n} 条命令`
+    case 'skill':
+      return `读取了 ${n} 个技能`
+    case 'plan':
+      return `更新了 ${n} 次计划`
+    default:
+      return `调用了 ${n} 个工具`
+  }
+}

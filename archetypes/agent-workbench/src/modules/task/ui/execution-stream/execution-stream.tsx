@@ -72,7 +72,7 @@ export function ExecutionStream({
     >
       <div className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-1'>
         <p
-          className='mb-2 text-[11px] leading-4 text-muted-foreground/80'
+          className='mb-2 text-xs leading-4 text-muted-foreground/80'
           data-testid='fixture-disclosure'
         >
           {playing ? (
@@ -105,7 +105,7 @@ export function ExecutionStream({
             data-kind='user'
             data-testid={`stream-user-${msg.id}`}
           >
-            <div className='max-w-[77%] rounded-2xl bg-muted px-3.5 py-2.5 text-[14px] leading-[22px] text-foreground'>
+            <div className='max-w-[77%] rounded-2xl bg-muted px-3.5 py-2.5 text-base leading-[22px] text-foreground'>
               {msg.text}
             </div>
           </div>
@@ -145,7 +145,7 @@ export function ExecutionStream({
         )}
 
         <div
-          className='prose-stream space-y-0 text-[14px] leading-[22px] text-foreground'
+          className='prose-stream space-y-0 text-base leading-[22px] text-foreground'
           data-testid='stream-markdown'
         >
           {stream.turn.markdownParts.map((md, index) => (
@@ -269,7 +269,7 @@ function TurnHeader({
   }
 
   const statusClass = cn(
-    'text-[14px] font-[445] leading-[21px]',
+    'text-base font-[445] leading-[21px]',
     completed
       ? 'text-[color:color(srgb_0.988235_0.988235_0.988235_/_0.65)]'
       : 'text-foreground',
@@ -364,7 +364,7 @@ function ToolRow({
       >
         <CollapsibleTrigger
           className={cn(
-            'flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-[13px] leading-4 font-[445]',
+            'flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm leading-4 font-[445]',
             'text-foreground/85 hover:bg-wb-hover-subtle',
             row.status === 'running' && 'text-foreground',
           )}
@@ -387,7 +387,7 @@ function ToolRow({
         </CollapsibleTrigger>
         {hasChildren ? (
           <CollapsibleContent className='pb-1 ps-7'>
-            <ul className='space-y-0.5 font-mono text-[12px] leading-4 text-muted-foreground'>
+            <ul className='space-y-0.5 font-mono text-xs leading-4 text-muted-foreground'>
               {row.items.map((item, i) => (
                 <li key={i} className='truncate'>
                   {item}
@@ -421,7 +421,7 @@ function ToolRowLabel({
         {row.label}
       </span>
       {row.detail ? (
-        <span className='hidden max-w-[40%] truncate text-[11px] opacity-70 sm:inline'>
+        <span className='hidden max-w-[40%] truncate text-xs opacity-70 sm:inline'>
           {row.detail}
         </span>
       ) : null}

@@ -64,6 +64,8 @@ describe('mapFullStreamChunks', () => {
       'run.completed',
     ])
     expect(envelopes[1]?.payload).toMatchObject({ text: '你' })
+    expect(envelopes[1]?.payload).not.toHaveProperty('phase')
+    expect(envelopes[3]?.payload).not.toHaveProperty('phase')
     expect(envelopes[0]?.taskSequence).toBe(1)
     expect(envelopes[4]?.taskSequence).toBe(5)
     expect(nextSequence).toBe(6)

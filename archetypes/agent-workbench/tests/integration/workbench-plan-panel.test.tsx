@@ -161,7 +161,7 @@ describe('Workbench plan panel + Timeline card', () => {
 
     await expect
       .element(page.getByTestId('timeline-run-status-label'))
-      .toHaveTextContent('个动作')
+      .toHaveTextContent(/已处理|读取|列出|命令|思考/)
     expect(
       page.getByTestId('timeline-run-status-label').element().textContent ?? '',
     ).not.toMatch(/步/)

@@ -54,7 +54,7 @@ export function FileReferenceChip({
         className={cn(
           'codex-file-ref inline-flex max-w-full items-baseline gap-0.5',
           'align-baseline rounded-sm px-0.5 py-0',
-          'text-[14px] font-medium leading-[22px]',
+          'text-base font-medium leading-[22px]',
           className,
         )}
         style={{ color: CODEX_FILE_LINK_COLOR }}
@@ -75,7 +75,7 @@ export function FileReferenceChip({
       className={cn(
         'codex-file-ref inline-flex max-w-full items-baseline gap-0.5',
         'align-baseline rounded-sm px-0.5 py-0',
-        'text-[14px] font-medium leading-[22px]',
+        'text-base font-medium leading-[22px]',
         'underline-offset-2 hover:underline',
         'focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
         className,

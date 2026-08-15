@@ -32,7 +32,7 @@ function QuestionCardFrame({
   return (
     <div
       className={cn(
-        'mb-2 max-w-[46rem] rounded-lg border bg-muted/40 text-sm',
+        'max-w-[46rem] rounded-lg border bg-muted/40 text-base leading-[22px]',
         className,
       )}
       data-kind='input-request'
@@ -67,8 +67,10 @@ export function QuestionCard({
       : '已提供'
     return (
       <QuestionCardFrame item={item} requestId={requestId} className='px-4 py-3'>
-        <p className='text-muted-foreground'>{question.question}</p>
-        <p className='mt-1 font-medium'>{answerLabel}</p>
+        <p className='text-base leading-[22px] text-muted-foreground'>
+          {question.question}
+        </p>
+        <p className='mt-1 text-base leading-[22px] font-medium'>{answerLabel}</p>
       </QuestionCardFrame>
     )
   }
@@ -115,7 +117,7 @@ export function QuestionCard({
       className='animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none p-3'
     >
       <div className='flex items-start justify-between gap-2'>
-        <p className='font-medium'>{question.question}</p>
+        <p className='text-base leading-[22px] font-medium'>{question.question}</p>
         <Button
           type='button'
           variant='ghost'
@@ -135,7 +137,7 @@ export function QuestionCard({
             <button
               key={option.id}
               type='button'
-              className='flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent'
+              className='flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm leading-5 transition-colors hover:bg-accent'
               data-testid={`question-option-${option.id}`}
               aria-pressed={allowMultiple ? active : undefined}
               onClick={() => toggleOption(option.id)}
