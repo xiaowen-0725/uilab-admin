@@ -172,4 +172,31 @@ describe('deriveTimelineView', () => {
     ])
     expect(kinds(blocks)).toEqual(['working[single:r1]'])
   })
+
+  it('returns the same block array when the input items are unchanged', () => {
+    const bodyItems = [
+      item({
+        id: 'r1',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'read' },
+      }),
+      item({ id: 'a1', category: 'assistant-message', body: '目录看完了。' }),
+    ]
+    const first = deriveTimelineView(bodyItems)
+    const second = deriveTimelineView(bodyItems)
+    expect(second).toBe(first)
+
+    const sameItemsNewArray = [...bodyItems]
+    const third = deriveTimelineView(sameItemsNewArray)
+    expect(third).toBe(first)
+
+    const changed = [bodyItems[0]!, item({ id: 'a2', category: 'assistant-message', body: '下一句' })]
+    const fourth = deriveTimelineView(changed)
+    expect(fourth).not.toBe(first)
+    expect(kinds(fourth)).toEqual(['working[single:r1]', 'prose:a2'])
+
+    const firstAgain = deriveTimelineView(bodyItems)
+    expect(firstAgain).toBe(first)
+  })
 })

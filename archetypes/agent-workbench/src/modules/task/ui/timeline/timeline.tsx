@@ -8,6 +8,7 @@
  */
 
 import {
+  memo,
   useCallback,
   useEffect,
   useRef,
@@ -959,7 +960,7 @@ function ReasoningRow({ item }: { item: TimelineItem }) {
   )
 }
 
-function TimelineRow({
+const TimelineRow = memo(function TimelineRow({
   item,
   runActive,
   forceToolCollapsed = false,
@@ -1201,4 +1202,4 @@ function TimelineRow({
         </div>
       )
   }
-}
+})

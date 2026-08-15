@@ -134,13 +134,52 @@ function toWorkingBlock(items: TimelineItem[]): TimelineViewBlock {
   }
 }
 
+function sameTimelineItems(
+  left: readonly TimelineItem[] | null,
+  right: readonly TimelineItem[],
+): boolean {
+  if (left === right) return true
+  if (left == null || left.length !== right.length) return false
+  for (let i = 0; i < right.length; i += 1) {
+    if (left[i] !== right[i]) return false
+  }
+  return true
+}
+
+const VIEW_CACHE_LIMIT = 16
+const viewCache: Array<{
+  input: readonly TimelineItem[]
+  output: TimelineViewBlock[]
+}> = []
+
+function cachedTimelineView(
+  bodyItems: readonly TimelineItem[],
+): TimelineViewBlock[] | null {
+  for (const entry of viewCache) {
+    if (sameTimelineItems(entry.input, bodyItems)) return entry.output
+  }
+  return null
+}
+
+function rememberTimelineView(
+  bodyItems: readonly TimelineItem[],
+  output: TimelineViewBlock[],
+): void {
+  viewCache.unshift({ input: bodyItems, output })
+  if (viewCache.length > VIEW_CACHE_LIMIT) viewCache.pop()
+}
+
 /**
  * Group a turn's `bodyItems` into chronological render blocks.
  * Does not consume user-message turn openers or run-terminal chrome.
+ * Returns the previous array when item identities are unchanged.
  */
 export function deriveTimelineView(
   bodyItems: readonly TimelineItem[],
 ): TimelineViewBlock[] {
+  const cached = cachedTimelineView(bodyItems)
+  if (cached) return cached
+
   const blocks: TimelineViewBlock[] = []
   let working: TimelineItem[] = []
 
@@ -163,5 +202,6 @@ export function deriveTimelineView(
     blocks.push({ kind: 'inline', item })
   }
   flushWorking()
+  rememberTimelineView(bodyItems, blocks)
   return blocks
 }

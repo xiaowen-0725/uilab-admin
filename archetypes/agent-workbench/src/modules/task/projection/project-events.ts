@@ -48,21 +48,54 @@ type MutableState = {
   seenEventIds: Set<string>
 }
 
+const STREAMING_DELTA_EVENT_TYPES = new Set([
+  'output.delta',
+  'reasoning.delta',
+  'command.output',
+])
+
+const SOURCE_EVENT_IDS_CAP = 8
+
+export function isStreamingDeltaEvent(eventType: string): boolean {
+  return STREAMING_DELTA_EVENT_TYPES.has(eventType)
+}
+
+/**
+ * Shallow-share the previous projection. The timeline array is copied;
+ * items stay the same object until {@link replaceItem} / {@link pushItem}.
+ * `seenEventIds` is copy-on-write so `applyRuntimeEvent` does not mutate
+ * the input state's Set.
+ */
 function cloneState(state: ProjectionState): MutableState {
   return {
     readModel: {
       ...state.readModel,
-      timeline: state.readModel.timeline.map((item) => ({
-        ...item,
-        sourceEventIds: [...item.sourceEventIds],
-        sourceEventRange: item.sourceEventRange
-          ? { ...item.sourceEventRange }
-          : undefined,
-      })),
-      scroll: { ...state.readModel.scroll },
+      timeline: state.readModel.timeline.slice(),
     },
     seenEventIds: new Set(state.seenEventIds),
   }
+}
+
+function capSourceEventIds(ids: string[]): string[] {
+  if (ids.length <= SOURCE_EVENT_IDS_CAP) return ids
+  return [...ids.slice(0, SOURCE_EVENT_IDS_CAP - 1), ids[ids.length - 1]!]
+}
+
+function nextSourceEventIds(
+  item: TimelineItem,
+  envelope: AgentRuntimeEventEnvelope,
+): string[] {
+  const ids = item.sourceEventIds
+  if (ids.includes(envelope.eventId)) return ids
+
+  if (isStreamingDeltaEvent(String(envelope.eventType))) {
+    if (ids.length === 0) return [envelope.eventId]
+    if (ids.length === 1) return [ids[0]!, envelope.eventId]
+    if (ids[ids.length - 1] === envelope.eventId) return ids
+    return [ids[0]!, envelope.eventId]
+  }
+
+  return capSourceEventIds([...ids, envelope.eventId])
 }
 
 function freezeState(state: MutableState): ProjectionState {
@@ -115,9 +148,7 @@ function touchItem(
   envelope: AgentRuntimeEventEnvelope,
   projectionVersion: number,
 ): TimelineItem {
-  const ids = item.sourceEventIds.includes(envelope.eventId)
-    ? item.sourceEventIds
-    : [...item.sourceEventIds, envelope.eventId]
+  const ids = nextSourceEventIds(item, envelope)
   const seq = envelope.taskSequence
   const sequenceFrom = item.sequenceFrom == null ? seq : Math.min(item.sequenceFrom, seq)
   const sequenceTo = item.sequenceTo == null ? seq : Math.max(item.sequenceTo, seq)

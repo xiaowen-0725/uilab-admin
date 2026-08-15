@@ -15,6 +15,7 @@ import type { RuntimePort, RuntimeSubscriptionEvent } from '../ports/runtime-por
 import { emptyProjectionState } from '../projection/empty-read-model'
 import {
   applyRuntimeEvent,
+  isStreamingDeltaEvent,
   projectEvents,
   setTimelineFollowMode,
 } from '../projection/project-events'
@@ -29,6 +30,7 @@ import type {
   QuestionAnswer,
   TurnComposerContext,
 } from '../protocol/commands'
+import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import { questionAnswerToInputText } from '../protocol/question-answer'
 import { runtimeHonestyCopy } from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
@@ -130,6 +132,11 @@ export class TaskRuntimeController {
    * Composition-only: work_surface.open_requested (does not mutate projection open set).
    */
   private workSurfaceOpenListener: WorkSurfaceOpenRequestedListener | null = null
+  /** Streaming deltas waiting for the next animation frame / 40ms flush. */
+  private pendingEnvelopes: AgentRuntimeEventEnvelope[] = []
+  private flushHandle: { kind: 'raf' | 'timeout'; id: number } | null = null
+  /** Serializes EventStore writes so a flush is one async chain, not N races. */
+  private persistQueue: Promise<void> = Promise.resolve()
 
   constructor(options: TaskRuntimeControllerOptions) {
     this.runtime = options.runtime
@@ -204,6 +211,7 @@ export class TaskRuntimeController {
     if (this.taskId === taskId && this.unsub) return
 
     const generation = ++this.attachGeneration
+    this.clearPendingProjection()
     this.detachSubscription()
     this.taskId = taskId
     this.localFollowUps = []
@@ -286,9 +294,18 @@ export class TaskRuntimeController {
 
   detach(): void {
     this.attachGeneration += 1
+    this.clearPendingProjection()
     this.detachSubscription()
     this.taskId = null
     this.localFollowUps = []
+  }
+
+  /**
+   * Apply any buffered streaming deltas now. Tests / VirtualClock use this
+   * instead of waiting for rAF or the 40ms timer.
+   */
+  flushPendingProjection(): void {
+    this.flushPendingProjectionInternal({ emit: true })
   }
 
   async submitText(
@@ -628,18 +645,17 @@ export class TaskRuntimeController {
       if (String(event.envelope.eventType) === 'work_surface.open_requested') {
         this.dispatchWorkSurfaceOpen(event.envelope)
       }
-      this.projection = applyRuntimeEvent(this.projection, event.envelope)
-      void this.persistEnvelope(event.envelope)
-      // Drain local queue after terminal (runtime also drains its own queue).
-      const status = this.projection.readModel.runStatus
-      if (status && isTerminalRunStatus(status)) {
-        this.maybeDrainLocalQueue()
+      if (isStreamingDeltaEvent(String(event.envelope.eventType))) {
+        this.pendingEnvelopes.push(event.envelope)
+        this.scheduleProjectionFlush()
+        return
       }
-      this.emitRunStatus()
-      this.emit()
+      this.flushPendingProjectionInternal({ emit: false })
+      this.applyProjectedEnvelopes([event.envelope], { persist: true, emit: true })
       return
     }
     if (event.kind === 'gap') {
+      this.flushPendingProjectionInternal({ emit: false })
       this.projection = {
         ...this.projection,
         readModel: {
@@ -652,13 +668,14 @@ export class TaskRuntimeController {
       return
     }
     if (event.kind === 'error') {
+      this.flushPendingProjectionInternal({ emit: false })
       this.notice = event.message || event.code
       this.emit()
     }
   }
 
   private dispatchWorkSurfaceOpen(
-    envelope: import('../protocol/events').AgentRuntimeEventEnvelope,
+    envelope: AgentRuntimeEventEnvelope,
   ): void {
     if (!this.workSurfaceOpenListener) return
     const payload = (envelope.payload ?? {}) as Record<string, unknown>
@@ -690,8 +707,116 @@ export class TaskRuntimeController {
     })
   }
 
+  private applyProjectedEnvelopes(
+    envelopes: readonly AgentRuntimeEventEnvelope[],
+    options: { persist: boolean; emit: boolean },
+  ): void {
+    if (envelopes.length === 0) return
+    this.projection = projectEvents(this.projection, envelopes)
+    if (options.persist) {
+      this.enqueuePersist(envelopes)
+    }
+    const status = this.projection.readModel.runStatus
+    if (status && isTerminalRunStatus(status)) {
+      this.maybeDrainLocalQueue()
+    }
+    if (options.emit) {
+      this.emitRunStatus()
+      this.emit()
+    }
+  }
+
+  private flushPendingProjectionInternal(options: { emit: boolean }): void {
+    this.cancelScheduledFlush()
+    if (this.pendingEnvelopes.length === 0) return
+    const batch = this.pendingEnvelopes
+    this.pendingEnvelopes = []
+    this.applyProjectedEnvelopes(batch, { persist: true, emit: options.emit })
+  }
+
+  private scheduleProjectionFlush(): void {
+    if (this.flushHandle) return
+    const generation = this.attachGeneration
+    const taskId = this.taskId
+    const run = (): void => {
+      this.flushHandle = null
+      if (generation !== this.attachGeneration || this.taskId !== taskId) {
+        this.pendingEnvelopes = []
+        return
+      }
+      this.flushPendingProjectionInternal({ emit: true })
+    }
+    if (typeof requestAnimationFrame === 'function') {
+      this.flushHandle = {
+        kind: 'raf',
+        id: requestAnimationFrame(run),
+      }
+      return
+    }
+    this.flushHandle = {
+      kind: 'timeout',
+      id: setTimeout(run, 40) as unknown as number,
+    }
+  }
+
+  private cancelScheduledFlush(): void {
+    if (!this.flushHandle) return
+    if (this.flushHandle.kind === 'raf') {
+      cancelAnimationFrame(this.flushHandle.id)
+    } else {
+      clearTimeout(this.flushHandle.id)
+    }
+    this.flushHandle = null
+  }
+
+  private clearPendingProjection(): void {
+    this.cancelScheduledFlush()
+    this.pendingEnvelopes = []
+  }
+
+  private enqueuePersist(
+    envelopes: readonly AgentRuntimeEventEnvelope[],
+  ): void {
+    if (!this.eventStore || envelopes.length === 0) return
+    this.persistQueue = this.persistQueue
+      .catch(() => undefined)
+      .then(() => this.persistEnvelopes(envelopes))
+  }
+
+  private async persistEnvelopes(
+    envelopes: readonly AgentRuntimeEventEnvelope[],
+  ): Promise<void> {
+    if (!this.eventStore || envelopes.length === 0) return
+    for (let i = 0; i < envelopes.length; i += 1) {
+      const envelope = envelopes[i]!
+      const checkpoint = i === envelopes.length - 1
+      if (checkpoint) {
+        await this.persistEnvelope(envelope)
+        continue
+      }
+      try {
+        const result = await this.eventStore.append(envelope)
+        if (result.status === 'conflict') {
+          this.markPersistenceDegraded('事件序号冲突，本地持久化可能不完整')
+          return
+        }
+      } catch {
+        this.markPersistenceDegraded(
+          '本地持久化写入失败；当前投影仍可用，但刷新后不一定能恢复',
+        )
+        return
+      }
+    }
+  }
+
+  private markPersistenceDegraded(notice: string): void {
+    this.persistenceDegraded = true
+    this.notice = notice
+    this.emit()
+  }
+
   private async persistEnvelope(
-    envelope: import('../protocol/events').AgentRuntimeEventEnvelope,
+    envelope: AgentRuntimeEventEnvelope,
   ): Promise<void> {
     if (!this.eventStore) return
     const snapshot = {
@@ -709,15 +834,12 @@ export class TaskRuntimeController {
         snapshot,
       })
       if (result.append.status === 'conflict') {
-        this.persistenceDegraded = true
-        this.notice = '事件序号冲突，本地持久化可能不完整'
-        this.emit()
+        this.markPersistenceDegraded('事件序号冲突，本地持久化可能不完整')
       }
     } catch {
-      this.persistenceDegraded = true
-      this.notice =
-        '本地持久化写入失败；当前投影仍可用，但刷新后不一定能恢复'
-      this.emit()
+      this.markPersistenceDegraded(
+        '本地持久化写入失败；当前投影仍可用，但刷新后不一定能恢复',
+      )
     }
   }
 
@@ -746,7 +868,7 @@ export class TaskRuntimeController {
 
     const nextSeq = this.projection.readModel.lastTaskSequence + 1
     const now = new Date().toISOString()
-    const envelope: import('../protocol/events').AgentRuntimeEventEnvelope = {
+    const envelope: AgentRuntimeEventEnvelope = {
       eventId: `${taskId}:rehydrate-interrupt:${nextSeq}`,
       eventType: 'run.interrupted',
       schemaVersion: 1,

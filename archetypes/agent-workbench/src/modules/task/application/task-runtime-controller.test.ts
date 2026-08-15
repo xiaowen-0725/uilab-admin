@@ -320,3 +320,144 @@ describe('TaskRuntimeController command transactions', () => {
     ).toBe(true)
   })
 })
+
+describe('TaskRuntimeController projection coalescing', () => {
+  it('keeps deltas buffered until flush, then applies them in order', async () => {
+    const runtime = createBoundaryRuntime(async () => ({
+      status: 'accepted',
+      commandId: 'c4:command:2',
+      acceptedAt: ISSUED_AT,
+    }))
+    const controller = await attachController(runtime)
+
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'run.started', {
+        taskSequence: 1,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+      }),
+    })
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'output.delta', {
+        taskSequence: 2,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+        payload: { text: '你好' },
+      }),
+    })
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'output.delta', {
+        taskSequence: 3,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+        payload: { text: '世界' },
+      }),
+    })
+
+    expect(
+      controller.readModel.timeline.some((item) => item.category === 'assistant-message'),
+    ).toBe(false)
+
+    controller.flushPendingProjection()
+
+    const assistant = controller.readModel.timeline.find(
+      (item) => item.category === 'assistant-message',
+    )
+    expect(assistant?.body).toBe('你好世界')
+  })
+
+  it('flushes buffered deltas before applying a tool.called event', async () => {
+    const runtime = createBoundaryRuntime(async () => ({
+      status: 'accepted',
+      commandId: 'c4:command:2',
+      acceptedAt: ISSUED_AT,
+    }))
+    const controller = await attachController(runtime)
+
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'run.started', {
+        taskSequence: 1,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+      }),
+    })
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'output.delta', {
+        taskSequence: 2,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+        payload: { text: '先看目录。' },
+      }),
+    })
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'tool.called', {
+        taskSequence: 3,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+        payload: { toolId: 'ls-1', name: 'ls', args: { path: '/' } },
+      }),
+    })
+
+    const categories = controller.readModel.timeline.map((item) => item.category)
+    expect(categories).toEqual(['run-terminal', 'assistant-message', 'tool-group'])
+    expect(
+      controller.readModel.timeline.find((item) => item.category === 'assistant-message')
+        ?.body,
+    ).toBe('先看目录。')
+    expect(
+      controller.readModel.timeline.find((item) => item.category === 'tool-group')?.status,
+    ).toBe('running')
+  })
+
+  it('discards a pending delta buffer when attach switches tasks', async () => {
+    const runtime = createBoundaryRuntime(async () => ({
+      status: 'accepted',
+      commandId: 'c4:command:2',
+      acceptedAt: ISSUED_AT,
+    }))
+    const controller = await attachController(runtime)
+
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'run.started', {
+        taskSequence: 1,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+      }),
+    })
+    runtime.push('task-c4', {
+      kind: 'event',
+      envelope: envelope('task-c4', 'output.delta', {
+        taskSequence: 2,
+        runId: 'run-c4',
+        turnId: 'turn-c4',
+        projectId: 'project-c4',
+        payload: { text: '不应出现在新任务' },
+      }),
+    })
+
+    await controller.attach('task-c5', { title: '另一任务' })
+    controller.flushPendingProjection()
+
+    expect(controller.readModel.taskId).toBe('task-c5')
+    expect(
+      controller.readModel.timeline.some((item) =>
+        item.body?.includes('不应出现在新任务'),
+      ),
+    ).toBe(false)
+  })
+})
+
