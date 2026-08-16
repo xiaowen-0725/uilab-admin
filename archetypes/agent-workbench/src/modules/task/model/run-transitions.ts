@@ -1,12 +1,12 @@
 /**
- * Pure Run status state machine (design §7).
+ * Pure Turn status state machine (design §7).
  * Illegal transitions return a diagnostic error object — never throw into UI.
  */
 
 import type { TurnStatus } from './lifecycle'
 import { isTerminalTurnStatus } from './lifecycle'
 
-/** Events that may drive a Run status change. */
+/** Events that may drive a Turn status change. */
 export type RunTransitionEvent =
   | { type: 'start' }
   | { type: 'request_approval' }
@@ -48,7 +48,7 @@ export type RunTransitionResult = RunTransitionOk | RunTransitionError
  * - queued|running|waiting_for_approval|waiting_for_input|cancelling → interrupted
  *
  * Terminal statuses (completed|failed|cancelled) are immutable.
- * interrupted never returns to running on the same Run.
+ * interrupted never returns to running on the same Turn.
  */
 export function applyRunTransition(
   from: TurnStatus,
@@ -84,22 +84,14 @@ export function applyRunTransition(
       return fail(from, event, 'input_provided is only valid from waiting_for_input')
 
     case 'cancel_requested':
-      // User cancel: running → cancelling (and active wait states may cancel via interrupt paths;
-      // design main path is running → cancelling).
       if (from === 'running') return ok('cancelling')
       if (from === 'waiting_for_approval' || from === 'waiting_for_input') {
-        // Design emphasizes approval reject vs user cancel; allow cancel_requested from wait
-        // states into cancelling for Fake cancel-while-wait if needed. Strict main path
-        // for user cancel is running → cancelling; wait states can also enter cancelling.
         return ok('cancelling')
       }
       if (from === 'cancelling') {
         return fail(from, event, 'already cancelling')
       }
       if (from === 'queued') {
-        // Queued cancel: treat as direct cancel path via cancelling for uniformity,
-        // or jump — design lists running → cancelling; queued cancel is rare.
-        // Accept queued → cancelling for cancel-before-start.
         return ok('cancelling')
       }
       return fail(from, event, 'cancel_requested is not valid from this status')

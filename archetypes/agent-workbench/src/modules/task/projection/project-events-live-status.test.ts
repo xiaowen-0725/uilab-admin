@@ -10,7 +10,6 @@ function mk(
   seq: number,
   type: string,
   payload: unknown,
-  _turnId = 'turn-1',
   occurredAt = `1970-01-01T00:00:0${Math.min(seq, 9)}.000Z`,
 ): AgentRuntimeEventEnvelope {
   return {
@@ -19,7 +18,7 @@ function mk(
     schemaVersion: 2,
     projectId: 'p',
     taskId: 't',
-    turnId: _turnId,
+    turnId: 'turn-1',
     taskSequence: seq,
     occurredAt,
     receivedAt: occurredAt,

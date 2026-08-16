@@ -125,7 +125,7 @@ describe('ScriptedRuntimePort', () => {
 
   it('setScenario overrides default per task', async () => {
     const runtime = createScriptedRuntimePort()
-    runtime.setScenario('task-custom', cancelledRunScenario('task-custom', 'run-1', 'turn-1'))
+    runtime.setScenario('task-custom', cancelledRunScenario('task-custom', 'turn-1'))
     const received: string[] = []
     runtime.subscribe('task-custom', null, (event) => {
       if (event.kind === 'event') received.push(event.envelope.eventType)
@@ -147,7 +147,7 @@ describe('ScriptedRuntimePort', () => {
   })
 
   it('completedRunScenario produces correct sequence', () => {
-    const scenario = completedRunScenario('task-a', 'run-1', 'turn-1')
+    const scenario = completedRunScenario('task-a', 'turn-1')
     expect(scenario.events).toHaveLength(4)
     expect(scenario.events.map((e) => e.eventType)).toEqual([
       'turn.started',

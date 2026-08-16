@@ -93,15 +93,10 @@ export function upgradeWorkbenchIdb(
   oldVersion: number,
   _newVersion: number | null,
 ): void {
-  if (oldVersion < 1) {
-    createWorkbenchStores(db)
-    return
-  }
-
-  if (oldVersion < 2) {
+  if (oldVersion >= 1 && oldVersion < 2) {
     for (const name of Array.from(db.objectStoreNames)) {
       db.deleteObjectStore(name)
     }
-    createWorkbenchStores(db)
   }
+  createWorkbenchStores(db)
 }

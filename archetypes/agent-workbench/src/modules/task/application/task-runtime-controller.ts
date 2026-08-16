@@ -178,7 +178,7 @@ export class TaskRuntimeController {
     return this.notice
   }
 
-  /** True while a non-terminal Run is active or a command is in flight. */
+  /** True while a non-terminal Turn is active or a command is in flight. */
   isBusy(): boolean {
     if (this.pending) return true
     const status = this.projection.readModel.turnStatus

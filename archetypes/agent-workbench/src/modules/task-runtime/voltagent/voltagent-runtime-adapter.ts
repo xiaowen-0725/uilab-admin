@@ -60,7 +60,6 @@ type PendingApproval = {
   input: unknown
   /** User prompt that started this turn (for resume UIMessages). */
   userText: string
-  runId: string
   turnId: string
 }
 
@@ -69,14 +68,12 @@ type PendingQuestion = {
   toolCallId: string
   input: unknown
   userText: string
-  runId: string
   turnId: string
 }
 
 type TaskStreamState = {
   nextSequence: number
   activeAbort: AbortController | null
-  lastRunId: string | null
   lastTurnId: string | null
   /** Last user text for this task (approval resume). */
   lastUserText: string | null
@@ -375,7 +372,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.ensureTask(input.taskId)
     const state = this.taskState.get(input.taskId)!
     state.lastTurnId = input.turnId
-    state.lastRunId = input.turnId
     return accepted(`start-${input.turnId}`, this.nowIso())
   }
 
@@ -423,7 +419,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       state = {
         nextSequence: 1,
         activeAbort: null,
-        lastRunId: null,
         lastTurnId: null,
         lastUserText: null,
         lastCapabilityConnectorIds: [],
@@ -502,7 +497,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   private launchStream(args: {
     taskId: string
     turnId: string
-    runId: string
     input: StreamInput
     capabilityConnectorIds: readonly string[]
     completeIfNoTerminal?: boolean
@@ -532,7 +526,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     }
 
     const { turnId } = this.allocateIds(taskId, command)
-    state.lastRunId = turnId
     state.lastTurnId = turnId
     const modelInput = modelInputWithComposerContext(
       command.inputText,
@@ -553,7 +546,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.launchStream({
       taskId,
       turnId,
-      runId: turnId,
       input: modelInput,
       capabilityConnectorIds: state.lastCapabilityConnectorIds,
       completeIfNoTerminal: true,
@@ -609,7 +601,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const pending = state.pendingApprovals.get(approvalId)
     const turnId =
       command.turnId ?? pending?.turnId ?? state.lastTurnId ?? `turn-${taskId}`
-    const runId = pending?.runId ?? state.lastRunId ?? turnId
     const approved = command.payload.decision === 'approved'
 
     // Validate resumability *before* mutating approval state (Codex P2).
@@ -648,7 +639,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
     this.resumeWithToolPart(
       taskId,
-      runId,
       turnId,
       pending.userText || state.lastUserText || '',
       {
@@ -692,7 +682,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     const turnId =
       command.turnId ?? pending.turnId ?? state.lastTurnId ?? `turn-${taskId}`
-    const runId = pending.runId ?? state.lastRunId ?? turnId
     const answer: QuestionAnswer =
       command.answer ?? { kind: 'freeText', text: command.inputText }
     const output = questionAnswerToToolOutput(
@@ -721,7 +710,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     this.resumeWithToolPart(
       taskId,
-      runId,
       turnId,
       pending.userText || state.lastUserText || '',
       {
@@ -739,7 +727,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
   private resumeWithToolPart(
     taskId: string,
-    runId: string,
     turnId: string,
     userText: string,
     toolPart: UiToolPart
@@ -748,7 +735,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.launchStream({
       taskId,
       turnId,
-      runId,
       input: [
         {
           id: `user-${taskId}-${this.seq}`,
@@ -768,7 +754,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
   private rememberApprovalFromChunk(
     taskId: string,
-    runId: string,
     turnId: string,
     chunk: FullStreamChunk
   ): void {
@@ -790,14 +775,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       toolName,
       input: normalizeWorkspaceToolInput(input),
       userText: state.lastUserText ?? '',
-      runId,
       turnId,
     })
   }
 
   private rememberQuestionFromChunk(
     taskId: string,
-    runId: string,
     turnId: string,
     chunk: FullStreamChunk
   ): void {
@@ -812,7 +795,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       toolCallId: callId,
       input,
       userText: state.lastUserText ?? '',
-      runId,
       turnId,
     })
   }
@@ -820,13 +802,12 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   private async streamAgent(args: {
     taskId: string
     turnId: string
-    runId: string
     input: StreamInput
     capabilityConnectorIds: readonly string[]
     signal: AbortSignal
     completeIfNoTerminal?: boolean
   }): Promise<void> {
-    const { taskId, turnId, runId, input, signal, completeIfNoTerminal } = args
+    const { taskId, turnId, input, signal, completeIfNoTerminal } = args
     const state = this.ensureTask(taskId)
     const url = `${this.baseUrl}/agents/${encodeURIComponent(this.agentId)}/stream`
 
@@ -856,7 +837,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
       if (!response.ok) {
         const body = await response.text().catch(() => '')
-        this.failRun(
+        this.failTurn(
           taskId,
           turnId,
           `侧车 HTTP ${response.status}: ${body.slice(0, 200) || response.statusText}`
@@ -865,7 +846,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
 
       if (!response.body) {
-        this.failRun(taskId, turnId, '侧车未返回流式 body')
+        this.failTurn(taskId, turnId, '侧车未返回流式 body')
         return
       }
 
@@ -904,8 +885,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         const chunk = parsed
 
         // Record pending HITL before deciding whether a terminal event is legal.
-        this.rememberApprovalFromChunk(taskId, runId, turnId, chunk)
-        this.rememberQuestionFromChunk(taskId, runId, turnId, chunk)
+        this.rememberApprovalFromChunk(taskId, turnId, chunk)
+        this.rememberQuestionFromChunk(taskId, turnId, chunk)
         const pausedForHitl =
           state.pendingApprovals.size > 0 || state.pendingQuestions.size > 0
 
@@ -953,7 +934,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
       const message =
         err instanceof Error ? err.message : '连接 VoltAgent 侧车失败'
-      this.failRun(taskId, turnId, message)
+      this.failTurn(taskId, turnId, message)
       this.emit(taskId, {
         kind: 'error',
         code: 'voltagent_stream_error',
@@ -962,7 +943,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     }
   }
 
-  private failRun(
+  private failTurn(
     taskId: string,
     turnId: string,
     message: string

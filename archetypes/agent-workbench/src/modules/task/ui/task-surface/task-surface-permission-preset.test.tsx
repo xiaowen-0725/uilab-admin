@@ -53,7 +53,6 @@ function ApprovalHarness({
       events ??
         approvalRequestedScenario(
           taskId,
-          'run-1',
           'turn-1',
           requestId,
           toolName ?? 'write_file',

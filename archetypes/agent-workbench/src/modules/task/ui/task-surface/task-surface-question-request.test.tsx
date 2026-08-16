@@ -46,7 +46,7 @@ function QuestionHarness({
     pushed.current = true
     runtime.pushEvents(
       taskId,
-      questionRequestedScenario(taskId, 'run-1', 'turn-1', requestId, {
+      questionRequestedScenario(taskId, 'turn-1', requestId, {
         allowMultiple,
       }).events,
     )

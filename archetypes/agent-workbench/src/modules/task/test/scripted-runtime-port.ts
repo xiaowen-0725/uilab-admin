@@ -45,7 +45,7 @@ export function envelope(
 }
 
 /** Standard completed-turn scenario: lifecycle + message + terminal. */
-export function completedRunScenario(taskId: string, _runId: string, turnId: string): ScriptedScenario {
+export function completedRunScenario(taskId: string, turnId: string): ScriptedScenario {
   return {
     events: [
       envelope(taskId, 'turn.started', {
@@ -69,7 +69,7 @@ export function completedRunScenario(taskId: string, _runId: string, turnId: str
 }
 
 /** Cancelled-turn scenario. */
-export function cancelledRunScenario(taskId: string, _runId: string, turnId: string): ScriptedScenario {
+export function cancelledRunScenario(taskId: string, turnId: string): ScriptedScenario {
   return {
     events: [
       envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
@@ -80,17 +80,17 @@ export function cancelledRunScenario(taskId: string, _runId: string, turnId: str
 }
 
 /** Failed-turn scenario. */
-export function failedRunScenario(taskId: string, _runId: string, turnId: string, message = 'runtime error'): ScriptedScenario {
+export function failedRunScenario(taskId: string, turnId: string, message = 'runtime error'): ScriptedScenario {
   return {
     events: [
       envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
-      envelope(taskId, 'turn.failed', { taskSequence: 3, turnId, payload: { message } }),
+      envelope(taskId, 'turn.failed', { taskSequence: 2, turnId, payload: { message } }),
     ],
   }
 }
 
 /** Approval-required scenario: turn pauses at waiting_for_approval. */
-export function approvalScenario(taskId: string, _runId: string, turnId: string, requestId = 'req-1'): ScriptedScenario {
+export function approvalScenario(taskId: string, turnId: string, requestId = 'req-1'): ScriptedScenario {
   return {
     events: [
       envelope(taskId, 'turn.started', { taskSequence: 1, turnId }),
@@ -106,7 +106,6 @@ export function approvalScenario(taskId: string, _runId: string, turnId: string,
 /** `approval.requested` pause — used by permission-preset auto-respond tests. */
 export function approvalRequestedScenario(
   taskId: string,
-  _runId: string,
   turnId: string,
   requestId: string,
   toolName: string,
@@ -126,7 +125,6 @@ export function approvalRequestedScenario(
 /** Structured Question Request pause — used by question-card / preset lock tests. */
 export function questionRequestedScenario(
   taskId: string,
-  _runId: string,
   turnId: string,
   requestId: string,
   options?: {
@@ -157,7 +155,7 @@ export function questionRequestedScenario(
 
 export type CreateScriptedRuntimePortOptions = {
   /** Default scenario producer; called per startRun if no per-task scenario is set. */
-  defaultScenario?: (taskId: string, runId: string, turnId: string) => ScriptedScenario
+  defaultScenario?: (taskId: string, turnId: string) => ScriptedScenario
   /** Delay between events (ms); 0 = synchronous (default). */
   eventDelayMs?: number
 }
@@ -286,7 +284,7 @@ export function createScriptedRuntimePort(
 
     async startRun(input: RunStartInput, idempotencyKey: string): Promise<CommandAcknowledgement> {
       const { taskId, turnId } = input
-      const scenario = perTaskScenarios.get(taskId) ?? defaultScenario(taskId, turnId, turnId)
+      const scenario = perTaskScenarios.get(taskId) ?? defaultScenario(taskId, turnId)
 
       snapshots.set(taskId, {
         taskId,
