@@ -57,6 +57,7 @@ export default defineConfig(({ mode }) => ({
       '@base-ui/react/scroll-area',
       '@base-ui/react/separator',
       '@base-ui/react/tooltip',
+      '@base-ui/react/use-render',
       'class-variance-authority',
     ],
   },
