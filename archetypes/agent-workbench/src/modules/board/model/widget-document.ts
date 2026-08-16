@@ -18,18 +18,15 @@ export const WIDGET_INPUT_KEY_LIMIT = 16
 export const WIDGET_INPUT_VALUE_MAX_BYTES = 32 * 1024
 export const WIDGET_MESSAGE_MAX_BYTES = 512 * 1024
 
-export const WIDGET_THEME_VARS: Record<
-  WidgetTheme,
-  Record<
-    | '--widget-bg'
-    | '--widget-fg'
-    | '--widget-muted'
-    | '--widget-border'
-    | '--widget-up'
-    | '--widget-down',
-    string
-  >
-> = {
+type WidgetThemeToken =
+  | '--widget-bg'
+  | '--widget-fg'
+  | '--widget-muted'
+  | '--widget-border'
+  | '--widget-up'
+  | '--widget-down'
+
+export const WIDGET_THEME_VARS: Record<WidgetTheme, Record<WidgetThemeToken, string>> = {
   light: {
     '--widget-bg': '#ffffff',
     '--widget-fg': '#0d0d0d',
@@ -137,19 +134,19 @@ export function createHandshakeToken(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+function cssVars(theme: WidgetTheme): string {
+  return Object.entries(WIDGET_THEME_VARS[theme])
+    .map(([name, value]) => `${name}: ${value};`)
+    .join(' ')
+}
+
 function themeVarBlock(theme: WidgetTheme): string {
-  const light = Object.entries(WIDGET_THEME_VARS.light)
-    .map(([name, value]) => `${name}: ${value};`)
-    .join(' ')
-  const dark = Object.entries(WIDGET_THEME_VARS.dark)
-    .map(([name, value]) => `${name}: ${value};`)
-    .join(' ')
   return [
     ':root {',
-    light,
+    cssVars('light'),
     '}',
     ':root[data-widget-theme="dark"] {',
-    dark,
+    cssVars('dark'),
     '}',
     '*, *::before, *::after { box-sizing: border-box; }',
     'html, body { margin: 0; padding: 0; min-height: 100%; }',
@@ -162,16 +159,16 @@ function themeVarBlock(theme: WidgetTheme): string {
   ].join('\n')
 }
 
+const JS_SCRIPT_TYPES = new Set([
+  'module',
+  'text/javascript',
+  'application/javascript',
+  'text/ecmascript',
+  'application/ecmascript',
+])
+
 function isJavascriptType(type: string | undefined): boolean {
-  if (!type) return true
-  const normalized = type.trim().toLowerCase()
-  return (
-    normalized === 'module' ||
-    normalized === 'text/javascript' ||
-    normalized === 'application/javascript' ||
-    normalized === 'text/ecmascript' ||
-    normalized === 'application/ecmascript'
-  )
+  return !type || JS_SCRIPT_TYPES.has(type.trim().toLowerCase())
 }
 
 function readAttr(attrs: string, name: string): string | undefined {
@@ -198,17 +195,16 @@ function rewriteScripts(html: string, nonce: string): string {
   })
 }
 
+function injectAfter(html: string, match: RegExpExecArray, snippet: string): string {
+  const at = match.index + match[0].length
+  return html.slice(0, at) + snippet + html.slice(at)
+}
+
 function injectIntoHead(html: string, snippet: string): string {
   const head = /<head\b[^>]*>/i.exec(html)
-  if (head && head.index !== undefined) {
-    const at = head.index + head[0].length
-    return html.slice(0, at) + snippet + html.slice(at)
-  }
+  if (head) return injectAfter(html, head, snippet)
   const htmlTag = /<html\b[^>]*>/i.exec(html)
-  if (htmlTag && htmlTag.index !== undefined) {
-    const at = htmlTag.index + htmlTag[0].length
-    return `${html.slice(0, at)}<head>${snippet}</head>${html.slice(at)}`
-  }
+  if (htmlTag) return injectAfter(html, htmlTag, `<head>${snippet}</head>`)
   return `<!doctype html><html><head>${snippet}</head><body>${html}</body></html>`
 }
 

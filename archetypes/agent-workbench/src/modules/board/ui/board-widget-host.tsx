@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type ReactNode } from 'react'
 import { Ellipsis, Expand, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +17,33 @@ import { BoardWidgetFrame, readHostCspNonce } from './board-widget-frame'
 import { useWidgetBridge } from './use-widget-bridge'
 
 export type WidgetChrome = 'full' | 'compact' | 'none'
+
+function ChromeIconButton({
+  testId,
+  label,
+  onClick,
+  children,
+}: {
+  testId: string
+  label: string
+  onClick?: () => void
+  children: ReactNode
+}) {
+  return (
+    <Button
+      type='button'
+      size='icon'
+      variant='ghost'
+      className='size-6 shrink-0'
+      data-testid={testId}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  )
+}
 
 export interface BoardWidgetHostProps {
   widgetId: BoardWidgetId
@@ -66,15 +93,10 @@ export function BoardWidgetHost({
 }: BoardWidgetHostProps) {
   const heartbeatEnabled = heartbeat ?? chrome !== 'none'
   const nonce = useMemo(() => readHostCspNonce(), [])
-  const firstPaintThemeRef = useRef(theme)
+  const firstPaintTheme = useRef(theme).current
   const srcDoc = useMemo(
-    () =>
-      buildWidgetDocument({
-        html,
-        nonce,
-        theme: firstPaintThemeRef.current,
-      }),
-    [html, nonce],
+    () => buildWidgetDocument({ html, nonce, theme: firstPaintTheme }),
+    [html, nonce, firstPaintTheme],
   )
 
   const bridge = useWidgetBridge({
@@ -92,8 +114,9 @@ export function BoardWidgetHost({
   })
 
   const showHeader = chrome !== 'none'
-  const showError = Boolean(bridge.error)
   const showReload = bridge.phase === 'failed' || bridge.phase === 'dead'
+  const headerClass = chrome === 'full' ? 'h-9' : 'h-7'
+  const titleClass = chrome === 'full' ? 'text-[13px]' : 'text-[12px]'
 
   return (
     <section
@@ -111,46 +134,26 @@ export function BoardWidgetHost({
         <header
           className={cn(
             'flex shrink-0 items-center gap-1.5 border-b border-border/60 px-2',
-            chrome === 'full' ? 'h-9' : 'h-7',
+            headerClass,
           )}
           data-testid='board-widget-chrome'
         >
           <h3
             className={cn(
               'min-w-0 flex-1 truncate font-medium text-foreground',
-              chrome === 'full' ? 'text-[13px]' : 'text-[12px]',
+              titleClass,
             )}
           >
             {title}
           </h3>
-          <Button
-            type='button'
-            size='icon'
-            variant='ghost'
-            className='size-6 shrink-0'
-            data-testid='board-widget-refresh'
-            aria-label='刷新'
-            title='刷新'
-            onClick={() => {
-              onRefresh?.()
-            }}
-          >
+          <ChromeIconButton testId='board-widget-refresh' label='刷新' onClick={onRefresh}>
             <RefreshCw className='size-3.5' aria-hidden />
-          </Button>
+          </ChromeIconButton>
           {chrome === 'full' ? (
             <>
-              <Button
-                type='button'
-                size='icon'
-                variant='ghost'
-                className='size-6 shrink-0'
-                data-testid='board-widget-expand'
-                aria-label='全屏'
-                title='全屏'
-                onClick={() => onExpand?.()}
-              >
+              <ChromeIconButton testId='board-widget-expand' label='全屏' onClick={onExpand}>
                 <Expand className='size-3.5' aria-hidden />
-              </Button>
+              </ChromeIconButton>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
@@ -170,7 +173,7 @@ export function BoardWidgetHost({
                   {onOpenJob ? (
                     <DropdownMenuItem
                       data-testid='board-widget-menu-job'
-                      onClick={() => onOpenJob()}
+                      onClick={onOpenJob}
                     >
                       取数作业…
                     </DropdownMenuItem>
@@ -188,7 +191,7 @@ export function BoardWidgetHost({
         </header>
       ) : null}
 
-      {showError ? (
+      {bridge.error ? (
         <p
           className='flex shrink-0 items-center gap-1.5 border-b border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive'
           data-testid='board-widget-error'

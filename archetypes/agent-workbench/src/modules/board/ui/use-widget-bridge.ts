@@ -74,22 +74,28 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
   const sentThemeRef = useRef<WidgetTheme | null>(null)
   const lastPongAtRef = useRef(0)
 
-  const handlersRef = useRef({
+  const latestRef = useRef({
+    data,
+    theme,
+    inputs,
+    canSubmit,
     onSaveInput,
     onSubmit,
     onOpenLink,
     onWheelForward,
     onReady,
   })
-  handlersRef.current = {
+  latestRef.current = {
+    data,
+    theme,
+    inputs,
+    canSubmit,
     onSaveInput,
     onSubmit,
     onOpenLink,
     onWheelForward,
     onReady,
   }
-  const snapshotRef = useRef({ data, theme, inputs, canSubmit })
-  snapshotRef.current = { data, theme, inputs, canSubmit }
 
   const post = useCallback((message: HostToWidgetMessage) => {
     if (messageByteLength(message) > WIDGET_MESSAGE_MAX_BYTES) return
@@ -113,16 +119,16 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
         case 'ready': {
           if (handshakeDoneRef.current) return
           handshakeDoneRef.current = true
-          const snapshot = snapshotRef.current
-          draftsRef.current = { ...snapshot.inputs }
-          sentDataRef.current = snapshot.data
-          sentThemeRef.current = snapshot.theme
+          const latest = latestRef.current
+          draftsRef.current = { ...latest.inputs }
+          sentDataRef.current = latest.data
+          sentThemeRef.current = latest.theme
           post({
             type: 'init',
-            data: snapshot.data,
-            theme: snapshot.theme,
+            data: latest.data,
+            theme: latest.theme,
             inputs: draftsRef.current,
-            capabilities: { canSubmit: snapshot.canSubmit },
+            capabilities: { canSubmit: latest.canSubmit },
           })
           setPortOpen(true)
           return
@@ -130,7 +136,7 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
         case 'widget-ready': {
           if (failedRef.current) return
           setPhase('ready')
-          handlersRef.current.onReady?.(performance.now() - mountedAtRef.current)
+          latestRef.current.onReady?.(performance.now() - mountedAtRef.current)
           return
         }
         case 'pong': {
@@ -152,12 +158,12 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
             ...draftsRef.current,
             [message.key]: message.value,
           }
-          handlersRef.current.onSaveInput?.(message.key, message.value)
+          latestRef.current.onSaveInput?.(message.key, message.value)
           return
         }
         case 'submit': {
-          if (!snapshotRef.current.canSubmit) return
-          handlersRef.current.onSubmit?.(message.payload)
+          if (!latestRef.current.canSubmit) return
+          latestRef.current.onSubmit?.(message.payload)
           return
         }
         case 'open-link': {
@@ -165,12 +171,12 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
             showHint('只能打开 http 或 https 链接', 'open_link_rejected')
             return
           }
-          handlersRef.current.onOpenLink?.(message.url)
+          latestRef.current.onOpenLink?.(message.url)
           return
         }
         case 'wheel': {
           if (typeof message.deltaY !== 'number') return
-          handlersRef.current.onWheelForward?.(message.deltaY)
+          latestRef.current.onWheelForward?.(message.deltaY)
           return
         }
         case 'error': {
@@ -179,8 +185,6 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
           setPhase('failed')
           return
         }
-        case 'resize':
-          return
         default:
           return
       }
@@ -208,7 +212,7 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
     ])
   }, [handleInbound])
 
-  const resetBridge = useCallback((nextAssignKey: boolean) => {
+  const resetSession = useCallback(() => {
     portRef.current?.close()
     portRef.current = null
     failedRef.current = false
@@ -221,13 +225,17 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
     setPhase('mounting')
     setError(null)
     setHint(null)
-    if (nextAssignKey) setAssignKey((key) => key + 1)
   }, [])
+
+  const reloadDocument = useCallback(() => {
+    resetSession()
+    setAssignKey((key) => key + 1)
+  }, [resetSession])
 
   const reload = useCallback(() => {
     reloadCountRef.current = 0
-    resetBridge(true)
-  }, [resetBridge])
+    reloadDocument()
+  }, [reloadDocument])
 
   useEffect(() => {
     return () => {
@@ -242,21 +250,21 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
       if (failedRef.current) return
       if (reloadCountRef.current < WIDGET_READY_RELOAD_LIMIT) {
         reloadCountRef.current += 1
-        resetBridge(true)
+        reloadDocument()
         return
       }
       setPhase((current) => (current === 'mounting' ? 'failed' : current))
       setError((current) => current ?? '小组件未在预期时间内就绪。')
     }, WIDGET_READY_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
-  }, [phase, assignKey, resetBridge])
+  }, [phase, assignKey, reloadDocument])
 
   const documentKeyRef = useRef(documentKey)
   useEffect(() => {
     if (documentKeyRef.current === documentKey) return
     documentKeyRef.current = documentKey
-    resetBridge(false)
-  }, [documentKey, resetBridge])
+    resetSession()
+  }, [documentKey, resetSession])
 
   useEffect(() => {
     if (!heartbeat || !portOpen || phase !== 'ready') return

@@ -23,7 +23,10 @@ export function readHostCspNonce(): string {
   return nonce
 }
 
-function setRef(ref: Ref<HTMLIFrameElement | null> | undefined, node: HTMLIFrameElement | null) {
+function setRef(
+  ref: Ref<HTMLIFrameElement | null> | undefined,
+  node: HTMLIFrameElement | null,
+): void {
   if (!ref) return
   if (typeof ref === 'function') ref(node)
   else ref.current = node
