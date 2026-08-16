@@ -1,0 +1,214 @@
+import { LayoutGrid, MessageSquarePlus } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import type { Board } from '../../model/board'
+import {
+  THUMBNAIL_GEOMETRY,
+  THUMBNAIL_SLOTS,
+  toThumbnailSlots,
+} from '../../model/grid'
+import { formatRelative } from '../../model/relative-time'
+import { BoardCanvas } from '../board-canvas/board-canvas'
+import { BoardWidgetHost } from '../board-widget-host/board-widget-host'
+import type { WidgetTheme } from '../../model/widget-document'
+
+/**
+ * How thumbnails are drawn. `live` renders real widgets shrunk down (Kimi's
+ * behaviour); `static` is the fallback if live iframes cost too much — the
+ * decision belongs to whoever reads the measurement in #121.
+ */
+export type ThumbnailMode = 'live' | 'static'
+
+/**
+ * Widgets are opaque-origin, so the host cannot restyle their contents for a
+ * thumbnail. Rendering the frame at 1/scale and scaling it down is the only way
+ * to get a true miniature instead of a clipped crop.
+ */
+const THUMBNAIL_SCALE = 0.34
+
+export interface BoardListPageProps {
+  boards: Board[]
+  theme: WidgetTheme
+  thumbnailMode?: ThumbnailMode
+  onOpenBoard: (boardId: string) => void
+  onCreateByChat: () => void
+  /** Reports per-widget host mount→ready latency, for the cost measurement. */
+  onWidgetReady?: (widgetId: string, elapsedMs: number) => void
+}
+
+/**
+ * Board list — cards whose thumbnails render at most the first four widgets and
+ * pad the rest with empty slots. That cap is what keeps the page's iframe count
+ * at `boards × 4` instead of `boards × widgets`.
+ */
+export function BoardListPage({
+  boards,
+  theme,
+  thumbnailMode = 'live',
+  onOpenBoard,
+  onCreateByChat,
+  onWidgetReady,
+}: BoardListPageProps) {
+  return (
+    <div
+      className='flex h-full min-h-0 flex-col'
+      data-testid='board-list-page'
+      data-thumbnail-mode={thumbnailMode}
+    >
+      <header className='flex shrink-0 items-center gap-3 border-b border-border/60 px-6 py-4'>
+        <h1 className='flex-1 text-base font-semibold text-foreground'>看板</h1>
+        <Button
+          type='button'
+          size='sm'
+          data-testid='board-create-by-chat'
+          onClick={onCreateByChat}
+        >
+          <MessageSquarePlus className='size-4' aria-hidden />
+          对话创建
+        </Button>
+      </header>
+
+      {boards.length === 0 ? (
+        <div
+          className='flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center'
+          data-testid='board-list-empty'
+        >
+          <LayoutGrid className='size-8 text-muted-foreground/60' aria-hidden />
+          <p className='text-sm text-foreground'>还没有看板</p>
+          <p className='max-w-sm text-xs text-muted-foreground'>
+            用一句话描述你想长期盯着的东西，比如「每天早上给我一个待办和汇率概览」，看板和小组件会在对话里生成。
+          </p>
+          <Button type='button' size='sm' onClick={onCreateByChat}>
+            <MessageSquarePlus className='size-4' aria-hidden />
+            对话创建
+          </Button>
+        </div>
+      ) : (
+        <div className='min-h-0 flex-1 overflow-auto px-6 py-5'>
+          <ul className='grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4'>
+            {boards.map((board) => (
+              <li key={board.id}>
+                <BoardCard
+                  board={board}
+                  theme={theme}
+                  thumbnailMode={thumbnailMode}
+                  onOpen={onOpenBoard}
+                  onWidgetReady={onWidgetReady}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface BoardCardProps {
+  board: Board
+  theme: WidgetTheme
+  thumbnailMode: ThumbnailMode
+  onOpen: (boardId: string) => void
+  onWidgetReady?: (widgetId: string, elapsedMs: number) => void
+}
+
+function BoardCard({
+  board,
+  theme,
+  thumbnailMode,
+  onOpen,
+  onWidgetReady,
+}: BoardCardProps) {
+  const slots = toThumbnailSlots(board.widgets.map((widget) => widget.id))
+  const items = slots.map((slot, index) => ({
+    id: slot.widgetId ?? `empty-${index}`,
+    placement: slot.placement,
+  }))
+  const hiddenCount = Math.max(0, board.widgets.length - THUMBNAIL_SLOTS)
+
+  return (
+    // A card-wide click plus a real button for the keyboard: the thumbnail holds
+    // iframes, which cannot live inside a <button>.
+    <div
+      className='group flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-card p-3 text-left transition-colors hover:border-border has-focus-visible:border-ring'
+      data-testid='board-card'
+      data-board-id={board.id}
+      onClick={() => onOpen(board.id)}
+    >
+      <div
+        className='pointer-events-none overflow-hidden rounded-lg bg-muted/40 p-2'
+        data-testid='board-card-thumbnail'
+        aria-hidden
+      >
+        <BoardCanvas
+          items={items}
+          geometry={THUMBNAIL_GEOMETRY}
+          mode='read-only'
+          data-testid='board-thumbnail-canvas'
+          renderItem={(id) => {
+            const widget = board.widgets.find((candidate) => candidate.id === id)
+            if (!widget) {
+              return (
+                <div
+                  className='h-full w-full rounded-md bg-muted-foreground/10'
+                  data-testid='board-thumbnail-placeholder'
+                />
+              )
+            }
+            if (thumbnailMode === 'static') {
+              return (
+                <div
+                  className='flex h-full w-full items-center justify-center rounded-md border border-border/60 bg-card px-1 text-center text-[9px] leading-tight text-muted-foreground'
+                  data-testid='board-thumbnail-static'
+                >
+                  {widget.title}
+                </div>
+              )
+            }
+            return (
+              <div className='h-full w-full overflow-hidden rounded-md'>
+                <div
+                  className='origin-top-left'
+                  style={{
+                    width: `${100 / THUMBNAIL_SCALE}%`,
+                    height: `${100 / THUMBNAIL_SCALE}%`,
+                    transform: `scale(${THUMBNAIL_SCALE})`,
+                  }}
+                >
+                  <BoardWidgetHost
+                    widget={widget}
+                    theme={theme}
+                    chrome='none'
+                    inert
+                    onReady={onWidgetReady}
+                    className='rounded-md'
+                  />
+                </div>
+              </div>
+            )
+          }}
+        />
+      </div>
+
+      <div className='flex min-w-0 items-center gap-2'>
+        <button
+          type='button'
+          className='min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+          data-testid='board-card-open'
+          onClick={() => onOpen(board.id)}
+        >
+          {board.name}
+        </button>
+        {board.isExample ? (
+          <Badge variant='secondary' data-testid='board-example-badge'>
+            示例
+          </Badge>
+        ) : null}
+      </div>
+      <p className='text-xs text-muted-foreground'>
+        {board.widgets.length} 个小组件 · {formatRelative(board.updatedAt)}更新
+        {hiddenCount > 0 ? ` · 缩略图未显示 ${hiddenCount} 个` : ''}
+      </p>
+    </div>
+  )
+}
