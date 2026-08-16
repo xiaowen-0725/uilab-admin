@@ -195,18 +195,18 @@ export function SimpleMarkdown({
   return (
     <div
       className={cn(
-        'stream-markdown text-base font-[445] leading-[22px] text-foreground',
-        /* Chat prose headings inherit the body size and lean on weight + rhythm. */
-        '[&_:is(h1,h2,h3)]:mb-2.5 [&_:is(h1,h2,h3)]:mt-5',
-        '[&_:is(h1,h2,h3)]:font-semibold [&_:is(h1,h2,h3)]:leading-tight',
-        /* Agent headings are variable length — balance the wrap, no trailing widow. */
+        'stream-markdown tl-prose text-foreground',
+        /* Headings stay near body size; rhythm matches grok-app chat-md. */
+        '[&_h1]:text-[1.25em] [&_h2]:text-[1.12em] [&_h3]:text-[1.05em]',
+        '[&_:is(h1,h2,h3)]:mb-[0.5em] [&_:is(h1,h2,h3)]:mt-[1.15em]',
+        '[&_:is(h1,h2,h3)]:font-semibold [&_:is(h1,h2,h3)]:leading-[1.35]',
         '[&_:is(h1,h2,h3)]:text-balance',
-        '[&_p]:my-2 [&_p]:whitespace-pre-wrap',
-        '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
-        '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5',
-        '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5',
-        '[&_li]:leading-[22px]',
-        '[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border/40 [&_pre]:bg-muted/60',
+        '[&_p]:mt-0 [&_p]:mb-[0.85em] [&_p]:whitespace-pre-wrap',
+        '[&_blockquote]:my-[0.85em] [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
+        '[&_ul]:my-[0.85em] [&_ul]:list-disc [&_ul]:pl-[1.35em]',
+        '[&_ol]:my-[0.85em] [&_ol]:list-decimal [&_ol]:pl-[1.35em]',
+        '[&_li]:my-[0.28em]',
+        '[&_pre]:my-[0.75em] [&_pre]:overflow-x-auto [&_pre]:rounded-[10px] [&_pre]:border [&_pre]:border-border/40 [&_pre]:bg-muted/60',
         '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
         className,
       )}

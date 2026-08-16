@@ -32,7 +32,7 @@ function QuestionCardFrame({
   return (
     <div
       className={cn(
-        'max-w-[46rem] rounded-lg border bg-muted/40 text-base leading-[22px]',
+        'tl-prose max-w-[46rem] rounded-lg border bg-muted/40',
         className,
       )}
       data-kind='input-request'
@@ -67,10 +67,10 @@ export function QuestionCard({
       : '已提供'
     return (
       <QuestionCardFrame item={item} requestId={requestId} className='px-4 py-3'>
-        <p className='text-base leading-[22px] text-muted-foreground'>
+        <p className='text-muted-foreground'>
           {question.question}
         </p>
-        <p className='mt-1 text-base leading-[22px] font-medium'>{answerLabel}</p>
+        <p className='mt-1 font-medium'>{answerLabel}</p>
       </QuestionCardFrame>
     )
   }
@@ -117,7 +117,7 @@ export function QuestionCard({
       className='animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none p-3'
     >
       <div className='flex items-start justify-between gap-2'>
-        <p className='text-base leading-[22px] font-medium'>{question.question}</p>
+        <p className='font-medium'>{question.question}</p>
         <Button
           type='button'
           variant='ghost'

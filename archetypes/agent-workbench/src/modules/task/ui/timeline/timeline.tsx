@@ -1,6 +1,6 @@
 /**
  * Timeline — render TaskReadModel.timeline (Phase 4C–4F).
- * Codex-aligned density: user → turn chrome → tools/reasoning → assistant + live status.
+ * Chat density: 14px prose / 13px process chrome, tight slot gaps (grok-app rhythm).
  * UI never mutates Turn status; presentation only.
  *
  * 4D: reasoning / plan / tool / command / file / source / approval / input / error
@@ -282,7 +282,7 @@ export function Timeline({
     >
       <div
         ref={contentRef}
-        className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-5'
+        className='mx-auto flex w-full max-w-[var(--content-max-width)] flex-col gap-4'
       >
         <span
           className='sr-only'
@@ -360,7 +360,7 @@ export function Timeline({
             return (
               <div
                 key={seg.key}
-                className='flex flex-col gap-5'
+                className='flex flex-col gap-2.5'
                 data-testid={`timeline-turn-${seg.key}`}
                 data-turn-index={String(index)}
               >
@@ -441,7 +441,7 @@ function DeliverableZone({
       data-testid='timeline-deliverables'
       data-kind='deliverables'
     >
-      <p className='text-sm leading-5 text-muted-foreground'>
+      <p className='tl-chrome text-muted-foreground'>
         本次产出 · {items.length} 个文件
       </p>
       <div className='flex flex-wrap gap-x-3 gap-y-1.5'>
@@ -490,7 +490,7 @@ function TimelineTurnBlock({
   const completed = latestTerminal?.status === 'completed' && !runActive
 
   return (
-    <div className='flex flex-col gap-5'>
+    <div className='flex flex-col gap-2.5'>
       {runActive && !hasWorking ? (
         <WorkingBlock
           block={emptyWorkingBlock()}
@@ -534,7 +534,7 @@ function TimelineTurnBlock({
 
       {completed && latestTerminal && !hasWorking ? (
         <div
-          className='pt-1 text-base font-[445] leading-[22px] text-muted-foreground'
+          className='tl-chrome pt-1 text-muted-foreground'
           data-kind='process-fold'
           data-testid={`timeline-item-${latestTerminal.id}`}
           data-category='turn-terminal'
@@ -629,7 +629,7 @@ function WorkingBlock({
         .join(' · ')
 
   const statusClass = cn(
-    'text-base font-[445] leading-[22px]',
+    'tl-chrome',
     running ? 'text-foreground' : 'text-muted-foreground',
   )
 
@@ -691,7 +691,7 @@ function WorkingBlock({
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -2 }}
             transition={{ duration: reduceMotion ? 0.01 : 0.14, ease: [0.2, 0, 0, 1] }}
-            className='flex flex-col gap-1 border-s border-border/40 ps-3 text-sm'
+            className='flex flex-col gap-0.5 border-s border-border/40 ps-3'
             data-slot='process-fold-body'
           >
             {block.items.map((entry, index) =>
@@ -739,7 +739,7 @@ function ToolCluster({
       >
         <CollapsibleTrigger
           className={cn(
-            'flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm leading-5 font-[445]',
+            'tl-chrome flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left',
             'text-foreground/85 hover:bg-wb-hover-subtle',
             'active:scale-[0.96] transition-transform',
           )}
@@ -782,7 +782,7 @@ function FoldableBody({
   const long = body.length > TIMELINE_FOLD_THRESHOLD
   const [open, setOpen] = useState(!long)
   const mdClass = muted
-    ? 'text-sm leading-[20px] text-muted-foreground'
+    ? 'tl-thought text-muted-foreground'
     : 'text-foreground'
   if (!long) {
     return markdown ? (
@@ -793,7 +793,7 @@ function FoldableBody({
         onOpenFileRef={onOpenFileRef}
       />
     ) : (
-      <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
+      <div className={cn('whitespace-pre-wrap tl-thought', muted && 'text-muted-foreground')}>
         {body}
       </div>
     )
@@ -810,7 +810,7 @@ function FoldableBody({
             onOpenFileRef={onOpenFileRef}
           />
         ) : (
-          <div className={cn('whitespace-pre-wrap text-sm', muted && 'text-muted-foreground')}>
+          <div className={cn('whitespace-pre-wrap tl-thought', muted && 'text-muted-foreground')}>
             {body}
           </div>
         )
@@ -821,7 +821,7 @@ function FoldableBody({
           onOpenFileRef={onOpenFileRef}
         />
       ) : (
-        <div className='whitespace-pre-wrap text-sm text-muted-foreground'>
+        <div className='tl-thought whitespace-pre-wrap text-muted-foreground'>
           {preview}…
         </div>
       )}
@@ -842,12 +842,12 @@ function FoldableBody({
 function UserBubble({ item }: { item: TimelineItem }) {
   return (
     <div
-      className='flex w-full flex-col items-end py-2'
+      className='flex w-full flex-col items-end'
       data-kind='user-message'
       data-testid={`timeline-item-${item.id}`}
       data-category='user-message'
     >
-      <div className='max-w-[77%] [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl bg-muted px-3 py-2 text-base leading-[22px]'>
+      <div className='tl-prose max-w-[min(100%,36rem)] [overflow-wrap:anywhere] whitespace-pre-wrap rounded-[14px] bg-muted px-3.5 py-2.5'>
         {item.body}
       </div>
     </div>
@@ -900,7 +900,7 @@ function ToolRow({
   if (!hasChildren) {
     return (
       <div
-        className='flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-sm leading-5 font-[445] text-foreground/85'
+        className='tl-chrome flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-foreground/85'
         data-kind='tool-group'
         data-testid={`timeline-item-${item.id}`}
         data-category='tool-group'
@@ -925,7 +925,7 @@ function ToolRow({
       >
         <CollapsibleTrigger
           className={cn(
-            'flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm leading-5 font-[445]',
+            'tl-chrome flex h-7 w-full items-center gap-2 rounded-md px-1 py-1 text-left',
             'text-foreground/85 hover:bg-wb-hover-subtle',
             'active:scale-[0.96] transition-transform',
             item.status === 'running' && 'text-foreground',
@@ -1018,7 +1018,7 @@ function ReasoningRow({ item }: { item: TimelineItem }) {
         data-category='reasoning-section'
         data-status={item.status}
       >
-        <CollapsibleTrigger className='flex min-h-7 w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm leading-5 text-muted-foreground hover:bg-wb-hover-subtle'>
+        <CollapsibleTrigger className='tl-chrome flex min-h-6 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-muted-foreground hover:bg-wb-hover-subtle'>
           <ChevronDown
             className={cn(
               'size-3.5 opacity-70 transition-transform duration-150 ease-out',
@@ -1031,7 +1031,7 @@ function ReasoningRow({ item }: { item: TimelineItem }) {
             <span className='truncate opacity-70'>· {item.title}</span>
           ) : null}
         </CollapsibleTrigger>
-        <CollapsibleContent className='px-1 pb-1 ps-6 text-sm leading-5 text-muted-foreground'>
+        <CollapsibleContent className='tl-thought px-1 pb-1 ps-6 text-muted-foreground'>
           <FoldableBody itemId={item.id} body={item.body ?? ''} />
         </CollapsibleContent>
       </div>
@@ -1060,7 +1060,7 @@ const TimelineRow = memo(function TimelineRow({
     case 'assistant-message':
       return (
         <div
-          className='py-1 text-base leading-[22px] text-foreground'
+          className='tl-prose text-foreground'
           data-kind='assistant-message'
           data-testid={`timeline-item-${item.id}`}
           data-category='assistant-message'
@@ -1104,7 +1104,7 @@ const TimelineRow = memo(function TimelineRow({
           data-category='command-execution'
           data-status={item.status}
         >
-          <div className='flex items-center gap-2 rounded-md px-1 py-1.5 text-sm leading-5 text-muted-foreground hover:bg-wb-hover-subtle'>
+          <div className='tl-chrome flex items-center gap-2 rounded-md px-1 py-1 text-muted-foreground hover:bg-wb-hover-subtle'>
             <ToolActivityIcon kind='command' />
             <span
               className={cn(
@@ -1128,7 +1128,7 @@ const TimelineRow = memo(function TimelineRow({
     case 'source-group':
       return (
         <div
-          className='rounded-md px-1 py-1.5 text-sm leading-5 text-muted-foreground'
+          className='tl-chrome rounded-md px-1 py-1 text-muted-foreground'
           data-kind='source-group'
           data-testid={`timeline-item-${item.id}`}
           data-category='source-group'
@@ -1146,7 +1146,7 @@ const TimelineRow = memo(function TimelineRow({
       const approved = item.status === 'approved'
       return (
         <div
-          className='rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-base leading-[22px]'
+          className='tl-prose rounded-md border border-border/60 bg-muted/30 px-3 py-2'
           data-kind='approval-request'
           data-testid={`timeline-item-${item.id}`}
           data-category='approval-request'
@@ -1161,12 +1161,12 @@ const TimelineRow = memo(function TimelineRow({
                 : item.title ?? '审批'}
           </div>
           {item.body ? (
-            <div className='mt-1 whitespace-pre-wrap text-sm leading-5 text-muted-foreground'>
+            <div className='tl-chrome mt-1 whitespace-pre-wrap text-muted-foreground'>
               {item.body}
             </div>
           ) : null}
           {waiting ? (
-            <p className='mt-2 text-sm leading-5 text-muted-foreground'>
+            <p className='tl-chrome mt-2 text-muted-foreground'>
               请在下方选择允许或拒绝
             </p>
           ) : null}
@@ -1187,7 +1187,7 @@ const TimelineRow = memo(function TimelineRow({
       const waiting = item.status === 'waiting'
       return (
         <div
-          className='rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-base leading-[22px]'
+          className='tl-prose rounded-md border border-border/60 bg-muted/40 px-3 py-2'
           data-kind='input-request'
           data-testid={`timeline-item-${item.id}`}
           data-category='input-request'
@@ -1196,16 +1196,16 @@ const TimelineRow = memo(function TimelineRow({
         >
           <div className='font-medium'>{item.title ?? '需要补充信息'}</div>
           {item.body ? (
-            <div className='mt-1 whitespace-pre-wrap text-sm leading-5 text-muted-foreground'>
+            <div className='tl-chrome mt-1 whitespace-pre-wrap text-muted-foreground'>
               {item.body}
             </div>
           ) : null}
           {waiting ? (
-            <p className='mt-2 text-sm leading-5 text-muted-foreground'>
+            <p className='tl-chrome mt-2 text-muted-foreground'>
               请在下方输入框直接回复
             </p>
           ) : (
-            <div className='mt-1 text-sm leading-5 text-muted-foreground'>已提供</div>
+            <div className='tl-chrome mt-1 text-muted-foreground'>已提供</div>
           )}
         </div>
       )
@@ -1213,21 +1213,21 @@ const TimelineRow = memo(function TimelineRow({
     case 'error':
       return (
         <div
-          className='rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-base leading-[22px] text-destructive'
+          className='tl-prose rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-destructive'
           data-kind='error'
           data-testid={`timeline-item-${item.id}`}
           data-category='error'
         >
           <div className='font-medium'>{item.title ?? '错误'}</div>
           {item.body ? (
-            <div className='mt-1 text-sm leading-5 opacity-90'>{item.body}</div>
+            <div className='tl-chrome mt-1 opacity-90'>{item.body}</div>
           ) : null}
         </div>
       )
     case 'warning':
       return (
         <div
-          className='rounded-md border border-amber-500/30 px-3 py-2 text-sm leading-5 text-muted-foreground'
+          className='tl-chrome rounded-md border border-amber-500/30 px-3 py-2 text-muted-foreground'
           data-kind='warning'
           data-testid={`timeline-item-${item.id}`}
           data-category='warning'
@@ -1241,7 +1241,7 @@ const TimelineRow = memo(function TimelineRow({
     case 'turn-terminal':
       return (
         <div
-          className='pt-1 text-base font-[445] leading-[22px] text-muted-foreground'
+          className='tl-chrome pt-1 text-muted-foreground'
           data-kind='turn-terminal'
           data-testid={`timeline-item-${item.id}`}
           data-category='turn-terminal'
@@ -1258,7 +1258,7 @@ const TimelineRow = memo(function TimelineRow({
     case 'unsupported-event':
       return (
         <div
-          className='rounded-md border border-dashed border-border px-3 py-2 text-sm leading-5 text-muted-foreground'
+          className='tl-chrome rounded-md border border-dashed border-border px-3 py-2 text-muted-foreground'
           data-kind='unsupported-event'
           data-testid={`timeline-item-${item.id}`}
           data-category='unsupported-event'
@@ -1270,7 +1270,7 @@ const TimelineRow = memo(function TimelineRow({
     default:
       return (
         <div
-          className='rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm leading-5 text-muted-foreground'
+          className='tl-chrome rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-muted-foreground'
           data-kind={item.category}
           data-testid={`timeline-item-${item.id}`}
           data-category={item.category}

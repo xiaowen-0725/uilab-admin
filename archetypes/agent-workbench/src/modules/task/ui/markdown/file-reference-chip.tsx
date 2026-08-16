@@ -1,6 +1,6 @@
 /**
  * Codex-style inline file reference (data-file-reference mention).
- * CDP: span[data-file-reference] > Mention — 14px/22, weight 500,
+ * Inline file mention — inherits surrounding prose (14px / 1.65).
  * color color(srgb 0.511 0.712 0.900) ≈ #82b5e6, icon 21×21, role=button.
  */
 
@@ -54,7 +54,7 @@ export function FileReferenceChip({
         className={cn(
           'codex-file-ref inline-flex max-w-full items-baseline gap-0.5',
           'align-baseline rounded-sm px-0.5 py-0',
-          'text-base font-medium leading-[22px]',
+          'text-[length:1em] font-medium leading-[inherit]',
           className,
         )}
         style={{ color: CODEX_FILE_LINK_COLOR }}
@@ -75,7 +75,7 @@ export function FileReferenceChip({
       className={cn(
         'codex-file-ref inline-flex max-w-full items-baseline gap-0.5',
         'align-baseline rounded-sm px-0.5 py-0',
-        'text-base font-medium leading-[22px]',
+        'text-[length:1em] font-medium leading-[inherit]',
         'underline-offset-2 hover:underline',
         'focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
         className,

@@ -21,6 +21,13 @@
   --workspace-radius: 12px;
   /* Codex content column ~736 */
   --content-max-width: 736px;
+  /* Timeline chat rhythm — grok-app comfortable/md */
+  --tl-prose-size: 14px;
+  --tl-prose-leading: 1.65;
+  --tl-chrome-size: 13px;
+  --tl-chrome-leading: 1.4;
+  --tl-thought-size: 12.5px;
+  --tl-thought-leading: 1.5;
   --wb-app-bg: var(--sidebar);
   --wb-font-weight: 400;
   --wb-composer-shell-shadow:
@@ -548,10 +555,26 @@
   }
 }
 
+/* Timeline type scale. Shimmer inherits these so chrome can stay 13px. */
+.tl-prose {
+  font-size: var(--tl-prose-size);
+  line-height: var(--tl-prose-leading);
+  font-weight: 445;
+}
+
+.tl-chrome {
+  font-size: var(--tl-chrome-size);
+  line-height: var(--tl-chrome-leading);
+  font-weight: 445;
+}
+
+.tl-thought {
+  font-size: var(--tl-thought-size);
+  line-height: var(--tl-thought-leading);
+}
+
 .wb-live-status-shimmer {
   display: inline-block;
-  font-size: 14px;
-  line-height: 22px;
   font-weight: var(--wb-font-weight, 445);
   /* Cadenced sweep closer to Codex _cadencedLoadingShimmer* (~1.2s) */
   background-image: linear-gradient(
