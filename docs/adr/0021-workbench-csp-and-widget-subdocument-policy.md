@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-16
 - **Scope:** Agent Workbench 宿主文档（`index.html` / Electron / vite dev）与 Board Widget 的 `srcdoc` 子文档
-- **Map:** [#111](https://github.com/xiaowen-0725/uilab-admin/issues/111) · **Ticket:** [#125](https://github.com/xiaowen-0725/uilab-admin/issues/125)
+- **Map:** [#111](https://github.com/xiaowen-0725/uilab-admin/issues/111) · **Design:** [#125](https://github.com/xiaowen-0725/uilab-admin/issues/125) · **Implement:** [#134](https://github.com/xiaowen-0725/uilab-admin/issues/134)
 - **Spec:** [workbench-board-spec §3](../plans/workbench-board-spec.md)
 
 ## Context
@@ -64,4 +64,16 @@ csp="default-src 'none'; script-src 'nonce-<SAME>'; style-src 'unsafe-inline';
 - widget 生成规范必须禁止内联事件处理器、`eval` / `new Function` / 动态 `import()`；校验器做静态检测。
 - 首版接受一处**已知弱化**：静态打包下 nonce 退化为构建期常量。本机桌面应用，宿主侧无渲染不可信 HTML 的路径。
 - 后人收紧宿主 CSP 会让全部看板静默黑屏，这是本特性最主要的回归风险，靠门禁第 3 条（成对检查）挡住。
-- 待实测：`frame-src 'self'` 对 `about:srcdoc` 初始加载与后续自导航的实际判定——**这是自导航封堵是否成立的唯一支点**；`csp=` 属性对本条文全部指令集的生效性；prod 期 `style-src` 能否收紧到 `'self'`。
+
+## 实测（#134 · Chromium / Vitest browser · 2026-08-16）
+
+条件：宿主 meta CSP 为 ADR §1（`frame-src 'self'`，`script-src 'self' 'nonce-…'`）；Playwright Chromium，与 `pnpm --filter @uilab/agent-workbench test` 同一份浏览器。
+
+| 问题 | 判定 | 证据 |
+| --- | --- | --- |
+| `frame-src 'self'` 是否允许 `about:srcdoc` **初始加载** | **允许**。带 nonce 的 srcdoc 脚本能跑，`location.href === 'about:srcdoc'`。 | `BoardWidgetFrame`：`board-widget-ready` |
+| `frame-src 'self'` 是否拦住 srcdoc **自导航**（`location = 'https://example.com'`） | **拦住**。只给 `sandbox="allow-scripts"`、**不加** iframe `csp=` 时，导航后仍停在 `about:srcdoc`，到不了 `example.com`。自导航封堵成立，**不必另找手段**。 | `BoardWidgetFrame`：host-only 探针 |
+| iframe `csp=` 对本条文指令集是否生效 | **对隔离项生效**。宿主 `connect-src` / `img-src` 允许 `http://127.0.0.1:3141`，widget `csp=` 仍拦住对该源的 `fetch` 与 `Image`；`eval` 也被拦。`font-src` / `form-action` / `base-uri` / `object-src` 未逐条探针。 | `BoardWidgetFrame`：`board-widget-csp-probe` |
+| prod 期 `style-src` 能否收紧到 `'self'` | **仍待测**。宿主与 widget 目前都依赖 `'unsafe-inline'` 样式；本票未改这条。 | — |
+
+实现备注：dev / 测试的 `connect-src` 在 ADR 的 `ws://localhost:5174` 之外，由 `transformIndexHtml` 补上实际 Vite/Vitest 端口与 `ws://127.0.0.1:*`，否则 HMR 与浏览器测试会自己违规。未加 `server.headers` / Electron `onHeadersReceived`。

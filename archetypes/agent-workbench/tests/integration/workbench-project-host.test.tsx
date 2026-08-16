@@ -192,10 +192,11 @@ describe('Composer project surface (Spec-α)', () => {
     expect(
       host.calls.some(
         (call) =>
-          call.method === 'startRuntime' &&
+          call.method === 'createProjectDirectory' &&
           String(call.args[0] ?? '').includes('项目甲'),
       ),
     ).toBe(true)
+    expect(host.calls.some((call) => call.method === 'startRuntime')).toBe(true)
   })
 
   it('Fake Host: removing a specified project drops it from the list and keeps the folder', async () => {

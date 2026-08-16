@@ -1,16 +1,56 @@
 /// <reference types="vitest/config" />
+import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Plugin, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { playwright } from '@vitest/browser-playwright'
+
+const CSP_NONCE_PLACEHOLDER = 'WORKBENCH_CSP_NONCE'
+const CSP_DEV_CONNECT_PLACEHOLDER = 'WORKBENCH_DEV_CONNECT'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 const reactRoot = path.dirname(require.resolve('react/package.json'))
 const reactDomRoot = path.dirname(require.resolve('react-dom/package.json'))
+
+function resolveDevConnect(server: ViteDevServer | undefined): string {
+  if (!server) return ''
+  const configured = server.config.server.port ?? 5174
+  const address = server.httpServer?.address()
+  const actual =
+    typeof address === 'object' && address ? address.port : configured
+  const ports = new Set([5174, configured, actual].filter((port) => port > 0))
+  const extras: string[] = []
+  for (const port of ports) {
+    extras.push(`ws://localhost:${port}`, `ws://127.0.0.1:${port}`)
+  }
+  extras.push('ws://localhost:*', 'ws://127.0.0.1:*')
+  return extras.join(' ')
+}
+
+function workbenchCspPlugin(): Plugin {
+  const buildNonce = randomBytes(16).toString('base64url')
+  return {
+    name: 'workbench-csp',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        const nonce = ctx.server
+          ? randomBytes(16).toString('base64url')
+          : buildNonce
+        const sidecarPort = process.env.WORKBENCH_SIDECAR_PORT ?? '3141'
+        const devConnect = resolveDevConnect(ctx.server)
+        return html
+          .replaceAll(CSP_NONCE_PLACEHOLDER, nonce)
+          .replaceAll(` ${CSP_DEV_CONNECT_PLACEHOLDER}`, devConnect ? ` ${devConnect}` : '')
+          .replaceAll('http://127.0.0.1:3141', `http://127.0.0.1:${sidecarPort}`)
+      },
+    },
+  }
+}
 
 function browserTestFixtures(): Plugin {
   return {
@@ -32,9 +72,13 @@ function browserTestFixtures(): Plugin {
 }
 
 export default defineConfig(({ mode }) => ({
+  html: {
+    cspNonce: CSP_NONCE_PLACEHOLDER,
+  },
   plugins: [
     react(),
     tailwindcss(),
+    workbenchCspPlugin(),
     ...(mode === 'test' ? [browserTestFixtures()] : []),
   ],
   resolve: {

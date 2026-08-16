@@ -616,6 +616,7 @@ async function checkSources() {
   }
 
   await checkDesktopHostImports()
+  await checkBoardCspAndSandbox()
 }
 
 async function checkDesktopHostImports() {
@@ -650,6 +651,169 @@ async function checkDesktopHostImports() {
   }
 }
 
+function parseCspPolicy(policy) {
+  const directives = new Map()
+  for (const raw of policy.split(';')) {
+    const tokens = raw.trim().split(/\s+/).filter(Boolean)
+    if (tokens.length === 0) continue
+    directives.set(tokens[0].toLowerCase(), tokens.slice(1))
+  }
+  return directives
+}
+
+function isNoneOnly(sources) {
+  return sources.length === 1 && sources[0] === "'none'"
+}
+
+function isNonceSource(source) {
+  return /^'nonce-.+'$/.test(source)
+}
+
+function coversSource(hostSources, widgetSource) {
+  if (hostSources.includes('*')) return true
+  if (hostSources.includes(widgetSource)) return true
+  if (isNonceSource(widgetSource)) {
+    return hostSources.some((source) => isNonceSource(source))
+  }
+  return false
+}
+
+function hostCspCoversWidgetCsp(hostPolicy, widgetPolicy) {
+  const host = parseCspPolicy(hostPolicy)
+  const widget = parseCspPolicy(widgetPolicy)
+  const missing = []
+  for (const [directive, widgetSources] of widget) {
+    if (isNoneOnly(widgetSources)) continue
+    const hostSources = host.get(directive) ?? host.get('default-src') ?? []
+    if (isNoneOnly(hostSources)) {
+      for (const source of widgetSources) {
+        if (source !== "'none'") missing.push(`${directive} ${source}`)
+      }
+      continue
+    }
+    for (const source of widgetSources) {
+      if (source === "'none'") continue
+      if (coversSource(hostSources, source)) continue
+      missing.push(`${directive} ${source}`)
+    }
+  }
+  return missing
+}
+
+function extractQuotedString(source, name) {
+  const match = source.match(
+    new RegExp(`export const ${name}\\s*=\\s*(['"\`])([\\s\\S]*?)\\1`),
+  )
+  return match?.[2] ?? null
+}
+
+function extractHostCspFromIndexHtml(html) {
+  const block = html.match(
+    /<meta\b[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/i,
+  )
+  if (!block) return null
+  const content = block[0].match(/\bcontent=(["'])([\s\S]*?)\1/)
+  return content?.[2] ?? null
+}
+
+function findBoardWidgetIframes(source) {
+  const frames = []
+  const iframeRe = /<iframe\b([\s\S]*?)\/?>/g
+  let match
+  while ((match = iframeRe.exec(source)) !== null) {
+    frames.push(match[1])
+  }
+  return frames
+}
+
+async function checkBoardCspAndSandbox() {
+  const indexHtmlPath = path.join(workbenchRoot, 'index.html')
+  if (!(await mustExist(indexHtmlPath, 'archetypes/agent-workbench/index.html'))) {
+    return
+  }
+  const indexHtml = await readFile(indexHtmlPath, 'utf8')
+  const hostCsp = extractHostCspFromIndexHtml(indexHtml)
+  if (!hostCsp) {
+    errors.push(
+      'index.html must include a Content-Security-Policy meta (Board widget srcdoc clones the host policy)',
+    )
+    return
+  }
+  if (!/\bframe-src\b/.test(hostCsp)) {
+    errors.push('host CSP must include frame-src')
+  }
+  if (!/\bimg-src\b/.test(hostCsp)) {
+    errors.push('host CSP must include img-src')
+  }
+  if (hostCsp.includes("'unsafe-eval'")) {
+    errors.push("host CSP must not include 'unsafe-eval'")
+  }
+
+  const boardDir = path.join(workbenchSrc, 'modules', 'board')
+  if (!(await exists(boardDir))) {
+    errors.push('missing src/modules/board (needed for widget iframe policy checks)')
+    return
+  }
+  const boardFiles = (await walkSources(boardDir)).filter((file) => !isTestSource(file))
+  let widgetIframeCount = 0
+  let widgetCsp = null
+  for (const file of boardFiles) {
+    const source = await readFile(file, 'utf8')
+    const fileRel = toPosixRel(file)
+    if (
+      /\bsandboxForTrust\b/.test(source) ||
+      /surfaces\/browser\/url-utils/.test(source)
+    ) {
+      errors.push(
+        `board module must not reuse sandboxForTrust() / browser url-utils (${fileRel})`,
+      )
+    }
+    for (const attrs of findBoardWidgetIframes(source)) {
+      widgetIframeCount += 1
+      const hasSandbox = /\bsandbox\s*=/.test(attrs)
+      const hasCsp = /\bcsp\s*=/.test(attrs)
+      if (!hasSandbox || !hasCsp) {
+        errors.push(
+          `Board widget iframe in ${fileRel} must set both sandbox and csp attributes`,
+        )
+      }
+      if (/allow-same-origin/.test(attrs)) {
+        errors.push(
+          `Board widget iframe sandbox in ${fileRel} must not include allow-same-origin`,
+        )
+      }
+    }
+    const template = extractQuotedString(source, 'WIDGET_IFRAME_CSP_TEMPLATE')
+    if (template) widgetCsp = template
+    const sandboxConst = extractQuotedString(source, 'WIDGET_IFRAME_SANDBOX')
+    if (sandboxConst?.includes('allow-same-origin')) {
+      errors.push(
+        'WIDGET_IFRAME_SANDBOX must not include allow-same-origin',
+      )
+    }
+  }
+  if (widgetIframeCount === 0) {
+    errors.push(
+      'Board widget rendering point must include an iframe with sandbox and csp attributes',
+    )
+  }
+  if (!widgetCsp) {
+    errors.push('missing WIDGET_IFRAME_CSP_TEMPLATE for host/widget CSP pair check')
+    return
+  }
+
+  const hostForPair = hostCsp
+    .replaceAll('WORKBENCH_CSP_NONCE', 'gate-nonce')
+    .replaceAll('WORKBENCH_DEV_CONNECT', 'ws://localhost:5174')
+  const widgetForPair = widgetCsp.replaceAll('__NONCE__', 'gate-nonce')
+  const missing = hostCspCoversWidgetCsp(hostForPair, widgetForPair)
+  if (missing.length > 0) {
+    errors.push(
+      `host CSP does not cover widget csp= (child can only tighten): ${missing.join(', ')}`,
+    )
+  }
+}
+
 function exitWithErrors() {
   console.error(`\ncheck-workbench FAILED (${errors.length} issue(s)):`)
   for (const e of errors) console.error(`  - ${e}`)
@@ -681,6 +845,7 @@ async function main() {
   console.log('  Leaf layer: no React / UI')
   console.log('  Runtime imports: no cycles')
   console.log('  Host wire: desktop ↔ renderer shared leaf')
+  console.log('  Board CSP: host meta + widget sandbox/csp pair')
   process.exit(0)
 }
 
