@@ -7,7 +7,7 @@
 
 export const WORKBENCH_IDB_NAME = 'uilab-agent-workbench'
 /** Schema algebra — bump only on structure migrations. */
-export const WORKBENCH_IDB_VERSION = 2
+export const WORKBENCH_IDB_VERSION = 3
 
 export const STORE_PROJECTS = 'projects'
 export const STORE_TASKS = 'tasks'
@@ -16,8 +16,19 @@ export const STORE_SNAPSHOTS = 'snapshots'
 export const STORE_COMMANDS = 'commands'
 export const STORE_SESSION = 'session'
 export const STORE_METADATA = 'metadata'
+export const STORE_BOARDS = 'boards'
+export const STORE_BOARD_WIDGETS = 'boardWidgets'
+export const STORE_WIDGET_DATA_JOBS = 'widgetDataJobs'
+export const STORE_WIDGET_JOB_RUNS = 'widgetJobRuns'
 
 export const SESSION_ROW_ID = 'current'
+
+/** Event-protocol stores wiped on the v1 → v2 jump. Never enumerate all object stores. */
+export const PROTOCOL_EVENT_STORE_NAMES = [
+  STORE_EVENTS,
+  STORE_SNAPSHOTS,
+  STORE_COMMANDS,
+] as const
 
 export type WorkbenchStoreName =
   | typeof STORE_PROJECTS
@@ -27,6 +38,10 @@ export type WorkbenchStoreName =
   | typeof STORE_COMMANDS
   | typeof STORE_SESSION
   | typeof STORE_METADATA
+  | typeof STORE_BOARDS
+  | typeof STORE_BOARD_WIDGETS
+  | typeof STORE_WIDGET_DATA_JOBS
+  | typeof STORE_WIDGET_JOB_RUNS
 
 export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
   STORE_PROJECTS,
@@ -36,6 +51,10 @@ export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
   STORE_COMMANDS,
   STORE_SESSION,
   STORE_METADATA,
+  STORE_BOARDS,
+  STORE_BOARD_WIDGETS,
+  STORE_WIDGET_DATA_JOBS,
+  STORE_WIDGET_JOB_RUNS,
 ]
 
 /** Session pointer row persisted in `session` store. */
@@ -82,10 +101,26 @@ function createWorkbenchStores(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains(STORE_METADATA)) {
     db.createObjectStore(STORE_METADATA, { keyPath: 'key' })
   }
+  if (!db.objectStoreNames.contains(STORE_BOARDS)) {
+    db.createObjectStore(STORE_BOARDS, { keyPath: 'id' })
+  }
+  if (!db.objectStoreNames.contains(STORE_BOARD_WIDGETS)) {
+    db.createObjectStore(STORE_BOARD_WIDGETS, { keyPath: 'id' })
+  }
+  if (!db.objectStoreNames.contains(STORE_WIDGET_DATA_JOBS)) {
+    const jobs = db.createObjectStore(STORE_WIDGET_DATA_JOBS, { keyPath: 'id' })
+    jobs.createIndex('widgetId', 'widgetId', { unique: true })
+  }
+  if (!db.objectStoreNames.contains(STORE_WIDGET_JOB_RUNS)) {
+    const runs = db.createObjectStore(STORE_WIDGET_JOB_RUNS, { keyPath: 'id' })
+    runs.createIndex('jobId', 'jobId', { unique: false })
+  }
 }
 
 /**
- * Schema upgrades. Version 2 drops local v1 event protocol data (wipe + recreate).
+ * Schema upgrades.
+ * Version 2 drops local v1 event protocol data (wipe + recreate those stores only).
+ * Version 3 additively creates Board stores; never delete existing stores.
  * Called only from the shared shell's onupgradeneeded.
  */
 export function upgradeWorkbenchIdb(
@@ -94,8 +129,10 @@ export function upgradeWorkbenchIdb(
   _newVersion: number | null,
 ): void {
   if (oldVersion >= 1 && oldVersion < 2) {
-    for (const name of Array.from(db.objectStoreNames)) {
-      db.deleteObjectStore(name)
+    for (const name of PROTOCOL_EVENT_STORE_NAMES) {
+      if (db.objectStoreNames.contains(name)) {
+        db.deleteObjectStore(name)
+      }
     }
   }
   createWorkbenchStores(db)

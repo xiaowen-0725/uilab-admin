@@ -29,6 +29,11 @@ export {
   STORE_COMMANDS,
   STORE_SESSION,
   STORE_METADATA,
+  STORE_BOARDS,
+  STORE_BOARD_WIDGETS,
+  STORE_WIDGET_DATA_JOBS,
+  STORE_WIDGET_JOB_RUNS,
+  PROTOCOL_EVENT_STORE_NAMES,
 } from './workbench-idb-schema'
 
 export interface WorkbenchIdbError {
