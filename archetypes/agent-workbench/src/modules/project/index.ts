@@ -106,3 +106,9 @@ export {
   sanitizeDirectoryName,
   uniqueChildDirectoryName,
 } from './application/local-root-path'
+export {
+  fetchSidecarWorkspaceRoot,
+  planSidecarStart,
+  waitForSidecarWorkspaceRoot,
+} from './application/sidecar-workspace-ready'
+export type { SidecarStartPlan } from './application/sidecar-workspace-ready'

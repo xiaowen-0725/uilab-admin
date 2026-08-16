@@ -267,6 +267,7 @@ const LEAF_PATH_PREFIXES = [
 
 const LEAF_FILES = new Set([
   'src/modules/project/application/local-root-path.ts',
+  'src/modules/project/application/sidecar-workspace-ready.ts',
 ])
 
 const DESKTOP_ALLOWED_SRC = new Set([
@@ -642,7 +643,7 @@ async function checkDesktopHostImports() {
         !DESKTOP_ALLOWED_SRC.has(resolvedRel)
       ) {
         errors.push(
-          `Desktop Host may only import host-wire or local-root-path from src/ (${fileRel}: ${spec} -> ${resolvedRel})`,
+          `Desktop Host may only import host-wire, local-root-path, or sidecar-workspace-ready from src/ (${fileRel}: ${spec} -> ${resolvedRel})`,
         )
       }
     }

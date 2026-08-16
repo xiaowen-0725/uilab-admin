@@ -35,3 +35,6 @@ dist-ssr
 
 # Playwright CLI transient snapshots/logs
 .playwright-cli/
+
+# Local VoltAgent e2e workspace (live runtime history; do not commit)
+output/voltagent-e2e-workspace/

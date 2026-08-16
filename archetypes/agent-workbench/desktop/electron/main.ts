@@ -16,6 +16,11 @@ import {
   uniqueChildDirectoryName,
 } from '../../src/modules/project/application/local-root-path'
 import {
+  fetchSidecarWorkspaceRoot,
+  planSidecarStart,
+  waitForSidecarWorkspaceRoot,
+} from '../../src/modules/project/application/sidecar-workspace-ready'
+import {
   HOST_IPC,
   type HostCreateProjectDirectoryInput,
   type HostProjectsHomePayload,
@@ -53,32 +58,6 @@ function resolveHome(payload: HostProjectsHomePayload): string {
     projectsHomeDirName: payload.projectsHomeDirName || 'AgentWorkbench',
     projectsHomeOverride: payload.projectsHomeOverride,
   })
-}
-
-async function waitForRuntimeReady(
-  workspaceRoot: string,
-  timeoutMs = 20_000,
-): Promise<void> {
-  const expected = normalizeLocalRoot(workspaceRoot)
-  const started = Date.now()
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const res = await fetch(`${SIDECAR_BASE}/workspace/info`)
-      if (res.ok) {
-        const body = (await res.json()) as { workspaceRoot?: string }
-        if (
-          typeof body.workspaceRoot === 'string' &&
-          normalizeLocalRoot(body.workspaceRoot) === expected
-        ) {
-          return
-        }
-      }
-    } catch {
-      // still starting
-    }
-    await new Promise((r) => setTimeout(r, 250))
-  }
-  throw new Error('侧车启动超时：工作根尚未就绪')
 }
 
 async function stopSidecar(): Promise<void> {
@@ -154,6 +133,15 @@ function registerIpc(): void {
   ipcMain.handle(HOST_IPC.startRuntime, async (_event, workspaceRoot: string) => {
     const root = normalizeLocalRoot(expandHome(workspaceRoot, os.homedir()))
     runtimeStatus = 'starting'
+    const live = await fetchSidecarWorkspaceRoot(
+      SIDECAR_BASE,
+      fetch,
+      AbortSignal.timeout(2_000),
+    )
+    if (planSidecarStart(live, root) === 'adopt') {
+      runtimeStatus = 'ready'
+      return { baseUrl: SIDECAR_BASE }
+    }
     await stopSidecar()
     runtimeStatus = 'starting'
     const cwd = resolveSidecarDir()
@@ -173,7 +161,10 @@ function registerIpc(): void {
       sidecar = null
     })
     try {
-      await waitForRuntimeReady(root)
+      await waitForSidecarWorkspaceRoot({
+        baseUrl: SIDECAR_BASE,
+        expectedRoot: root,
+      })
       runtimeStatus = 'ready'
       return { baseUrl: SIDECAR_BASE }
     } catch (err) {
