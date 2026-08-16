@@ -63,7 +63,7 @@ src/
     task-runtime/      # VoltAgent Adapter + EventStore 实现（叶层，无 React）
     work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
     capabilities/      # 连接器 / 技能 / 专家 snapshot 与选择
-    board/             # Board 实体 + BoardStorePort（IDB v3）；UI / 作业运行时未交付
+    board/             # Board 实体 + BoardStorePort（IDB v3）+ BoardWidgetHost / 桥；canvas / 作业运行时未交付
   components/ui/       # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
   lib/                 # cn 等应用侧工具（叶层，无 React）
   config/              # fixtures / captures / runtime-adapter（叶层，无 React）
