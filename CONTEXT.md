@@ -182,3 +182,15 @@ _Avoid_: Enabled, Installed, Logged in（作全局宿主登录）
 **Permission Preset**:
 Task 级默认权限档位，决定渲染端如何自动应答 Runtime 审批请求（`approval.requested`）；两档：`auto-approve`「帮我批准」（文件写白名单自动批准，命令与未知工具弹 Dock）与 `full-access`「完全访问」（一律自动批准）。侧车门闸保持 fail-closed，预设只自动化用户同意动作。
 _Avoid_: Permission Mode（作实现词）, 权限策略引擎, Role
+
+**Board**:
+用户长期持有、按主题聚合多个 Board Widget 的网格空间（用户可见中文文案「看板」）；只拥有放置与布局，不拥有 widget 的实现与数据。应用级全局实体，不隶属于某个 Project 或 Task，其存在与浏览不依赖 Agent Runtime 可用性。
+_Avoid_: Dashboard, Canvas, Workspace, Work Surface, Task Context Panel
+
+**Board Widget**:
+Board 上一块可独立渲染的单元（用户可见中文文案「小组件」），实现形态为 Agent 生成的单文件 HTML/JS，运行在不透明源沙箱内且无网络、无存储、无导航能力；外部数据只能由 Widget Data Job 经宿主桥投入。
+_Avoid_: Card, Panel, Component, Work Surface, Plugin, Artifact
+
+**Widget Data Job**:
+为 Board Widget 取数或计算的可重复执行作业（用户可见中文文案「取数作业」），是 widget 外部数据的唯一来源；代码写入时一次授权、之后运行静默，执行不经 Agent Runtime 也不需要 Task。
+_Avoid_: Automation, Cron Task, 定时任务, Runtime Command, Tool Call

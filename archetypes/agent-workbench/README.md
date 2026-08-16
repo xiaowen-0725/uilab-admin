@@ -17,6 +17,7 @@
 | Work Surface Host + Document / Browser | **shipped**（点文件 / URL 打开；无 Artifact 目录） |
 | Capability Surface（连接器 / 技能 / 专家） | **shipped**（打开 / 状态 / 选用；OAuth 产品化未做） |
 | 最小 Electron Desktop Host（Spec-α） | **shipped**（`dev:desktop`；无安装器） |
+| Board（看板 / 小组件 / 取数作业） | **planned**（设计已全部定案，见 [workbench-board-spec](../../docs/plans/workbench-board-spec.md)；首版不含定时调度，实施排在事件协议 v2 之后） |
 | Review / Terminal / 可编辑 Editor / Spreadsheet | **planned** |
 | Artifact 实体目录、steer、Runtime retry | **planned** |
 | `uilab-admin init` 生成 Workbench | **planned**（Phase 8） |
