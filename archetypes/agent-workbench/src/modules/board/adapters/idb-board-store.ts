@@ -27,6 +27,7 @@ import {
 } from '../model/types'
 import {
   BoardStorePortError,
+  mergeBoardForCommit,
   type BoardAtomicCommitInput,
   type BoardStorePort,
 } from '../ports/board-store-port'
@@ -182,7 +183,8 @@ export class IdbBoardStore implements BoardStorePort {
 
   commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
     return this.write(BOARD_STORES, async (tx) => {
-      await putValue(tx, STORE_BOARDS, await mergeBoardInTx(tx, input))
+      const live = await getRow<BoardRecord>(tx, STORE_BOARDS, input.board.id)
+      await putValue(tx, STORE_BOARDS, mergeBoardForCommit(live, input))
       await putValue(tx, STORE_BOARD_WIDGETS, input.widget)
       if (this.options.failOnPutStore === STORE_WIDGET_DATA_JOBS) {
         throw new Error('injected widgetDataJobs write failure')
@@ -250,27 +252,6 @@ export function createIdbBoardStore(
   options?: IdbBoardStoreOptions,
 ): IdbBoardStore {
   return new IdbBoardStore(db, options)
-}
-
-async function mergeBoardInTx(
-  tx: IDBTransaction,
-  input: BoardAtomicCommitInput,
-): Promise<BoardRecord> {
-  const live = await getRow<BoardRecord>(tx, STORE_BOARDS, input.board.id)
-  if (!live) return input.board
-  const alreadyPlaced = live.placements.some(
-    (item) => item.widgetId === input.widget.id,
-  )
-  const placements =
-    input.appendPlacement && !alreadyPlaced
-      ? [...live.placements, input.appendPlacement]
-      : live.placements
-  return {
-    ...live,
-    updatedAt: input.board.updatedAt,
-    createdByTaskId: live.createdByTaskId ?? input.board.createdByTaskId,
-    placements,
-  }
 }
 
 async function deleteWidgetInTx(

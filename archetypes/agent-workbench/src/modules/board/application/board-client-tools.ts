@@ -19,8 +19,8 @@ export const BOARD_CLIENT_TOOL_NAMES = ['board_status', 'board_commit'] as const
 
 export type BoardClientToolName = (typeof BOARD_CLIENT_TOOL_NAMES)[number]
 
-export function isBoardClientTool(name: string): boolean {
-  return name === 'board_status' || name === 'board_commit'
+export function isBoardClientTool(name: string): name is BoardClientToolName {
+  return (BOARD_CLIENT_TOOL_NAMES as readonly string[]).includes(name)
 }
 
 export type BoardCommitEffects = {
@@ -77,7 +77,6 @@ export function createBoardClientToolExecutor(input: {
       newBoardTitle: asString(rec.newBoardTitle),
       widgetId: asString(rec.widgetId) ?? '',
       draftId: asString(rec.draftId) ?? asString(rec.widgetDraftId),
-      widgetDraftId: asString(rec.widgetDraftId),
       contentHash: asString(rec.contentHash) ?? '',
       jobId: asString(rec.jobId),
       jobDraftId: asString(rec.jobDraftId),

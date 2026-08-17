@@ -48,6 +48,11 @@ export interface WorkbenchBoardWiring {
   ) => void
 }
 
+function defaultJobRuntime(): BoardJobRuntimePort {
+  if (INSTANT_DEMO) return createMemoryBoardJobRuntime()
+  return createUnavailableBoardJobRuntime()
+}
+
 export function useWorkbenchBoardWiring(
   input: UseWorkbenchBoardWiringInput,
 ): WorkbenchBoardWiring {
@@ -68,11 +73,7 @@ export function useWorkbenchBoardWiring(
     })
   }, [input.boardContent])
   const jobRuntime = useMemo(
-    () =>
-      input.boardJobRuntime ??
-      (INSTANT_DEMO
-        ? createMemoryBoardJobRuntime()
-        : createUnavailableBoardJobRuntime()),
+    () => input.boardJobRuntime ?? defaultJobRuntime(),
     [input.boardJobRuntime],
   )
   const previewPolicy = useMemo(() => createBoardPreviewPolicy(), [])

@@ -304,10 +304,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     this.clientToolExecutor = options.clientToolExecutor
   }
 
-  private resolveClientToolExecutor(): ClientToolExecutor | null {
-    return this.clientToolExecutor ?? null
-  }
-
   subscribe(
     taskId: string,
     cursor: number | string | null | undefined,
@@ -861,17 +857,14 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   private async flushClientTools(taskId: string, turnId: string): Promise<void> {
     const state = this.taskState.get(taskId)
     if (!state || state.pendingClientTools.size === 0) return
-    const pending = state.pendingClientTools.values().next().value as
-      | PendingClientTool
-      | undefined
+    const pending = state.pendingClientTools.values().next().value
     if (!pending) return
     state.pendingClientTools.delete(pending.toolCallId)
 
     let output: unknown
-    const executor = this.resolveClientToolExecutor()
     try {
-      output = executor
-        ? await executor({
+      output = this.clientToolExecutor
+        ? await this.clientToolExecutor({
             toolName: pending.toolName,
             args: pending.input,
             taskId,

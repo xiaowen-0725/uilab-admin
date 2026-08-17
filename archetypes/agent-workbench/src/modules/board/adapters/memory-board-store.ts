@@ -17,6 +17,7 @@ import {
 } from '../model/types'
 import {
   BoardStorePortError,
+  mergeBoardForCommit,
   type BoardAtomicCommitInput,
   type BoardStorePort,
 } from '../ports/board-store-port'
@@ -129,24 +130,10 @@ export class MemoryBoardStore implements BoardStorePort {
   }
 
   async commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
-    const live = this.boards.get(input.board.id)
-    if (!live) {
-      this.boards.set(input.board.id, input.board)
-    } else {
-      const alreadyPlaced = live.placements.some(
-        (item) => item.widgetId === input.widget.id,
-      )
-      const placements =
-        input.appendPlacement && !alreadyPlaced
-          ? [...live.placements, input.appendPlacement]
-          : live.placements
-      this.boards.set(input.board.id, {
-        ...live,
-        updatedAt: input.board.updatedAt,
-        createdByTaskId: live.createdByTaskId ?? input.board.createdByTaskId,
-        placements,
-      })
-    }
+    this.boards.set(
+      input.board.id,
+      mergeBoardForCommit(this.boards.get(input.board.id), input),
+    )
     this.widgets.set(input.widget.id, input.widget)
     if (input.job) this.jobs.set(input.job.id, input.job)
   }

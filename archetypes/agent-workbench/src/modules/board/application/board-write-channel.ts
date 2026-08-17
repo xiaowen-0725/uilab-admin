@@ -14,7 +14,10 @@ import {
   type BoardWidgetRecord,
   type WidgetDataJobRecord,
 } from '../model/types'
-import type { BoardContentPort } from '../ports/board-content-port'
+import type {
+  BoardContentOk,
+  BoardContentPort,
+} from '../ports/board-content-port'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 
@@ -183,13 +186,13 @@ export async function commitBoardDraft(
   const jobId = input.jobId?.trim()
   const jobDraftId = input.jobDraftId?.trim()
   const codeHash = input.codeHash?.trim()
-  if (jobId || jobDraftId || codeHash) {
-    if (!jobId || !jobDraftId || !codeHash) {
-      return fail(
-        'build_not_ready',
-        '提交作业需要同时提供 jobId、jobDraftId 与 codeHash；作业须先完成 board_job_finish 审批',
-      )
-    }
+  const wantsJob = Boolean(jobId || jobDraftId || codeHash)
+  const jobReady = Boolean(jobId && jobDraftId && codeHash)
+  if (wantsJob && !jobReady) {
+    return fail(
+      'build_not_ready',
+      '提交作业需要同时提供 jobId、jobDraftId 与 codeHash；作业须先完成 board_job_finish 审批',
+    )
   }
 
   const now = nowIso()
@@ -206,7 +209,7 @@ export async function commitBoardDraft(
     (await hashBoardContent(existingWidget.html)) === contentHash &&
     hashesMatch(await store.getJobByWidgetId(widgetId), codeHash)
   ) {
-    const result: BoardCommitOk = {
+    return leakFreeCommit({
       ok: true,
       boardId: board.id,
       widgetId,
@@ -214,9 +217,7 @@ export async function commitBoardDraft(
       placement: pickPlacement(existingPlacement),
       jobId: jobId || undefined,
       replayed: true,
-    }
-    assertNoContentLeak(result)
-    return result
+    })
   }
 
   if (!existingPlacement && board.placements.length >= BOARD_WIDGET_LIMIT) {
@@ -226,98 +227,62 @@ export async function commitBoardDraft(
     )
   }
 
-  const widgetPull = await content.pullReady(draftId)
+  const widgetPull = await pullMatchingDraft(
+    content,
+    draftId,
+    contentHash,
+    '小组件 contentHash 与草稿不一致',
+  )
   if (!widgetPull.ok) return widgetPull
-  if (widgetPull.hash !== contentHash) {
-    return fail('hash_mismatch', '小组件 contentHash 与草稿不一致')
+
+  let jobPull: BoardContentOk | null = null
+  if (jobReady && jobId && jobDraftId && codeHash) {
+    const pulled = await pullMatchingDraft(
+      content,
+      jobDraftId,
+      codeHash,
+      '作业 codeHash 与草稿不一致',
+    )
+    if (!pulled.ok) return pulled
+    jobPull = pulled
   }
 
-  let jobPull: Awaited<ReturnType<BoardContentPort['pullReady']>> | null = null
-  if (jobId && jobDraftId && codeHash) {
-    jobPull = await content.pullReady(jobDraftId)
-    if (!jobPull.ok) return jobPull
-    if (jobPull.hash !== codeHash) {
-      return fail('hash_mismatch', '作业 codeHash 与草稿不一致')
-    }
-  }
-
-  const slot = existingPlacement
-    ? pickPlacement(existingPlacement)
-    : firstEmptySlot(board.placements, DEFAULT_WIDGET_SPAN.default)
   const placement: BoardPlacement = existingPlacement ?? {
     mountId: newId('m'),
     widgetId,
-    ...slot,
+    ...firstEmptySlot(board.placements, DEFAULT_WIDGET_SPAN.default),
   }
-
-  const widget: BoardWidgetRecord = {
-    id: widgetId,
-    title: widgetPull.title || existingWidget?.title || '小组件',
-    html: widgetPull.content,
-    span: existingWidget?.span ?? {
-      min: { ...DEFAULT_WIDGET_SPAN.min },
-      default: { ...DEFAULT_WIDGET_SPAN.default },
-      max: { ...DEFAULT_WIDGET_SPAN.max },
-    },
-    latestData: existingWidget?.latestData,
-    latestDataAt: existingWidget?.latestDataAt,
-    status: existingWidget?.status ?? 'idle',
-    lastRunId: existingWidget?.lastRunId,
-    createdAt: existingWidget?.createdAt ?? now,
-    updatedAt: now,
-    createdByTaskId: existingWidget?.createdByTaskId ?? input.taskId,
-  }
-
+  const widget = nextWidgetRecord(existingWidget, widgetPull, widgetId, input.taskId, now)
   let job: WidgetDataJobRecord | undefined
-  if (jobPull?.ok && jobId) {
+  if (jobPull && jobId) {
     const previous = await store.getJob(jobId) ?? await store.getJobByWidgetId(widgetId)
-    job = {
-      id: jobId,
-      widgetId,
-      title: jobPull.title || previous?.title || '取数作业',
-      description: jobPull.description || previous?.description || '',
-      enabled: previous?.enabled ?? true,
-      trigger: { kind: 'manual' },
-      approved: {
-        code: jobPull.content,
-        codeHash: jobPull.hash,
-        allowedHosts: jobPull.allowedHosts ?? previous?.approved?.allowedHosts ?? [],
-        approvedAt: now,
-        approvedInTaskId: input.taskId ?? previous?.approved?.approvedInTaskId ?? '',
-      },
-      createdAt: previous?.createdAt ?? now,
-      updatedAt: now,
-    }
+    job = nextJobRecord(previous, jobPull, { jobId, widgetId, taskId: input.taskId }, now)
   }
 
+  const updating = Boolean(existingPlacement)
   const nextBoard: BoardRecord = {
     ...board,
-    placements: existingPlacement
-      ? board.placements
-      : created
-        ? [...board.placements, placement]
-        : board.placements,
+    placements:
+      created && !updating ? [...board.placements, placement] : board.placements,
     updatedAt: now,
-    createdByTaskId: board.createdByTaskId ?? (created ? input.taskId : board.createdByTaskId),
+    createdByTaskId: board.createdByTaskId ?? (created ? input.taskId : undefined),
   }
 
   await store.commitAtomically({
     board: nextBoard,
     widget,
     job,
-    appendPlacement: existingPlacement || created ? undefined : placement,
+    appendPlacement: !updating && !created ? placement : undefined,
   })
 
-  const result: BoardCommitOk = {
+  return leakFreeCommit({
     ok: true,
     boardId: nextBoard.id,
     widgetId,
     mountId: placement.mountId,
     placement: pickPlacement(placement),
     jobId: job?.id,
-  }
-  assertNoContentLeak(result)
-  return result
+  })
 }
 
 export async function runCommittedJob(
@@ -331,8 +296,7 @@ export async function runCommittedJob(
   const runId = newId('run')
   await store.recordRun({
     id: runId,
-    jobId: input.jobId,
-    widgetId: input.widgetId,
+    ...input,
     startedAt,
     status: 'running',
   })
@@ -340,27 +304,87 @@ export async function runCommittedJob(
   const finishedAt = nowIso()
   if (result.ok) {
     await store.recordRun(
-      {
-        id: runId,
-        jobId: input.jobId,
-        widgetId: input.widgetId,
-        startedAt,
-        finishedAt,
-        status: 'success',
-      },
+      { id: runId, ...input, startedAt, finishedAt, status: 'success' },
       result.payload,
     )
     return
   }
   await store.recordRun({
     id: runId,
-    jobId: input.jobId,
-    widgetId: input.widgetId,
+    ...input,
     startedAt,
     finishedAt,
     status: 'error',
     errorMessage: result.hint,
   })
+}
+
+function leakFreeCommit(result: BoardCommitOk): BoardCommitOk {
+  assertNoContentLeak(result)
+  return result
+}
+
+async function pullMatchingDraft(
+  content: BoardContentPort,
+  draftId: string,
+  expectedHash: string,
+  mismatchHint: string,
+): Promise<BoardContentOk | BoardToolFailure> {
+  const pulled = await content.pullReady(draftId)
+  if (!pulled.ok) return pulled
+  if (pulled.hash !== expectedHash) return fail('hash_mismatch', mismatchHint)
+  return pulled
+}
+
+function nextWidgetRecord(
+  existing: BoardWidgetRecord | null,
+  pull: BoardContentOk,
+  widgetId: string,
+  taskId: string | undefined,
+  now: string,
+): BoardWidgetRecord {
+  return {
+    id: widgetId,
+    title: pull.title || existing?.title || '小组件',
+    html: pull.content,
+    span: existing?.span ?? {
+      min: { ...DEFAULT_WIDGET_SPAN.min },
+      default: { ...DEFAULT_WIDGET_SPAN.default },
+      max: { ...DEFAULT_WIDGET_SPAN.max },
+    },
+    latestData: existing?.latestData,
+    latestDataAt: existing?.latestDataAt,
+    status: existing?.status ?? 'idle',
+    lastRunId: existing?.lastRunId,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    createdByTaskId: existing?.createdByTaskId ?? taskId,
+  }
+}
+
+function nextJobRecord(
+  previous: WidgetDataJobRecord | null,
+  pull: BoardContentOk,
+  input: { jobId: string; widgetId: string; taskId?: string },
+  now: string,
+): WidgetDataJobRecord {
+  return {
+    id: input.jobId,
+    widgetId: input.widgetId,
+    title: pull.title || previous?.title || '取数作业',
+    description: pull.description || previous?.description || '',
+    enabled: previous?.enabled ?? true,
+    trigger: { kind: 'manual' },
+    approved: {
+      code: pull.content,
+      codeHash: pull.hash,
+      allowedHosts: pull.allowedHosts ?? previous?.approved?.allowedHosts ?? [],
+      approvedAt: now,
+      approvedInTaskId: input.taskId ?? previous?.approved?.approvedInTaskId ?? '',
+    },
+    createdAt: previous?.createdAt ?? now,
+    updatedAt: now,
+  }
 }
 
 function pickPlacement(placement: BoardPlacement): {

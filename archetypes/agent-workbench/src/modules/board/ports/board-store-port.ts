@@ -93,3 +93,23 @@ export interface BoardAtomicCommitInput {
   /** Agent path: append onto the live board row. Never replace `placements`. */
   appendPlacement?: BoardPlacement
 }
+
+/** Merge a commit onto the live board row. New boards are written as given. */
+export function mergeBoardForCommit(
+  live: BoardRecord | undefined,
+  input: BoardAtomicCommitInput,
+): BoardRecord {
+  if (!live) return input.board
+  const alreadyPlaced = live.placements.some(
+    (item) => item.widgetId === input.widget.id,
+  )
+  return {
+    ...live,
+    updatedAt: input.board.updatedAt,
+    createdByTaskId: live.createdByTaskId ?? input.board.createdByTaskId,
+    placements:
+      input.appendPlacement && !alreadyPlaced
+        ? [...live.placements, input.appendPlacement]
+        : live.placements,
+  }
+}
