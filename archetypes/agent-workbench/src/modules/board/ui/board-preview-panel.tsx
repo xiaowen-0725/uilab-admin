@@ -1,6 +1,10 @@
 import { Expand, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { placementsToGridItems, type BoardView } from '../model/board-view'
+import {
+  placementsToGridItems,
+  widgetOnMount,
+  type BoardView,
+} from '../model/board-view'
 import { BOARD_PREVIEW_WIDTH, PREVIEW_GEOMETRY } from '../model/grid'
 import type { WidgetTheme } from '../model/widget-document'
 import { JOB_RUNTIME_UNAVAILABLE } from './board-detail-page'
@@ -85,12 +89,7 @@ export function BoardPreviewPanel({
           mode='read-only'
           data-testid='board-preview-canvas'
           renderItem={(mountId) => {
-            const placement = board.placements.find(
-              (item) => item.mountId === mountId,
-            )
-            const widget = placement
-              ? view.widgets.get(placement.widgetId)
-              : undefined
+            const widget = widgetOnMount(view, mountId)
             if (!widget) return null
             return (
               <BoardWidgetHost

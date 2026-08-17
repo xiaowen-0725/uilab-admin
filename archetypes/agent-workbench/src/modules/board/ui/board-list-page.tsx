@@ -132,53 +132,14 @@ function BoardCard({
           geometry={THUMBNAIL_GEOMETRY}
           mode='read-only'
           data-testid='board-thumbnail-canvas'
-          renderItem={(id) => {
-            const widget = widgets.find((candidate) => candidate.id === id)
-            if (!widget) {
-              return (
-                <div
-                  className='h-full w-full rounded-md bg-muted-foreground/10'
-                  data-testid='board-thumbnail-placeholder'
-                />
-              )
-            }
-            if (thumbnailMode === 'static') {
-              return (
-                <div
-                  className='flex h-full w-full items-center justify-center rounded-md border border-border/60 bg-card px-1 text-center text-[9px] leading-tight text-muted-foreground'
-                  data-testid='board-thumbnail-static'
-                >
-                  {widget.title}
-                </div>
-              )
-            }
-            return (
-              <div className='h-full w-full overflow-hidden rounded-md'>
-                <div
-                  className='origin-top-left'
-                  data-testid='board-thumbnail-scale'
-                  style={{
-                    width: `${100 / THUMBNAIL_SCALE}%`,
-                    height: `${100 / THUMBNAIL_SCALE}%`,
-                    transform: `scale(${THUMBNAIL_SCALE})`,
-                  }}
-                >
-                  <BoardWidgetHost
-                    widgetId={widget.id}
-                    title={widget.title}
-                    html={widget.html}
-                    data={widget.latestData}
-                    theme={theme}
-                    chrome='none'
-                    heartbeat={false}
-                    inert
-                    onReady={(elapsedMs) => onWidgetReady?.(widget.id, elapsedMs)}
-                    className='rounded-md'
-                  />
-                </div>
-              </div>
-            )
-          }}
+          renderItem={(id) => (
+            <ThumbnailCell
+              widget={widgets.find((candidate) => candidate.id === id)}
+              theme={theme}
+              thumbnailMode={thumbnailMode}
+              onWidgetReady={onWidgetReady}
+            />
+          )}
         />
       </div>
 
@@ -204,6 +165,63 @@ function BoardCard({
         {widgets.length} 个小组件 · {formatRelative(board.updatedAt)}更新
         {hiddenCount > 0 ? ` · 缩略图未显示 ${hiddenCount} 个` : ''}
       </p>
+    </div>
+  )
+}
+
+function ThumbnailCell({
+  widget,
+  theme,
+  thumbnailMode,
+  onWidgetReady,
+}: {
+  widget: BoardListCard['widgets'][number] | undefined
+  theme: WidgetTheme
+  thumbnailMode: ThumbnailMode
+  onWidgetReady?: (widgetId: string, elapsedMs: number) => void
+}) {
+  if (!widget) {
+    return (
+      <div
+        className='h-full w-full rounded-md bg-muted-foreground/10'
+        data-testid='board-thumbnail-placeholder'
+      />
+    )
+  }
+  if (thumbnailMode === 'static') {
+    return (
+      <div
+        className='flex h-full w-full items-center justify-center rounded-md border border-border/60 bg-card px-1 text-center text-[9px] leading-tight text-muted-foreground'
+        data-testid='board-thumbnail-static'
+      >
+        {widget.title}
+      </div>
+    )
+  }
+  return (
+    <div className='h-full w-full overflow-hidden rounded-md'>
+      <div
+        className='origin-top-left'
+        data-testid='board-thumbnail-scale'
+        style={{
+          width: `${100 / THUMBNAIL_SCALE}%`,
+          height: `${100 / THUMBNAIL_SCALE}%`,
+          transform: `scale(${THUMBNAIL_SCALE})`,
+        }}
+      >
+        <BoardWidgetHost
+          widgetId={widget.id}
+          title={widget.title}
+          html={widget.html}
+          data={widget.latestData}
+          theme={theme}
+          chrome='none'
+          heartbeat={false}
+          inert
+          onReady={(elapsedMs) => onWidgetReady?.(widget.id, elapsedMs)}
+          className='rounded-md'
+        />
+      </div>
     </div>
   )
 }

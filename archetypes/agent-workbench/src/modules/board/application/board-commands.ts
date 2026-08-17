@@ -36,18 +36,20 @@ export interface AddWidgetToBoardInput {
  * Create a widget (and optional job) and append its placement.
  * Tools and UI must both go through this command so the cap cannot be bypassed.
  */
+function notFound(message: string): never {
+  throw new BoardStorePortError({
+    code: 'not_found',
+    message,
+    retriable: false,
+  })
+}
+
 export async function addWidgetToBoard(
   store: BoardStorePort,
   input: AddWidgetToBoardInput,
 ): Promise<void> {
   const board = await store.getBoard(input.boardId)
-  if (!board) {
-    throw new BoardStorePortError({
-      code: 'not_found',
-      message: '看板不存在',
-      retriable: false,
-    })
-  }
+  if (!board) notFound('看板不存在')
   if (board.placements.length >= BOARD_WIDGET_LIMIT) {
     throw new BoardWidgetLimitError(input.boardId)
   }
@@ -68,13 +70,7 @@ export async function updateBoardLayout(
   placements: readonly BoardPlacement[],
 ): Promise<void> {
   const board = await store.getBoard(boardId)
-  if (!board) {
-    throw new BoardStorePortError({
-      code: 'not_found',
-      message: '看板不存在',
-      retriable: false,
-    })
-  }
+  if (!board) notFound('看板不存在')
   await store.putBoard({
     ...board,
     placements: [...placements],
@@ -88,13 +84,7 @@ export async function revokeJobApproval(
   jobId: WidgetDataJobRecord['id'],
 ): Promise<void> {
   const job = await store.getJob(jobId)
-  if (!job) {
-    throw new BoardStorePortError({
-      code: 'not_found',
-      message: '作业不存在',
-      retriable: false,
-    })
-  }
+  if (!job) notFound('作业不存在')
   const next: WidgetDataJobRecord = {
     ...job,
     updatedAt: new Date().toISOString(),

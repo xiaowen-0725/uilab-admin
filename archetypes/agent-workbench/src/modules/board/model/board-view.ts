@@ -56,3 +56,11 @@ export function gridItemsToPlacements(
     }
   })
 }
+
+export function widgetOnMount(
+  view: BoardView,
+  mountId: string,
+): BoardWidgetRecord | undefined {
+  const placement = view.board.placements.find((item) => item.mountId === mountId)
+  return placement ? view.widgets.get(placement.widgetId) : undefined
+}

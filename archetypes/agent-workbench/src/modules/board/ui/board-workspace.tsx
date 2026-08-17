@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { loadBoardList, loadBoardView } from '../application/load-board-view'
 import {
   revokeJobApproval,
@@ -79,20 +79,11 @@ export function BoardWorkspace({
 
   if (boardId) {
     if (detail === undefined) {
-      return (
-        <div className='flex h-full items-center justify-center text-sm text-muted-foreground'>
-          正在打开看板…
-        </div>
-      )
+      return <BoardStatus>正在打开看板…</BoardStatus>
     }
     if (!detail) {
       return (
-        <div
-          className='flex h-full items-center justify-center text-sm text-muted-foreground'
-          data-testid='board-detail-missing'
-        >
-          找不到这块看板
-        </div>
+        <BoardStatus testId='board-detail-missing'>找不到这块看板</BoardStatus>
       )
     }
     return (
@@ -119,5 +110,22 @@ export function BoardWorkspace({
       onOpenBoard={onOpenBoard}
       onCreateByChat={onCreateByChat}
     />
+  )
+}
+
+function BoardStatus({
+  children,
+  testId,
+}: {
+  children: ReactNode
+  testId?: string
+}) {
+  return (
+    <div
+      className='flex h-full items-center justify-center text-sm text-muted-foreground'
+      data-testid={testId}
+    >
+      {children}
+    </div>
   )
 }

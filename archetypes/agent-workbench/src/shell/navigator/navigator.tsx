@@ -64,6 +64,22 @@ type NavItem = {
   action?: 'new-chat' | 'open-capabilities' | 'open-board'
 }
 
+const NAV_ACTION_KIND: Record<
+  NonNullable<NavItem['action']>,
+  ShellDestination['kind']
+> = {
+  'new-chat': 'task',
+  'open-capabilities': 'capabilities',
+  'open-board': 'board',
+}
+
+function isNavItemCurrent(
+  item: NavItem,
+  destination: ShellDestination,
+): boolean {
+  return item.action != null && NAV_ACTION_KIND[item.action] === destination.kind
+}
+
 const NAV_ITEMS: readonly NavItem[] = [
   {
     id: 'new-chat',
@@ -309,11 +325,7 @@ export function Navigator({
         <ul className='flex flex-col gap-0.5'>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
-            const selected =
-              (item.action === 'new-chat' && activeDestination.kind === 'task') ||
-              (item.action === 'open-capabilities' &&
-                activeDestination.kind === 'capabilities') ||
-              (item.action === 'open-board' && activeDestination.kind === 'board')
+            const selected = isNavItemCurrent(item, activeDestination)
             const wired = item.action != null
             return (
               <li key={item.id}>

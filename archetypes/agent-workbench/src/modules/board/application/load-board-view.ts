@@ -1,11 +1,24 @@
 import type { BoardListCard, BoardView } from '../model/board-view'
 import type {
   BoardId,
+  BoardPlacement,
   BoardWidgetRecord,
   WidgetDataJobRecord,
   WidgetJobRunRecord,
 } from '../model/types'
 import type { BoardStorePort } from '../ports/board-store-port'
+
+async function loadPlacedWidgets(
+  store: BoardStorePort,
+  placements: readonly BoardPlacement[],
+): Promise<BoardWidgetRecord[]> {
+  const widgets: BoardWidgetRecord[] = []
+  for (const placement of placements) {
+    const widget = await store.getWidget(placement.widgetId)
+    if (widget) widgets.push(widget)
+  }
+  return widgets
+}
 
 export async function loadBoardList(
   store: BoardStorePort,
@@ -13,12 +26,10 @@ export async function loadBoardList(
   const boards = await store.listBoards()
   const cards: BoardListCard[] = []
   for (const board of boards) {
-    const widgets: BoardWidgetRecord[] = []
-    for (const placement of board.placements) {
-      const widget = await store.getWidget(placement.widgetId)
-      if (widget) widgets.push(widget)
-    }
-    cards.push({ board, widgets })
+    cards.push({
+      board,
+      widgets: await loadPlacedWidgets(store, board.placements),
+    })
   }
   return cards
 }
@@ -31,12 +42,13 @@ export async function loadBoardView(
   if (!board) return null
 
   const widgets = new Map<string, BoardWidgetRecord>()
+  for (const widget of await loadPlacedWidgets(store, board.placements)) {
+    widgets.set(widget.id, widget)
+  }
+
   const jobs = new Map<string, WidgetDataJobRecord>()
   const lastRunByJobId = new Map<string, WidgetJobRunRecord>()
-
   for (const placement of board.placements) {
-    const widget = await store.getWidget(placement.widgetId)
-    if (widget) widgets.set(widget.id, widget)
     const job = await store.getJobByWidgetId(placement.widgetId)
     if (!job) continue
     jobs.set(placement.widgetId, job)

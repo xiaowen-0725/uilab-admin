@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import {
   gridItemsToPlacements,
   placementsToGridItems,
+  widgetOnMount,
   type BoardView,
 } from '../model/board-view'
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
@@ -52,6 +53,8 @@ export function BoardDetailPage({
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
   const jobCount = view.jobs.size
+  const refreshAllTitle =
+    jobCount === 0 ? '这个看板没有取数作业' : JOB_RUNTIME_UNAVAILABLE
 
   useEffect(() => {
     if (!expandedId) return
@@ -127,9 +130,7 @@ export function BoardDetailPage({
           size='sm'
           variant='outline'
           data-testid='board-refresh-all'
-          title={
-            jobCount === 0 ? '这个看板没有取数作业' : JOB_RUNTIME_UNAVAILABLE
-          }
+          title={refreshAllTitle}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />
@@ -177,22 +178,9 @@ export function BoardDetailPage({
             mode='edit'
             spareRows={3}
             onLayoutChange={applyLayout}
-            spanLimits={(mountId) => {
-              const placement = board.placements.find(
-                (item) => item.mountId === mountId,
-              )
-              const widget = placement
-                ? view.widgets.get(placement.widgetId)
-                : undefined
-              return widget?.span
-            }}
+            spanLimits={(mountId) => widgetOnMount(view, mountId)?.span}
             renderItem={(mountId) => {
-              const placement = board.placements.find(
-                (item) => item.mountId === mountId,
-              )
-              const widget = placement
-                ? view.widgets.get(placement.widgetId)
-                : undefined
+              const widget = widgetOnMount(view, mountId)
               if (!widget) return null
               return (
                 <BoardWidgetHost

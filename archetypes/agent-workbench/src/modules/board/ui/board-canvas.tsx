@@ -46,11 +46,18 @@ interface DragState {
   start: GridPlacement
 }
 
+interface ItemRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
 function itemRect(
   placement: GridPlacement,
   colWidth: number,
   geometry: GridGeometry,
-) {
+): ItemRect {
   const { gap, rowHeight } = geometry
   return {
     left: placement.x * (colWidth + gap),
@@ -58,6 +65,87 @@ function itemRect(
     width: placement.w * colWidth + (placement.w - 1) * gap,
     height: placement.h * rowHeight + (placement.h - 1) * gap,
   }
+}
+
+function itemVisualStyle(
+  rect: ItemRect,
+  kind: DragState['kind'] | null,
+  pointerDelta: { x: number; y: number },
+): ItemRect {
+  if (kind === 'move') {
+    return {
+      ...rect,
+      left: rect.left + pointerDelta.x,
+      top: rect.top + pointerDelta.y,
+    }
+  }
+  if (kind === 'resize') {
+    return {
+      ...rect,
+      width: rect.width + pointerDelta.x,
+      height: rect.height + pointerDelta.y,
+    }
+  }
+  return rect
+}
+
+function layoutFromPointer(
+  items: GridItem[],
+  drag: DragState,
+  delta: { x: number; y: number },
+  width: number,
+  geometry: GridGeometry,
+  limits?: SpanLimits,
+): GridItem[] {
+  const cells = deltaToCells(delta, width, geometry)
+  if (drag.kind === 'move') {
+    return moveItem(
+      items,
+      drag.id,
+      { x: drag.start.x + cells.x, y: drag.start.y + cells.y },
+      geometry.columns,
+    )
+  }
+  return resizeItem(
+    items,
+    drag.id,
+    { w: drag.start.w + cells.x, h: drag.start.h + cells.y },
+    geometry.columns,
+    limits,
+  )
+}
+
+function nudgeItem(
+  items: GridItem[],
+  id: string,
+  direction: { x: number; y: number },
+  columns: number,
+  resize: boolean,
+  limits?: SpanLimits,
+): GridItem[] | null {
+  const target = items.find((item) => item.id === id)
+  if (!target) return null
+  if (resize) {
+    return resizeItem(
+      items,
+      id,
+      {
+        w: target.placement.w + direction.x,
+        h: target.placement.h + direction.y,
+      },
+      columns,
+      limits,
+    )
+  }
+  return moveItem(
+    items,
+    id,
+    {
+      x: target.placement.x + direction.x,
+      y: target.placement.y + direction.y,
+    },
+    columns,
+  )
 }
 
 /**
@@ -148,36 +236,33 @@ export function BoardCanvas({
         y: event.clientY - drag.originY,
       }
       setPointerDelta(delta)
-      const cells = deltaToCells(delta, width, geometry)
-      const next =
-        drag.kind === 'move'
-          ? moveItem(
-              items,
-              drag.id,
-              { x: drag.start.x + cells.x, y: drag.start.y + cells.y },
-              geometry.columns,
-            )
-          : resizeItem(
-              items,
-              drag.id,
-              { w: drag.start.w + cells.x, h: drag.start.h + cells.y },
-              geometry.columns,
-              spanLimits?.(drag.id),
-            )
-      setDraft(next)
+      setDraft(
+        layoutFromPointer(
+          items,
+          drag,
+          delta,
+          width,
+          geometry,
+          spanLimits?.(drag.id),
+        ),
+      )
     },
     [drag, geometry, items, spanLimits, width],
   )
+
+  const clearDrag = useCallback(() => {
+    setDrag(null)
+    setDraft(null)
+    setPointerDelta({ x: 0, y: 0 })
+  }, [])
 
   const endDrag = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       if (!drag || event.pointerId !== drag.pointerId) return
       if (draft) onLayoutChange?.(draft)
-      setDrag(null)
-      setDraft(null)
-      setPointerDelta({ x: 0, y: 0 })
+      clearDrag()
     },
-    [draft, drag, onLayoutChange],
+    [clearDrag, draft, drag, onLayoutChange],
   )
 
   const onItemKeyDown = useCallback(
@@ -191,29 +276,16 @@ export function BoardCanvas({
       }
       const direction = step[event.key]
       if (!direction) return
-      const target = items.find((item) => item.id === id)
-      if (!target) return
+      const next = nudgeItem(
+        items,
+        id,
+        direction,
+        geometry.columns,
+        event.shiftKey,
+        spanLimits?.(id),
+      )
+      if (!next) return
       event.preventDefault()
-      const next = event.shiftKey
-        ? resizeItem(
-            items,
-            id,
-            {
-              w: target.placement.w + direction.x,
-              h: target.placement.h + direction.y,
-            },
-            geometry.columns,
-            spanLimits?.(id),
-          )
-        : moveItem(
-            items,
-            id,
-            {
-              x: target.placement.x + direction.x,
-              y: target.placement.y + direction.y,
-            },
-            geometry.columns,
-          )
       onLayoutChange?.(next)
     },
     [editable, geometry.columns, items, onLayoutChange, spanLimits],
@@ -221,14 +293,9 @@ export function BoardCanvas({
 
   useEffect(() => {
     if (!drag) return
-    const cancel = () => {
-      setDrag(null)
-      setDraft(null)
-      setPointerDelta({ x: 0, y: 0 })
-    }
-    window.addEventListener('blur', cancel)
-    return () => window.removeEventListener('blur', cancel)
-  }, [drag])
+    window.addEventListener('blur', clearDrag)
+    return () => window.removeEventListener('blur', clearDrag)
+  }, [clearDrag, drag])
 
   const dragged = drag ? live.find((item) => item.id === drag.id) : undefined
 
@@ -248,10 +315,11 @@ export function BoardCanvas({
         ? null
         : live.map((item) => {
             const isDragged = drag?.id === item.id
-            const followPointer = isDragged && drag.kind === 'move'
+            const dragKind = isDragged && drag ? drag.kind : null
+            const followPointer = dragKind === 'move'
             // Follow the pointer from the grab cell; the dashed box uses the snap.
-            const visualPlacement = isDragged ? drag.start : item.placement
-            const rect = itemRect(visualPlacement, colWidth, geometry)
+            const visualPlacement =
+              isDragged && drag ? drag.start : item.placement
             return (
               <div
                 key={item.id}
@@ -262,18 +330,11 @@ export function BoardCanvas({
                     'transition-[left,top,width,height] duration-150 ease-out',
                   editable && 'focus-visible:outline-2 focus-visible:outline-ring',
                 )}
-                style={{
-                  left: rect.left + (followPointer ? pointerDelta.x : 0),
-                  top: rect.top + (followPointer ? pointerDelta.y : 0),
-                  width:
-                    isDragged && drag.kind === 'resize'
-                      ? rect.width + pointerDelta.x
-                      : rect.width,
-                  height:
-                    isDragged && drag.kind === 'resize'
-                      ? rect.height + pointerDelta.y
-                      : rect.height,
-                }}
+                style={itemVisualStyle(
+                  itemRect(visualPlacement, colWidth, geometry),
+                  dragKind,
+                  pointerDelta,
+                )}
                 data-testid='board-canvas-item'
                 data-item-id={item.id}
                 data-placement={`${item.placement.x},${item.placement.y},${item.placement.w},${item.placement.h}`}

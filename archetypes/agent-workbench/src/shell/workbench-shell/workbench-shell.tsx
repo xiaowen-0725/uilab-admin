@@ -189,13 +189,17 @@ export function WorkbenchShell({
     setSettingsOpen(true)
   }, [])
 
-  const openCapabilities = useCallback(() => {
-    setActiveDestination({ kind: 'capabilities' })
+  const closeOverlayNav = useCallback(() => {
     if (viewport !== 'wide' && view.navigatorOpen) {
       setNavMotion('instant')
       commands.setNavigatorOpen(false)
     }
   }, [commands, viewport, view.navigatorOpen])
+
+  const openCapabilities = useCallback(() => {
+    setActiveDestination({ kind: 'capabilities' })
+    closeOverlayNav()
+  }, [closeOverlayNav])
 
   const showTask = useCallback(() => {
     setActiveDestination(TASK_DESTINATION)
@@ -203,11 +207,8 @@ export function WorkbenchShell({
 
   const openBoard = useCallback((boardId?: string) => {
     setActiveDestination({ kind: 'board', boardId })
-    if (viewport !== 'wide' && view.navigatorOpen) {
-      setNavMotion('instant')
-      commands.setNavigatorOpen(false)
-    }
-  }, [commands, viewport, view.navigatorOpen])
+    closeOverlayNav()
+  }, [closeOverlayNav])
 
   useEffect(() => {
     if (!boardOpenerRef) return
@@ -365,7 +366,8 @@ export function WorkbenchShell({
     effectiveWorkMax
   )
 
-  const drawerWidth = isTaskDestination(activeDestination)
+  const showingTask = isTaskDestination(activeDestination)
+  const drawerWidth = showingTask
     ? workDrawerWidth(
         view.layout.workSurfaceVisible,
         workFullStage,
@@ -561,20 +563,14 @@ export function WorkbenchShell({
             data-slot='work-drawer-slot'
             style={{ width: drawerWidth }}
             aria-hidden={
-              !isTaskDestination(activeDestination) ||
-              !view.layout.workSurfaceVisible ||
-              undefined
+              !showingTask || !view.layout.workSurfaceVisible || undefined
             }
             onTransitionEnd={handleWorkDrawerTransitionEnd}
           >
             <WorkSurfaceHost
               view={{
-                visible:
-                  isTaskDestination(activeDestination) &&
-                  view.layout.workSurfaceVisible,
-                maximized:
-                  isTaskDestination(activeDestination) &&
-                  view.layout.workSurfaceMaximized,
+                visible: showingTask && view.layout.workSurfaceVisible,
+                maximized: showingTask && view.layout.workSurfaceMaximized,
                 width: effectiveWorkWidth,
                 minWidth: view.workSurfaceMinWidth,
                 maxWidth: effectiveWorkMax,
@@ -596,7 +592,7 @@ export function WorkbenchShell({
               }}
               registry={surfaceRegistry}
               taskId={view.selectedTaskId}
-              fullStage={isTaskDestination(activeDestination) && workFullStage}
+              fullStage={showingTask && workFullStage}
               emptyExtra={workSurfaceEmptyExtra}
               toolbarTrailing={workSurfaceToolbarTrailing}
               toolbarLeading={
