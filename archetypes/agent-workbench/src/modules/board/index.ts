@@ -71,6 +71,27 @@ export {
   readBoardStatus,
   runCommittedJob,
 } from './application/board-write-channel'
+export {
+  createBoardRefreshController,
+  executeJobRun,
+} from './application/board-refresh'
+export type {
+  BoardRefreshController,
+  RefreshOutcome,
+} from './application/board-refresh'
+export {
+  BOARD_JOB_DEFAULT_TIMEOUT_MS,
+  BOARD_JOB_MAX_TIMEOUT_MS,
+  BOARD_REFRESH_CONCURRENCY,
+  BOARD_REFRESH_POLL_INTERVAL_MS,
+  BOARD_REFRESH_STALE_MS,
+  JOB_DENO_MISSING,
+  JOB_INVALID_RESULT,
+  JOB_RUNTIME_DISCONNECTED,
+  isWidgetDataStale,
+  mapJobRuntimeHint,
+  parseJobResult,
+} from './model/refresh-policy'
 export type {
   BoardCommitInput,
   BoardCommitOk,

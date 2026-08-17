@@ -274,7 +274,7 @@ uilab-templates/
 3. ~~Phase 4 VoltAgent Runtime + projection~~
 4. Phase 5–6 补 Review / Terminal / Artifact 目录（Document/Browser 打开文件 MVP 已有）
 5. UI Lab 真源正式发布与 `shadcn add` 回装流程固化
-6. Board：~~宿主 CSP + Host/桥 + Canvas + 侧车工具族 + 写入通道 + Deno 执行端点~~（#134–#139）→ 刷新语义（#140）/ 示例板（#141）/ agent 面契约（#142）
+6. Board：~~宿主 CSP + Host/桥 + Canvas + 侧车工具族 + 写入通道 + Deno 执行端点 + 刷新语义~~（#134–#140）→ 示例板（#141）/ agent 面契约（#142）
 
 ### Wave C — 装配系统增强
 

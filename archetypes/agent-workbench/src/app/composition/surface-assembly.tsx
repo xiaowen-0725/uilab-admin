@@ -22,6 +22,7 @@ import {
 import type { WorkbenchSessionCommands } from '@/modules/workbench-session'
 import {
   BoardPreviewLoader,
+  type BoardRefreshController,
   type BoardStorePort,
 } from '@/modules/board'
 
@@ -35,6 +36,7 @@ export interface BoardSurfaceWiring {
   onOpenFull: (boardId: string) => void
   onClosePreview: (tabId: string) => void
   revision?: number
+  refresh?: BoardRefreshController
 }
 
 export function createWorkbenchSurfaceRegistry(
@@ -62,6 +64,7 @@ export function createWorkbenchSurfaceRegistry(
           boardId={props.resourceKey}
           store={board.store}
           revision={board.revision}
+          refresh={board.refresh}
           theme={
             document.documentElement.classList.contains('dark')
               ? 'dark'

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MutableRefObject, ReactNode, TransitionEvent } from 'react'
 import {
   BoardWorkspace,
+  type BoardRefreshController,
   type BoardStorePort,
 } from '@/modules/board'
 import {
@@ -135,6 +136,8 @@ export interface WorkbenchShellProps {
    */
   workSurfaceToolbarTrailing?: ReactNode
   boardStore?: BoardStorePort | null
+  boardRefresh?: BoardRefreshController | null
+  boardRevision?: number
   taskExists?: (taskId: string) => boolean
   boardOpenerRef?: MutableRefObject<((boardId?: string) => void) | null>
 }
@@ -165,6 +168,8 @@ export function WorkbenchShell({
   workSurfaceEmptyExtra,
   workSurfaceToolbarTrailing,
   boardStore = null,
+  boardRefresh = null,
+  boardRevision = 0,
   taskExists = () => false,
   boardOpenerRef,
 }: WorkbenchShellProps) {
@@ -453,6 +458,8 @@ export function WorkbenchShell({
               store={boardStore}
               boardId={activeDestination.boardId}
               theme={boardTheme}
+              refresh={boardRefresh ?? undefined}
+              revision={boardRevision}
               taskExists={taskExists}
               onOpenList={() => openBoard()}
               onOpenBoard={(id) => openBoard(id)}

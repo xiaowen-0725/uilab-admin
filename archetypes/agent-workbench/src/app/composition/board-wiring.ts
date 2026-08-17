@@ -7,6 +7,7 @@ import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
   createBoardClientToolExecutor,
   createBoardPreviewPolicy,
+  createBoardRefreshController,
   createHttpBoardContent,
   createHttpBoardJobRuntime,
   createIdbBoardStore,
@@ -16,6 +17,7 @@ import {
   type BoardClientToolExecutor,
   type BoardContentPort,
   type BoardJobRuntimePort,
+  type BoardRefreshController,
   type BoardStorePort,
 } from '@/modules/board'
 import type { WorkbenchSessionCommands } from '@/modules/workbench-session'
@@ -40,6 +42,7 @@ export interface UseWorkbenchBoardWiringInput {
 export interface WorkbenchBoardWiring {
   store: BoardStorePort
   revision: number
+  refresh: BoardRefreshController
   executor: BoardClientToolExecutor
   surface: BoardSurfaceWiring
   boardOpenerRef: MutableRefObject<BoardOpener | null>
@@ -86,6 +89,16 @@ export function useWorkbenchBoardWiring(
   )
   const previewPolicy = useMemo(() => createBoardPreviewPolicy(), [])
   const [revision, setRevision] = useState(0)
+  const bumpRevision = () => setRevision((value) => value + 1)
+  const refresh = useMemo(
+    () =>
+      createBoardRefreshController({
+        store,
+        runtime: jobRuntime,
+        onChange: bumpRevision,
+      }),
+    [jobRuntime, store],
+  )
   const selectedTaskIdRef = useRef(input.selectedTaskId)
   selectedTaskIdRef.current = input.selectedTaskId
   const openBoardPreviewRef = useRef<
@@ -99,6 +112,7 @@ export function useWorkbenchBoardWiring(
     effects: {
       preview: previewPolicy,
       jobRuntime,
+      refresh,
       openPreview: ({ boardId, title, taskId }) => {
         if (taskId && selectedTaskIdRef.current !== taskId) return
         setRevision((value) => value + 1)
@@ -111,18 +125,20 @@ export function useWorkbenchBoardWiring(
     () => ({
       store,
       revision,
+      refresh,
       onOpenFull: (boardId: string) => boardOpenerRef.current?.(boardId),
       onClosePreview: (tabId: string) => {
         previewPolicy.onUserClose()
         input.closeWorkSurfaceTab(tabId)
       },
     }),
-    [input.closeWorkSurfaceTab, previewPolicy, revision, store],
+    [input.closeWorkSurfaceTab, previewPolicy, refresh, revision, store],
   )
 
   return {
     store,
     revision,
+    refresh,
     executor: async (args) =>
       executorRef.current?.(args) ?? {
         ok: false,

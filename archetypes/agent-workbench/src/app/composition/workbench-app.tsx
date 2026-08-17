@@ -775,6 +775,8 @@ export function WorkbenchApp({
           capabilityController={capabilityController}
           surfaceRegistry={surface.surfaceRegistry}
           boardStore={board.store}
+          boardRefresh={board.refresh}
+          boardRevision={board.revision}
           taskExists={(id) => Boolean(catalogController?.getTaskRow(id))}
           boardOpenerRef={boardOpenerRef}
           onOpenFileRef={surface.onOpenFileRef}

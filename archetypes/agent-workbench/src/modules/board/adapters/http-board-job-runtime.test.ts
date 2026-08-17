@@ -51,4 +51,58 @@ describe('createHttpBoardJobRuntime', () => {
       hint: '缺少或无效的本机侧车凭据，拒绝执行作业',
     })
   })
+
+  it('maps deno_not_found from the sidecar', async () => {
+    const runtime = createHttpBoardJobRuntime({
+      baseUrl: 'http://sidecar',
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: 'deno_not_found',
+            hint: '未安装 Deno，无法执行取数作业。请安装 Deno 后重试',
+          }),
+          { status: 503 },
+        )) as unknown as typeof fetch,
+    })
+    await expect(runtime.runJob('j_1')).resolves.toEqual({
+      ok: false,
+      error: 'deno_not_found',
+      hint: '未安装 Deno，无法执行取数作业。请安装 Deno 后重试',
+    })
+  })
+
+  it('maps already_running without treating it as a new failure class', async () => {
+    const runtime = createHttpBoardJobRuntime({
+      baseUrl: 'http://sidecar',
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: 'already_running',
+            hint: '该作业已在运行，请等待结束后再刷新',
+          }),
+          { status: 409 },
+        )) as unknown as typeof fetch,
+    })
+    await expect(runtime.runJob('j_1')).resolves.toEqual({
+      ok: false,
+      error: 'already_running',
+      hint: '该作业已在运行，请等待结束后再刷新',
+    })
+  })
+
+  it('probes a disconnected sidecar as runtime_unavailable', async () => {
+    const runtime = createHttpBoardJobRuntime({
+      baseUrl: 'http://sidecar',
+      fetchImpl: (async () => {
+        throw new TypeError('Failed to fetch')
+      }) as unknown as typeof fetch,
+    })
+    await expect(runtime.probe?.()).resolves.toEqual({
+      ok: false,
+      error: 'runtime_unavailable',
+      hint: '作业执行端点不可达，侧车未连接或网络错误',
+    })
+  })
 })

@@ -19,5 +19,7 @@ export type BoardJobRunResult = BoardJobRunOk | BoardJobRunFailure
 export interface BoardJobRuntimePort {
   /** False skips first-run (tests / explicit unavailability). Omit on the live HTTP adapter. */
   readonly available?: boolean
+  /** Optional startup probe so chrome can show a persistent unavailable icon. */
+  probe?(): Promise<BoardJobRunResult>
   runJob(jobId: string): Promise<BoardJobRunResult>
 }

@@ -6,6 +6,7 @@ import type { BoardContentPort } from '../ports/board-content-port'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 import type { BoardPreviewPolicy } from './board-preview-policy'
+import type { BoardRefreshController } from './board-refresh'
 import {
   commitBoardDraft,
   readBoardStatus,
@@ -32,6 +33,7 @@ export type BoardCommitEffects = {
     taskId: string
   }) => void
   jobRuntime?: BoardJobRuntimePort | null
+  refresh?: BoardRefreshController
 }
 
 export type BoardClientToolExecutor = (input: {
@@ -99,12 +101,16 @@ async function applyCommitEffects(
   scope: { taskId: string; turnId: string },
   effects?: BoardCommitEffects,
 ): Promise<void> {
-  if (result.jobId && effects?.jobRuntime && !result.replayed) {
+  if (result.jobId && !result.replayed) {
     try {
-      await runCommittedJob(store, effects.jobRuntime, {
-        jobId: result.jobId,
-        widgetId: result.widgetId,
-      })
+      if (effects?.refresh) {
+        await effects.refresh.refreshJob(result.jobId)
+      } else if (effects?.jobRuntime) {
+        await runCommittedJob(store, effects.jobRuntime, {
+          jobId: result.jobId,
+          widgetId: result.widgetId,
+        })
+      }
     } catch {
       // First-run is best-effort; commit already succeeded.
     }

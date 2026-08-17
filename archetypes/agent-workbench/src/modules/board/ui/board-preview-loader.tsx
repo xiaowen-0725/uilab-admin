@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { BoardRefreshController } from '../application/board-refresh'
 import { loadBoardView } from '../application/load-board-view'
 import type { BoardView } from '../model/board-view'
 import type { BoardStorePort } from '../ports/board-store-port'
 import type { WidgetTheme } from '../model/widget-document'
-import { JOB_RUNTIME_UNAVAILABLE } from './board-detail-page'
 import { BoardPreviewPanel } from './board-preview-panel'
 
 export interface BoardPreviewLoaderProps {
@@ -14,6 +14,7 @@ export interface BoardPreviewLoaderProps {
   onClose: () => void
   /** Bump after commit / first-run so an already-open preview reloads. */
   revision?: number
+  refresh?: BoardRefreshController
 }
 
 export function BoardPreviewLoader({
@@ -23,9 +24,11 @@ export function BoardPreviewLoader({
   onOpenFull,
   onClose,
   revision = 0,
+  refresh,
 }: BoardPreviewLoaderProps) {
   const [view, setView] = useState<BoardView | null | undefined>(undefined)
   const [hint, setHint] = useState<string | null>(null)
+  const [runtimeUnavailable, setRuntimeUnavailable] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -36,6 +39,22 @@ export function BoardPreviewLoader({
       cancelled = true
     }
   }, [boardId, revision, store])
+
+  useEffect(() => {
+    if (!refresh) return
+    void refresh.refreshStaleOnOpen(boardId)
+  }, [boardId, refresh])
+
+  useEffect(() => {
+    if (!refresh) return
+    let cancelled = false
+    void refresh.probe().then((probed) => {
+      if (!cancelled) setRuntimeUnavailable(!probed.ok)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [refresh])
 
   if (view === undefined) {
     return (
@@ -54,15 +73,34 @@ export function BoardPreviewLoader({
   return (
     <div className='flex h-full min-h-0 flex-col'>
       {hint ? (
-        <p className='shrink-0 px-3 py-1 text-[12px] text-muted-foreground'>
+        <p
+          className='shrink-0 px-3 py-1 text-[12px] text-muted-foreground'
+          data-testid='board-preview-refresh-hint'
+        >
           {hint}
         </p>
       ) : null}
       <BoardPreviewPanel
         view={view}
         theme={theme}
+        runtimeUnavailable={runtimeUnavailable}
         onOpenFull={onOpenFull}
-        onRefreshAll={() => setHint(JOB_RUNTIME_UNAVAILABLE)}
+        onRefreshAll={() => {
+          if (!refresh) {
+            setHint('运行时未连接')
+            return
+          }
+          void refresh.refreshBoard(boardId).then((outcomes) => {
+            const unavailable = outcomes.find((item) => item.kind === 'unavailable')
+            if (unavailable && unavailable.kind === 'unavailable') {
+              setRuntimeUnavailable(true)
+              setHint(unavailable.hint)
+              return
+            }
+            setHint(null)
+            void loadBoardView(store, boardId).then(setView)
+          })
+        }}
         onClose={onClose}
       />
     </div>

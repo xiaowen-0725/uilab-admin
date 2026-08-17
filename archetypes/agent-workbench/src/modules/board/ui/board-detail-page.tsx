@@ -11,11 +11,12 @@ import {
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
 import type { BoardPlacement, BoardWidgetId } from '../model/types'
 import type { WidgetTheme } from '../model/widget-document'
+import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import { BoardCanvas } from './board-canvas'
 import { BoardJobDialog } from './board-job-dialog'
 import { BoardWidgetHost } from './board-widget-host'
 
-export const JOB_RUNTIME_UNAVAILABLE = '取数作业运行时尚未接入'
+export const JOB_RUNTIME_UNAVAILABLE = JOB_RUNTIME_DISCONNECTED
 
 export interface BoardDetailPageProps {
   view: BoardView
@@ -29,6 +30,7 @@ export interface BoardDetailPageProps {
   onOpenSourceTask?: (taskId: string) => void
   onRevokeJob?: (jobId: string) => void
   refreshHint?: string | null
+  runtimeUnavailable?: boolean
 }
 
 export function BoardDetailPage({
@@ -43,18 +45,27 @@ export function BoardDetailPage({
   onOpenSourceTask,
   onRevokeJob,
   refreshHint,
+  runtimeUnavailable = false,
 }: BoardDetailPageProps) {
   const { board } = view
   const [expandedId, setExpandedId] = useState<BoardWidgetId | null>(null)
   const [jobWidgetId, setJobWidgetId] = useState<BoardWidgetId | null>(null)
   const expanded = expandedId ? view.widgets.get(expandedId) : undefined
+  const expandedJob = expanded ? view.jobs.get(expanded.id) : undefined
+  const expandedRun = expandedJob
+    ? view.lastRunByJobId.get(expandedJob.id)
+    : undefined
   const job = jobWidgetId ? (view.jobs.get(jobWidgetId) ?? null) : null
   const lastRun = job ? (view.lastRunByJobId.get(job.id) ?? null) : null
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
   const jobCount = view.jobs.size
   const refreshAllTitle =
-    jobCount === 0 ? '这个看板没有取数作业' : JOB_RUNTIME_UNAVAILABLE
+    jobCount === 0
+      ? '这个看板没有取数作业'
+      : runtimeUnavailable
+        ? JOB_RUNTIME_UNAVAILABLE
+        : '全部刷新'
 
   useEffect(() => {
     if (!expandedId) return
@@ -182,6 +193,10 @@ export function BoardDetailPage({
             renderItem={(mountId) => {
               const widget = widgetOnMount(view, mountId)
               if (!widget) return null
+              const widgetJob = view.jobs.get(widget.id)
+              const last = widgetJob
+                ? view.lastRunByJobId.get(widgetJob.id)
+                : undefined
               return (
                 <BoardWidgetHost
                   widgetId={widget.id}
@@ -192,6 +207,9 @@ export function BoardDetailPage({
                   canSubmit={Boolean(widget.events?.submit)}
                   chrome='full'
                   movable
+                  status={widget.status}
+                  runError={last?.errorMessage}
+                  runtimeUnavailable={runtimeUnavailable}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
                   onOpenJob={() => setJobWidgetId(widget.id)}
@@ -234,6 +252,9 @@ export function BoardDetailPage({
             theme={theme}
             canSubmit={Boolean(expanded.events?.submit)}
             chrome='full'
+            status={expanded.status}
+            runError={expandedRun?.errorMessage}
+            runtimeUnavailable={runtimeUnavailable}
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}
             className='min-h-0 flex-1'

@@ -3,6 +3,10 @@
  * Browser-safe. Same bearer surface as staging content.
  */
 
+import {
+  BOARD_JOB_MAX_TIMEOUT_MS,
+  BOARD_REFRESH_POLL_INTERVAL_MS,
+} from '../model/refresh-policy'
 import type {
   BoardJobRunFailure,
   BoardJobRuntimePort,
@@ -12,8 +16,7 @@ import type {
 const NETWORK_ERROR_RE =
   /failed to fetch|load failed|networkerror|network request failed/i
 
-const POLL_MS = 250
-const POLL_BUDGET_MS = 130_000
+const POLL_BUDGET_MS = BOARD_JOB_MAX_TIMEOUT_MS + BOARD_REFRESH_POLL_INTERVAL_MS
 
 export type HttpBoardJobRuntimeOptions = {
   baseUrl: string
@@ -76,7 +79,7 @@ export function createHttpBoardJobRuntime(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const baseUrl = options.baseUrl.replace(/\/$/, '')
   const token = options.token
-  const pollIntervalMs = options.pollIntervalMs ?? POLL_MS
+  const pollIntervalMs = options.pollIntervalMs ?? BOARD_REFRESH_POLL_INTERVAL_MS
   const pollBudgetMs = options.pollBudgetMs ?? POLL_BUDGET_MS
   const sleep = options.sleep ?? defaultSleep
   const headers = authHeaders(token)
@@ -127,6 +130,26 @@ export function createHttpBoardJobRuntime(
   }
 
   return {
+    async probe(): Promise<BoardJobRunResult> {
+      try {
+        const res = await fetchImpl(`${baseUrl}/board/runs/_probe`, { headers })
+        if (res.status === 401 || res.status === 403) {
+          return failureFromStatus(res.status, await readErrorBody(res))
+        }
+        return { ok: true, payload: null }
+      } catch (err) {
+        if (isNetworkClassError(err)) {
+          return failure(
+            'runtime_unavailable',
+            '作业执行端点不可达，侧车未连接或网络错误',
+          )
+        }
+        return failure(
+          'runtime_unavailable',
+          err instanceof Error ? err.message : '作业执行端点不可达',
+        )
+      }
+    },
     async runJob(jobId: string): Promise<BoardJobRunResult> {
       const id = jobId.trim()
       if (!id) return failure('unknown_job', '缺少 jobId')

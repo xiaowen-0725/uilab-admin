@@ -9,7 +9,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import type { BoardWidgetId } from '../model/types'
+import type { BoardWidgetId, BoardWidgetStatus } from '../model/types'
+import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import {
   buildWidgetDocument,
   type WidgetTheme,
@@ -23,11 +24,13 @@ function ChromeIconButton({
   testId,
   label,
   onClick,
+  disabled,
   children,
 }: {
   testId: string
   label: string
   onClick?: () => void
+  disabled?: boolean
   children: ReactNode
 }) {
   return (
@@ -39,6 +42,7 @@ function ChromeIconButton({
       data-testid={testId}
       aria-label={label}
       title={label}
+      disabled={disabled}
       onClick={onClick}
     >
       {children}
@@ -57,6 +61,10 @@ export interface BoardWidgetHostProps {
   chrome?: WidgetChrome
   /** Detail / preview only. List thumbnails must leave this off. */
   heartbeat?: boolean
+  /** Sole loading source — must come from widget.status, not a local boolean. */
+  status?: BoardWidgetStatus
+  runError?: string | null
+  runtimeUnavailable?: boolean
   onRefresh?: () => void
   onExpand?: () => void
   onOpenJob?: () => void
@@ -86,6 +94,9 @@ export function BoardWidgetHost({
   canSubmit = false,
   chrome = 'full',
   heartbeat,
+  status = 'idle',
+  runError = null,
+  runtimeUnavailable = false,
   onRefresh,
   onExpand,
   onOpenJob,
@@ -124,6 +135,12 @@ export function BoardWidgetHost({
   const showReload = bridge.phase === 'failed' || bridge.phase === 'dead'
   const headerClass = chrome === 'full' ? 'h-9' : 'h-7'
   const titleClass = chrome === 'full' ? 'text-[13px]' : 'text-[12px]'
+  const running = status === 'running'
+  const refreshLabel = running
+    ? '正在刷新'
+    : runtimeUnavailable
+      ? JOB_RUNTIME_DISCONNECTED
+      : '刷新'
 
   return (
     <section
@@ -134,9 +151,11 @@ export function BoardWidgetHost({
       data-testid='board-widget-host'
       data-widget-id={widgetId}
       data-has-latest={data == null ? 'false' : 'true'}
+      data-widget-status={status}
       data-phase={bridge.phase}
       data-chrome={chrome}
       aria-label={title}
+      aria-busy={running || undefined}
       inert={inert || undefined}
     >
       {showHeader ? (
@@ -157,8 +176,36 @@ export function BoardWidgetHost({
           >
             {title}
           </h3>
-          <ChromeIconButton testId='board-widget-refresh' label='刷新' onClick={onRefresh}>
-            <RefreshCw className='size-3.5' aria-hidden />
+          {status === 'error' && runError ? (
+            <span
+              className='inline-flex size-6 items-center justify-center text-destructive'
+              data-testid='board-widget-run-error'
+              title={runError}
+              aria-label={runError}
+            >
+              <TriangleAlert className='size-3.5' aria-hidden />
+            </span>
+          ) : null}
+          {runtimeUnavailable ? (
+            <span
+              className='inline-flex size-6 items-center justify-center text-muted-foreground'
+              data-testid='board-widget-runtime-missing'
+              title={JOB_RUNTIME_DISCONNECTED}
+              aria-label={JOB_RUNTIME_DISCONNECTED}
+            >
+              <TriangleAlert className='size-3.5' aria-hidden />
+            </span>
+          ) : null}
+          <ChromeIconButton
+            testId='board-widget-refresh'
+            label={refreshLabel}
+            disabled={running}
+            onClick={onRefresh}
+          >
+            <RefreshCw
+              className={cn('size-3.5', running && 'animate-spin')}
+              aria-hidden
+            />
           </ChromeIconButton>
           {chrome === 'full' ? (
             <>
@@ -235,14 +282,29 @@ export function BoardWidgetHost({
         </div>
       ) : null}
 
-      <BoardWidgetFrame
-        srcDoc={srcDoc}
-        title={title}
-        assignKey={bridge.assignKey}
-        iframeRef={bridge.iframeRef}
-        onLoad={bridge.onIframeLoad}
-        className='min-h-0 w-full flex-1 border-0 bg-background'
-      />
+      <div className='relative min-h-0 flex-1'>
+        {chrome === 'none' && (running || (status === 'error' && runError)) ? (
+          <span
+            className='pointer-events-none absolute right-1 top-1 z-10 inline-flex size-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground'
+            data-testid={running ? 'board-widget-thumb-running' : 'board-widget-run-error'}
+            title={running ? '正在刷新' : runError ?? undefined}
+          >
+            {running ? (
+              <RefreshCw className='size-2.5 animate-spin' aria-hidden />
+            ) : (
+              <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
+            )}
+          </span>
+        ) : null}
+        <BoardWidgetFrame
+          srcDoc={srcDoc}
+          title={title}
+          assignKey={bridge.assignKey}
+          iframeRef={bridge.iframeRef}
+          onLoad={bridge.onIframeLoad}
+          className='min-h-0 h-full w-full flex-1 border-0 bg-background'
+        />
+      </div>
     </section>
   )
 }

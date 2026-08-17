@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { BoardRefreshController } from '../application/board-refresh'
 import { loadBoardList, loadBoardView } from '../application/load-board-view'
 import {
   revokeJobApproval,
   updateBoardLayout,
 } from '../application/board-commands'
+import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import type { BoardListCard, BoardView } from '../model/board-view'
-import type { BoardId, BoardPlacement } from '../model/types'
+import type { BoardId, BoardPlacement, BoardWidgetId } from '../model/types'
 import type { BoardStorePort } from '../ports/board-store-port'
 import type { WidgetTheme } from '../model/widget-document'
-import { BoardDetailPage, JOB_RUNTIME_UNAVAILABLE } from './board-detail-page'
+import { BoardDetailPage } from './board-detail-page'
 import { BoardListPage } from './board-list-page'
 
 export interface BoardWorkspaceProps {
@@ -20,6 +22,9 @@ export interface BoardWorkspaceProps {
   onOpenBoard: (boardId: BoardId) => void
   onCreateByChat: () => void
   onOpenSourceTask?: (taskId: string) => void
+  refresh?: BoardRefreshController
+  /** Bump when a shared controller writes a run (preview / first-run). */
+  revision?: number
 }
 
 export function BoardWorkspace({
@@ -31,30 +36,56 @@ export function BoardWorkspace({
   onOpenBoard,
   onCreateByChat,
   onOpenSourceTask,
+  refresh,
+  revision = 0,
 }: BoardWorkspaceProps) {
   const [cards, setCards] = useState<BoardListCard[]>([])
   const [detail, setDetail] = useState<BoardView | null | undefined>(undefined)
   const [refreshHint, setRefreshHint] = useState<string | null>(null)
+  const [runtimeUnavailable, setRuntimeUnavailable] = useState(false)
   const [generation, setGeneration] = useState(0)
+  const openedBoardRef = useRef<string | null>(null)
 
   const reload = useCallback(() => setGeneration((value) => value + 1), [])
 
   useEffect(() => {
+    if (!refresh) {
+      setRuntimeUnavailable(true)
+      return
+    }
     let cancelled = false
-    if (boardId) setDetail(undefined)
+    void refresh.probe().then((probed) => {
+      if (!cancelled) setRuntimeUnavailable(!probed.ok)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [refresh])
+
+  useEffect(() => {
+    let cancelled = false
+    if (boardId && openedBoardRef.current !== boardId) {
+      setDetail(undefined)
+    }
     void (async () => {
       if (boardId) {
         const next = await loadBoardView(store, boardId)
-        if (!cancelled) setDetail(next)
+        if (cancelled) return
+        setDetail(next)
+        const firstOpen = openedBoardRef.current !== boardId
+        openedBoardRef.current = boardId
+        if (firstOpen) void refresh?.refreshStaleOnOpen(boardId)
         return
       }
+      openedBoardRef.current = null
+      await refresh?.reconcileOrphans()
       const next = await loadBoardList(store)
       if (!cancelled) setCards(next)
     })()
     return () => {
       cancelled = true
     }
-  }, [boardId, store, generation])
+  }, [boardId, refresh, store, generation, revision])
 
   const persistLayout = useCallback(
     async (placements: BoardPlacement[]) => {
@@ -73,9 +104,61 @@ export function BoardWorkspace({
     [reload, store],
   )
 
-  const showRuntimeHint = useCallback(() => {
-    setRefreshHint(JOB_RUNTIME_UNAVAILABLE)
-  }, [])
+  const showOutcomeHint = useCallback(
+    (hint: string | null) => {
+      setRefreshHint(hint)
+    },
+    [],
+  )
+
+  const refreshWidget = useCallback(
+    async (widgetId: BoardWidgetId) => {
+      if (!detail) return
+      if (!refresh) {
+        showOutcomeHint(JOB_RUNTIME_DISCONNECTED)
+        return
+      }
+      const job = detail.jobs.get(widgetId)
+      if (!job) {
+        showOutcomeHint('这个小组件没有取数作业')
+        return
+      }
+      const outcome = await refresh.refreshJob(job.id)
+      if (outcome.kind === 'unavailable') {
+        setRuntimeUnavailable(true)
+        showOutcomeHint(outcome.hint)
+        return
+      }
+      if (outcome.kind === 'finished' && outcome.status !== 'success') {
+        const view = await loadBoardView(store, detail.board.id)
+        const run = view?.lastRunByJobId.get(job.id)
+        showOutcomeHint(run?.errorMessage ?? null)
+        return
+      }
+      showOutcomeHint(null)
+    },
+    [detail, refresh, showOutcomeHint, store],
+  )
+
+  const refreshAll = useCallback(async () => {
+    if (!boardId) return
+    if (!refresh) {
+      showOutcomeHint(JOB_RUNTIME_DISCONNECTED)
+      return
+    }
+    if (detail && detail.jobs.size === 0) {
+      showOutcomeHint('这个看板没有取数作业')
+      return
+    }
+    const outcomes = await refresh.refreshBoard(boardId)
+    const unavailable = outcomes.find((item) => item.kind === 'unavailable')
+    if (unavailable && unavailable.kind === 'unavailable') {
+      setRuntimeUnavailable(true)
+      showOutcomeHint(unavailable.hint)
+      return
+    }
+    showOutcomeHint(null)
+  }, [boardId, detail, refresh, showOutcomeHint])
 
   if (boardId) {
     if (detail === undefined) {
@@ -93,12 +176,13 @@ export function BoardWorkspace({
         taskExists={taskExists}
         onBack={onOpenList}
         onLayoutChange={(placements) => void persistLayout(placements)}
-        onRefreshWidget={showRuntimeHint}
-        onRefreshAll={showRuntimeHint}
+        onRefreshWidget={(widgetId) => void refreshWidget(widgetId)}
+        onRefreshAll={() => void refreshAll()}
         onCreateByChat={onCreateByChat}
         onOpenSourceTask={onOpenSourceTask}
         onRevokeJob={(jobId) => void revoke(jobId)}
         refreshHint={refreshHint}
+        runtimeUnavailable={runtimeUnavailable}
       />
     )
   }

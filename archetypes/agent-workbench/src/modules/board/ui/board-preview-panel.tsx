@@ -7,7 +7,7 @@ import {
 } from '../model/board-view'
 import { BOARD_PREVIEW_WIDTH, PREVIEW_GEOMETRY } from '../model/grid'
 import type { WidgetTheme } from '../model/widget-document'
-import { JOB_RUNTIME_UNAVAILABLE } from './board-detail-page'
+import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import { BoardCanvas } from './board-canvas'
 import { BoardWidgetHost } from './board-widget-host'
 
@@ -17,6 +17,7 @@ export interface BoardPreviewPanelProps {
   onOpenFull: (boardId: string) => void
   onRefreshAll?: () => void
   onClose: () => void
+  runtimeUnavailable?: boolean
 }
 
 /**
@@ -30,6 +31,7 @@ export function BoardPreviewPanel({
   onOpenFull,
   onRefreshAll,
   onClose,
+  runtimeUnavailable = false,
 }: BoardPreviewPanelProps) {
   const { board } = view
 
@@ -52,7 +54,7 @@ export function BoardPreviewPanel({
           className='size-7'
           data-testid='board-preview-refresh'
           aria-label='刷新'
-          title={JOB_RUNTIME_UNAVAILABLE}
+          title={runtimeUnavailable ? JOB_RUNTIME_DISCONNECTED : '刷新'}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />
@@ -91,6 +93,8 @@ export function BoardPreviewPanel({
           renderItem={(mountId) => {
             const widget = widgetOnMount(view, mountId)
             if (!widget) return null
+            const job = view.jobs.get(widget.id)
+            const last = job ? view.lastRunByJobId.get(job.id) : undefined
             return (
               <BoardWidgetHost
                 widgetId={widget.id}
@@ -99,6 +103,9 @@ export function BoardPreviewPanel({
                 data={widget.latestData}
                 theme={theme}
                 chrome='compact'
+                status={widget.status}
+                runError={last?.errorMessage}
+                runtimeUnavailable={runtimeUnavailable}
                 className='h-full'
               />
             )

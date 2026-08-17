@@ -218,6 +218,7 @@ function ThumbnailCell({
           chrome='none'
           heartbeat={false}
           inert
+          status={widget.status}
           onReady={(elapsedMs) => onWidgetReady?.(widget.id, elapsedMs)}
           className='rounded-md'
         />

@@ -20,6 +20,7 @@ import type {
 } from '../ports/board-content-port'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type { BoardStorePort } from '../ports/board-store-port'
+import { executeJobRun } from './board-refresh'
 
 export type BoardToolFailure = {
   ok: false
@@ -291,31 +292,13 @@ export async function runCommittedJob(
   input: { jobId: string; widgetId: string },
   nowIso: BoardWriteClock = () => new Date().toISOString(),
 ): Promise<void> {
-  if (runtime.available === false) return
-  const startedAt = nowIso()
-  const runId = newId('run')
-  await store.recordRun({
-    id: runId,
-    ...input,
-    startedAt,
-    status: 'running',
-  })
-  const result = await runtime.runJob(input.jobId)
-  const finishedAt = nowIso()
-  if (result.ok) {
-    await store.recordRun(
-      { id: runId, ...input, startedAt, finishedAt, status: 'success' },
-      result.payload,
-    )
-    return
-  }
-  await store.recordRun({
-    id: runId,
-    ...input,
-    startedAt,
-    finishedAt,
-    status: 'error',
-    errorMessage: result.hint,
+  await executeJobRun({
+    store,
+    runtime,
+    jobId: input.jobId,
+    widgetId: input.widgetId,
+    mode: 'first-run',
+    nowIso,
   })
 }
 

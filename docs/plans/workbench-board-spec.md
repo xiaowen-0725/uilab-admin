@@ -1,6 +1,6 @@
 # Spec: Workbench Board（看板 / 小组件 / 取数作业）
 
-**Status:** implementation in progress（#133–#139 已落地；刷新 UI / 示例板 / agent 面契约未交付）
+**Status:** implementation in progress（#133–#140 已落地；示例板 / agent 面契约未交付）
 **Map:** [#111 Workbench Board 首版可执行规格](https://github.com/xiaowen-0725/uilab-admin/issues/111)
 **ADR:**
 
@@ -29,6 +29,7 @@
 - **2026-08-16e｜`WidgetJobRunRecord.artifactRef` 首版不填。** #115 按 `/workspace/file`（1.5 MiB）定义了它，#128 改为端点直接回传（512 KiB）。字段保留，v1 恒空。
 - **2026-08-16f｜审批「独立种类」措辞作废。** 代码里没有 approval kind 注册表，粒度就是工具名（#132）。见 §5.4。
 - **2026-08-16g｜IDB 清库风险范围收窄。** #115 称「任何新增的非协议 store 都会被下一次协议升级顺带清掉」。核对代码后更准确的表述是：现有清库分支被 `oldVersion >= 1 && oldVersion < 2` 界定（`workbench-idb-schema.ts:96-100`），**不会**碰到 Board 的 v3；风险在于**后续**协议升级若照抄这个「全量枚举删除」的写法。见 §2.6。
+- **2026-08-17｜刷新参数定值（#140）。** 轮询间隔 **1 s**（§8.2 原文；短于 1 s 对 60–120 s 作业无收益，只会打满 dev server 代理）。单次执行超时维持 ADR-0023：默认 **60 s**、硬顶 **120 s**。打开 Board 的陈旧度阈值 **15 min**：短于 5 min 会在列表/详情来回时反复打侧车，长于 1 h 会让上午的数挂到下午；从未跑过（无 `latestDataAt`）视为陈旧。首版无定时调度。
 
 ---
 
@@ -742,7 +743,7 @@ modules/board/
 
 按主题归拢；完整雾区清单在地图 #111。
 
-**需实测校准的参数**：单片 2–4 KB（推算值）、staging TTL、心跳 5 s/3 次与 ready 8 s/2 次、轮询 1 s 与并发上限 2、自修上限 3 次、产物 512 KiB、Deno 启动耗时。
+**需实测校准的参数**：单片 2–4 KB（推算值）、staging TTL、心跳 5 s/3 次与 ready 8 s/2 次、自修上限 3 次、产物 512 KiB、Deno 启动耗时。**已定值（#140）**：轮询 1 s、并发上限 2、打开 Board 陈旧度 15 min、执行超时 60 s / 硬顶 120 s。
 
 **需实测确认的行为**：`frame-src 'self'` 对 `about:srcdoc` 初始加载与自导航的判定（**自导航封堵是否成立的唯一支点**）、`csp=` 属性对本规格全部指令集的生效性、srcdoc 的进程模型（决定要不要看门狗）、WebSocket 在不透明源下能否连通、`--allow-net` 的子域通配是否覆盖裸域及对重定向/IP 直连的判定、prod 期 `style-src` 能否收紧到 `'self'`、Windows 下 Deno 权限与路径。
 
