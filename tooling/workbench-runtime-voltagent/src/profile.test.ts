@@ -84,6 +84,8 @@ describe('toolsForProfile', () => {
     assert.ok(!tools.includes('run_command'))
     assert.ok(tools.includes('update_plan'))
     assert.ok(tools.includes('ask_user_question'))
+    assert.ok(tools.includes('board_widget_begin'))
+    assert.ok(tools.includes('board_job_finish'))
     for (const name of OFFICE_FS_TOOL_NAMES) {
       assert.ok(tools.includes(name), `missing FS tool ${name}`)
     }
@@ -99,6 +101,12 @@ describe('toolsForProfile', () => {
         'run_command',
         'update_plan',
         'ask_user_question',
+        'board_widget_begin',
+        'board_widget_append',
+        'board_widget_finish',
+        'board_job_begin',
+        'board_job_append',
+        'board_job_finish',
       ],
     )
   })

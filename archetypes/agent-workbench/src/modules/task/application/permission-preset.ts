@@ -19,6 +19,11 @@ export const AUTO_APPROVE_WRITE_TOOLS = [
   'delete_file',
   'rmdir',
   'mkdir',
+  'board_widget_begin',
+  'board_widget_append',
+  'board_widget_finish',
+  'board_job_begin',
+  'board_job_append',
 ] as const
 
 const AUTO_APPROVE_WRITE_TOOL_SET: ReadonlySet<string> = new Set(

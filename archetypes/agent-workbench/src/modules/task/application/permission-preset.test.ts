@@ -26,6 +26,14 @@ describe('decideApprovalResponse', () => {
     expect(decideApprovalResponse('auto-approve', 'ask_user_question')).toBe(
       'dock',
     )
+    expect(AUTO_APPROVE_WRITE_TOOLS).not.toContain('board_job_finish')
+    expect(decideApprovalResponse('auto-approve', 'board_job_finish')).toBe(
+      'dock',
+    )
+    expect(AUTO_APPROVE_WRITE_TOOLS).toContain('board_widget_begin')
+    expect(decideApprovalResponse('auto-approve', 'board_widget_finish')).toBe(
+      'approve',
+    )
   })
 
   it('full-access: every tool name (including unknown) approves', () => {

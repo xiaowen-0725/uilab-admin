@@ -617,6 +617,7 @@ async function checkSources() {
 
   await checkDesktopHostImports()
   await checkBoardCspAndSandbox()
+  await checkBoardToolReturnTypes()
 }
 
 async function checkDesktopHostImports() {
@@ -807,6 +808,46 @@ async function checkBoardCspAndSandbox() {
   }
 }
 
+const FORBIDDEN_BOARD_RETURN_FIELDS = new Set(['html', 'code', 'data'])
+
+async function checkBoardToolReturnTypes() {
+  const sidecarToolsDir = path.join(
+    platformRoot,
+    'tooling',
+    'workbench-runtime-voltagent',
+    'src',
+    'tools',
+  )
+  if (!(await exists(sidecarToolsDir))) {
+    errors.push(
+      'missing tooling/workbench-runtime-voltagent/src/tools (board tool return-type gate)',
+    )
+    return
+  }
+  const files = (await walkSources(sidecarToolsDir)).filter((file) => {
+    const base = path.basename(file)
+    return base === 'board-types.ts' || base === 'board-tools.ts'
+  })
+  if (files.length === 0) {
+    errors.push('board tool return-type files (board-types.ts / board-tools.ts) are missing')
+    return
+  }
+  const propertyRe = /^\s*(?:readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)\??\s*:/gm
+  for (const file of files) {
+    const source = await readFile(file, 'utf8')
+    const fileRel = toPosixRel(file)
+    let match
+    propertyRe.lastIndex = 0
+    while ((match = propertyRe.exec(source)) !== null) {
+      if (FORBIDDEN_BOARD_RETURN_FIELDS.has(match[1])) {
+        errors.push(
+          `board tool return types must not include field "${match[1]}" (${fileRel})`,
+        )
+      }
+    }
+  }
+}
+
 function exitWithErrors() {
   console.error(`\ncheck-workbench FAILED (${errors.length} issue(s)):`)
   for (const e of errors) console.error(`  - ${e}`)
@@ -839,6 +880,7 @@ async function main() {
   console.log('  Runtime imports: no cycles')
   console.log('  Host wire: desktop ↔ renderer shared leaf')
   console.log('  Board CSP: host meta + widget sandbox/csp pair')
+  console.log('  Board tools: return types omit html/code/data')
   process.exit(0)
 }
 

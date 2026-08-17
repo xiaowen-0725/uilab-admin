@@ -92,6 +92,12 @@ describe('configureSidecarApp', () => {
         message.includes('capability routes mounted'),
       ),
     )
+
+    const content = await app.request('/board/staging/missing/content')
+    assert.equal(content.status, 401)
+    const denied = (await content.json()) as { ok: false; error: string }
+    assert.equal(denied.ok, false)
+    assert.equal(denied.error, 'not_authorized')
   })
 
   it('logs catalog load failure, still serves snapshot, and does not reject', async () => {

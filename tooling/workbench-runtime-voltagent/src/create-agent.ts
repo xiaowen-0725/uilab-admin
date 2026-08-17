@@ -38,6 +38,7 @@ import {
   ASK_TOOL_INSTRUCTIONS,
   askUserQuestionTool,
 } from './ask-user-question-tool.js'
+import { getSharedBoardRuntime } from './tools/board-runtime.js'
 import { workbenchTools } from './tools.js'
 import {
   PLAN_TOOL_INSTRUCTIONS,
@@ -59,6 +60,13 @@ const planToolkit: Toolkit = { name: 'update_plan', tools: [updatePlanTool] }
 const askToolkit: Toolkit = {
   name: 'ask_user_question',
   tools: [askUserQuestionTool],
+}
+
+function boardToolkit(env?: NodeJS.ProcessEnv): Toolkit {
+  return {
+    name: 'board',
+    tools: getSharedBoardRuntime({ env }).toolList,
+  }
 }
 
 export type CreateWorkbenchAgentOptions = {
@@ -267,7 +275,7 @@ export async function createWorkbenchAgent(
         ASK_TOOL_INSTRUCTIONS,
       ].join(' '),
       model: options.model,
-      toolkits: [planToolkit, askToolkit],
+      toolkits: [planToolkit, askToolkit, boardToolkit(env)],
       workspace,
       workspaceToolkits: {
         filesystem: {},
@@ -349,7 +357,7 @@ export async function createWorkbenchAgent(
       ASK_TOOL_INSTRUCTIONS,
     ].join(' '),
     model: options.model,
-    toolkits: [planToolkit],
+    toolkits: [planToolkit, boardToolkit(env)],
     tools: workbenchTools as (Tool<any, any> | Toolkit)[],
     maxSteps: defaults.maxSteps,
   })

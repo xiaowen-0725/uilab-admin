@@ -15,6 +15,10 @@ import type { OfficeConnectorRuntime } from './capability/office-connector-runti
 import type { CapabilitySnapshotExpert } from './capability/types.js'
 import type { AgentProfile } from './profile.js'
 import {
+  getSharedBoardRuntime,
+  type BoardRuntime,
+} from './tools/board-runtime.js'
+import {
   guessMimeFromPath,
   httpStatusForWorkspaceRead,
   readWorkspaceFile,
@@ -33,6 +37,8 @@ export type ConfigureSidecarAppInput = {
   getDiscoverableSkillIds: () => readonly string[]
   logger: SidecarHttpLogger
   loadExperts?: () => Promise<readonly CapabilitySnapshotExpert[]>
+  /** Inject board staging/runtime (tests). */
+  boardRuntime?: BoardRuntime
 }
 
 function safeError(cause: unknown): string {
@@ -113,6 +119,10 @@ export async function configureSidecarApp<
 >(app: Hono<E, S, BasePath>, input: ConfigureSidecarAppInput): Promise<void> {
   const { workspaceRoot, profile, logger } = input
   mountWorkspaceRoutes(app, workspaceRoot, profile)
+
+  const boardRuntime = input.boardRuntime ?? getSharedBoardRuntime()
+  boardRuntime.mountRoutes(app)
+  logger.info('board staging routes mounted')
 
   const experts = await loadExpertsOrDefault(input.loadExperts, logger)
   try {

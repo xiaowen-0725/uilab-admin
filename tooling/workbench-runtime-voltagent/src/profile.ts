@@ -9,6 +9,7 @@
 
 import os from 'node:os'
 import path from 'node:path'
+import { BOARD_SIDECAR_TOOLS } from './tools/board-policy.js'
 
 export type AgentProfile = 'office' | 'minimal'
 
@@ -81,12 +82,15 @@ export const OFFICE_FS_TOOL_NAMES = [
   'grep',
 ] as const
 
+export const BOARD_TOOL_NAMES = BOARD_SIDECAR_TOOLS
+
 export const MINIMAL_TOOL_NAMES = [
   'read_file',
   'write_file',
   'run_command',
   'update_plan',
   'ask_user_question',
+  ...BOARD_TOOL_NAMES,
 ] as const
 
 /** Office honesty list: FS tools + skills toolkit (no DIY run_command). */
@@ -96,6 +100,7 @@ export const OFFICE_TOOL_NAMES = [
   'execute_command',
   'update_plan',
   'ask_user_question',
+  ...BOARD_TOOL_NAMES,
 ] as const
 
 export function toolsForProfile(profile: AgentProfile): readonly string[] {

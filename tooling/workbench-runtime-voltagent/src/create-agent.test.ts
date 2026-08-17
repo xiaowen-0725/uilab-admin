@@ -501,6 +501,8 @@ describe('createWorkbenchAgent', () => {
     assert.ok(bundle.tools.includes('execute_command'))
     assert.ok(bundle.tools.includes('update_plan'))
     assert.ok(bundle.tools.includes('ask_user_question'))
+    assert.ok(bundle.tools.includes('board_widget_begin'))
+    assert.ok(bundle.tools.includes('board_job_finish'))
     assert.ok(!bundle.tools.includes('run_command'))
 
     // O2 first-run bootstrap
@@ -548,6 +550,7 @@ describe('createWorkbenchAgent', () => {
       toolNames.includes('execute_command'),
       `expected generic Workspace Shell, got: ${toolNames.join(',')}`,
     )
+    assertRegisteredBoardTools(fullState)
     assertRegisteredUpdatePlan(fullState)
     assertRegisteredAskUserQuestion(fullState)
 
@@ -629,6 +632,12 @@ describe('createWorkbenchAgent', () => {
         'run_command',
         'update_plan',
         'ask_user_question',
+        'board_widget_begin',
+        'board_widget_append',
+        'board_widget_finish',
+        'board_job_begin',
+        'board_job_append',
+        'board_job_finish',
       ],
     )
 
@@ -641,8 +650,27 @@ describe('createWorkbenchAgent', () => {
     assert.ok(toolNames.includes('run_command'))
     assertRegisteredUpdatePlan(fullState)
     assertRegisteredAskUserQuestion(fullState)
+    assertRegisteredBoardTools(fullState)
   })
 })
+
+function assertRegisteredBoardTools(fullState: {
+  tools: Array<{ name?: string; needsApproval?: unknown }>
+}) {
+  const names = fullState.tools.map((tool) => tool.name)
+  for (const name of [
+    'board_widget_begin',
+    'board_widget_append',
+    'board_widget_finish',
+    'board_job_begin',
+    'board_job_append',
+    'board_job_finish',
+  ]) {
+    assert.ok(names.includes(name), `missing board tool ${name}`)
+  }
+  const finish = fullState.tools.find((tool) => tool.name === 'board_job_finish')
+  assert.equal(finish?.needsApproval, true)
+}
 
 function assertRegisteredUpdatePlan(fullState: {
   instructions?: string
