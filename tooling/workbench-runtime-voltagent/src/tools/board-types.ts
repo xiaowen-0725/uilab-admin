@@ -94,6 +94,13 @@ export function boardToolError(
   return { ok: false, error, hint }
 }
 
+export function repairBudgetExhausted(): BoardToolError {
+  return boardToolError(
+    'repair_budget_exhausted',
+    '同一草稿连续校验失败已达上限，请停止重试并向用户说明问题、换方案',
+  )
+}
+
 export function isBoardToolError(value: unknown): value is BoardToolError {
   return (
     typeof value === 'object' &&

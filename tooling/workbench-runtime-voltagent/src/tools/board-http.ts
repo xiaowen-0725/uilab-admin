@@ -9,7 +9,16 @@ import {
   resolveSidecarHttpToken,
 } from './board-auth.js'
 import type { BoardStaging } from './board-staging.js'
-import { boardToolError, isBoardToolError } from './board-types.js'
+import {
+  boardToolError,
+  isBoardToolError,
+  type BoardDraftKind,
+} from './board-types.js'
+
+function contentTypeFor(kind: BoardDraftKind): string {
+  if (kind === 'widget') return 'text/html; charset=utf-8'
+  return 'text/plain; charset=utf-8'
+}
 
 export type MountBoardStagingRoutesInput = {
   staging: BoardStaging
@@ -48,10 +57,7 @@ export function mountBoardStagingRoutes<
       return c.json(result, status)
     }
 
-    c.header(
-      'Content-Type',
-      result.kind === 'widget' ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8',
-    )
+    c.header('Content-Type', contentTypeFor(result.kind))
     c.header('X-Content-Hash', result.hash)
     c.header('X-Byte-Length', String(result.bytes))
     c.header('Cache-Control', 'no-store')

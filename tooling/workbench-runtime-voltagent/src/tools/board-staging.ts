@@ -16,6 +16,8 @@ import {
   BOARD_REPAIR_LIMIT,
   BOARD_STAGING_TTL_MS,
   boardToolError,
+  isBoardToolError,
+  repairBudgetExhausted,
   type BoardDraftKind,
   type BoardDraftMeta,
   type BoardToolError,
@@ -31,6 +33,15 @@ export type CreateBoardStagingInput = {
 
 type AppendOk = { received: number; nextSeq: number }
 type FinishOk = { hash: string; bytes: number; content: string }
+
+type DraftRef = {
+  buildId: string
+  expectedKind: BoardDraftKind
+  ownerId: string
+  ownerField: 'widgetId' | 'jobId'
+}
+
+const PRIVATE_FILE = { encoding: 'utf8' as const, mode: 0o600 }
 
 function hashText(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex')
@@ -89,24 +100,13 @@ export class BoardStaging {
     return { jobId, buildId }
   }
 
-  async append(input: {
-    buildId: string
-    expectedKind: BoardDraftKind
-    ownerId: string
-    ownerField: 'widgetId' | 'jobId'
-    seq: number
-    chunk: string
-  }): Promise<AppendOk | BoardToolError> {
+  async append(
+    input: DraftRef & { seq: number; chunk: string },
+  ): Promise<AppendOk | BoardToolError> {
     return this.withLock(input.buildId, async () => {
-      const loaded = await this.loadMeta(input.buildId)
-      if (!loaded) return boardToolError('unknown_build', '未知的 buildId，请先调用 begin')
-      if (loaded.kind !== input.expectedKind) {
-        return boardToolError('unknown_build', 'buildId 与工具面不匹配')
-      }
-      if (loaded[input.ownerField] !== input.ownerId) {
-        return boardToolError('unknown_build', 'id 与 buildId 不匹配')
-      }
-      if (loaded.status !== 'open') {
+      const draft = await this.requireDraft(input)
+      if (isBoardToolError(draft)) return draft
+      if (draft.status !== 'open') {
         return boardToolError('build_not_ready', '该草稿已结束，不能再追加')
       }
       if (!Number.isInteger(input.seq) || input.seq < 1) {
@@ -114,88 +114,70 @@ export class BoardStaging {
       }
 
       const chunkHash = hashText(input.chunk)
-      const existing = loaded.received[String(input.seq)]
+      const existing = draft.received[String(input.seq)]
       if (existing) {
         if (existing === chunkHash) {
-          return { received: input.seq, nextSeq: loaded.nextSeq }
+          return { received: input.seq, nextSeq: draft.nextSeq }
         }
         return boardToolError(
           'validation_failed',
           `seq ${input.seq} 已写入且内容不同，重复 seq 仅在同内容时幂等`,
         )
       }
-      if (input.seq !== loaded.nextSeq) {
+      if (input.seq !== draft.nextSeq) {
         return boardToolError(
           'validation_failed',
-          `乱序 seq：缺第 ${loaded.nextSeq} 段，当前收到 ${input.seq}`,
+          `乱序 seq：缺第 ${draft.nextSeq} 段，当前收到 ${input.seq}`,
         )
       }
 
       await mkdir(this.chunkDir(input.buildId), { recursive: true })
-      await writeFile(this.chunkPath(input.buildId, input.seq), input.chunk, {
-        encoding: 'utf8',
-        mode: 0o600,
-      })
-      loaded.received[String(input.seq)] = chunkHash
-      loaded.nextSeq = input.seq + 1
-      loaded.updatedAt = new Date(this.now()).toISOString()
-      await this.writeMeta(loaded)
-      return { received: input.seq, nextSeq: loaded.nextSeq }
+      await writeFile(this.chunkPath(input.buildId, input.seq), input.chunk, PRIVATE_FILE)
+      draft.received[String(input.seq)] = chunkHash
+      draft.nextSeq = input.seq + 1
+      this.touch(draft)
+      await this.writeMeta(draft)
+      return { received: input.seq, nextSeq: draft.nextSeq }
     })
   }
 
-  async finish(input: {
-    buildId: string
-    expectedKind: BoardDraftKind
-    ownerId: string
-    ownerField: 'widgetId' | 'jobId'
-    validate: (content: string, meta: BoardDraftMeta) =>
-      | { ok: true }
-      | BoardToolError
-  }): Promise<(FinishOk & { meta: BoardDraftMeta }) | BoardToolError> {
+  async finish(
+    input: DraftRef & {
+      validate: (
+        content: string,
+        meta: BoardDraftMeta,
+      ) => { ok: true } | BoardToolError
+    },
+  ): Promise<(FinishOk & { meta: BoardDraftMeta }) | BoardToolError> {
     return this.withLock(input.buildId, async () => {
-      const loaded = await this.loadMeta(input.buildId)
-      if (!loaded) return boardToolError('unknown_build', '未知的 buildId，请先调用 begin')
-      if (loaded.kind !== input.expectedKind) {
-        return boardToolError('unknown_build', 'buildId 与工具面不匹配')
-      }
-      if (loaded[input.ownerField] !== input.ownerId) {
-        return boardToolError('unknown_build', 'id 与 buildId 不匹配')
-      }
-      if (loaded.status === 'consumed') {
+      const draft = await this.requireDraft(input)
+      if (isBoardToolError(draft)) return draft
+      if (draft.status === 'consumed') {
         return boardToolError('build_not_ready', '该草稿已被拉取，不能再 finish')
       }
-      if (loaded.validationFailures >= BOARD_REPAIR_LIMIT + 1) {
-        return boardToolError(
-          'repair_budget_exhausted',
-          '同一草稿连续校验失败已达上限，请停止重试并向用户说明问题、换方案',
-        )
+      if (draft.validationFailures >= BOARD_REPAIR_LIMIT + 1) {
+        return repairBudgetExhausted()
       }
-      if (loaded.nextSeq <= 1) {
+      if (draft.nextSeq <= 1) {
         return this.recordFailure(
-          loaded,
+          draft,
           boardToolError('build_not_ready', '还没有追加任何分片，无法 finish'),
         )
       }
 
-      const content = await this.assemble(input.buildId, loaded)
-      const checked = input.validate(content, loaded)
-      if (checked.ok !== true) {
-        return this.recordFailure(loaded, checked)
-      }
+      const content = await this.assemble(input.buildId, draft)
+      const checked = input.validate(content, draft)
+      if (checked.ok !== true) return this.recordFailure(draft, checked)
 
       const contentHash = hashText(content)
       const bytes = Buffer.byteLength(content, 'utf8')
-      await writeFile(this.assembledPath(input.buildId), content, {
-        encoding: 'utf8',
-        mode: 0o600,
-      })
-      loaded.status = 'ready'
-      loaded.contentHash = contentHash
-      loaded.bytes = bytes
-      loaded.updatedAt = new Date(this.now()).toISOString()
-      await this.writeMeta(loaded)
-      return { hash: contentHash, bytes, content, meta: loaded }
+      await writeFile(this.assembledPath(input.buildId), content, PRIVATE_FILE)
+      draft.status = 'ready'
+      draft.contentHash = contentHash
+      draft.bytes = bytes
+      this.touch(draft)
+      await this.writeMeta(draft)
+      return { hash: contentHash, bytes, content, meta: draft }
     })
   }
 
@@ -214,7 +196,7 @@ export class BoardStaging {
       }
       const content = await readFile(this.assembledPath(buildId), 'utf8')
       loaded.status = 'consumed'
-      loaded.updatedAt = new Date(this.now()).toISOString()
+      this.touch(loaded)
       await this.writeMeta(loaded)
       await rm(this.assembledPath(buildId), { force: true })
       return {
@@ -276,18 +258,31 @@ export class BoardStaging {
     }
   }
 
+  private async requireDraft(ref: DraftRef): Promise<BoardDraftMeta | BoardToolError> {
+    const loaded = await this.loadMeta(ref.buildId)
+    if (!loaded) return boardToolError('unknown_build', '未知的 buildId，请先调用 begin')
+    if (loaded.kind !== ref.expectedKind) {
+      return boardToolError('unknown_build', 'buildId 与工具面不匹配')
+    }
+    if (loaded[ref.ownerField] !== ref.ownerId) {
+      return boardToolError('unknown_build', 'id 与 buildId 不匹配')
+    }
+    return loaded
+  }
+
+  private touch(meta: BoardDraftMeta): void {
+    meta.updatedAt = new Date(this.now()).toISOString()
+  }
+
   private async recordFailure(
     meta: BoardDraftMeta,
     error: BoardToolError,
   ): Promise<BoardToolError> {
     meta.validationFailures += 1
-    meta.updatedAt = new Date(this.now()).toISOString()
+    this.touch(meta)
     await this.writeMeta(meta)
     if (meta.validationFailures >= BOARD_REPAIR_LIMIT + 1) {
-      return boardToolError(
-        'repair_budget_exhausted',
-        '同一草稿连续校验失败已达上限，请停止重试并向用户说明问题、换方案',
-      )
+      return repairBudgetExhausted()
     }
     return error
   }
@@ -314,10 +309,7 @@ export class BoardStaging {
   private async writeMeta(meta: BoardDraftMeta): Promise<void> {
     const dir = this.draftDir(meta.buildId)
     await mkdir(dir, { recursive: true })
-    await writeFile(this.metaPath(meta.buildId), JSON.stringify(meta), {
-      encoding: 'utf8',
-      mode: 0o600,
-    })
+    await writeFile(this.metaPath(meta.buildId), JSON.stringify(meta), PRIVATE_FILE)
   }
 
   private draftDir(buildId: string): string {

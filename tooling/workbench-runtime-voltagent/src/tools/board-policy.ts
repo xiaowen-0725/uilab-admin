@@ -17,26 +17,8 @@ export const BOARD_SIDECAR_TOOLS = [
 export type BoardSidecarToolName = (typeof BOARD_SIDECAR_TOOLS)[number]
 
 /** The five tools that auto-approve; board_job_finish stays off this list. */
-export const BOARD_AUTO_APPROVE_TOOLS = [
-  'board_widget_begin',
-  'board_widget_append',
-  'board_widget_finish',
-  'board_job_begin',
-  'board_job_append',
-] as const
+export const BOARD_AUTO_APPROVE_TOOLS = BOARD_SIDECAR_TOOLS.filter(
+  (name) => name !== BOARD_JOB_FINISH_TOOL,
+)
 
 export type BoardAutoApproveToolName = (typeof BOARD_AUTO_APPROVE_TOOLS)[number]
-
-export type BoardToolPolicy = {
-  name: BoardSidecarToolName
-  needsApproval: boolean
-  autoApprove: boolean
-}
-
-export const BOARD_TOOL_POLICY: readonly BoardToolPolicy[] = BOARD_SIDECAR_TOOLS.map(
-  (name) => ({
-    name,
-    needsApproval: name === BOARD_JOB_FINISH_TOOL,
-    autoApprove: name !== BOARD_JOB_FINISH_TOOL,
-  }),
-)

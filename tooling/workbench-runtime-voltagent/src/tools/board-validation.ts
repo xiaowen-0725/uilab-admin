@@ -8,6 +8,7 @@ import {
   BOARD_WIDGET_MAX_BYTES,
   boardToolError,
   type BoardToolError,
+  type BoardToolErrorCode,
 } from './board-types.js'
 
 const FETCH_RE = /\bfetch\s*\(/
@@ -34,14 +35,43 @@ export type BoardValidationOk = { ok: true }
 
 export type BoardValidationResult = BoardValidationOk | BoardToolError
 
-function snippet(source: string, match: RegExpMatchArray | null): string {
-  if (!match || match.index == null) return ''
-  return source.slice(match.index, match.index + 40).replace(/\s+/g, ' ')
+type SourceRule = {
+  re: RegExp
+  error: BoardToolErrorCode
+  hint: (line: number, excerpt: string) => string
 }
 
-function locate(source: string, index: number): { line: number } {
-  const line = source.slice(0, Math.max(0, index)).split('\n').length
-  return { line }
+function excerpt(source: string, match: RegExpMatchArray): string {
+  return source.slice(match.index ?? 0, (match.index ?? 0) + 40).replace(/\s+/g, ' ')
+}
+
+function lineNumber(source: string, index: number): number {
+  return source.slice(0, Math.max(0, index)).split('\n').length
+}
+
+function rejectIfTooLarge(
+  source: string,
+  maxBytes: number,
+  label: string,
+): BoardToolError | null {
+  const bytes = Buffer.byteLength(source, 'utf8')
+  if (bytes <= maxBytes) return null
+  return boardToolError(
+    'validation_failed',
+    `${label}超过体积上限 ${maxBytes} 字节（当前 ${bytes}）`,
+  )
+}
+
+function firstRuleError(source: string, rules: readonly SourceRule[]): BoardToolError | null {
+  for (const rule of rules) {
+    const match = source.match(rule.re)
+    if (!match) continue
+    return boardToolError(
+      rule.error,
+      rule.hint(lineNumber(source, match.index ?? 0), excerpt(source, match)),
+    )
+  }
+  return null
 }
 
 export function validateAllowedHosts(hosts: readonly string[]): BoardValidationResult {
@@ -60,52 +90,66 @@ export function validateAllowedHosts(hosts: readonly string[]): BoardValidationR
   return { ok: true }
 }
 
+function cspHint(label: string) {
+  return (line: number, text: string) =>
+    `第 ${line} 行禁止 ${label}（${text}）。外部数据必须走取数作业`
+}
+
+const WIDGET_RULES: readonly SourceRule[] = [
+  {
+    re: EXTERNAL_SRC_HREF_RE,
+    error: 'csp_violation',
+    hint: (line, text) =>
+      `第 ${line} 行禁止外链 src/href（${text}）。小组件必须单文件自洽`,
+  },
+  {
+    re: INLINE_HANDLER_RE,
+    error: 'csp_violation',
+    hint: (line, text) =>
+      `第 ${line} 行禁止内联事件处理器（${text}）。请改用 addEventListener`,
+  },
+  { re: FETCH_RE, error: 'csp_violation', hint: cspHint('fetch(') },
+  { re: XHR_RE, error: 'csp_violation', hint: cspHint('XMLHttpRequest') },
+  { re: WEBSOCKET_RE, error: 'csp_violation', hint: cspHint('WebSocket') },
+  { re: EVAL_RE, error: 'csp_violation', hint: cspHint('eval(') },
+  { re: NEW_FUNCTION_RE, error: 'csp_violation', hint: cspHint('new Function') },
+]
+
+const JOB_RULES: readonly SourceRule[] = [
+  {
+    re: IMPORT_RE,
+    error: 'validation_failed',
+    hint: (line, text) =>
+      `第 ${line} 行禁止 import（${text}）。作业必须零依赖单文件`,
+  },
+  {
+    re: DENO_ENV_RE,
+    error: 'validation_failed',
+    hint: (line, text) =>
+      `第 ${line} 行禁止 Deno.env（${text}）。首版作业读不到环境变量`,
+  },
+  {
+    re: DENO_RUN_RE,
+    error: 'validation_failed',
+    hint: (line, text) =>
+      `第 ${line} 行禁止 Deno.run / Deno.Command（${text}）`,
+  },
+  {
+    re: PATH_ESCAPE_RE,
+    error: 'validation_failed',
+    hint: (line, text) =>
+      `第 ${line} 行疑似写文件路径逃逸（${text}）。只能读写 ctx.runDir`,
+  },
+]
+
 export function validateWidgetSource(html: string): BoardValidationResult {
-  const bytes = Buffer.byteLength(html, 'utf8')
-  if (bytes > BOARD_WIDGET_MAX_BYTES) {
-    return boardToolError(
-      'validation_failed',
-      `小组件超过体积上限 ${BOARD_WIDGET_MAX_BYTES} 字节（当前 ${bytes}）`,
-    )
-  }
+  const oversized = rejectIfTooLarge(html, BOARD_WIDGET_MAX_BYTES, '小组件')
+  if (oversized) return oversized
   if (!SCRIPT_RE.test(html)) {
     return boardToolError('validation_failed', 'HTML 必须包含 <script>，小组件需要一段自洽脚本')
   }
-
-  const external = html.match(EXTERNAL_SRC_HREF_RE)
-  if (external) {
-    const { line } = locate(html, external.index ?? 0)
-    return boardToolError(
-      'csp_violation',
-      `第 ${line} 行禁止外链 src/href（${snippet(html, external)}）。小组件必须单文件自洽`,
-    )
-  }
-  const inline = html.match(INLINE_HANDLER_RE)
-  if (inline) {
-    const { line } = locate(html, inline.index ?? 0)
-    return boardToolError(
-      'csp_violation',
-      `第 ${line} 行禁止内联事件处理器（${snippet(html, inline)}）。请改用 addEventListener`,
-    )
-  }
-
-  for (const [re, label] of [
-    [FETCH_RE, 'fetch('],
-    [XHR_RE, 'XMLHttpRequest'],
-    [WEBSOCKET_RE, 'WebSocket'],
-    [EVAL_RE, 'eval('],
-    [NEW_FUNCTION_RE, 'new Function'],
-  ] as const) {
-    const match = html.match(re)
-    if (match) {
-      const { line } = locate(html, match.index ?? 0)
-      return boardToolError(
-        'csp_violation',
-        `第 ${line} 行禁止 ${label}（${snippet(html, match)}）。外部数据必须走取数作业`,
-      )
-    }
-  }
-
+  const violation = firstRuleError(html, WIDGET_RULES)
+  if (violation) return violation
   if (!WIDGET_READY_RE.test(html)) {
     return boardToolError(
       'sdk_contract_violation',
@@ -122,50 +166,13 @@ export function validateWidgetSource(html: string): BoardValidationResult {
 }
 
 export function validateJobSource(code: string): BoardValidationResult {
-  const bytes = Buffer.byteLength(code, 'utf8')
-  if (bytes > BOARD_JOB_MAX_BYTES) {
-    return boardToolError(
-      'validation_failed',
-      `作业代码超过体积上限 ${BOARD_JOB_MAX_BYTES} 字节（当前 ${bytes}）`,
-    )
-  }
+  const oversized = rejectIfTooLarge(code, BOARD_JOB_MAX_BYTES, '作业代码')
+  if (oversized) return oversized
   if (!JOB_RUN_RE.test(code)) {
     return boardToolError(
       'validation_failed',
       '作业必须 `export function run(ctx)`（或 async），顶层脚本不是入口',
     )
   }
-  const imported = code.match(IMPORT_RE)
-  if (imported) {
-    const { line } = locate(code, imported.index ?? 0)
-    return boardToolError(
-      'validation_failed',
-      `第 ${line} 行禁止 import（${snippet(code, imported)}）。作业必须零依赖单文件`,
-    )
-  }
-  const env = code.match(DENO_ENV_RE)
-  if (env) {
-    const { line } = locate(code, env.index ?? 0)
-    return boardToolError(
-      'validation_failed',
-      `第 ${line} 行禁止 Deno.env（${snippet(code, env)}）。首版作业读不到环境变量`,
-    )
-  }
-  const run = code.match(DENO_RUN_RE)
-  if (run) {
-    const { line } = locate(code, run.index ?? 0)
-    return boardToolError(
-      'validation_failed',
-      `第 ${line} 行禁止 Deno.run / Deno.Command（${snippet(code, run)}）`,
-    )
-  }
-  const escape = code.match(PATH_ESCAPE_RE)
-  if (escape) {
-    const { line } = locate(code, escape.index ?? 0)
-    return boardToolError(
-      'validation_failed',
-      `第 ${line} 行疑似写文件路径逃逸（${snippet(code, escape)}）。只能读写 ctx.runDir`,
-    )
-  }
-  return { ok: true }
+  return firstRuleError(code, JOB_RULES) ?? { ok: true }
 }

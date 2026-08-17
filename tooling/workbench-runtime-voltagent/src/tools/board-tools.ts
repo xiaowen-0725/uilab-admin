@@ -56,6 +56,24 @@ const jobFinishParams = z.object({
   buildId: z.string().min(1),
 })
 
+function widgetDraft(widgetId: string, buildId: string) {
+  return {
+    buildId,
+    expectedKind: 'widget' as const,
+    ownerId: widgetId,
+    ownerField: 'widgetId' as const,
+  }
+}
+
+function jobDraft(jobId: string, buildId: string) {
+  return {
+    buildId,
+    expectedKind: 'job' as const,
+    ownerId: jobId,
+    ownerField: 'jobId' as const,
+  }
+}
+
 export function createBoardTools(staging: BoardStaging) {
   const board_widget_begin = createTool({
     name: 'board_widget_begin',
@@ -78,14 +96,7 @@ export function createBoardTools(staging: BoardStaging) {
     parameters: widgetAppendParams,
     needsApproval: false,
     execute: async ({ widgetId, buildId, seq, chunk }) =>
-      staging.append({
-        buildId,
-        expectedKind: 'widget',
-        ownerId: widgetId,
-        ownerField: 'widgetId',
-        seq,
-        chunk,
-      }),
+      staging.append({ ...widgetDraft(widgetId, buildId), seq, chunk }),
   })
 
   const board_widget_finish = createTool({
@@ -98,11 +109,8 @@ export function createBoardTools(staging: BoardStaging) {
     needsApproval: false,
     execute: async ({ widgetId, buildId }) => {
       const result = await staging.finish({
-        buildId,
-        expectedKind: 'widget',
-        ownerId: widgetId,
-        ownerField: 'widgetId',
-        validate: (content) => validateWidgetSource(content),
+        ...widgetDraft(widgetId, buildId),
+        validate: validateWidgetSource,
       })
       if (isBoardToolError(result)) return result
       return {
@@ -135,14 +143,7 @@ export function createBoardTools(staging: BoardStaging) {
     parameters: jobAppendParams,
     needsApproval: false,
     execute: async ({ jobId, buildId, seq, chunk }) =>
-      staging.append({
-        buildId,
-        expectedKind: 'job',
-        ownerId: jobId,
-        ownerField: 'jobId',
-        seq,
-        chunk,
-      }),
+      staging.append({ ...jobDraft(jobId, buildId), seq, chunk }),
   })
 
   const board_job_finish = createTool({
@@ -156,10 +157,7 @@ export function createBoardTools(staging: BoardStaging) {
     needsApproval: true,
     execute: async ({ jobId, buildId }) => {
       const result = await staging.finish({
-        buildId,
-        expectedKind: 'job',
-        ownerId: jobId,
-        ownerField: 'jobId',
+        ...jobDraft(jobId, buildId),
         validate: (content, meta) => {
           const hosts = validateAllowedHosts(meta.allowedHosts ?? [])
           if (hosts.ok !== true) return hosts
@@ -186,14 +184,7 @@ export function createBoardTools(staging: BoardStaging) {
 
 export type BoardTools = ReturnType<typeof createBoardTools>
 
-export function boardToolsList(tools: BoardTools) {
-  return [
-    tools.board_widget_begin,
-    tools.board_widget_append,
-    tools.board_widget_finish,
-    tools.board_job_begin,
-    tools.board_job_append,
-    tools.board_job_finish,
-  ]
+export function boardToolsList(tools: BoardTools): Array<BoardTools[keyof BoardTools]> {
+  return Object.values(tools)
 }
 
