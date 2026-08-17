@@ -35,13 +35,18 @@ export type BoardJobRunView = {
 export type ResolveDeno = () => Promise<string | null>
 
 const KILL_GRACE_MS = 1_000
+const DENO_MISSING_HINT = '未安装 Deno，无法执行取数作业。请安装 Deno 后重试'
 
 export async function resolveDenoExecutable(
   env: Record<string, string | undefined> = process.env,
 ): Promise<string | null> {
   const override = env.DENO_PATH?.trim()
-  if (override) return (await canExec(override)) ? override : null
-  return (await canExec('deno')) ? 'deno' : null
+  if (override) {
+    if (await canExec(override)) return override
+    return null
+  }
+  if (await canExec('deno')) return 'deno'
+  return null
 }
 
 function canExec(bin: string): Promise<boolean> {
@@ -110,10 +115,7 @@ export class BoardJobExecutor {
 
     const deno = await this.resolveDeno()
     if (!deno) {
-      return boardToolError(
-        'deno_not_found',
-        '未安装 Deno，无法执行取数作业。请安装 Deno 后重试',
-      )
+      return boardToolError('deno_not_found', DENO_MISSING_HINT)
     }
 
     const runId = newJobRunId()
@@ -159,10 +161,7 @@ export class BoardJobExecutor {
     const timeoutMs = clampJobTimeoutMs(ready.approved.timeoutMs)
     const timeout = setTimeout(() => {
       live.timedOut = true
-      child.kill('SIGTERM')
-      setTimeout(() => {
-        if (live.view.status === 'running') child.kill('SIGKILL')
-      }, KILL_GRACE_MS)
+      terminate(child, () => live.view.status === 'running')
     }, timeoutMs)
 
     let stderr = ''
@@ -173,18 +172,19 @@ export class BoardJobExecutor {
 
     child.once('error', (err: NodeJS.ErrnoException) => {
       clearTimeout(timeout)
-      const missing = err.code === 'ENOENT'
+      if (err.code === 'ENOENT') {
+        this.finish(live, {
+          status: 'error',
+          error: { code: 'deno_not_found', hint: DENO_MISSING_HINT },
+        })
+        return
+      }
       this.finish(live, {
         status: 'error',
-        error: missing
-          ? {
-              code: 'deno_not_found',
-              hint: '未安装 Deno，无法执行取数作业。请安装 Deno 后重试',
-            }
-          : {
-              code: 'runtime_unavailable',
-              hint: err.message || '无法启动 Deno 子进程',
-            },
+        error: {
+          code: 'runtime_unavailable',
+          hint: err.message || '无法启动 Deno 子进程',
+        },
       })
     })
 
@@ -202,10 +202,7 @@ export class BoardJobExecutor {
     if (live.view.status !== 'running') return live.view
     live.cancelled = true
     this.finish(live, { status: 'cancelled' })
-    live.child.kill('SIGTERM')
-    setTimeout(() => {
-      if (!live.child.killed) live.child.kill('SIGKILL')
-    }, KILL_GRACE_MS)
+    terminate(live.child, () => !live.child.killed)
     return live.view
   }
 
@@ -230,57 +227,49 @@ export class BoardJobExecutor {
     }
 
     const resultPath = path.join(runDir, 'result.json')
-    const errorPath = path.join(runDir, 'error.json')
-    try {
-      const st = await stat(resultPath)
-      if (st.size > BOARD_JOB_RESULT_MAX_BYTES) {
-        this.finish(live, {
-          status: 'error',
-          error: {
-            code: 'output_too_large',
-            hint: `产物超过 512 KiB（${st.size} 字节），已拒绝回传`,
-          },
-        })
+    const size = await fileSize(resultPath)
+    if (size !== null) {
+      if (size > BOARD_JOB_RESULT_MAX_BYTES) {
+        this.finish(live, outputTooLarge(size))
         return
       }
-      const raw = await readFile(resultPath, 'utf8')
-      const bytes = Buffer.byteLength(raw, 'utf8')
-      if (bytes > BOARD_JOB_RESULT_MAX_BYTES) {
-        this.finish(live, {
-          status: 'error',
-          error: {
-            code: 'output_too_large',
-            hint: `产物超过 512 KiB（${bytes} 字节），已拒绝回传`,
-          },
-        })
-        return
+      const raw = await readText(resultPath)
+      if (raw !== null) {
+        const bytes = Buffer.byteLength(raw, 'utf8')
+        if (bytes > BOARD_JOB_RESULT_MAX_BYTES) {
+          this.finish(live, outputTooLarge(bytes))
+          return
+        }
+        try {
+          this.finish(live, {
+            status: 'success',
+            result: JSON.parse(raw) as unknown,
+          })
+          return
+        } catch {
+          // invalid result.json — fall through
+        }
       }
-      this.finish(live, { status: 'success', result: JSON.parse(raw) as unknown })
-      return
-    } catch {
-      // fall through to error.json / stderr
     }
 
-    try {
-      const raw = await readFile(errorPath, 'utf8')
-      const parsed = JSON.parse(raw) as { message?: string; name?: string }
+    const jobError = await readJobError(path.join(runDir, 'error.json'))
+    if (jobError) {
       this.finish(live, {
         status: 'error',
         error: {
           code: 'runtime_unavailable',
-          hint: parsed.message || parsed.name || '作业执行失败',
+          hint: jobError,
         },
       })
       return
-    } catch {
-      this.finish(live, {
-        status: 'error',
-        error: {
-          code: 'runtime_unavailable',
-          hint: stderr.trim() || '作业执行失败且未写出产物',
-        },
-      })
     }
+    this.finish(live, {
+      status: 'error',
+      error: {
+        code: 'runtime_unavailable',
+        hint: stderr.trim() || '作业执行失败且未写出产物',
+      },
+    })
   }
 
   private finish(
@@ -294,6 +283,52 @@ export class BoardJobExecutor {
       finishedAt: this.now().toISOString(),
     }
     this.runningByJob.delete(live.view.jobId)
+  }
+}
+
+function terminate(child: ChildProcess, shouldKill: () => boolean): void {
+  child.kill('SIGTERM')
+  setTimeout(() => {
+    if (shouldKill()) child.kill('SIGKILL')
+  }, KILL_GRACE_MS)
+}
+
+function outputTooLarge(
+  bytes: number,
+): Pick<BoardJobRunView, 'status' | 'error'> {
+  return {
+    status: 'error',
+    error: {
+      code: 'output_too_large',
+      hint: `产物超过 512 KiB（${bytes} 字节），已拒绝回传`,
+    },
+  }
+}
+
+async function fileSize(filePath: string): Promise<number | null> {
+  try {
+    return (await stat(filePath)).size
+  } catch {
+    return null
+  }
+}
+
+async function readText(filePath: string): Promise<string | null> {
+  try {
+    return await readFile(filePath, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+async function readJobError(filePath: string): Promise<string | null> {
+  const raw = await readText(filePath)
+  if (raw === null) return null
+  try {
+    const parsed = JSON.parse(raw) as { message?: string; name?: string }
+    return parsed.message || parsed.name || '作业执行失败'
+  } catch {
+    return null
   }
 }
 

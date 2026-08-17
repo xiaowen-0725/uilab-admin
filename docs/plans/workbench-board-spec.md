@@ -1,6 +1,6 @@
 # Spec: Workbench Board（看板 / 小组件 / 取数作业）
 
-**Status:** implementation in progress（#133/#134/#135 已落地；Canvas / 作业运行时 / 示例板未交付）
+**Status:** implementation in progress（#133–#139 已落地；刷新 UI / 示例板 / agent 面契约未交付）
 **Map:** [#111 Workbench Board 首版可执行规格](https://github.com/xiaowen-0725/uilab-admin/issues/111)
 **ADR:**
 

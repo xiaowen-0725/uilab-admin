@@ -2,6 +2,7 @@
 
 ### Added
 
+- Workbench Board Deno job runtime (#139): sidecar `POST /board/jobs/:jobId/run` + poll/cancel; CLI flags are the permission contract; results over 512 KiB fail with `output_too_large` (no `artifactRef`); missing Deno reports `deno_not_found`. Refresh UI is still #140
 - **Phase 3C Workbench Composer fidelity**: UI Lab `agent-composer` motion block under `src/components/motion/agent-composer` (portal menus, full-width add/`/` panels, skill tags, mode badges)
 - Workbench Composer local product interactions: context-rail project picker (search / create dialog / open local folder / clear), shell-width `+` menu, `/` command+skill palette, inline skill tags (`#7eb8f0`), scenario `show*` toggles for context rail chips
 - AI-first contracts: `AGENTS.md`, Admin `docs/ai/*`, `$uilab-admin` skill, scaffolds

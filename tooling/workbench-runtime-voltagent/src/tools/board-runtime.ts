@@ -58,7 +58,9 @@ export function createBoardRuntime(input: CreateBoardRuntimeInput = {}): BoardRu
   )
   const executor = new BoardJobExecutor(
     jobs,
-    input.resolveDeno ?? (() => resolveDenoExecutable(env)),
+    input.resolveDeno ?? function resolveDeno() {
+      return resolveDenoExecutable(env)
+    },
   )
   const tools = createBoardTools(staging, jobs)
   const token = resolveSidecarHttpToken(env, input.token)

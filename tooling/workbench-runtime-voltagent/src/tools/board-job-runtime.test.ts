@@ -108,6 +108,29 @@ async function pollRun(
   throw new Error(`run ${runId} still running after ${timeoutMs}ms`)
 }
 
+async function exec<T>(
+  tool: { execute?: unknown },
+  args: Record<string, unknown>,
+): Promise<T> {
+  return (tool.execute as (input: Record<string, unknown>, opts: object) => Promise<T>)(
+    args,
+    {},
+  )
+}
+
+async function startApprovedRun(
+  app: Hono,
+  jobId: string,
+  code: string,
+  extra?: { allowedHosts?: string[]; timeoutMs?: number },
+): Promise<string> {
+  assert.equal((await install(app, jobId, code, extra)).status, 200)
+  const started = await startRun(app, jobId)
+  assert.equal(started.status, 202)
+  const { runId } = (await started.json()) as { runId: string }
+  return runId
+}
+
 describe('board job run endpoint auth', () => {
   it('rejects a run without credentials', async () => {
     const runtime = await boardRuntime()
@@ -145,36 +168,26 @@ describe('board job run approval gate', () => {
 
   it('installs approved code when board_job_finish succeeds', async () => {
     const runtime = await boardRuntime()
-    const begun = (await (
-      runtime.tools.board_job_begin.execute as (
-        args: Record<string, unknown>,
-        opts: object,
-      ) => Promise<{ jobId: string; buildId: string }>
-    )(
+    const begun = await exec<{ jobId: string; buildId: string }>(
+      runtime.tools.board_job_begin,
       {
         widgetId: 'w_1',
         title: '汇率',
         description: '公开汇率',
         allowedHosts: ['api.example.com'],
       },
-      {},
-    ))
-    const code = jobCode('return { ok: true }')
-    await (
-      runtime.tools.board_job_append.execute as (
-        args: Record<string, unknown>,
-        opts: object,
-      ) => Promise<unknown>
-    )(
-      { jobId: begun.jobId, buildId: begun.buildId, seq: 1, chunk: code },
-      {},
     )
-    const finished = (await (
-      runtime.tools.board_job_finish.execute as (
-        args: Record<string, unknown>,
-        opts: object,
-      ) => Promise<{ jobId: string; codeHash: string }>
-    )({ jobId: begun.jobId, buildId: begun.buildId }, {}))
+    const code = jobCode('return { ok: true }')
+    await exec(runtime.tools.board_job_append, {
+      jobId: begun.jobId,
+      buildId: begun.buildId,
+      seq: 1,
+      chunk: code,
+    })
+    const finished = await exec<{ jobId: string; codeHash: string }>(
+      runtime.tools.board_job_finish,
+      { jobId: begun.jobId, buildId: begun.buildId },
+    )
     assert.equal(finished.codeHash, hashText(code))
     const approved = await runtime.jobs.readApproved(begun.jobId)
     assert.equal(approved?.codeHash, finished.codeHash)
@@ -198,33 +211,26 @@ describe('board job Deno isolation', async () => {
   const deno = await resolveDenoExecutable()
 
   it('returns a small JSON result from an approved job', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
-    const code = jobCode('return { quote: 42 }')
-    assert.equal((await install(app, 'j_ok', code)).status, 200)
-    const started = await startRun(app, 'j_ok')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
-    const done = await pollRun(app, runId)
+    const app = appOf(await boardRuntime())
+    const done = await pollRun(
+      app,
+      await startApprovedRun(app, 'j_ok', jobCode('return { quote: 42 }')),
+    )
     assert.equal(done.status, 'success')
     assert.deepEqual(done.result, { quote: 42 })
   })
 
   it('lets Deno refuse a fetch to an undeclared host', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
-    const code = jobCode(
-      'return await (await fetch("https://evil.example/data")).json()',
+    const app = appOf(await boardRuntime())
+    const done = await pollRun(
+      app,
+      await startApprovedRun(
+        app,
+        'j_net',
+        jobCode('return await (await fetch("https://evil.example/data")).json()'),
+        { allowedHosts: ['api.example.com'] },
+      ),
     )
-    assert.equal(
-      (await install(app, 'j_net', code, { allowedHosts: ['api.example.com'] }))
-        .status,
-      200,
-    )
-    const started = await startRun(app, 'j_net')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
-    const done = await pollRun(app, runId)
     assert.equal(done.status, 'error')
     assert.match(
       `${done.error?.hint ?? ''} ${done.error?.code ?? ''}`,
@@ -233,14 +239,15 @@ describe('board job Deno isolation', async () => {
   })
 
   it('lets Deno refuse reading Deno.env', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
-    const code = jobCode('return { home: Deno.env.get("HOME") }')
-    assert.equal((await install(app, 'j_env', code)).status, 200)
-    const started = await startRun(app, 'j_env')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
-    const done = await pollRun(app, runId)
+    const app = appOf(await boardRuntime())
+    const done = await pollRun(
+      app,
+      await startApprovedRun(
+        app,
+        'j_env',
+        jobCode('return { home: Deno.env.get("HOME") }'),
+      ),
+    )
     assert.equal(done.status, 'error')
     assert.match(
       `${done.error?.hint ?? ''} ${done.error?.code ?? ''}`,
@@ -249,17 +256,18 @@ describe('board job Deno isolation', async () => {
   })
 
   it('lets Deno refuse a write outside the run directory', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
+    const app = appOf(await boardRuntime())
     const outside = path.join(os.tmpdir(), `uilab-job-escape-${Date.now()}`)
-    const code = jobCode(
-      `await Deno.writeTextFile(${JSON.stringify(outside)}, "nope"); return { wrote: true }`,
+    const done = await pollRun(
+      app,
+      await startApprovedRun(
+        app,
+        'j_fs',
+        jobCode(
+          `await Deno.writeTextFile(${JSON.stringify(outside)}, "nope"); return { wrote: true }`,
+        ),
+      ),
     )
-    assert.equal((await install(app, 'j_fs', code)).status, 200)
-    const started = await startRun(app, 'j_fs')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
-    const done = await pollRun(app, runId)
     assert.equal(done.status, 'error')
     assert.match(
       `${done.error?.hint ?? ''} ${done.error?.code ?? ''}`,
@@ -268,33 +276,32 @@ describe('board job Deno isolation', async () => {
   })
 
   it('kills a timed-out job and records a timeout run', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
-    const code = jobCode(
-      'await new Promise((resolve) => setTimeout(resolve, 20_000)); return { late: true }',
+    const app = appOf(await boardRuntime())
+    const done = await pollRun(
+      app,
+      await startApprovedRun(
+        app,
+        'j_slow',
+        jobCode(
+          'await new Promise((resolve) => setTimeout(resolve, 20_000)); return { late: true }',
+        ),
+        { timeoutMs: 400 },
+      ),
+      8_000,
     )
-    assert.equal(
-      (await install(app, 'j_slow', code, { timeoutMs: 400 })).status,
-      200,
-    )
-    const started = await startRun(app, 'j_slow')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
-    const done = await pollRun(app, runId, 8_000)
     assert.equal(done.status, 'timeout')
     assert.match(done.error?.hint ?? '', /超时/)
   })
 
   it('cancels a running job', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
-    const code = jobCode(
-      'await new Promise((resolve) => setTimeout(resolve, 20_000)); return { late: true }',
+    const app = appOf(await boardRuntime())
+    const runId = await startApprovedRun(
+      app,
+      'j_cancel',
+      jobCode(
+        'await new Promise((resolve) => setTimeout(resolve, 20_000)); return { late: true }',
+      ),
     )
-    assert.equal((await install(app, 'j_cancel', code)).status, 200)
-    const started = await startRun(app, 'j_cancel')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
     const cancelled = await app.request(
       `/board/runs/${runId}/cancel`,
       auth({ method: 'POST' }),
@@ -305,14 +312,15 @@ describe('board job Deno isolation', async () => {
   })
 
   it('fails a result larger than 512 KiB without filling artifactRef', { skip: !deno }, async () => {
-    const runtime = await boardRuntime()
-    const app = appOf(runtime)
-    const code = jobCode('return { blob: "x".repeat(512 * 1024 + 8) }')
-    assert.equal((await install(app, 'j_big', code)).status, 200)
-    const started = await startRun(app, 'j_big')
-    assert.equal(started.status, 202)
-    const { runId } = (await started.json()) as { runId: string }
-    const done = await pollRun(app, runId)
+    const app = appOf(await boardRuntime())
+    const done = await pollRun(
+      app,
+      await startApprovedRun(
+        app,
+        'j_big',
+        jobCode('return { blob: "x".repeat(512 * 1024 + 8) }'),
+      ),
+    )
     assert.equal(done.status, 'error')
     assert.equal(done.error?.code, 'output_too_large')
     assert.equal((done as { artifactRef?: string }).artifactRef, undefined)

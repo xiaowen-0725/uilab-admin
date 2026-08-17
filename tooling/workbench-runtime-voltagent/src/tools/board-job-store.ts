@@ -164,10 +164,7 @@ export class BoardJobStore {
 
   async assertRunnable(
     jobId: string,
-  ): Promise<
-    | { ok: true; approved: BoardJobInstalled; code: string }
-    | BoardToolError
-  > {
+  ): Promise<{ ok: true; approved: BoardJobInstalled } | BoardToolError> {
     const approved = await this.readApproved(jobId)
     if (!approved) {
       return boardToolError(
@@ -182,13 +179,12 @@ export class BoardJobStore {
         '已批准快照存在但作业代码缺失，请重新安装',
       )
     }
-    const actual = hashJobCode(code)
-    if (actual !== approved.codeHash) {
+    if (hashJobCode(code) !== approved.codeHash) {
       return boardToolError(
         'code_hash_mismatch',
         '待执行代码与已批准 codeHash 不一致，已拒绝执行',
       )
     }
-    return { ok: true, approved, code }
+    return { ok: true, approved }
   }
 }
