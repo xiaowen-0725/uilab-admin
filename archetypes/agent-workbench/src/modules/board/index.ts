@@ -74,6 +74,7 @@ export {
 export {
   createBoardRefreshController,
   executeJobRun,
+  findUnavailable,
 } from './application/board-refresh'
 export type {
   BoardRefreshController,

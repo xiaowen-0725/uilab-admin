@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   gridItemsToPlacements,
+  lastRunForWidget,
   placementsToGridItems,
   widgetOnMount,
   type BoardView,
@@ -51,21 +52,15 @@ export function BoardDetailPage({
   const [expandedId, setExpandedId] = useState<BoardWidgetId | null>(null)
   const [jobWidgetId, setJobWidgetId] = useState<BoardWidgetId | null>(null)
   const expanded = expandedId ? view.widgets.get(expandedId) : undefined
-  const expandedJob = expanded ? view.jobs.get(expanded.id) : undefined
-  const expandedRun = expandedJob
-    ? view.lastRunByJobId.get(expandedJob.id)
-    : undefined
+  const expandedRun = expanded ? lastRunForWidget(view, expanded.id) : undefined
   const job = jobWidgetId ? (view.jobs.get(jobWidgetId) ?? null) : null
-  const lastRun = job ? (view.lastRunByJobId.get(job.id) ?? null) : null
+  const lastRun = job ? (lastRunForWidget(view, job.widgetId) ?? null) : null
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
   const jobCount = view.jobs.size
-  const refreshAllTitle =
-    jobCount === 0
-      ? '这个看板没有取数作业'
-      : runtimeUnavailable
-        ? JOB_RUNTIME_UNAVAILABLE
-        : '全部刷新'
+  let refreshAllTitle = '全部刷新'
+  if (jobCount === 0) refreshAllTitle = '这个看板没有取数作业'
+  else if (runtimeUnavailable) refreshAllTitle = JOB_RUNTIME_UNAVAILABLE
 
   useEffect(() => {
     if (!expandedId) return
@@ -193,10 +188,7 @@ export function BoardDetailPage({
             renderItem={(mountId) => {
               const widget = widgetOnMount(view, mountId)
               if (!widget) return null
-              const widgetJob = view.jobs.get(widget.id)
-              const last = widgetJob
-                ? view.lastRunByJobId.get(widgetJob.id)
-                : undefined
+              const last = lastRunForWidget(view, widget.id)
               return (
                 <BoardWidgetHost
                   widgetId={widget.id}

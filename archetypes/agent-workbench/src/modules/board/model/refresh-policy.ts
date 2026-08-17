@@ -24,16 +24,23 @@ const DISCONNECTED_HINT = /不可达|未连接|未接通|network|failed to fetch
 
 export function mapJobRuntimeHint(error: string, hint?: string): string {
   const trimmed = hint?.trim()
-  if (error === 'deno_not_found') {
-    return trimmed || JOB_DENO_MISSING
+  switch (error) {
+    case 'deno_not_found':
+      return trimmed || JOB_DENO_MISSING
+    case 'runtime_unavailable':
+      if (trimmed && !DISCONNECTED_HINT.test(trimmed)) return trimmed
+      return JOB_RUNTIME_DISCONNECTED
+    case 'invalid_job_result':
+      return trimmed || JOB_INVALID_RESULT
+    case 'already_running':
+      return trimmed || '该作业已在运行'
+    default:
+      return trimmed || '作业执行失败'
   }
-  if (error === 'runtime_unavailable') {
-    if (trimmed && !DISCONNECTED_HINT.test(trimmed)) return trimmed
-    return JOB_RUNTIME_DISCONNECTED
-  }
-  if (error === 'invalid_job_result') return trimmed || JOB_INVALID_RESULT
-  if (error === 'already_running') return trimmed || '该作业已在运行'
-  return trimmed || '作业执行失败'
+}
+
+function invalidJobResult(): { ok: false; error: string; hint: string } {
+  return { ok: false, error: 'invalid_job_result', hint: JOB_INVALID_RESULT }
 }
 
 export function parseJobResult(
@@ -43,12 +50,10 @@ export function parseJobResult(
     try {
       return { ok: true, data: JSON.parse(payload) as unknown }
     } catch {
-      return { ok: false, error: 'invalid_job_result', hint: JOB_INVALID_RESULT }
+      return invalidJobResult()
     }
   }
-  if (payload === undefined) {
-    return { ok: false, error: 'invalid_job_result', hint: JOB_INVALID_RESULT }
-  }
+  if (payload === undefined) return invalidJobResult()
   return { ok: true, data: payload }
 }
 

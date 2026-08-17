@@ -28,7 +28,7 @@ export type RefreshOutcome =
   | { kind: 'already_running'; runId?: string }
   | { kind: 'skipped'; reason: 'not_runnable' | 'no_job' | 'no_widget' }
   | { kind: 'unavailable'; error: string; hint: string }
-  | { kind: 'finished'; status: WidgetJobRunStatus; runId: string }
+  | { kind: 'finished'; status: WidgetJobRunStatus; runId: string; hint?: string }
 
 export type BoardWriteClock = () => string
 
@@ -59,16 +59,35 @@ function defaultNowIso(): string {
   return new Date().toISOString()
 }
 
+function unavailable(): RefreshOutcome {
+  return {
+    kind: 'unavailable',
+    error: 'runtime_unavailable',
+    hint: JOB_RUNTIME_DISCONNECTED,
+  }
+}
+
+function runStatusFromError(error: string): WidgetJobRunStatus {
+  if (error === 'timeout') return 'timeout'
+  if (error === 'cancelled') return 'cancelled'
+  return 'error'
+}
+
+export function findUnavailable(
+  outcomes: readonly RefreshOutcome[],
+): Extract<RefreshOutcome, { kind: 'unavailable' }> | undefined {
+  return outcomes.find(
+    (item): item is Extract<RefreshOutcome, { kind: 'unavailable' }> =>
+      item.kind === 'unavailable',
+  )
+}
+
 export async function executeJobRun(
   input: ExecuteJobRunInput,
 ): Promise<RefreshOutcome> {
   const nowIso = input.nowIso ?? defaultNowIso
   if (input.mode === 'first-run' && input.runtime.available === false) {
-    return {
-      kind: 'unavailable',
-      error: 'runtime_unavailable',
-      hint: JOB_RUNTIME_DISCONNECTED,
-    }
+    return unavailable()
   }
 
   const job = await input.store.getJob(input.jobId)
@@ -80,14 +99,7 @@ export async function executeJobRun(
   if (widget.status === 'running') {
     return { kind: 'already_running', runId: widget.lastRunId }
   }
-
-  if (input.runtime.available === false) {
-    return {
-      kind: 'unavailable',
-      error: 'runtime_unavailable',
-      hint: JOB_RUNTIME_DISCONNECTED,
-    }
-  }
+  if (input.runtime.available === false) return unavailable()
 
   const runId = newId('run')
   const startedAt = nowIso()
@@ -107,46 +119,38 @@ export async function executeJobRun(
     return { kind: 'already_running', runId }
   }
 
-  if (result.ok) {
-    const parsed = parseJobResult(result.payload)
-    if (parsed.ok) {
-      await input.store.recordRun(
-        { id: runId, jobId: input.jobId, widgetId: input.widgetId, startedAt, finishedAt, status: 'success' },
-        parsed.data,
-      )
-      input.onStatus?.()
-      return { kind: 'finished', status: 'success', runId }
-    }
-    await input.store.recordRun({
-      id: runId,
-      jobId: input.jobId,
-      widgetId: input.widgetId,
-      startedAt,
-      finishedAt,
-      status: 'error',
-      errorMessage: mapJobRuntimeHint(parsed.error, parsed.hint),
-    })
+  async function settle(
+    status: WidgetJobRunStatus,
+    extra?: { data?: unknown; errorMessage?: string },
+  ): Promise<RefreshOutcome> {
+    await input.store.recordRun(
+      {
+        id: runId,
+        jobId: input.jobId,
+        widgetId: input.widgetId,
+        startedAt,
+        finishedAt,
+        status,
+        errorMessage: extra?.errorMessage,
+      },
+      extra?.data,
+    )
     input.onStatus?.()
-    return { kind: 'finished', status: 'error', runId }
+    return { kind: 'finished', status, runId, hint: extra?.errorMessage }
   }
 
-  const status: WidgetJobRunStatus =
-    result.error === 'timeout'
-      ? 'timeout'
-      : result.error === 'cancelled'
-        ? 'cancelled'
-        : 'error'
-  await input.store.recordRun({
-    id: runId,
-    jobId: input.jobId,
-    widgetId: input.widgetId,
-    startedAt,
-    finishedAt,
-    status,
+  if (result.ok) {
+    const parsed = parseJobResult(result.payload)
+    if (parsed.ok) return settle('success', { data: parsed.data })
+    return settle('error', {
+      errorMessage: mapJobRuntimeHint(parsed.error, parsed.hint),
+    })
+  }
+
+  const status = runStatusFromError(result.error)
+  return settle(status, {
     errorMessage: mapJobRuntimeHint(result.error, result.hint),
   })
-  input.onStatus?.()
-  return { kind: 'finished', status, runId }
 }
 
 export function createBoardRefreshController(input: {
@@ -160,7 +164,8 @@ export function createBoardRefreshController(input: {
   const inFlight = new Set<string>()
   const concurrency = input.concurrency ?? BOARD_REFRESH_CONCURRENCY
   const staleMs = input.staleMs ?? BOARD_REFRESH_STALE_MS
-  const nowIso = () => (input.now ?? (() => new Date()))().toISOString()
+  const clock = input.now ?? (() => new Date())
+  const nowIso = () => clock().toISOString()
 
   async function runExclusive(job: WidgetDataJobRecord): Promise<RefreshOutcome> {
     if (inFlight.has(job.id)) {
@@ -193,11 +198,9 @@ export function createBoardRefreshController(input: {
         outcomes[index] = await runExclusive(job)
       }
     }
-    const workers = Array.from(
-      { length: Math.min(concurrency, jobs.length) },
-      () => worker(),
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, jobs.length) }, () => worker()),
     )
-    await Promise.all(workers)
     return outcomes
   }
 
@@ -212,6 +215,12 @@ export function createBoardRefreshController(input: {
     return jobs
   }
 
+  async function isRunning(job: WidgetDataJobRecord): Promise<boolean> {
+    if (inFlight.has(job.id)) return true
+    const widget = await input.store.getWidget(job.widgetId)
+    return widget?.status === 'running'
+  }
+
   async function markOrphaned(job: WidgetDataJobRecord): Promise<void> {
     const widget = await input.store.getWidget(job.widgetId)
     if (widget?.status !== 'running' || inFlight.has(job.id)) return
@@ -219,12 +228,7 @@ export function createBoardRefreshController(input: {
     const last = runs[runs.length - 1]
     const finishedAt = nowIso()
     const run: WidgetJobRunRecord = last
-      ? {
-          ...last,
-          status: 'error',
-          finishedAt,
-          errorMessage: JOB_ORPHANED_RUN,
-        }
+      ? { ...last, status: 'error', finishedAt, errorMessage: JOB_ORPHANED_RUN }
       : {
           id: newId('run'),
           jobId: job.id,
@@ -270,27 +274,21 @@ export function createBoardRefreshController(input: {
       return runExclusive(job)
     },
     async refreshBoard(boardId) {
-      const jobs = await jobsOnBoard(boardId)
       const queued: WidgetDataJobRecord[] = []
-      for (const job of jobs) {
-        if (inFlight.has(job.id)) continue
-        const widget = await input.store.getWidget(job.widgetId)
-        if (widget?.status === 'running') continue
+      for (const job of await jobsOnBoard(boardId)) {
+        if (await isRunning(job)) continue
         queued.push(job)
       }
       return runPool(queued)
     },
     async refreshStaleOnOpen(boardId) {
-      const jobs = await jobsOnBoard(boardId)
-      const nowMs = (input.now ?? (() => new Date()))().getTime()
+      const nowMs = clock().getTime()
       const stale: WidgetDataJobRecord[] = []
-      for (const job of jobs) {
+      for (const job of await jobsOnBoard(boardId)) {
         await markOrphaned(job)
-        if (inFlight.has(job.id)) continue
+        if (await isRunning(job)) continue
         const widget = await input.store.getWidget(job.widgetId)
-        if (!widget) continue
-        if (widget.status === 'running') continue
-        if (isWidgetDataStale(widget.latestDataAt, nowMs, staleMs)) {
+        if (widget && isWidgetDataStale(widget.latestDataAt, nowMs, staleMs)) {
           stale.push(job)
         }
       }
@@ -298,11 +296,10 @@ export function createBoardRefreshController(input: {
     },
     async reconcileOrphans(boardId) {
       const boards = boardId
-        ? [await input.store.getBoard(boardId)].filter(
-            (board): board is NonNullable<typeof board> => board != null,
-          )
+        ? [await input.store.getBoard(boardId)].filter(Boolean)
         : [...(await input.store.listBoards())]
       for (const board of boards) {
+        if (!board) continue
         for (const job of await jobsOnBoard(board.id)) {
           await markOrphaned(job)
         }

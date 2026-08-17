@@ -64,3 +64,11 @@ export function widgetOnMount(
   const placement = view.board.placements.find((item) => item.mountId === mountId)
   return placement ? view.widgets.get(placement.widgetId) : undefined
 }
+
+export function lastRunForWidget(
+  view: BoardView,
+  widgetId: BoardWidgetId,
+): WidgetJobRunRecord | undefined {
+  const job = view.jobs.get(widgetId)
+  return job ? view.lastRunByJobId.get(job.id) : undefined
+}

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { BoardRefreshController } from '../application/board-refresh'
+import {
+  findUnavailable,
+  type BoardRefreshController,
+} from '../application/board-refresh'
 import { loadBoardView } from '../application/load-board-view'
+import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import type { BoardView } from '../model/board-view'
 import type { BoardStorePort } from '../ports/board-store-port'
 import type { WidgetTheme } from '../model/widget-document'
@@ -42,19 +46,30 @@ export function BoardPreviewLoader({
 
   useEffect(() => {
     if (!refresh) return
-    void refresh.refreshStaleOnOpen(boardId)
-  }, [boardId, refresh])
-
-  useEffect(() => {
-    if (!refresh) return
     let cancelled = false
     void refresh.probe().then((probed) => {
       if (!cancelled) setRuntimeUnavailable(!probed.ok)
     })
+    void refresh.refreshStaleOnOpen(boardId)
     return () => {
       cancelled = true
     }
-  }, [refresh])
+  }, [boardId, refresh])
+
+  async function refreshAll() {
+    if (!refresh) {
+      setHint(JOB_RUNTIME_DISCONNECTED)
+      return
+    }
+    const unavailable = findUnavailable(await refresh.refreshBoard(boardId))
+    if (unavailable) {
+      setRuntimeUnavailable(true)
+      setHint(unavailable.hint)
+      return
+    }
+    setHint(null)
+    setView(await loadBoardView(store, boardId))
+  }
 
   if (view === undefined) {
     return (
@@ -85,22 +100,7 @@ export function BoardPreviewLoader({
         theme={theme}
         runtimeUnavailable={runtimeUnavailable}
         onOpenFull={onOpenFull}
-        onRefreshAll={() => {
-          if (!refresh) {
-            setHint('运行时未连接')
-            return
-          }
-          void refresh.refreshBoard(boardId).then((outcomes) => {
-            const unavailable = outcomes.find((item) => item.kind === 'unavailable')
-            if (unavailable && unavailable.kind === 'unavailable') {
-              setRuntimeUnavailable(true)
-              setHint(unavailable.hint)
-              return
-            }
-            setHint(null)
-            void loadBoardView(store, boardId).then(setView)
-          })
-        }}
+        onRefreshAll={() => void refreshAll()}
         onClose={onClose}
       />
     </div>

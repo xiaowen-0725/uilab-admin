@@ -20,6 +20,38 @@ import { useWidgetBridge } from './use-widget-bridge'
 
 export type WidgetChrome = 'full' | 'compact' | 'none'
 
+function ChromeStatusIcon({
+  testId,
+  label,
+  tone,
+  children,
+}: {
+  testId: string
+  label: string
+  tone: 'destructive' | 'muted'
+  children: ReactNode
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex size-6 items-center justify-center',
+        tone === 'destructive' ? 'text-destructive' : 'text-muted-foreground',
+      )}
+      data-testid={testId}
+      title={label}
+      aria-label={label}
+    >
+      {children}
+    </span>
+  )
+}
+
+function refreshButtonLabel(running: boolean, runtimeUnavailable: boolean): string {
+  if (running) return '正在刷新'
+  if (runtimeUnavailable) return JOB_RUNTIME_DISCONNECTED
+  return '刷新'
+}
+
 function ChromeIconButton({
   testId,
   label,
@@ -136,11 +168,8 @@ export function BoardWidgetHost({
   const headerClass = chrome === 'full' ? 'h-9' : 'h-7'
   const titleClass = chrome === 'full' ? 'text-[13px]' : 'text-[12px]'
   const running = status === 'running'
-  const refreshLabel = running
-    ? '正在刷新'
-    : runtimeUnavailable
-      ? JOB_RUNTIME_DISCONNECTED
-      : '刷新'
+  const refreshLabel = refreshButtonLabel(running, runtimeUnavailable)
+  const showRunError = status === 'error' && Boolean(runError)
 
   return (
     <section
@@ -176,25 +205,23 @@ export function BoardWidgetHost({
           >
             {title}
           </h3>
-          {status === 'error' && runError ? (
-            <span
-              className='inline-flex size-6 items-center justify-center text-destructive'
-              data-testid='board-widget-run-error'
-              title={runError}
-              aria-label={runError}
+          {showRunError ? (
+            <ChromeStatusIcon
+              testId='board-widget-run-error'
+              label={runError ?? ''}
+              tone='destructive'
             >
               <TriangleAlert className='size-3.5' aria-hidden />
-            </span>
+            </ChromeStatusIcon>
           ) : null}
           {runtimeUnavailable ? (
-            <span
-              className='inline-flex size-6 items-center justify-center text-muted-foreground'
-              data-testid='board-widget-runtime-missing'
-              title={JOB_RUNTIME_DISCONNECTED}
-              aria-label={JOB_RUNTIME_DISCONNECTED}
+            <ChromeStatusIcon
+              testId='board-widget-runtime-missing'
+              label={JOB_RUNTIME_DISCONNECTED}
+              tone='muted'
             >
               <TriangleAlert className='size-3.5' aria-hidden />
-            </span>
+            </ChromeStatusIcon>
           ) : null}
           <ChromeIconButton
             testId='board-widget-refresh'

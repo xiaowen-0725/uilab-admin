@@ -1,6 +1,7 @@
 import { Expand, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
+  lastRunForWidget,
   placementsToGridItems,
   widgetOnMount,
   type BoardView,
@@ -93,8 +94,7 @@ export function BoardPreviewPanel({
           renderItem={(mountId) => {
             const widget = widgetOnMount(view, mountId)
             if (!widget) return null
-            const job = view.jobs.get(widget.id)
-            const last = job ? view.lastRunByJobId.get(job.id) : undefined
+            const last = lastRunForWidget(view, widget.id)
             return (
               <BoardWidgetHost
                 widgetId={widget.id}

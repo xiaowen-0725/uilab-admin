@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { BoardRefreshController } from '../application/board-refresh'
+import {
+  findUnavailable,
+  type BoardRefreshController,
+} from '../application/board-refresh'
 import { loadBoardList, loadBoardView } from '../application/load-board-view'
 import {
   revokeJobApproval,
@@ -104,61 +107,51 @@ export function BoardWorkspace({
     [reload, store],
   )
 
-  const showOutcomeHint = useCallback(
-    (hint: string | null) => {
-      setRefreshHint(hint)
-    },
-    [],
-  )
-
   const refreshWidget = useCallback(
     async (widgetId: BoardWidgetId) => {
       if (!detail) return
       if (!refresh) {
-        showOutcomeHint(JOB_RUNTIME_DISCONNECTED)
+        setRefreshHint(JOB_RUNTIME_DISCONNECTED)
         return
       }
       const job = detail.jobs.get(widgetId)
       if (!job) {
-        showOutcomeHint('这个小组件没有取数作业')
+        setRefreshHint('这个小组件没有取数作业')
         return
       }
       const outcome = await refresh.refreshJob(job.id)
       if (outcome.kind === 'unavailable') {
         setRuntimeUnavailable(true)
-        showOutcomeHint(outcome.hint)
+        setRefreshHint(outcome.hint)
         return
       }
       if (outcome.kind === 'finished' && outcome.status !== 'success') {
-        const view = await loadBoardView(store, detail.board.id)
-        const run = view?.lastRunByJobId.get(job.id)
-        showOutcomeHint(run?.errorMessage ?? null)
+        setRefreshHint(outcome.hint ?? null)
         return
       }
-      showOutcomeHint(null)
+      setRefreshHint(null)
     },
-    [detail, refresh, showOutcomeHint, store],
+    [detail, refresh],
   )
 
   const refreshAll = useCallback(async () => {
     if (!boardId) return
     if (!refresh) {
-      showOutcomeHint(JOB_RUNTIME_DISCONNECTED)
+      setRefreshHint(JOB_RUNTIME_DISCONNECTED)
       return
     }
     if (detail && detail.jobs.size === 0) {
-      showOutcomeHint('这个看板没有取数作业')
+      setRefreshHint('这个看板没有取数作业')
       return
     }
-    const outcomes = await refresh.refreshBoard(boardId)
-    const unavailable = outcomes.find((item) => item.kind === 'unavailable')
-    if (unavailable && unavailable.kind === 'unavailable') {
+    const unavailable = findUnavailable(await refresh.refreshBoard(boardId))
+    if (unavailable) {
       setRuntimeUnavailable(true)
-      showOutcomeHint(unavailable.hint)
+      setRefreshHint(unavailable.hint)
       return
     }
-    showOutcomeHint(null)
-  }, [boardId, detail, refresh, showOutcomeHint])
+    setRefreshHint(null)
+  }, [boardId, detail, refresh])
 
   if (boardId) {
     if (detail === undefined) {

@@ -73,6 +73,19 @@ function failureFromStatus(
   )
 }
 
+function failureFromCatch(err: unknown): BoardJobRunFailure {
+  if (isNetworkClassError(err)) {
+    return failure(
+      'runtime_unavailable',
+      '作业执行端点不可达，侧车未连接或网络错误',
+    )
+  }
+  return failure(
+    'runtime_unavailable',
+    err instanceof Error ? err.message : '作业执行端点不可达',
+  )
+}
+
 export function createHttpBoardJobRuntime(
   options: HttpBoardJobRuntimeOptions,
 ): BoardJobRuntimePort {
@@ -138,16 +151,7 @@ export function createHttpBoardJobRuntime(
         }
         return { ok: true, payload: null }
       } catch (err) {
-        if (isNetworkClassError(err)) {
-          return failure(
-            'runtime_unavailable',
-            '作业执行端点不可达，侧车未连接或网络错误',
-          )
-        }
-        return failure(
-          'runtime_unavailable',
-          err instanceof Error ? err.message : '作业执行端点不可达',
-        )
+        return failureFromCatch(err)
       }
     },
     async runJob(jobId: string): Promise<BoardJobRunResult> {
@@ -158,16 +162,7 @@ export function createHttpBoardJobRuntime(
         if (!started.ok) return started
         return await waitForRun(started.runId)
       } catch (err) {
-        if (isNetworkClassError(err)) {
-          return failure(
-            'runtime_unavailable',
-            '作业执行端点不可达，侧车未连接或网络错误',
-          )
-        }
-        return failure(
-          'runtime_unavailable',
-          err instanceof Error ? err.message : '作业执行端点不可达',
-        )
+        return failureFromCatch(err)
       }
     },
   }
