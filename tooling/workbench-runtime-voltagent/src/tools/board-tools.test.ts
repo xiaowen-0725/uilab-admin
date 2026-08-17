@@ -303,6 +303,29 @@ describe('board staging content endpoint', () => {
   })
 })
 
+describe('board agent recipe', () => {
+  it('walks begin → append → finish to a valid widget hash', async () => {
+    const board = await runtime()
+    const begun = (await exec(board.tools.board_widget_begin, {
+      title: '番茄钟',
+    })) as { widgetId: string; buildId: string }
+    const html = validWidgetHtml()
+    await exec(board.tools.board_widget_append, {
+      widgetId: begun.widgetId,
+      buildId: begun.buildId,
+      seq: 1,
+      chunk: html,
+    })
+    const finished = (await exec(board.tools.board_widget_finish, {
+      widgetId: begun.widgetId,
+      buildId: begun.buildId,
+    })) as { widgetId: string; contentHash: string; bytes: number }
+    assert.equal(finished.widgetId, begun.widgetId)
+    assert.equal(typeof finished.contentHash, 'string')
+    assert.ok(finished.bytes > 0)
+  })
+})
+
 describe('board tool policy', () => {
   it('keeps board_job_finish off the auto-approve list', () => {
     assert.equal(BOARD_JOB_FINISH_TOOL, 'board_job_finish')

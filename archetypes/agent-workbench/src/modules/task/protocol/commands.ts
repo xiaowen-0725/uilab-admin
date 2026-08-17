@@ -87,6 +87,8 @@ export interface TurnComposerContext {
    */
   expert?: TurnExpertRef | null
   mode?: 'default' | 'goal' | 'plan' | 'goal+plan'
+  /** Product features exposed this Turn (e.g. board). Not a Capability Surface catalog. */
+  featureIds?: string[]
 }
 
 export interface CancelRunCommand extends CommandEnvelope {

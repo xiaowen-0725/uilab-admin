@@ -66,6 +66,7 @@ describe('createConnectorAwareSandbox', () => {
     assert.deepEqual(received, {
       taskId: 'task-a',
       selectedConnectorIds: ['connector.feishu'],
+      selectedFeatureIds: [],
     })
   })
 

@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head></head>
+<body>
+<style>
+body{padding:12px;font:13px/1.5 system-ui,sans-serif;color:var(--widget-fg);background:var(--widget-bg)}
+h1{margin:0 0 8px;font-size:14px}
+.stat{font-size:28px;font-weight:600}
+.muted{color:var(--widget-muted)}
+</style>
+<h1>美元兑人民币</h1>
+<p class="stat" id="rate">—</p>
+<p class="muted" id="hint">还没有数据</p>
+<script>
+function paint(data) {
+  var rate = document.getElementById('rate');
+  var hint = document.getElementById('hint');
+  if (!data || data.usdCny == null) {
+    rate.textContent = '—';
+    hint.textContent = '还没有数据，等取数作业跑完';
+    return;
+  }
+  rate.textContent = String(data.usdCny);
+  hint.textContent = data.asOf ? ('更新于 ' + data.asOf) : '';
+}
+widget.onDataChange(paint);
+widget.ready();
+</script>
+</body>
+</html>

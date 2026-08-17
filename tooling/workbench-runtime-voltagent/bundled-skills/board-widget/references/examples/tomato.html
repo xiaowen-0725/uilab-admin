@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head></head>
+<body>
+<style>
+body{padding:12px;font:13px/1.5 system-ui,sans-serif;color:var(--widget-fg);background:var(--widget-bg)}
+h1{margin:0 0 8px;font-size:14px}
+.stat{font-size:28px;font-weight:600}
+button{font:inherit;color:inherit;background:var(--widget-bg);border:1px solid var(--widget-border);border-radius:6px;padding:4px 8px}
+</style>
+<h1>番茄钟</h1>
+<p class="stat" id="clock">25:00</p>
+<button type="button" id="toggle">开始</button>
+<script>
+var clock = document.getElementById('clock');
+var toggle = document.getElementById('toggle');
+var left = Number(widget.getInput('left'));
+if (!left) left = 25 * 60;
+var running = false;
+var timer = null;
+function paint() {
+  var m = String(Math.floor(left / 60)).padStart(2, '0');
+  var s = String(left % 60).padStart(2, '0');
+  clock.textContent = m + ':' + s;
+  toggle.textContent = running ? '暂停' : '开始';
+}
+function tick() {
+  if (left <= 0) { running = false; if (timer) clearInterval(timer); timer = null; paint(); return; }
+  left -= 1;
+  widget.saveInput('left', left);
+  paint();
+  widget.resize();
+}
+toggle.addEventListener('click', function () {
+  running = !running;
+  if (running) timer = setInterval(tick, 1000);
+  else if (timer) { clearInterval(timer); timer = null; }
+  paint();
+});
+widget.onDataChange(function () {
+  paint();
+});
+paint();
+widget.ready();
+</script>
+</body>
+</html>

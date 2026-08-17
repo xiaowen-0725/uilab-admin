@@ -63,6 +63,7 @@ export {
 } from './tool-gate.js'
 export {
   CAPABILITY_CONNECTOR_IDS_CONTEXT_KEY,
+  CAPABILITY_FEATURE_IDS_CONTEXT_KEY,
   readCapabilityTurnContext,
   type CapabilityTurnContext,
 } from './turn-context.js'

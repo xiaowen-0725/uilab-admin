@@ -7,6 +7,7 @@ import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 import type { BoardPreviewPolicy } from './board-preview-policy'
 import type { BoardRefreshController } from './board-refresh'
+import { grantBoardCapability } from './board-capability'
 import {
   commitBoardDraft,
   readBoardStatus,
@@ -87,6 +88,7 @@ export function createBoardClientToolExecutor(input: {
     } satisfies BoardCommitInput)
 
     if (result.ok) {
+      await grantBoardCapability(input.store, taskId)
       await applyCommitEffects(input.store, result, { taskId, turnId }, input.effects)
       const { replayed: _replayed, ...publicResult } = result
       return publicResult

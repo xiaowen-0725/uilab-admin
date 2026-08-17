@@ -15,6 +15,10 @@ import {
   type MetadataRecord,
 } from '@/app/persistence/workbench-idb'
 import {
+  BOARD_CAPABLE_TASK_IDS_KEY,
+  parseTaskIdList,
+} from '../model/board-capability-ledger'
+import {
   BOARD_PRESETS_INSTALLED_KEY,
   parsePresetMap,
 } from '../model/preset-install'
@@ -204,16 +208,39 @@ export class IdbBoardStore implements BoardStorePort {
 
   getInstalledPresets(): Promise<Readonly<Record<string, number>>> {
     return this.read(STORE_METADATA, async (tx) =>
-      parsePresetMap((await getMetadataRow(tx))?.value),
+      parsePresetMap((await getMetadataRow(tx, BOARD_PRESETS_INSTALLED_KEY))?.value),
     )
   }
 
   recordPresetInstalled(presetId: string, version: number): Promise<void> {
     return this.write(STORE_METADATA, async (tx) => {
-      const current = parsePresetMap((await getMetadataRow(tx))?.value)
+      const current = parsePresetMap(
+        (await getMetadataRow(tx, BOARD_PRESETS_INSTALLED_KEY))?.value,
+      )
       await putValue(tx, STORE_METADATA, {
         key: BOARD_PRESETS_INSTALLED_KEY,
         value: { ...current, [presetId]: version },
+      } satisfies MetadataRecord)
+    })
+  }
+
+  listBoardCapableTaskIds(): Promise<readonly string[]> {
+    return this.read(STORE_METADATA, async (tx) =>
+      parseTaskIdList((await getMetadataRow(tx, BOARD_CAPABLE_TASK_IDS_KEY))?.value),
+    )
+  }
+
+  grantBoardCapability(taskId: string): Promise<void> {
+    const id = taskId.trim()
+    if (!id) return Promise.resolve()
+    return this.write(STORE_METADATA, async (tx) => {
+      const current = parseTaskIdList(
+        (await getMetadataRow(tx, BOARD_CAPABLE_TASK_IDS_KEY))?.value,
+      )
+      if (current.includes(id)) return
+      await putValue(tx, STORE_METADATA, {
+        key: BOARD_CAPABLE_TASK_IDS_KEY,
+        value: [...current, id],
       } satisfies MetadataRecord)
     })
   }
@@ -379,11 +406,12 @@ function sortRunsByStartedAt(
 
 async function getMetadataRow(
   tx: IDBTransaction,
+  key: string,
 ): Promise<MetadataRecord | undefined> {
   return idbRequest(
     tx
       .objectStore(STORE_METADATA)
-      .get(BOARD_PRESETS_INSTALLED_KEY) as IDBRequest<MetadataRecord | undefined>,
+      .get(key) as IDBRequest<MetadataRecord | undefined>,
   )
 }
 

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { validateWidgetSource } from '../../../../../../tooling/workbench-runtime-voltagent/src/tools/board-validation.ts'
+import { resolveCapabilityFeatureIds } from './board-capability'
 import { createMemoryBoardContent } from '../adapters/memory-board-content'
 import {
   createMemoryBoardJobRuntime,
@@ -72,6 +74,62 @@ async function seedReadyDrafts(content: ReturnType<typeof createMemoryBoardConte
   })
   return { contentHash, codeHash }
 }
+
+describe('board agent recipe', () => {
+  it('walks status to commit and leaves a renderable widget', async () => {
+    const store = createMemoryBoardStore()
+    const content = createMemoryBoardContent()
+    const html = [
+      '<!doctype html><html><body>',
+      '<div id="root"></div>',
+      '<script>widget.onDataChange(function () {});widget.ready();</script>',
+      '</body></html>',
+    ].join('')
+    const contentHash = await hashBoardContent(html)
+    content.seed({
+      draftId: 'b-recipe',
+      kind: 'widget',
+      status: 'ready',
+      title: '汇率',
+      widgetId: 'w-recipe',
+      content: html,
+      hash: contentHash,
+      bytes: html.length,
+      contentHash,
+    })
+
+    const status = await readBoardStatus(store, content, {})
+    expect(status).toMatchObject({ ok: true, boards: [], committed: [] })
+
+    const committed = await commitBoardDraft(
+      store,
+      content,
+      {
+        newBoardTitle: '汇率板',
+        widgetId: 'w-recipe',
+        draftId: 'b-recipe',
+        contentHash,
+        taskId: 'task-recipe',
+      },
+      () => NOW,
+    )
+    expect(committed).toMatchObject({ ok: true, widgetId: 'w-recipe' })
+    if (!committed.ok) throw new Error('commit failed')
+
+    const widget = await store.getWidget('w-recipe')
+    expect(widget?.html).toBe(html)
+    expect(validateWidgetSource(widget?.html ?? '')).toEqual({ ok: true })
+    const next = await readBoardStatus(store, content, { boardId: committed.boardId })
+    expect(next).toMatchObject({
+      ok: true,
+      targetExists: true,
+      committed: [{ widgetId: 'w-recipe', boardId: committed.boardId }],
+    })
+    expect(await resolveCapabilityFeatureIds(store, 'task-recipe')).toEqual([
+      'board',
+    ])
+  })
+})
 
 describe('commitBoardDraft', () => {
   it('returns a scalar result without HTML or job source', async () => {

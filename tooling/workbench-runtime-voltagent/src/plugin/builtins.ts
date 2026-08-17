@@ -64,6 +64,7 @@ export const OFFICE_BUILTIN_SKILL_IDS = [
   'meeting-notes',
   'weekly-report',
   'research-brief',
+  'board-widget',
 ] as const
 
 export const OFFICE_BUILTIN_OUTPUT_DIRS = [
@@ -152,7 +153,7 @@ export const BUILTIN_MCP_CALENDAR_PLUGIN: PluginManifest = {
 }
 
 /**
- * Office workspace skills (meeting-notes / weekly-report / research-brief).
+ * Office workspace skills (meeting-notes / weekly-report / research-brief / board-widget).
  * Seed is missing-only; never overwrites user SKILL.md.
  */
 export const BUILTIN_SKILLS_OFFICE_PLUGIN: PluginManifest = {

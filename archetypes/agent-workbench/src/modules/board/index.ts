@@ -102,6 +102,11 @@ export type {
   BoardToolFailure,
 } from './application/board-write-channel'
 export {
+  BOARD_FEATURE_ID,
+  grantBoardCapability,
+  resolveCapabilityFeatureIds,
+} from './application/board-capability'
+export {
   BOARD_CLIENT_TOOL_NAMES,
   createBoardClientToolExecutor,
   isBoardClientTool,

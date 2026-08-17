@@ -107,6 +107,8 @@ export interface WorkbenchShellProps {
   busyTaskIds?: ReadonlySet<string>
   onLaunchAction?: (action: LaunchAction) => void
   onNewChat?: () => void
+  /** New chat from the Board list/detail entry — marks the Task board-capable. */
+  onCreateByChat?: () => void
   onSelectTask?: (taskId: string) => void
   onDeleteTask?: (taskId: string) => void
   onRemoveProject?: (projectId: string) => void
@@ -156,6 +158,7 @@ export function WorkbenchShell({
   busyTaskIds,
   onLaunchAction,
   onNewChat,
+  onCreateByChat,
   onSelectTask,
   onDeleteTask,
   onRemoveProject,
@@ -227,6 +230,11 @@ export function WorkbenchShell({
     showTask()
     onNewChat?.()
   }, [onNewChat, showTask])
+
+  const startBoardChatFromShell = useCallback(() => {
+    showTask()
+    ;(onCreateByChat ?? onNewChat)?.()
+  }, [onCreateByChat, onNewChat, showTask])
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false)
@@ -463,7 +471,7 @@ export function WorkbenchShell({
               taskExists={taskExists}
               onOpenList={() => openBoard()}
               onOpenBoard={(id) => openBoard(id)}
-              onCreateByChat={startNewChatFromShell}
+              onCreateByChat={startBoardChatFromShell}
               onOpenSourceTask={selectTaskFromShell}
             />
           ) : (

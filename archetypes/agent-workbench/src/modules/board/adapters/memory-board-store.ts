@@ -28,6 +28,7 @@ export class MemoryBoardStore implements BoardStorePort {
   private readonly jobs = new Map<WidgetDataJobId, WidgetDataJobRecord>()
   private readonly runs = new Map<string, WidgetJobRunRecord>()
   private presetsInstalled: Record<string, number> = {}
+  private capableTaskIds: string[] = []
 
   async listBoards(): Promise<readonly BoardRecord[]> {
     return [...this.boards.values()]
@@ -145,6 +146,16 @@ export class MemoryBoardStore implements BoardStorePort {
 
   async recordPresetInstalled(presetId: string, version: number): Promise<void> {
     this.presetsInstalled = { ...this.presetsInstalled, [presetId]: version }
+  }
+
+  async listBoardCapableTaskIds(): Promise<readonly string[]> {
+    return [...this.capableTaskIds]
+  }
+
+  async grantBoardCapability(taskId: string): Promise<void> {
+    const id = taskId.trim()
+    if (!id || this.capableTaskIds.includes(id)) return
+    this.capableTaskIds = [...this.capableTaskIds, id]
   }
 
   async appendPlacement(

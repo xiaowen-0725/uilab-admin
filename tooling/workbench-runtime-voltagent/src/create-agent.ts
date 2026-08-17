@@ -38,6 +38,10 @@ import {
   ASK_TOOL_INSTRUCTIONS,
   askUserQuestionTool,
 } from './ask-user-question-tool.js'
+import {
+  assembleTurnTools,
+  BOARD_TOOL_INSTRUCTIONS,
+} from './tools/board-agent-contract.js'
 import { getSharedBoardRuntime } from './tools/board-runtime.js'
 import { workbenchTools } from './tools.js'
 import {
@@ -246,7 +250,7 @@ export async function createWorkbenchAgent(
 
     const skillInstruction = skillsEnabled
       ? [
-          'Office skills live under /skills (meeting-notes, weekly-report, research-brief).',
+          'Office skills live under /skills (meeting-notes, weekly-report, research-brief, board-widget).',
           `Provider-installed Skills may be synchronized under these manifest-declared roots: ${skillRoots.join(', ')}. Search and read the matching package instead of inventing Provider CLI commands.`,
           'When a request matches a skill: workspace_list_skills or workspace_search_skills → workspace_activate_skill → workspace_read_skill → follow SKILL.md → write deliverable under the skill output path.',
           'Deliverable paths: /output/meeting-notes/, /output/weekly-report/, /output/research-brief/.',
@@ -273,9 +277,10 @@ export async function createWorkbenchAgent(
         'Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar.',
         PLAN_TOOL_INSTRUCTIONS,
         ASK_TOOL_INSTRUCTIONS,
+        BOARD_TOOL_INSTRUCTIONS,
       ].join(' '),
       model: options.model,
-      toolkits: [planToolkit, askToolkit, boardToolkit(env)],
+      toolkits: [planToolkit, askToolkit],
       workspace,
       workspaceToolkits: {
         filesystem: {},
@@ -295,7 +300,11 @@ export async function createWorkbenchAgent(
         : {}),
       tools: ({ context }) => {
         const turnContext = readCapabilityTurnContext({ context })
-        return connectorRuntime.toolsFor(turnContext)
+        return assembleTurnTools({
+          connectorTools: connectorRuntime.toolsFor(turnContext),
+          resolveBoardTools: () => boardToolkit(env).tools,
+          selectedFeatureIds: turnContext.selectedFeatureIds,
+        }) as Tool<any, any>[]
       },
       maxSteps: defaults.maxSteps,
       summarization: defaults.summarization,
@@ -355,10 +364,18 @@ export async function createWorkbenchAgent(
       'This is a local demo sidecar, not a remote production cluster.',
       PLAN_TOOL_INSTRUCTIONS,
       ASK_TOOL_INSTRUCTIONS,
+      BOARD_TOOL_INSTRUCTIONS,
     ].join(' '),
     model: options.model,
-    toolkits: [planToolkit, boardToolkit(env)],
-    tools: workbenchTools as (Tool<any, any> | Toolkit)[],
+    toolkits: [planToolkit],
+    tools: ({ context }) => {
+      const turnContext = readCapabilityTurnContext({ context })
+      return assembleTurnTools({
+        connectorTools: workbenchTools as Tool<any, any>[],
+        resolveBoardTools: () => boardToolkit(env).tools,
+        selectedFeatureIds: turnContext.selectedFeatureIds,
+      }) as Tool<any, any>[]
+    },
     maxSteps: defaults.maxSteps,
   })
 

@@ -92,6 +92,11 @@ export interface BoardStorePort {
   getInstalledPresets(): Promise<Readonly<Record<string, number>>>
 
   recordPresetInstalled(presetId: string, version: number): Promise<void>
+
+  /** Tasks that may see board_* tools (created from 对话创建, or after commit). */
+  listBoardCapableTaskIds(): Promise<readonly string[]>
+
+  grantBoardCapability(taskId: string): Promise<void>
 }
 
 export interface BoardAtomicCommitInput {

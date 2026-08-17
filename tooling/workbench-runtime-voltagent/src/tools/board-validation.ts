@@ -17,8 +17,14 @@ const WEBSOCKET_RE = /\bWebSocket\b/
 const EVAL_RE = /\beval\s*\(/
 const NEW_FUNCTION_RE = /\bnew\s+Function\s*\(/
 const INLINE_HANDLER_RE = /\son[a-z]+\s*=/i
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(/
 const EXTERNAL_SRC_HREF_RE =
   /\b(?:src|href)\s*=\s*(?:["'](?:https?:)?\/\/[^"']+|https?:\/\/|(?:https?:)?\/\/)/i
+const STORAGE_RE = /\b(?:localStorage|sessionStorage|document\.cookie)\b/
+const MODAL_RE = /\b(?:alert|confirm|prompt)\s*\(/
+const NAVIGATION_RE =
+  /\b(?:window\.open\s*\(|location\s*=|target\s*=\s*["']_blank["'])/
+const VIEWPORT_HEIGHT_RE = /\b100vh\b/
 const WIDGET_READY_RE = /\bwidget\.ready\s*\(/
 const WIDGET_DATA_RE = /\bwidget\.data\b/
 const WIDGET_ON_DATA_RE = /\bwidget\.onDataChange\s*\(/
@@ -29,6 +35,31 @@ const DENO_ENV_RE = /\bDeno\.env\b/
 const DENO_RUN_RE = /\bDeno\.(?:run|Command|spawn)\b/
 const PATH_ESCAPE_RE = /(?:\.\.[/\\]|[/\\](?:etc|Users|home|root|var)[/\\])/
 
+export const WIDGET_VALIDATOR_CHECK_IDS = [
+  'W1',
+  'W2-network',
+  'W2-data',
+  'W5',
+  'W6',
+  'W7',
+  'W9',
+  'W12-eval',
+  'W12-function',
+  'W12-inline',
+  'W12-import',
+  'W15',
+] as const
+
+export const JOB_VALIDATOR_CHECK_IDS = [
+  'J1-import',
+  'J1-run',
+  'J2-hosts',
+  'J3',
+  'J4-size',
+  'J5-env',
+  'J5-run',
+] as const
+
 const HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?::\d{1,5})?$/i
 
 export type BoardValidationOk = { ok: true }
@@ -36,6 +67,7 @@ export type BoardValidationOk = { ok: true }
 export type BoardValidationResult = BoardValidationOk | BoardToolError
 
 type SourceRule = {
+  id: string
   re: RegExp
   error: BoardToolErrorCode
   hint: (line: number, excerpt: string) => string
@@ -101,44 +133,89 @@ function cspHint(label: string) {
 
 const WIDGET_RULES: readonly SourceRule[] = [
   {
+    id: 'W1',
     re: EXTERNAL_SRC_HREF_RE,
     error: 'csp_violation',
     hint: (line, text) =>
       `第 ${line} 行禁止外链 src/href（${text}）。小组件必须单文件自洽`,
   },
   {
+    id: 'W12-inline',
     re: INLINE_HANDLER_RE,
     error: 'csp_violation',
     hint: (line, text) =>
       `第 ${line} 行禁止内联事件处理器（${text}）。请改用 addEventListener`,
   },
-  { re: FETCH_RE, error: 'csp_violation', hint: cspHint('fetch(') },
-  { re: XHR_RE, error: 'csp_violation', hint: cspHint('XMLHttpRequest') },
-  { re: WEBSOCKET_RE, error: 'csp_violation', hint: cspHint('WebSocket') },
-  { re: EVAL_RE, error: 'csp_violation', hint: cspHint('eval(') },
-  { re: NEW_FUNCTION_RE, error: 'csp_violation', hint: cspHint('new Function') },
+  { id: 'W2-network', re: FETCH_RE, error: 'csp_violation', hint: cspHint('fetch(') },
+  { id: 'W2-network', re: XHR_RE, error: 'csp_violation', hint: cspHint('XMLHttpRequest') },
+  { id: 'W2-network', re: WEBSOCKET_RE, error: 'csp_violation', hint: cspHint('WebSocket') },
+  { id: 'W12-eval', re: EVAL_RE, error: 'csp_violation', hint: cspHint('eval(') },
+  {
+    id: 'W12-function',
+    re: NEW_FUNCTION_RE,
+    error: 'csp_violation',
+    hint: cspHint('new Function'),
+  },
+  {
+    id: 'W12-import',
+    re: DYNAMIC_IMPORT_RE,
+    error: 'csp_violation',
+    hint: cspHint('import()'),
+  },
+  {
+    id: 'W5',
+    re: STORAGE_RE,
+    error: 'csp_violation',
+    hint: (line, text) =>
+      `第 ${line} 行禁止 ${text}。状态只走 widget.saveInput / getInput`,
+  },
+  {
+    id: 'W6',
+    re: MODAL_RE,
+    error: 'csp_violation',
+    hint: (line, text) =>
+      `第 ${line} 行禁止 ${text}。确认请走 widget.submit()`,
+  },
+  {
+    id: 'W7',
+    re: NAVIGATION_RE,
+    error: 'csp_violation',
+    hint: (line, text) =>
+      `第 ${line} 行禁止导航或开窗（${text}）。外链走 widget.openLink`,
+  },
+  {
+    id: 'W9',
+    re: VIEWPORT_HEIGHT_RE,
+    error: 'validation_failed',
+    hint: (line, text) =>
+      `第 ${line} 行不要 ${text}。内容放 body 并调用 widget.resize()`,
+  },
 ]
 
 const JOB_RULES: readonly SourceRule[] = [
   {
+    id: 'J1-import',
     re: IMPORT_RE,
     error: 'validation_failed',
     hint: (line, text) =>
       `第 ${line} 行禁止 import（${text}）。作业必须零依赖单文件`,
   },
   {
+    id: 'J5-env',
     re: DENO_ENV_RE,
     error: 'validation_failed',
     hint: (line, text) =>
       `第 ${line} 行禁止 Deno.env（${text}）。首版作业读不到环境变量`,
   },
   {
+    id: 'J5-run',
     re: DENO_RUN_RE,
     error: 'validation_failed',
     hint: (line, text) =>
       `第 ${line} 行禁止 Deno.run / Deno.Command（${text}）`,
   },
   {
+    id: 'J3',
     re: PATH_ESCAPE_RE,
     error: 'validation_failed',
     hint: (line, text) =>

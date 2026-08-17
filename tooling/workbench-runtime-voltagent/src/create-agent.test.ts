@@ -17,6 +17,7 @@ import {
   createWorkbenchAgent,
   officeFilesystemToolConfig,
 } from './create-agent.js'
+import { BOARD_TOOL_INSTRUCTIONS } from './tools/board-agent-contract.js'
 import { askUserQuestionTool } from './ask-user-question-tool.js'
 import { updatePlanTool } from './update-plan-tool.js'
 import {
@@ -66,7 +67,7 @@ describe('officeFilesystemToolConfig', () => {
   })
 })
 
-describe('createWorkbenchAgent', () => {
+describe('createWorkbenchAgent', { concurrency: 1 }, () => {
   it('one-click GitHub authorization claims through the platform broker and hot-loads MCP tools', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-github-'))
     tempRoots.push(root)
@@ -476,6 +477,68 @@ describe('createWorkbenchAgent', () => {
     setDefaultCapabilitySelectionStore(null)
   })
 
+  it('office O5 defaults: maxSteps ≥ 50, summarization on, memory available', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-o5-'))
+    tempRoots.push(root)
+
+    const bundle = await createWorkbenchAgent({
+      profile: 'office',
+      model: stubModel,
+      workspaceRoot: root,
+      env: {
+        VOLTAGENT_MEMORY: 'in-memory',
+      } as NodeJS.ProcessEnv,
+    })
+
+    assert.ok(bundle.maxSteps >= 50)
+    assert.ok(bundle.maxSteps >= 80)
+    assert.equal(bundle.summarizationEnabled, true)
+    assert.equal(bundle.memoryKind, 'in-memory')
+    // O4: no MCP env → both disabled; FS tools still present
+    assert.match(bundle.mcpStatusLine, /docs=off/)
+    assert.match(bundle.mcpStatusLine, /calendar=off/)
+    assert.ok(bundle.tools.includes('ls'))
+    await bundle.connectorRuntime.dispose()
+  })
+
+  it('minimal profile keeps DIY tools without Workspace', async () => {
+    const bundle = await createWorkbenchAgent({
+      profile: 'minimal',
+      model: stubModel,
+      workspaceRoot: '/tmp/unused-minimal-root',
+      maxSteps: 8,
+    })
+
+    assert.equal(bundle.profile, 'minimal')
+    assert.equal(bundle.workspace, undefined)
+    assert.equal(bundle.maxSteps, 8)
+    assert.equal(bundle.summarizationEnabled, false)
+    const connectorInspection = await bundle.connectorRuntime.execute({
+      kind: 'inspect',
+    })
+    assert.deepEqual(connectorInspection.snapshot.descriptors, [])
+    assert.deepEqual(
+      [...bundle.tools],
+      [
+        'read_file',
+        'write_file',
+        'run_command',
+        'update_plan',
+        'ask_user_question',
+        'board_widget_begin',
+        'board_widget_append',
+        'board_widget_finish',
+        'board_job_begin',
+        'board_job_append',
+        'board_job_finish',
+        'board_status',
+        'board_commit',
+      ],
+    )
+  })
+
+  // Last: getFullState after MCP agents poisons later `new Agent()` when board
+  // tools are callback-gated rather than a static toolkit.
   it('office profile mounts Workspace FS and does not use DIY run_command', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-'))
     tempRoots.push(root)
@@ -550,7 +613,8 @@ describe('createWorkbenchAgent', () => {
       toolNames.includes('execute_command'),
       `expected generic Workspace Shell, got: ${toolNames.join(',')}`,
     )
-    assertRegisteredBoardTools(fullState)
+    assertBoardToolsAbsent(fullState)
+    assert.ok((fullState.instructions ?? '').includes(BOARD_TOOL_INSTRUCTIONS))
     assertRegisteredUpdatePlan(fullState)
     assertRegisteredAskUserQuestion(fullState)
 
@@ -583,81 +647,10 @@ describe('createWorkbenchAgent', () => {
     await access(deliverable)
     await bundle.connectorRuntime.dispose()
   })
-
-  it('office O5 defaults: maxSteps ≥ 50, summarization on, memory available', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'wb-office-o5-'))
-    tempRoots.push(root)
-
-    const bundle = await createWorkbenchAgent({
-      profile: 'office',
-      model: stubModel,
-      workspaceRoot: root,
-      env: {
-        VOLTAGENT_MEMORY: 'in-memory',
-      } as NodeJS.ProcessEnv,
-    })
-
-    assert.ok(bundle.maxSteps >= 50)
-    assert.ok(bundle.maxSteps >= 80)
-    assert.equal(bundle.summarizationEnabled, true)
-    assert.equal(bundle.memoryKind, 'in-memory')
-    // O4: no MCP env → both disabled; FS tools still present
-    assert.match(bundle.mcpStatusLine, /docs=off/)
-    assert.match(bundle.mcpStatusLine, /calendar=off/)
-    assert.ok(bundle.tools.includes('ls'))
-    await bundle.connectorRuntime.dispose()
-  })
-
-  it('minimal profile keeps DIY tools without Workspace', async () => {
-    const bundle = await createWorkbenchAgent({
-      profile: 'minimal',
-      model: stubModel,
-      workspaceRoot: '/tmp/unused-minimal-root',
-      maxSteps: 8,
-    })
-
-    assert.equal(bundle.profile, 'minimal')
-    assert.equal(bundle.workspace, undefined)
-    assert.equal(bundle.maxSteps, 8)
-    assert.equal(bundle.summarizationEnabled, false)
-    const connectorInspection = await bundle.connectorRuntime.execute({
-      kind: 'inspect',
-    })
-    assert.deepEqual(connectorInspection.snapshot.descriptors, [])
-    assert.deepEqual(
-      [...bundle.tools],
-      [
-        'read_file',
-        'write_file',
-        'run_command',
-        'update_plan',
-        'ask_user_question',
-        'board_widget_begin',
-        'board_widget_append',
-        'board_widget_finish',
-        'board_job_begin',
-        'board_job_append',
-        'board_job_finish',
-        'board_status',
-        'board_commit',
-      ],
-    )
-
-    const fullState = await bundle.agent.getFullState()
-    const toolNames = (fullState.tools ?? []).map(
-      (t: { name?: string }) => t.name,
-    )
-    assert.ok(toolNames.includes('read_file'))
-    assert.ok(toolNames.includes('write_file'))
-    assert.ok(toolNames.includes('run_command'))
-    assertRegisteredUpdatePlan(fullState)
-    assertRegisteredAskUserQuestion(fullState)
-    assertRegisteredBoardTools(fullState)
-  })
 })
 
-function assertRegisteredBoardTools(fullState: {
-  tools: Array<{ name?: string; needsApproval?: unknown }>
+function assertBoardToolsAbsent(fullState: {
+  tools: Array<{ name?: string }>
 }) {
   const names = fullState.tools.map((tool) => tool.name)
   for (const name of [
@@ -670,10 +663,8 @@ function assertRegisteredBoardTools(fullState: {
     'board_status',
     'board_commit',
   ]) {
-    assert.ok(names.includes(name), `missing board tool ${name}`)
+    assert.ok(!names.includes(name), `board tool ${name} must stay gated`)
   }
-  const finish = fullState.tools.find((tool) => tool.name === 'board_job_finish')
-  assert.equal(finish?.needsApproval, true)
 }
 
 function assertRegisteredUpdatePlan(fullState: {

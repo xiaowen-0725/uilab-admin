@@ -105,6 +105,8 @@ type TaskStreamState = {
   lastUserText: string | null
   /** Immutable connector selection captured when this Turn started. */
   lastCapabilityConnectorIds: string[]
+  /** Immutable product-feature selection captured when this Turn started. */
+  lastCapabilityFeatureIds: string[]
   /** Pending tool approvals keyed by approvalId. */
   pendingApprovals: Map<string, PendingApproval>
   /** Pending Question Requests keyed by toolCallId / requestId. */
@@ -453,6 +455,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         lastTurnId: null,
         lastUserText: null,
         lastCapabilityConnectorIds: [],
+        lastCapabilityFeatureIds: [],
         pendingApprovals: new Map(),
         pendingQuestions: new Map(),
         pendingClientTools: new Map(),
@@ -531,6 +534,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     turnId: string
     input: StreamInput
     capabilityConnectorIds: readonly string[]
+    capabilityFeatureIds: readonly string[]
     completeIfNoTerminal?: boolean
   }): void {
     const state = this.ensureTask(args.taskId)
@@ -571,6 +575,13 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           .map((connector) => connector.id) ?? []
       ),
     ]
+    state.lastCapabilityFeatureIds = [
+      ...new Set(
+        command.composerContext?.featureIds
+          ?.map((id) => id.trim())
+          .filter(Boolean) ?? []
+      ),
+    ]
     state.pendingApprovals.clear()
     state.pendingQuestions.clear()
     state.pendingClientTools.clear()
@@ -581,6 +592,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       turnId,
       input: modelInput,
       capabilityConnectorIds: state.lastCapabilityConnectorIds,
+      capabilityFeatureIds: state.lastCapabilityFeatureIds,
       completeIfNoTerminal: true,
     })
 
@@ -783,6 +795,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         },
       ],
       capabilityConnectorIds: state.lastCapabilityConnectorIds,
+      capabilityFeatureIds: state.lastCapabilityFeatureIds,
       completeIfNoTerminal: true,
     })
   }
@@ -920,6 +933,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     turnId: string
     input: StreamInput
     capabilityConnectorIds: readonly string[]
+    capabilityFeatureIds: readonly string[]
     signal: AbortSignal
     completeIfNoTerminal?: boolean
   }): Promise<void> {
@@ -939,6 +953,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           options: {
             context: {
               capabilityConnectorIds: [...args.capabilityConnectorIds],
+              capabilityFeatureIds: [...args.capabilityFeatureIds],
             },
             memory: {
               userId: this.userId,

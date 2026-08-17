@@ -51,6 +51,14 @@ describe('seedSkillsContribution (missing-only)', () => {
       await listWorkspaceSkillIds(root),
       [...OFFICE_BUILTIN_SKILL_IDS].sort(),
     )
+    const widgetRules = path.join(
+      root,
+      'skills',
+      'board-widget',
+      'references',
+      'widget-rules.md',
+    )
+    assert.match(await readFile(widgetRules, 'utf8'), /### W1/)
   })
 
   it('does not crash with empty skillIds / no workspace templates', async () => {

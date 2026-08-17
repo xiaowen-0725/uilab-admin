@@ -169,6 +169,11 @@ export async function seedSkillsContribution(
       const { wrote } = await writeFileIfAbsentWithinRoot(root, relSkill, content)
       if (wrote) seededSkillIds.push(id)
       else skippedSkillIds.push(id)
+      await seedSkillReferencesMissingOnly(
+        path.join(bundledRoot, id),
+        root,
+        path.join(workspaceDir, id),
+      )
     }
 
     const outputDirs: string[] = []
@@ -445,6 +450,37 @@ function failedSeedResult(
     outputDirs: [],
     status: 'failed',
     reason,
+  }
+}
+
+async function seedSkillReferencesMissingOnly(
+  bundledSkillDir: string,
+  workspaceRoot: string,
+  workspaceSkillRel: string,
+): Promise<void> {
+  const srcRefs = path.join(bundledSkillDir, 'references')
+  if (!(await pathExists(srcRefs))) return
+  await walkSeedMissingOnly(srcRefs, workspaceRoot, path.join(workspaceSkillRel, 'references'))
+}
+
+async function walkSeedMissingOnly(
+  sourceDir: string,
+  workspaceRoot: string,
+  relativeDir: string,
+): Promise<void> {
+  const entries = await readdir(sourceDir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue
+    const rel = path.join(relativeDir, entry.name)
+    const src = path.join(sourceDir, entry.name)
+    if (entry.isDirectory()) {
+      await ensureDirWithinRoot(workspaceRoot, rel)
+      await walkSeedMissingOnly(src, workspaceRoot, rel)
+      continue
+    }
+    if (!entry.isFile()) continue
+    const content = await readFile(src, 'utf8')
+    await writeFileIfAbsentWithinRoot(workspaceRoot, rel, content)
   }
 }
 

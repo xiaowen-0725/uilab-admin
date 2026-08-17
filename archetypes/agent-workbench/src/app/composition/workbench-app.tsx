@@ -5,10 +5,12 @@
  * This file assembles them into Shell + thin chrome (boot screen, delete dialog).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  BoardContentPort,
-  BoardJobRuntimePort,
-  BoardStorePort,
+import {
+  grantBoardCapability,
+  resolveCapabilityFeatureIds,
+  type BoardContentPort,
+  type BoardJobRuntimePort,
+  type BoardStorePort,
 } from '@/modules/board'
 import {
   putSessionPointer,
@@ -326,7 +328,13 @@ export function WorkbenchApp({
                 return null
               }
               setProjectActionError(null)
-              return runtime.submitText(text, composerContext)
+              const featureIds = taskId
+                ? await resolveCapabilityFeatureIds(board.store, taskId)
+                : []
+              return runtime.submitText(text, {
+                ...composerContext,
+                featureIds,
+              })
             },
             onCancelRun: runtime.cancelActiveRun,
             runtimeNotice: [
@@ -352,6 +360,7 @@ export function WorkbenchApp({
           }
         : undefined,
     [
+      board.store,
       isRuntimePath,
       runtime.turnStatus,
       runtime.submitText,
@@ -379,10 +388,11 @@ export function WorkbenchApp({
           setProjectActionError(gate.message)
           return
         }
-        void runtime.submitText(action.promptStub)
+        const featureIds = await resolveCapabilityFeatureIds(board.store, taskId)
+        void runtime.submitText(action.promptStub, { featureIds })
       })()
     },
-    [runtime, taskId]
+    [board.store, runtime, taskId]
   )
 
   // --- Task lifecycle commands ---
@@ -451,49 +461,61 @@ export function WorkbenchApp({
   }, [bindSelectedProject, catalogController, hostPort])
   localRootRef.current = localRootCommands
 
-  const onNewChat = useCallback(async () => {
-    if (!catalogController || !localRootCommands) return
-    if (openingDraftRef.current) return
-    openingDraftRef.current = true
+  const onNewChat = useCallback(
+    async (options?: { grantBoard?: boolean }): Promise<string | null> => {
+      if (!catalogController || !localRootCommands) return null
+      if (openingDraftRef.current) return null
+      openingDraftRef.current = true
 
-    try {
-      let project
       try {
-        project = await localRootCommands.ensureProjectForNewChat()
-      } catch (err) {
-        setProjectActionError(actionErrorMessage(err, '无法准备项目'))
-        return
-      }
-      setProjectActionError(null)
+        let project
+        try {
+          project = await localRootCommands.ensureProjectForNewChat()
+        } catch (err) {
+          setProjectActionError(actionErrorMessage(err, '无法准备项目'))
+          return null
+        }
+        setProjectActionError(null)
 
-      const selected = selectedTaskIdRef.current
-        ? catalogController.getTaskRow(selectedTaskIdRef.current)
-        : null
-      const decision = decideNewChat({
-        selectedProjectId: project.id,
-        selectedTask: selected,
-        blankDraftInProject:
-          catalogController
-            .listTasksInProject(project.id)
-            .find(isBlankDraftTask) ?? null,
-      })
-      if (decision.kind === 'reselect') {
-        session.commands.selectTask(decision.taskId)
-        return
+        const selected = selectedTaskIdRef.current
+          ? catalogController.getTaskRow(selectedTaskIdRef.current)
+          : null
+        const decision = decideNewChat({
+          selectedProjectId: project.id,
+          selectedTask: selected,
+          blankDraftInProject:
+            catalogController
+              .listTasksInProject(project.id)
+              .find(isBlankDraftTask) ?? null,
+        })
+        const taskId =
+          decision.kind === 'reselect'
+            ? decision.taskId
+            : (
+                await createNewChatTask({
+                  catalog: catalogController,
+                  projectId: project.id,
+                  sequence: (newTaskCounterRef.current += 1),
+                })
+              ).id
+        if (decision.kind !== 'reselect') {
+          session.commands.ensureTaskLayout(taskId)
+        }
+        if (options?.grantBoard) {
+          await grantBoardCapability(board.store, taskId)
+        }
+        session.commands.selectTask(taskId)
+        return taskId
+      } finally {
+        openingDraftRef.current = false
       }
+    },
+    [board.store, catalogController, localRootCommands, session.commands],
+  )
 
-      newTaskCounterRef.current += 1
-      const row = await createNewChatTask({
-        catalog: catalogController,
-        projectId: project.id,
-        sequence: newTaskCounterRef.current,
-      })
-      session.commands.ensureTaskLayout(row.id)
-      session.commands.selectTask(row.id)
-    } finally {
-      openingDraftRef.current = false
-    }
-  }, [catalogController, localRootCommands, session.commands])
+  const onCreateBoardChat = useCallback(async () => {
+    await onNewChat({ grantBoard: true })
+  }, [onNewChat])
 
   useEffect(() => {
     if (!bootReady || !localRootCommands || !catalogController) return
@@ -739,6 +761,7 @@ export function WorkbenchApp({
           busyTaskIds={busyTaskIds}
           onLaunchAction={onLaunchAction}
           onNewChat={() => void onNewChat()}
+          onCreateByChat={() => void onCreateBoardChat()}
           onSelectTask={onSelectCatalogTask}
           onDeleteTask={onDeleteTask}
           onRemoveProject={onRemoveProject}

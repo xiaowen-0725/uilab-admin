@@ -108,6 +108,7 @@ describe('VoltAgentRuntimeAdapter', () => {
           instruction: '优先结构化会议纪要（议题、决议、待办）。',
         },
         mode: 'plan',
+        featureIds: ['board'],
       },
     })
 
@@ -118,11 +119,17 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(requestBody).toContain('优先结构化会议纪要')
     expect(requestBody).not.toContain('attachment bytes')
     const streamPayload = JSON.parse(requestBody) as {
-      options: { context: { capabilityConnectorIds: string[] } }
+      options: {
+        context: {
+          capabilityConnectorIds: string[]
+          capabilityFeatureIds: string[]
+        }
+      }
     }
     expect(streamPayload.options.context.capabilityConnectorIds).toEqual([
       'connector.feishu',
     ])
+    expect(streamPayload.options.context.capabilityFeatureIds).toEqual(['board'])
     expect(requestBody).not.toContain('本 Task 已选连接器：GitHub')
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
