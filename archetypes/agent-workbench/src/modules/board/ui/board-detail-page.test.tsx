@@ -80,6 +80,52 @@ describe('BoardDetailPage', () => {
     expect(onOpenSourceTask).toHaveBeenCalledWith('task-live')
   })
 
+  it('deletes the board from the detail chrome', async () => {
+    const onDeleteBoard = vi.fn()
+    await render(
+      <BoardDetailPage
+        view={view()}
+        theme='light'
+        taskExists={() => false}
+        onBack={() => {}}
+        onLayoutChange={() => {}}
+        onCreateByChat={() => {}}
+        onDeleteBoard={onDeleteBoard}
+      />,
+    )
+
+    await userEvent.click(page.getByTestId('board-delete'))
+    expect(onDeleteBoard).toHaveBeenCalledTimes(1)
+  })
+
+  it('labels example data widgets that have no job', async () => {
+    const sample = widget()
+    sample.latestData = { value: 3 }
+    await render(
+      <BoardDetailPage
+        view={{
+          board: { ...board(), isExample: true, title: '示例：每日速递' },
+          widgets: new Map([['w1', sample]]),
+          jobs: new Map(),
+          lastRunByJobId: new Map(),
+        }}
+        theme='light'
+        taskExists={() => false}
+        onBack={() => {}}
+        onLayoutChange={() => {}}
+        onCreateByChat={() => {}}
+      />,
+    )
+
+    expect(page.getByTestId('board-example-badge')).toHaveTextContent('示例')
+    expect(page.getByTestId('board-widget-example-data')).toHaveTextContent(
+      '示例数据 · 未绑定取数作业',
+    )
+    expect(page.getByTestId('board-widget-example-data')).toHaveTextContent(
+      '想让它每天自动更新？在对话里说一声',
+    )
+  })
+
   it('opens the job dialog with authorized status and revoke', async () => {
     const onRevokeJob = vi.fn()
     const job: WidgetDataJobRecord = {

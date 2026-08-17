@@ -4,6 +4,7 @@ import {
   openWorkSurfaceFromFileRef,
   openWorkSurfaceFromRuntimePayload,
 } from './surface-assembly'
+import { createMemoryBoardStore } from '@/modules/board'
 import type { DocumentContentPort } from '@/modules/work-surface'
 
 function stubDocumentContent(): DocumentContentPort {
@@ -31,23 +32,7 @@ describe('createWorkbenchSurfaceRegistry', () => {
       stubDocumentContent(),
       null,
       {
-        store: {
-          listBoards: async () => [],
-          getBoard: async () => null,
-          putBoard: async () => {},
-          deleteBoard: async () => {},
-          getWidget: async () => null,
-          putWidget: async () => {},
-          deleteWidget: async () => {},
-          getJob: async () => null,
-          getJobByWidgetId: async () => null,
-          putJob: async () => {},
-          deleteJob: async () => {},
-          listRuns: async () => [],
-          recordRun: async () => {},
-          appendPlacement: async () => {},
-          commitAtomically: async () => {},
-        },
+        store: createMemoryBoardStore(),
         onOpenFull: () => {},
         onClosePreview: () => {},
       },

@@ -109,6 +109,9 @@ export interface BoardWidgetHostProps {
   movable?: boolean
   /** Isolate pointer/focus for list thumbnails. */
   inert?: boolean
+  /** Example boards with prefilled data and no job (spec §9.5). */
+  exampleDataHint?: string | null
+  exampleDataNudge?: string | null
   className?: string
 }
 
@@ -139,6 +142,8 @@ export function BoardWidgetHost({
   onReady,
   movable = false,
   inert = false,
+  exampleDataHint = null,
+  exampleDataNudge = null,
   className,
 }: BoardWidgetHostProps) {
   const heartbeatEnabled = heartbeat ?? chrome !== 'none'
@@ -205,6 +210,16 @@ export function BoardWidgetHost({
           >
             {title}
           </h3>
+          {exampleDataHint ? (
+            <span
+              className='max-w-[52%] truncate text-[10px] leading-tight text-muted-foreground'
+              data-testid='board-widget-example-data'
+              title={[exampleDataHint, exampleDataNudge].filter(Boolean).join(' ')}
+            >
+              {exampleDataHint}
+              {exampleDataNudge ? ` · ${exampleDataNudge}` : ''}
+            </span>
+          ) : null}
           {showRunError ? (
             <ChromeStatusIcon
               testId='board-widget-run-error'

@@ -9,9 +9,15 @@ import {
   runTransaction,
   STORE_BOARDS,
   STORE_BOARD_WIDGETS,
+  STORE_METADATA,
   STORE_WIDGET_DATA_JOBS,
   STORE_WIDGET_JOB_RUNS,
+  type MetadataRecord,
 } from '@/app/persistence/workbench-idb'
+import {
+  BOARD_PRESETS_INSTALLED_KEY,
+  parsePresetMap,
+} from '../model/preset-install'
 import {
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
@@ -195,6 +201,17 @@ export class IdbBoardStore implements BoardStorePort {
     })
   }
 
+  getInstalledPresets(): Promise<Readonly<Record<string, number>>> {
+    return this.readMetadata((row) => parsePresetMap(row?.value))
+  }
+
+  recordPresetInstalled(presetId: string, version: number): Promise<void> {
+    return this.writeMetadata((current) => ({
+      ...current,
+      [presetId]: version,
+    }))
+  }
+
   appendPlacement(boardId: BoardId, placement: BoardPlacement): Promise<void> {
     return this.write(STORE_BOARDS, async (tx) => {
       const board = await getRow<BoardRecord>(tx, STORE_BOARDS, boardId)
@@ -241,6 +258,39 @@ export class IdbBoardStore implements BoardStorePort {
   ): Promise<T> {
     try {
       return await runTransaction(this.db, store, mode, fn)
+    } catch (err) {
+      throw toStoreError(err)
+    }
+  }
+
+  private async readMetadata<T>(
+    fn: (row: MetadataRecord | undefined) => T,
+  ): Promise<T> {
+    try {
+      return await runTransaction(
+        this.db,
+        STORE_METADATA,
+        'readonly',
+        async (tx) => fn(await getMetadataRow(tx)),
+      )
+    } catch (err) {
+      throw toStoreError(err)
+    }
+  }
+
+  private async writeMetadata(
+    next: (current: Record<string, number>) => Record<string, number>,
+  ): Promise<void> {
+    try {
+      await runTransaction(this.db, STORE_METADATA, 'readwrite', async (tx) => {
+        const current = parsePresetMap((await getMetadataRow(tx))?.value)
+        await idbRequest(
+          tx.objectStore(STORE_METADATA).put({
+            key: BOARD_PRESETS_INSTALLED_KEY,
+            value: next(current),
+          } satisfies MetadataRecord),
+        )
+      })
     } catch (err) {
       throw toStoreError(err)
     }
@@ -352,6 +402,16 @@ function sortRunsByStartedAt(
   rows: readonly WidgetJobRunRecord[],
 ): WidgetJobRunRecord[] {
   return [...rows].sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+}
+
+async function getMetadataRow(
+  tx: IDBTransaction,
+): Promise<MetadataRecord | undefined> {
+  return idbRequest(
+    tx
+      .objectStore(STORE_METADATA)
+      .get(BOARD_PRESETS_INSTALLED_KEY) as IDBRequest<MetadataRecord | undefined>,
+  )
 }
 
 function toStoreError(err: unknown): BoardStorePortError {

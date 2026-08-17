@@ -64,6 +64,7 @@ export {
   revokeJobApproval,
   updateBoardLayout,
 } from './application/board-commands'
+export { ensureExampleBoards } from './application/ensure-example-boards'
 export type { AddWidgetToBoardInput } from './application/board-commands'
 export { loadBoardList, loadBoardView } from './application/load-board-view'
 export {

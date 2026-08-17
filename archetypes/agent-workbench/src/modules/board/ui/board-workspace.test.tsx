@@ -8,6 +8,7 @@ import {
 } from '../adapters/memory-board-job-runtime'
 import { createMemoryBoardStore } from '../adapters/memory-board-store'
 import { createBoardRefreshController } from '../application/board-refresh'
+import { DRAG_HANDLE_ATTR } from '../model/drag-handle'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 import { BoardWorkspace } from './board-workspace'
@@ -59,10 +60,12 @@ function WorkspaceHarness({
   store,
   jobRuntime,
   startOnDetail = true,
+  width = 960,
 }: {
   store: BoardStorePort
   jobRuntime: BoardJobRuntimePort
   startOnDetail?: boolean
+  width?: number
 }) {
   const [boardId, setBoardId] = useState<string | undefined>(
     startOnDetail ? 'board-1' : undefined,
@@ -78,7 +81,7 @@ function WorkspaceHarness({
     [jobRuntime, store],
   )
   return (
-    <div style={{ width: 960, height: 720 }}>
+    <div style={{ width, height: 800 }}>
       <BoardWorkspace
         store={store}
         boardId={boardId}
@@ -181,7 +184,12 @@ describe('BoardWorkspace refresh', () => {
 
     await userEvent.click(page.getByTestId('board-breadcrumb-root'))
     await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
-    await userEvent.click(page.getByTestId('board-card-open'))
+    const seeded = page
+      .getByTestId('board-card')
+      .elements()
+      .find((node) => node.getAttribute('data-board-id') === 'board-1')
+    expect(seeded).toBeTruthy()
+    await userEvent.click(seeded as HTMLElement)
 
     await expect
       .poll(() => host().getAttribute('data-widget-status'))
@@ -218,5 +226,133 @@ describe('BoardWorkspace refresh', () => {
       latestData: { quote: 1 },
       status: 'idle',
     })
+  })
+})
+
+describe('BoardWorkspace example boards', () => {
+  it('installs two example boards on a fresh list without CSP violations', async () => {
+    const store = createMemoryBoardStore()
+    const violations: string[] = []
+    const onViolation = (event: Event) => {
+      const policy = event as SecurityPolicyViolationEvent
+      violations.push(`${policy.violatedDirective}:${policy.blockedURI}`)
+    }
+    window.addEventListener('securitypolicyviolation', onViolation)
+
+    try {
+      await render(
+        <WorkspaceHarness
+          store={store}
+          jobRuntime={createUnavailableBoardJobRuntime()}
+          startOnDetail={false}
+        />,
+      )
+
+      await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
+      expect(page.getByTestId('board-example-badge').elements()).toHaveLength(2)
+      expect(page.getByTestId('board-list-empty').elements()).toHaveLength(0)
+      expect(page.getByTestId('board-thumbnail-scale').elements().length).toBeGreaterThan(0)
+
+      await expect
+        .poll(
+          () =>
+            page
+              .getByTestId('board-widget-host')
+              .elements()
+              .filter((node) => node.getAttribute('data-phase') === 'ready').length,
+          { timeout: 8000 },
+        )
+        .toBeGreaterThan(0)
+      expect(violations).toEqual([])
+    } finally {
+      window.removeEventListener('securitypolicyviolation', onViolation)
+    }
+  })
+
+  it('deletes an example board and does not recreate it on the next list visit', async () => {
+    const store = createMemoryBoardStore()
+    await render(
+      <WorkspaceHarness
+        store={store}
+        jobRuntime={createUnavailableBoardJobRuntime()}
+        startOnDetail={false}
+      />,
+    )
+
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
+    const guide = page
+      .getByTestId('board-card')
+      .elements()
+      .find((node) => node.getAttribute('data-board-id') === 'example:getting-started')
+    await userEvent.click(guide as HTMLElement)
+    await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
+    await userEvent.click(page.getByTestId('board-delete'))
+
+    await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(1)
+    expect(await store.getBoard('example:getting-started')).toBeNull()
+    expect(await store.getInstalledPresets()).toMatchObject({ 'getting-started': 1 })
+  })
+
+  it('lets the user drag an example board and persists the layout', async () => {
+    const store = createMemoryBoardStore()
+    await render(
+      <WorkspaceHarness
+        store={store}
+        jobRuntime={createUnavailableBoardJobRuntime()}
+        startOnDetail={false}
+        width={1200}
+      />,
+    )
+
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
+    const guide = page
+      .getByTestId('board-card')
+      .elements()
+      .find((node) => node.getAttribute('data-board-id') === 'example:getting-started')
+    expect(guide).toBeTruthy()
+    await userEvent.click(guide as HTMLElement)
+
+    await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
+    await expect.poll(() => page.getByTestId('board-canvas-item').elements().length).toBe(5)
+    const before = await store.getBoard('example:getting-started')
+    const start = before?.placements.find(
+      (item) => item.widgetId === 'example:getting-started:resize',
+    )
+    expect(start).toBeTruthy()
+
+    expect(page.getByTestId('board-canvas').element()).toHaveAttribute(
+      'data-mode',
+      'edit',
+    )
+    const host = page
+      .getByTestId('board-widget-host')
+      .elements()
+      .find((node) => node.getAttribute('data-widget-id') === 'example:getting-started:resize')
+    const handle = host?.querySelector('[data-testid="board-widget-chrome"]') as HTMLElement
+    expect(handle).toBeTruthy()
+    expect(handle.hasAttribute(DRAG_HANDLE_ATTR)).toBe(true)
+
+    const item = page
+      .getByTestId('board-canvas-item')
+      .elements()
+      .find(
+        (node) =>
+          node.getAttribute('data-item-id') ===
+          'mount:example:getting-started:resize',
+      ) as HTMLElement
+    expect(item).toBeTruthy()
+    item.focus()
+    await userEvent.keyboard('{ArrowDown}')
+
+    await expect
+      .poll(async () => {
+        const board = await store.getBoard('example:getting-started')
+        const moved = board?.placements.find(
+          (item) => item.widgetId === 'example:getting-started:resize',
+        )
+        return Boolean(moved && (moved.x !== start?.x || moved.y !== start?.y))
+      }, { timeout: 4000 })
+      .toBe(true)
   })
 })

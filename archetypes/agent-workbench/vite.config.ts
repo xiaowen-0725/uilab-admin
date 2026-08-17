@@ -105,6 +105,9 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 5174,
+    fs: {
+      allow: [path.resolve(__dirname, '../..')],
+    },
     proxy: {
       // Local VoltAgent sidecar (tooling/workbench-runtime-voltagent)
       '/voltagent-runtime': {

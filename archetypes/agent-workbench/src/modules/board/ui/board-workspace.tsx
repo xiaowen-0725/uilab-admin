@@ -3,6 +3,7 @@ import {
   findUnavailable,
   type BoardRefreshController,
 } from '../application/board-refresh'
+import { ensureExampleBoards } from '../application/ensure-example-boards'
 import { loadBoardList, loadBoardView } from '../application/load-board-view'
 import {
   revokeJobApproval,
@@ -82,6 +83,7 @@ export function BoardWorkspace({
       }
       openedBoardRef.current = null
       await refresh?.reconcileOrphans()
+      await ensureExampleBoards(store)
       const next = await loadBoardList(store)
       if (!cancelled) setCards(next)
     })()
@@ -174,6 +176,12 @@ export function BoardWorkspace({
         onCreateByChat={onCreateByChat}
         onOpenSourceTask={onOpenSourceTask}
         onRevokeJob={(jobId) => void revoke(jobId)}
+        onDeleteBoard={() => {
+          void (async () => {
+            await store.deleteBoard(detail.board.id)
+            onOpenList()
+          })()
+        }}
         refreshHint={refreshHint}
         runtimeUnavailable={runtimeUnavailable}
       />

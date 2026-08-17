@@ -12,6 +12,10 @@ import {
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
 import type { BoardPlacement, BoardWidgetId } from '../model/types'
 import type { WidgetTheme } from '../model/widget-document'
+import {
+  EXAMPLE_DATA_HINT,
+  EXAMPLE_DATA_NUDGE,
+} from '../fixtures/example-presets'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import { BoardCanvas } from './board-canvas'
 import { BoardJobDialog } from './board-job-dialog'
@@ -30,6 +34,7 @@ export interface BoardDetailPageProps {
   onCreateByChat: () => void
   onOpenSourceTask?: (taskId: string) => void
   onRevokeJob?: (jobId: string) => void
+  onDeleteBoard?: () => void
   refreshHint?: string | null
   runtimeUnavailable?: boolean
 }
@@ -45,6 +50,7 @@ export function BoardDetailPage({
   onCreateByChat,
   onOpenSourceTask,
   onRevokeJob,
+  onDeleteBoard,
   refreshHint,
   runtimeUnavailable = false,
 }: BoardDetailPageProps) {
@@ -57,6 +63,12 @@ export function BoardDetailPage({
   const lastRun = job ? (lastRunForWidget(view, job.widgetId) ?? null) : null
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
+  const exampleUnbound = (widgetId: BoardWidgetId) => {
+    const widget = view.widgets.get(widgetId)
+    return Boolean(
+      board.isExample && widget?.latestData != null && !view.jobs.get(widgetId),
+    )
+  }
   const jobCount = view.jobs.size
   let refreshAllTitle = '全部刷新'
   if (jobCount === 0) refreshAllTitle = '这个看板没有取数作业'
@@ -131,6 +143,17 @@ export function BoardDetailPage({
           </Button>
         ) : null}
 
+        {onDeleteBoard ? (
+          <Button
+            type='button'
+            size='sm'
+            variant='ghost'
+            data-testid='board-delete'
+            onClick={onDeleteBoard}
+          >
+            删除
+          </Button>
+        ) : null}
         <Button
           type='button'
           size='sm'
@@ -189,6 +212,7 @@ export function BoardDetailPage({
               const widget = widgetOnMount(view, mountId)
               if (!widget) return null
               const last = lastRunForWidget(view, widget.id)
+              const unbound = exampleUnbound(widget.id)
               return (
                 <BoardWidgetHost
                   widgetId={widget.id}
@@ -202,6 +226,8 @@ export function BoardDetailPage({
                   status={widget.status}
                   runError={last?.errorMessage}
                   runtimeUnavailable={runtimeUnavailable}
+                  exampleDataHint={unbound ? EXAMPLE_DATA_HINT : null}
+                  exampleDataNudge={unbound ? EXAMPLE_DATA_NUDGE : null}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
                   onOpenJob={() => setJobWidgetId(widget.id)}
@@ -247,6 +273,12 @@ export function BoardDetailPage({
             status={expanded.status}
             runError={expandedRun?.errorMessage}
             runtimeUnavailable={runtimeUnavailable}
+            exampleDataHint={
+              exampleUnbound(expanded.id) ? EXAMPLE_DATA_HINT : null
+            }
+            exampleDataNudge={
+              exampleUnbound(expanded.id) ? EXAMPLE_DATA_NUDGE : null
+            }
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}
             className='min-h-0 flex-1'

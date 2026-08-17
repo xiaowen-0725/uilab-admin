@@ -84,6 +84,14 @@ export interface BoardStorePort {
    * Any store failure aborts the whole commit — no half-written board.
    */
   commitAtomically(input: BoardAtomicCommitInput): Promise<void>
+
+  /**
+   * Preset install ledger (`metadata` / `board.presets.installed`).
+   * Meaning is "ever installed", not "currently present".
+   */
+  getInstalledPresets(): Promise<Readonly<Record<string, number>>>
+
+  recordPresetInstalled(presetId: string, version: number): Promise<void>
 }
 
 export interface BoardAtomicCommitInput {

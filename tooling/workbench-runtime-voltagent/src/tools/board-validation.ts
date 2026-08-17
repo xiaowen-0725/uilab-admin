@@ -49,12 +49,16 @@ function lineNumber(source: string, index: number): number {
   return source.slice(0, Math.max(0, index)).split('\n').length
 }
 
+function utf8ByteLength(source: string): number {
+  return new TextEncoder().encode(source).byteLength
+}
+
 function rejectIfTooLarge(
   source: string,
   maxBytes: number,
   label: string,
 ): BoardToolError | null {
-  const bytes = Buffer.byteLength(source, 'utf8')
+  const bytes = utf8ByteLength(source)
   if (bytes <= maxBytes) return null
   return boardToolError(
     'validation_failed',

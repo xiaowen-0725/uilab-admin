@@ -17,7 +17,7 @@ import {
   type WorkbenchStoreName,
 } from './workbench-idb-schema'
 
-export type { SessionPointerRecord } from './workbench-idb-schema'
+export type { MetadataRecord, SessionPointerRecord } from './workbench-idb-schema'
 export {
   WORKBENCH_IDB_NAME,
   WORKBENCH_IDB_VERSION,
