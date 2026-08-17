@@ -1,6 +1,6 @@
 /**
  * Shell-owned Stage split constraints (not Session Interface).
- * Visual inset geometry and motion tokens live in styles/index.css.
+ * Visual Workspace geometry and motion tokens live in styles/index.css.
  */
 
 export const TASK_SURFACE_MIN_WIDTH = 420

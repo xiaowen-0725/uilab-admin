@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
-/** Shipped Phase 3A contract: wide/medium Workspace uses an 8px inset. */
-const INSET = 8
+/** Workspace is full-bleed on every viewport: no outer margin. */
+const INSET = 0
 const NAV_WIDTH = 306
 const TOOLBAR_HEIGHT = 44
 const GEOMETRY_TOLERANCE = 2
@@ -191,7 +191,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(Math.abs(navBox.width - NAV_WIDTH)).toBeLessThanOrEqual(
       GEOMETRY_TOLERANCE
     )
-    // Workspace: 8px top/right/bottom; left sits against Navigator.
+    // Workspace: flush to the window; left sits against Navigator. No card chrome.
     expect(Math.abs(wsBox.top - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
     expect(
       Math.abs(window.innerWidth - wsBox.right - INSET)
@@ -202,6 +202,13 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(Math.abs(wsBox.left - navBox.right)).toBeLessThanOrEqual(
       GEOMETRY_TOLERANCE
     )
+    const wsStyle = getComputedStyle(workspace)
+    expect(wsStyle.borderRadius).toBe('0px')
+    expect(wsStyle.boxShadow).toBe('none')
+    expect(wsStyle.borderTopWidth).toBe('0px')
+    expect(wsStyle.borderRightWidth).toBe('0px')
+    expect(wsStyle.borderBottomWidth).toBe('0px')
+    expect(wsStyle.borderLeftWidth).toBe('0px')
 
     // Exactly one Task pane toolbar (compat testid + slot).
     const topBar = page.getByTestId('workspace-top-bar').element()
@@ -269,7 +276,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
-  it('1440 collapsed by pointer: Navigator inert, left inset, animated motion', async () => {
+  it('1440 collapsed by pointer: Navigator inert, full-bleed, animated motion', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
 
@@ -310,7 +317,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .getByTestId('workbench-workspace')
       .element()
       .getBoundingClientRect()
-    // Collapsed: ~8px left inset; workspace expands into remaining viewport.
+    // Collapsed: flush left; workspace expands into remaining viewport.
     expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
     expect(wsBox.width).toBeGreaterThan(1400 - INSET * 2 - GEOMETRY_TOLERANCE)
   })

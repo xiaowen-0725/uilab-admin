@@ -17,8 +17,6 @@
 :root {
   /* Codex Desktop left rail CDP: 306 CSS px */
   --navigator-width: 306px;
-  --workspace-inset: 8px;
-  --workspace-radius: 12px;
   /* Codex content column ~736 */
   --content-max-width: 736px;
   /* Timeline chat rhythm — grok-app comfortable/md */
@@ -178,7 +176,7 @@
   pointer-events: auto;
 }
 
-/* Inset Workspace — foreground plane. */
+/* Workspace — flush foreground plane (no inset / radius / border / shadow). */
 .workbench-workspace {
   position: relative;
   display: flex;
@@ -187,60 +185,12 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: var(--background);
-  color: var(--foreground);
-}
-
-/* Desktop wide + medium: 8px inset, 12px radius, border + shadow. */
-[data-slot='workbench-shell'][data-viewport='wide'] .workbench-workspace,
-[data-slot='workbench-shell'][data-viewport='medium'] .workbench-workspace {
-  margin-block: var(--workspace-inset);
-  margin-inline-end: var(--workspace-inset);
-  border: 1px solid var(--border);
-  border-radius: var(--workspace-radius);
-  /* Light: soft ink shadow. Dark overridden below (white-glow on black looks wrong). */
-  box-shadow:
-    0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
-    0 8px 24px color-mix(in oklch, var(--foreground) 6%, transparent);
-}
-
-/*
- * Dark: black main stage sits in front of the grayer Navigator.
- * Hairline + soft black depth (not a light halo).
- */
-.dark [data-slot='workbench-shell'][data-viewport='wide'] .workbench-workspace,
-.dark [data-slot='workbench-shell'][data-viewport='medium'] .workbench-workspace {
-  border-color: rgb(255 255 255 / 7%);
-  box-shadow:
-    0 0 0 1px rgb(0 0 0 / 40%),
-    0 8px 28px rgb(0 0 0 / 35%);
-}
-
-/* Wide expanded: left margin 0 (sits against Navigator). */
-[data-slot='workbench-shell'][data-viewport='wide'][data-nav-open='true']
-  .workbench-workspace {
-  margin-inline-start: 0;
-  transition: margin-inline-start var(--nav-motion-duration) var(--ease-drawer);
-}
-
-/* Wide collapsed: 8px left inset. */
-[data-slot='workbench-shell'][data-viewport='wide'][data-nav-open='false']
-  .workbench-workspace {
-  margin-inline-start: var(--workspace-inset);
-  transition: margin-inline-start var(--nav-motion-duration) var(--ease-drawer);
-}
-
-/* Medium: overlay nav — full 8px inset all sides. */
-[data-slot='workbench-shell'][data-viewport='medium'] .workbench-workspace {
-  margin-inline-start: var(--workspace-inset);
-}
-
-/* Narrow: full-bleed, no chrome. */
-[data-slot='workbench-shell'][data-viewport='narrow'] .workbench-workspace {
   margin: 0;
   border: none;
   border-radius: 0;
   box-shadow: none;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 /* Overlay Navigator host — transform + opacity only; closed does not intercept. */

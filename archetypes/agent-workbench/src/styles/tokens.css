@@ -28,7 +28,7 @@
   --input: #e5e5e5;
   --ring: #0169cc;
 
-  /* Slightly cooler plane behind the inset Workspace */
+  /* Navigator plane; Workspace is flush and separated by this step. */
   --sidebar: #f7f7f7;
   --sidebar-foreground: #0d0d0d;
   --sidebar-primary: #0169cc;

@@ -64,7 +64,7 @@ Sidebar background plane
             └── Document / Browser（或空态）
 ```
 
-- 根背景为 `sidebar` plane；Workspace 为唯一前景平面（desktop/medium：8px inset、12px radius、border/shadow；narrow full-bleed）。
+- 根背景为 `sidebar` plane；Workspace 为唯一前景平面（各视口 full-bleed，无 inset / radius / border / shadow；与导航靠平面色阶分开）。
 - 新 Task 默认 **Task-only**。
 - Context / Work Surface 显隐、宽度、活动 tab、最大化 **按 Task 保存**。
 - Context Panel：宽 Task 用 reserved-space，窄 Task 用 overlay（CSS container query）；卡片按内容高度/最大高度，不默认满高。
