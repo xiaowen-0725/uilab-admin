@@ -6,6 +6,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  createIdbBoardStore,
+  createMemoryBoardStore,
+  type BoardStorePort,
+} from '@/modules/board'
+import {
   putSessionPointer,
   SESSION_ROW_ID,
   type SessionPointerRecord,
@@ -63,6 +68,8 @@ export interface WorkbenchAppProps {
   idbName?: string
   /** Optional HostPort injection (tests). Product path uses Electron 桥 or unavailable. */
   hostPort?: HostPort
+  /** Optional Board store injection (tests). */
+  boardStore?: BoardStorePort
 }
 
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
@@ -96,6 +103,7 @@ export function WorkbenchApp({
   persistence: persistenceProp,
   idbName,
   hostPort: hostPortProp,
+  boardStore: boardStoreProp,
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
@@ -127,6 +135,13 @@ export function WorkbenchApp({
     catalogController,
     eventStore,
   } = boot
+
+  const boardOpenerRef = useRef<((boardId?: string) => void) | null>(null)
+  const boardStore = useMemo(() => {
+    if (boardStoreProp) return boardStoreProp
+    if (db) return createIdbBoardStore(db)
+    return createMemoryBoardStore()
+  }, [boardStoreProp, db])
 
   // --- Catalog + selection ---
   const catalogView = useProjectCatalog(catalogController)
@@ -187,6 +202,15 @@ export function WorkbenchApp({
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
+  const boardWiring = useMemo(
+    () => ({
+      store: boardStore,
+      onOpenFull: (boardId: string) => boardOpenerRef.current?.(boardId),
+      onClosePreview: (tabId: string) =>
+        session.commands.closeWorkSurfaceTab(tabId),
+    }),
+    [boardStore, session.commands],
+  )
   const surface = useWorkbenchSurfaceAssembly({
     documentSource,
     hasOpenWorkTabs,
@@ -194,6 +218,7 @@ export function WorkbenchApp({
     runtimeController,
     selectedTaskId: taskId,
     bootReady,
+    board: boardWiring,
   })
 
   // Persist session pointers (IDB product path).
@@ -732,6 +757,9 @@ export function WorkbenchApp({
           }
           capabilityController={capabilityController}
           surfaceRegistry={surface.surfaceRegistry}
+          boardStore={boardStore}
+          taskExists={(id) => Boolean(catalogController?.getTaskRow(id))}
+          boardOpenerRef={boardOpenerRef}
           onOpenFileRef={surface.onOpenFileRef}
           workSurfaceEmptyExtra={surface.workSurfaceEmptyExtra}
           workSurfaceToolbarTrailing={surface.workSurfaceToolbarTrailing}

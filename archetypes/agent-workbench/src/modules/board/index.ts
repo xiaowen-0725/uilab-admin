@@ -4,7 +4,7 @@
  * Owns: Board / Board Widget / Widget Data Job entities, BoardStorePort,
  * the application command path (per-Board widget cap), widget srcdoc
  * assembly, the host bridge SDK, and the iframe frame (sandbox + csp).
- * Does not own: canvas UI, sidecar tools, or the job runtime.
+ * Does not own: sidecar tools or the job runtime.
  */
 
 export {
@@ -37,8 +37,15 @@ export { BoardStorePortError } from './ports/board-store-port'
 
 export { IdbBoardStore, createIdbBoardStore } from './adapters/idb-board-store'
 
-export { addWidgetToBoard, BoardWidgetLimitError } from './application/board-commands'
+export {
+  addWidgetToBoard,
+  BoardWidgetLimitError,
+  revokeJobApproval,
+  updateBoardLayout,
+} from './application/board-commands'
 export type { AddWidgetToBoardInput } from './application/board-commands'
+export { loadBoardList, loadBoardView } from './application/load-board-view'
+export { createMemoryBoardStore, MemoryBoardStore } from './adapters/memory-board-store'
 
 export {
   WIDGET_IFRAME_CSP_TEMPLATE,
@@ -82,3 +89,31 @@ export type {
   BoardWidgetHostProps,
   WidgetChrome,
 } from './ui/board-widget-host'
+
+export {
+  BOARD_PREVIEW_WIDTH,
+  DETAIL_GEOMETRY,
+  GRID_COLUMNS,
+  PREVIEW_GEOMETRY,
+  THUMBNAIL_GEOMETRY,
+  THUMBNAIL_SCALE,
+  THUMBNAIL_SLOTS,
+  moveItem,
+  resizeItem,
+} from './model/grid'
+export { DRAG_HANDLE_ATTR } from './model/drag-handle'
+export { formatRelative } from './model/relative-time'
+export type { BoardListCard, BoardView } from './model/board-view'
+
+export { BoardCanvas } from './ui/board-canvas'
+export {
+  BoardListPage,
+  THUMBNAIL_COST_CEILING_MS,
+  resolveThumbnailMode,
+} from './ui/board-list-page'
+export type { ThumbnailMode } from './ui/board-list-page'
+export { BoardDetailPage, JOB_RUNTIME_UNAVAILABLE } from './ui/board-detail-page'
+export { BoardPreviewPanel } from './ui/board-preview-panel'
+export { BoardPreviewLoader } from './ui/board-preview-loader'
+export { BoardWorkspace } from './ui/board-workspace'
+export { BoardJobDialog } from './ui/board-job-dialog'

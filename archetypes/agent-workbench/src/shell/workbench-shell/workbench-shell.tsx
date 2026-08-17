@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode, TransitionEvent } from 'react'
+import type { CSSProperties, MutableRefObject, ReactNode, TransitionEvent } from 'react'
+import {
+  BoardWorkspace,
+  type BoardStorePort,
+} from '@/modules/board'
 import {
   CapabilityManagementSurface,
   type CapabilityController,
@@ -37,6 +41,12 @@ import {
   type SettingsSectionId,
 } from '../settings/settings-dialog'
 import { useWorkbenchShortcuts } from './use-workbench-shortcuts'
+import { useThemePreference } from '../theme/theme-provider'
+import {
+  TASK_DESTINATION,
+  isTaskDestination,
+  type ShellDestination,
+} from '../destination'
 
 /** Shell-owned motion modality — never stored in Session. */
 export type MotionSource = 'animated' | 'instant'
@@ -124,6 +134,9 @@ export interface WorkbenchShellProps {
    * Shell/Host only pass-through.
    */
   workSurfaceToolbarTrailing?: ReactNode
+  boardStore?: BoardStorePort | null
+  taskExists?: (taskId: string) => boolean
+  boardOpenerRef?: MutableRefObject<((boardId?: string) => void) | null>
 }
 
 /**
@@ -151,8 +164,13 @@ export function WorkbenchShell({
   onOpenFileRef,
   workSurfaceEmptyExtra,
   workSurfaceToolbarTrailing,
+  boardStore = null,
+  taskExists = () => false,
+  boardOpenerRef,
 }: WorkbenchShellProps) {
   const viewport = useViewportMode()
+  const { resolvedDark } = useThemePreference()
+  const boardTheme = resolvedDark ? 'dark' : 'light'
   const [navMotion, setNavMotion] = useState<NavMotionSource>('instant')
   const [contextMotion, setContextMotion] =
     useState<ContextMotionSource>('instant')
@@ -161,9 +179,8 @@ export function WorkbenchShell({
   const [paneTransition, setPaneTransition] =
     useState<PaneTransition>('instant')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [activeDestination, setActiveDestination] = useState<
-    'task' | 'capabilities'
-  >('task')
+  const [activeDestination, setActiveDestination] =
+    useState<ShellDestination>(TASK_DESTINATION)
   const [settingsSection, setSettingsSection] =
     useState<SettingsSectionId>('profile')
 
@@ -173,7 +190,7 @@ export function WorkbenchShell({
   }, [])
 
   const openCapabilities = useCallback(() => {
-    setActiveDestination('capabilities')
+    setActiveDestination({ kind: 'capabilities' })
     if (viewport !== 'wide' && view.navigatorOpen) {
       setNavMotion('instant')
       commands.setNavigatorOpen(false)
@@ -181,8 +198,24 @@ export function WorkbenchShell({
   }, [commands, viewport, view.navigatorOpen])
 
   const showTask = useCallback(() => {
-    setActiveDestination('task')
+    setActiveDestination(TASK_DESTINATION)
   }, [])
+
+  const openBoard = useCallback((boardId?: string) => {
+    setActiveDestination({ kind: 'board', boardId })
+    if (viewport !== 'wide' && view.navigatorOpen) {
+      setNavMotion('instant')
+      commands.setNavigatorOpen(false)
+    }
+  }, [commands, viewport, view.navigatorOpen])
+
+  useEffect(() => {
+    if (!boardOpenerRef) return
+    boardOpenerRef.current = openBoard
+    return () => {
+      boardOpenerRef.current = null
+    }
+  }, [boardOpenerRef, openBoard])
 
   const startNewChatFromShell = useCallback(() => {
     showTask()
@@ -332,15 +365,14 @@ export function WorkbenchShell({
     effectiveWorkMax
   )
 
-  const drawerWidth =
-    activeDestination === 'capabilities'
-      ? 0
-      : workDrawerWidth(
-          view.layout.workSurfaceVisible,
-          workFullStage,
-          effectiveWorkWidth,
-          stageWidth
-        )
+  const drawerWidth = isTaskDestination(activeDestination)
+    ? workDrawerWidth(
+        view.layout.workSurfaceVisible,
+        workFullStage,
+        effectiveWorkWidth,
+        stageWidth,
+      )
+    : 0
 
   const widthAnimating = paneMotionSource === 'animated'
 
@@ -359,6 +391,7 @@ export function WorkbenchShell({
     onOpenSettings: openSettings,
     activeDestination,
     onOpenCapabilities: openCapabilities,
+    onOpenBoard: () => openBoard(),
     onToggleNavigator: toggleNavigatorFromPointer,
   }
 
@@ -367,6 +400,7 @@ export function WorkbenchShell({
       className='relative flex h-svh min-h-0 w-full overflow-hidden bg-[var(--wb-app-bg)]'
       data-slot='workbench-shell'
       data-testid='workbench-shell'
+      data-destination={activeDestination.kind}
       data-viewport={viewport}
       data-nav-open={view.navigatorOpen ? 'true' : 'false'}
       data-nav-motion={navMotion}
@@ -406,11 +440,22 @@ export function WorkbenchShell({
           className='relative flex min-h-0 min-w-0 flex-1 overflow-hidden'
           data-testid='workbench-stage'
         >
-          {activeDestination === 'capabilities' ? (
+          {activeDestination.kind === 'capabilities' ? (
             <CapabilityManagementSurface
               controller={capabilityController}
               taskId={view.selectedTaskId}
               onBack={showTask}
+            />
+          ) : activeDestination.kind === 'board' && boardStore ? (
+            <BoardWorkspace
+              store={boardStore}
+              boardId={activeDestination.boardId}
+              theme={boardTheme}
+              taskExists={taskExists}
+              onOpenList={() => openBoard()}
+              onOpenBoard={(id) => openBoard(id)}
+              onCreateByChat={startNewChatFromShell}
+              onOpenSourceTask={selectTaskFromShell}
             />
           ) : (
             /* Task pane: full-stage Work shrinks it via the drawer width. */
@@ -516,7 +561,7 @@ export function WorkbenchShell({
             data-slot='work-drawer-slot'
             style={{ width: drawerWidth }}
             aria-hidden={
-              activeDestination === 'capabilities' ||
+              !isTaskDestination(activeDestination) ||
               !view.layout.workSurfaceVisible ||
               undefined
             }
@@ -525,10 +570,10 @@ export function WorkbenchShell({
             <WorkSurfaceHost
               view={{
                 visible:
-                  activeDestination === 'task' &&
+                  isTaskDestination(activeDestination) &&
                   view.layout.workSurfaceVisible,
                 maximized:
-                  activeDestination === 'task' &&
+                  isTaskDestination(activeDestination) &&
                   view.layout.workSurfaceMaximized,
                 width: effectiveWorkWidth,
                 minWidth: view.workSurfaceMinWidth,
@@ -551,7 +596,7 @@ export function WorkbenchShell({
               }}
               registry={surfaceRegistry}
               taskId={view.selectedTaskId}
-              fullStage={activeDestination === 'task' && workFullStage}
+              fullStage={isTaskDestination(activeDestination) && workFullStage}
               emptyExtra={workSurfaceEmptyExtra}
               toolbarTrailing={workSurfaceToolbarTrailing}
               toolbarLeading={

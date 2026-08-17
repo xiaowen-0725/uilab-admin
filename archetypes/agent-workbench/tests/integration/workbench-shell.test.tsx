@@ -175,6 +175,38 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect.element(page.getByTestId('task-surface')).toBeInTheDocument()
   })
 
+  it('opens Board from Navigator with no work drawer, then cold-starts on Task', async () => {
+    await page.viewport(1440, 900)
+    await renderWorkbenchWithTask()
+
+    expect(page.getByTestId('workbench-shell').element()).toHaveAttribute(
+      'data-destination',
+      'task',
+    )
+
+    await userEvent.click(page.getByTestId('navigator-menu-board'))
+    await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
+    expect(page.getByTestId('workbench-shell').element()).toHaveAttribute(
+      'data-destination',
+      'board',
+    )
+    expect(page.getByTestId('navigator-menu-board')).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(workDrawerSlot().getBoundingClientRect().width).toBeLessThanOrEqual(
+      GEOMETRY_TOLERANCE,
+    )
+    expect(page.getByTestId('task-surface').elements()).toHaveLength(0)
+
+    await userEvent.click(page.getByTestId('navigator-new-chat'))
+    await expect.element(page.getByTestId('task-surface')).toBeInTheDocument()
+    expect(page.getByTestId('workbench-shell').element()).toHaveAttribute(
+      'data-destination',
+      'task',
+    )
+  })
+
   it('Task-only: 44px Task toolbar, single title, no subtitle, icon controls', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()

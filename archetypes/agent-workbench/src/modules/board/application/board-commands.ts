@@ -57,3 +57,48 @@ export async function addWidgetToBoard(
   }
   await store.appendPlacement(input.boardId, input.placement)
 }
+
+/**
+ * Persist a user-edited layout. This replaces placements — unlike agent
+ * `appendPlacement`, which must never overwrite the array.
+ */
+export async function updateBoardLayout(
+  store: BoardStorePort,
+  boardId: BoardId,
+  placements: readonly BoardPlacement[],
+): Promise<void> {
+  const board = await store.getBoard(boardId)
+  if (!board) {
+    throw new BoardStorePortError({
+      code: 'not_found',
+      message: '看板不存在',
+      retriable: false,
+    })
+  }
+  await store.putBoard({
+    ...board,
+    placements: [...placements],
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+/** Clear job approval so the job cannot run until it is approved again. */
+export async function revokeJobApproval(
+  store: BoardStorePort,
+  jobId: WidgetDataJobRecord['id'],
+): Promise<void> {
+  const job = await store.getJob(jobId)
+  if (!job) {
+    throw new BoardStorePortError({
+      code: 'not_found',
+      message: '作业不存在',
+      retriable: false,
+    })
+  }
+  const next: WidgetDataJobRecord = {
+    ...job,
+    updatedAt: new Date().toISOString(),
+  }
+  delete next.approved
+  await store.putJob(next)
+}

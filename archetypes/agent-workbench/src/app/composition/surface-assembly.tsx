@@ -20,15 +20,26 @@ import {
   type WorkspaceDocumentSource,
 } from '@/modules/work-surface'
 import type { WorkbenchSessionCommands } from '@/modules/workbench-session'
+import {
+  BoardPreviewLoader,
+  type BoardStorePort,
+} from '@/modules/board'
 
 /**
  * Composition-only Surface Registry assembly.
  * Document content Port comes from WorkspaceDocumentSource (work-surface module).
  * Document registers before test so workspace paths resolve to document.
  */
+export interface BoardSurfaceWiring {
+  store: BoardStorePort
+  onOpenFull: (boardId: string) => void
+  onClosePreview: (tabId: string) => void
+}
+
 export function createWorkbenchSurfaceRegistry(
   documentContent: DocumentContentPort,
   workspaceHint: string | null = null,
+  board?: BoardSurfaceWiring,
 ): SurfaceRegistry {
   const registry = createSurfaceRegistry()
   registry.register(
@@ -41,6 +52,25 @@ export function createWorkbenchSurfaceRegistry(
     createBrowserSurfaceDefinition({ host: createWebBrowserHostPort() }),
   )
   registry.register(createTestSurfaceDefinition())
+  if (board) {
+    registry.register({
+      kind: 'board',
+      displayName: '看板',
+      render: (props) => (
+        <BoardPreviewLoader
+          boardId={props.resourceKey}
+          store={board.store}
+          theme={
+            document.documentElement.classList.contains('dark')
+              ? 'dark'
+              : 'light'
+          }
+          onOpenFull={board.onOpenFull}
+          onClose={() => board.onClosePreview(props.tabId)}
+        />
+      ),
+    })
+  }
   return registry
 }
 
@@ -115,6 +145,7 @@ export interface UseWorkbenchSurfaceAssemblyOptions {
   selectedTaskId: string | null
   /** Re-bind listener after boot when controller appears. */
   bootReady: boolean
+  board?: BoardSurfaceWiring
 }
 
 export interface WorkbenchSurfaceAssembly {
@@ -137,6 +168,7 @@ export function useWorkbenchSurfaceAssembly(
     runtimeController,
     selectedTaskId,
     bootReady,
+    board,
   } = options
 
   const {
@@ -152,8 +184,12 @@ export function useWorkbenchSurfaceAssembly(
 
   const surfaceRegistry = useMemo(
     () =>
-      createWorkbenchSurfaceRegistry(documentContent, documentWorkspaceHint),
-    [documentContent, documentWorkspaceHint],
+      createWorkbenchSurfaceRegistry(
+        documentContent,
+        documentWorkspaceHint,
+        board,
+      ),
+    [board, documentContent, documentWorkspaceHint],
   )
 
   const workSurfaceEmptyExtra = useMemo(

@@ -47,6 +47,18 @@ export function resolveOpenWorkSurfaceIntent(
   const raw = (input.resourceKey ?? '').trim()
   if (!raw) return { ok: false, reason: 'empty' }
 
+  if (input.kind === 'board') {
+    if (!registry.get('board')) return { ok: false, reason: 'unresolved-kind' }
+    return {
+      ok: true,
+      kind: 'board',
+      resourceKey: raw,
+      title: input.title?.trim() || raw,
+      source: input.source,
+      focus: input.focus,
+    }
+  }
+
   // Explicit browser kind or URL schemes
   if (input.kind === 'browser' || looksLikeUrl(raw)) {
     const n = normalizeBrowserUrl(raw)

@@ -5,6 +5,7 @@ import {
   BoardWidgetLimitError,
   addWidgetToBoard,
   createIdbBoardStore,
+  updateBoardLayout,
   type BoardPlacement,
   type BoardRecord,
   type BoardWidgetRecord,
@@ -85,6 +86,38 @@ describe('addWidgetToBoard', () => {
     const saved = await store.getBoard('board-1')
     expect(saved?.placements).toHaveLength(20)
     expect(await store.getWidget('widget-21')).toBeNull()
+    db.close()
+  })
+})
+
+describe('updateBoardLayout and revokeJobApproval', () => {
+  const opened: string[] = []
+
+  afterEach(async () => {
+    for (const name of opened.splice(0)) {
+      await deleteWorkbenchIdb(name)
+    }
+  })
+
+  it('replaces placements without going through append', async () => {
+    const name = uniqueDbName()
+    opened.push(name)
+    const db = await openWorkbenchIdb({ name })
+    const store = createIdbBoardStore(db)
+    await store.putBoard(board())
+    await addWidgetToBoard(store, {
+      boardId: 'board-1',
+      widget: widget(1),
+      placement: placement(1),
+    })
+
+    await updateBoardLayout(store, 'board-1', [
+      { mountId: 'mount-1', widgetId: 'widget-1', x: 2, y: 3, w: 4, h: 5 },
+    ])
+    const saved = await store.getBoard('board-1')
+    expect(saved?.placements).toEqual([
+      { mountId: 'mount-1', widgetId: 'widget-1', x: 2, y: 3, w: 4, h: 5 },
+    ])
     db.close()
   })
 })

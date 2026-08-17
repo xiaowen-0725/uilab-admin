@@ -30,6 +30,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { NavigatorUserMenu } from './navigator-user-menu'
+import type { ShellDestination } from '../destination'
 
 export interface NavigatorProps {
   looseTasks: TaskSummary[]
@@ -49,8 +50,9 @@ export interface NavigatorProps {
   /** Collapse / open left rail (control lives on the rail, not Task chrome). */
   onToggleNavigator?: () => void
   onOpenSettings?: () => void
-  activeDestination?: 'task' | 'capabilities'
+  activeDestination?: ShellDestination
   onOpenCapabilities?: () => void
+  onOpenBoard?: () => void
 }
 
 type NavItemId = 'new-chat' | 'board' | 'skills-connectors' | 'automation'
@@ -59,7 +61,7 @@ type NavItem = {
   id: NavItemId
   label: string
   icon: LucideIcon
-  action?: 'new-chat' | 'open-capabilities'
+  action?: 'new-chat' | 'open-capabilities' | 'open-board'
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
@@ -69,7 +71,7 @@ const NAV_ITEMS: readonly NavItem[] = [
     icon: MessageSquarePlus,
     action: 'new-chat',
   },
-  { id: 'board', label: '看板', icon: Kanban },
+  { id: 'board', label: '看板', icon: Kanban, action: 'open-board' },
   {
     id: 'skills-connectors',
     label: '专家·技能·连接器',
@@ -120,8 +122,9 @@ export function Navigator({
   onClose,
   onToggleNavigator,
   onOpenSettings,
-  activeDestination = 'task',
+  activeDestination = { kind: 'task' },
   onOpenCapabilities,
+  onOpenBoard,
   projectActionError = null,
 }: NavigatorProps) {
   const [query, setQuery] = useState('')
@@ -165,6 +168,7 @@ export function Navigator({
   const handleNavClick = (item: NavItem) => {
     if (item.action === 'new-chat') onNewChat?.()
     if (item.action === 'open-capabilities') onOpenCapabilities?.()
+    if (item.action === 'open-board') onOpenBoard?.()
   }
 
   const resetFilters = () => {
@@ -306,9 +310,10 @@ export function Navigator({
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
             const selected =
-              (item.action === 'new-chat' && activeDestination === 'task') ||
+              (item.action === 'new-chat' && activeDestination.kind === 'task') ||
               (item.action === 'open-capabilities' &&
-                activeDestination === 'capabilities')
+                activeDestination.kind === 'capabilities') ||
+              (item.action === 'open-board' && activeDestination.kind === 'board')
             const wired = item.action != null
             return (
               <li key={item.id}>

@@ -110,6 +110,27 @@ describe('resolveOpenWorkSurfaceIntent', () => {
     }
   })
 
+  it('keeps an explicit board id out of path normalization', () => {
+    const r = registry()
+    r.register({
+      kind: 'board',
+      displayName: '看板',
+      render: () => null,
+    })
+    const ok = resolveOpenWorkSurfaceIntent(r, {
+      kind: 'board',
+      resourceKey: 'board-daily',
+      source: 'user',
+      title: '每日速递',
+    })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) {
+      expect(ok.kind).toBe('board')
+      expect(ok.resourceKey).toBe('board-daily')
+      expect(ok.title).toBe('每日速递')
+    }
+  })
+
   it('accepts filenames with ".." characters (not parent segment)', () => {
     const r = registry()
     const ok = resolveOpenWorkSurfaceIntent(r, {

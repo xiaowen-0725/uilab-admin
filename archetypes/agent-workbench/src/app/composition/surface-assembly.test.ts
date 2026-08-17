@@ -25,6 +25,34 @@ describe('createWorkbenchSurfaceRegistry', () => {
     expect(kinds).toContain('document')
     expect(kinds).toContain('test')
   })
+
+  it('registers a board surface when wiring is provided', () => {
+    const registry = createWorkbenchSurfaceRegistry(
+      stubDocumentContent(),
+      null,
+      {
+        store: {
+          listBoards: async () => [],
+          getBoard: async () => null,
+          putBoard: async () => {},
+          deleteBoard: async () => {},
+          getWidget: async () => null,
+          putWidget: async () => {},
+          deleteWidget: async () => {},
+          getJob: async () => null,
+          getJobByWidgetId: async () => null,
+          putJob: async () => {},
+          deleteJob: async () => {},
+          listRuns: async () => [],
+          recordRun: async () => {},
+          appendPlacement: async () => {},
+        },
+        onOpenFull: () => {},
+        onClosePreview: () => {},
+      },
+    )
+    expect(registry.get('board')?.kind).toBe('board')
+  })
 })
 
 describe('open channels', () => {

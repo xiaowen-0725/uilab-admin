@@ -1,4 +1,5 @@
 import { useMemo, useRef, type ReactNode } from 'react'
+import { DRAG_HANDLE_ATTR } from '../model/drag-handle'
 import { Ellipsis, Expand, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,6 +65,10 @@ export interface BoardWidgetHostProps {
   onOpenLink?: (url: string) => void
   onWheelForward?: (deltaY: number) => void
   onReady?: (elapsedMs: number) => void
+  /** Mark the chrome header as the grid move handle. */
+  movable?: boolean
+  /** Isolate pointer/focus for list thumbnails. */
+  inert?: boolean
   className?: string
 }
 
@@ -89,6 +94,8 @@ export function BoardWidgetHost({
   onOpenLink,
   onWheelForward,
   onReady,
+  movable = false,
+  inert = false,
   className,
 }: BoardWidgetHostProps) {
   const heartbeatEnabled = heartbeat ?? chrome !== 'none'
@@ -129,14 +136,17 @@ export function BoardWidgetHost({
       data-phase={bridge.phase}
       data-chrome={chrome}
       aria-label={title}
+      inert={inert || undefined}
     >
       {showHeader ? (
         <header
           className={cn(
             'flex shrink-0 items-center gap-1.5 border-b border-border/60 px-2',
             headerClass,
+            movable && 'cursor-grab',
           )}
           data-testid='board-widget-chrome'
+          {...(movable ? { [DRAG_HANDLE_ATTR]: '' } : {})}
         >
           <h3
             className={cn(
