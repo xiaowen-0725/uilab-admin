@@ -6,8 +6,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  grantBoardCapability,
-  resolveCapabilityFeatureIds,
   type BoardContentPort,
   type BoardJobRuntimePort,
   type BoardStorePort,
@@ -328,9 +326,7 @@ export function WorkbenchApp({
                 return null
               }
               setProjectActionError(null)
-              const featureIds = taskId
-                ? await resolveCapabilityFeatureIds(board.store, taskId)
-                : []
+              const featureIds = await board.resolveFeatureIds(taskId)
               return runtime.submitText(text, {
                 ...composerContext,
                 featureIds,
@@ -360,7 +356,7 @@ export function WorkbenchApp({
           }
         : undefined,
     [
-      board.store,
+      board,
       isRuntimePath,
       runtime.turnStatus,
       runtime.submitText,
@@ -388,11 +384,11 @@ export function WorkbenchApp({
           setProjectActionError(gate.message)
           return
         }
-        const featureIds = await resolveCapabilityFeatureIds(board.store, taskId)
+        const featureIds = await board.resolveFeatureIds(taskId)
         void runtime.submitText(action.promptStub, { featureIds })
       })()
     },
-    [board.store, runtime, taskId]
+    [board, runtime, taskId]
   )
 
   // --- Task lifecycle commands ---
@@ -488,21 +484,21 @@ export function WorkbenchApp({
               .listTasksInProject(project.id)
               .find(isBlankDraftTask) ?? null,
         })
-        const taskId =
-          decision.kind === 'reselect'
-            ? decision.taskId
-            : (
-                await createNewChatTask({
-                  catalog: catalogController,
-                  projectId: project.id,
-                  sequence: (newTaskCounterRef.current += 1),
-                })
-              ).id
-        if (decision.kind !== 'reselect') {
+        let taskId: string
+        if (decision.kind === 'reselect') {
+          taskId = decision.taskId
+        } else {
+          newTaskCounterRef.current += 1
+          const row = await createNewChatTask({
+            catalog: catalogController,
+            projectId: project.id,
+            sequence: newTaskCounterRef.current,
+          })
+          taskId = row.id
           session.commands.ensureTaskLayout(taskId)
         }
         if (options?.grantBoard) {
-          await grantBoardCapability(board.store, taskId)
+          await board.grantCapability(taskId)
         }
         session.commands.selectTask(taskId)
         return taskId
@@ -510,7 +506,7 @@ export function WorkbenchApp({
         openingDraftRef.current = false
       }
     },
-    [board.store, catalogController, localRootCommands, session.commands],
+    [board, catalogController, localRootCommands, session.commands],
   )
 
   const onCreateBoardChat = useCallback(async () => {

@@ -158,6 +158,20 @@ export class MemoryBoardStore implements BoardStorePort {
     this.capableTaskIds = [...this.capableTaskIds, id]
   }
 
+  async hasBoardCreatedByTask(taskId: string): Promise<boolean> {
+    const id = taskId.trim()
+    if (!id) return false
+    for (const board of this.boards.values()) {
+      if (board.createdByTaskId === id) return true
+      for (const placement of board.placements) {
+        if (this.widgets.get(placement.widgetId)?.createdByTaskId === id) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
   async appendPlacement(
     boardId: BoardId,
     placement: BoardPlacement,

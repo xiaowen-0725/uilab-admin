@@ -245,6 +245,26 @@ export class IdbBoardStore implements BoardStorePort {
     })
   }
 
+  hasBoardCreatedByTask(taskId: string): Promise<boolean> {
+    const id = taskId.trim()
+    if (!id) return Promise.resolve(false)
+    return this.read([STORE_BOARDS, STORE_BOARD_WIDGETS], async (tx) => {
+      const boards = await getAllRows<BoardRecord>(tx, STORE_BOARDS)
+      for (const board of boards) {
+        if (board.createdByTaskId === id) return true
+        for (const placement of board.placements) {
+          const widget = await getRow<BoardWidgetRecord>(
+            tx,
+            STORE_BOARD_WIDGETS,
+            placement.widgetId,
+          )
+          if (widget?.createdByTaskId === id) return true
+        }
+      }
+      return false
+    })
+  }
+
   appendPlacement(boardId: BoardId, placement: BoardPlacement): Promise<void> {
     return this.write(STORE_BOARDS, async (tx) => {
       const board = await getRow<BoardRecord>(tx, STORE_BOARDS, boardId)

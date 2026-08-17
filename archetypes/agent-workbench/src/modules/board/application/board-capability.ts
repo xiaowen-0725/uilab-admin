@@ -22,18 +22,8 @@ export async function resolveCapabilityFeatureIds(
 ): Promise<string[]> {
   const id = taskId.trim()
   if (!id) return []
-  if ((await store.listBoardCapableTaskIds()).includes(id)) {
-    return [BOARD_FEATURE_ID]
-  }
-  const boards = await store.listBoards()
-  if (boards.some((board) => board.createdByTaskId === id)) {
-    return [BOARD_FEATURE_ID]
-  }
-  for (const board of boards) {
-    for (const placement of board.placements) {
-      const widget = await store.getWidget(placement.widgetId)
-      if (widget?.createdByTaskId === id) return [BOARD_FEATURE_ID]
-    }
-  }
-  return []
+  const granted =
+    (await store.listBoardCapableTaskIds()).includes(id) ||
+    (await store.hasBoardCreatedByTask(id))
+  return granted ? [BOARD_FEATURE_ID] : []
 }

@@ -97,6 +97,9 @@ export interface BoardStorePort {
   listBoardCapableTaskIds(): Promise<readonly string[]>
 
   grantBoardCapability(taskId: string): Promise<void>
+
+  /** Resume path: a Board or widget already records this Task as creator. */
+  hasBoardCreatedByTask(taskId: string): Promise<boolean>
 }
 
 export interface BoardAtomicCommitInput {

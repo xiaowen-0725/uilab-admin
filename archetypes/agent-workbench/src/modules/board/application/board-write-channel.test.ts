@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateWidgetSource } from '../../../../../../tooling/workbench-runtime-voltagent/src/tools/board-validation.ts'
 import { resolveCapabilityFeatureIds } from './board-capability'
+import { createBoardClientToolExecutor } from './board-client-tools'
 import { createMemoryBoardContent } from '../adapters/memory-board-content'
 import {
   createMemoryBoardJobRuntime,
@@ -98,32 +99,38 @@ describe('board agent recipe', () => {
       contentHash,
     })
 
-    const status = await readBoardStatus(store, content, {})
+    const exec = createBoardClientToolExecutor({ store, content })
+    const status = await exec({
+      toolName: 'board_status',
+      args: {},
+      taskId: 'task-recipe',
+      turnId: 'turn-recipe',
+    })
     expect(status).toMatchObject({ ok: true, boards: [], committed: [] })
 
-    const committed = await commitBoardDraft(
-      store,
-      content,
-      {
+    const committed = await exec({
+      toolName: 'board_commit',
+      args: {
         newBoardTitle: '汇率板',
         widgetId: 'w-recipe',
         draftId: 'b-recipe',
         contentHash,
-        taskId: 'task-recipe',
       },
-      () => NOW,
-    )
+      taskId: 'task-recipe',
+      turnId: 'turn-recipe',
+    })
     expect(committed).toMatchObject({ ok: true, widgetId: 'w-recipe' })
-    if (!committed.ok) throw new Error('commit failed')
+    if (!isBoardCommitOk(committed)) throw new Error('commit failed')
+    const { boardId } = committed
 
     const widget = await store.getWidget('w-recipe')
     expect(widget?.html).toBe(html)
     expect(validateWidgetSource(widget?.html ?? '')).toEqual({ ok: true })
-    const next = await readBoardStatus(store, content, { boardId: committed.boardId })
+    const next = await readBoardStatus(store, content, { boardId })
     expect(next).toMatchObject({
       ok: true,
       targetExists: true,
-      committed: [{ widgetId: 'w-recipe', boardId: committed.boardId }],
+      committed: [{ widgetId: 'w-recipe', boardId }],
     })
     expect(await resolveCapabilityFeatureIds(store, 'task-recipe')).toEqual([
       'board',
@@ -423,3 +430,11 @@ describe('runCommittedJob', () => {
     expect(await store.getWidget('w-new')).toMatchObject({ status: 'idle' })
   })
 })
+
+function isBoardCommitOk(
+  value: unknown,
+): value is { ok: true; boardId: string; widgetId: string } {
+  if (value == null || typeof value !== 'object') return false
+  const rec = value as { ok?: unknown; boardId?: unknown }
+  return rec.ok === true && typeof rec.boardId === 'string'
+}

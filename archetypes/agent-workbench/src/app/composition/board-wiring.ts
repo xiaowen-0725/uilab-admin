@@ -14,6 +14,8 @@ import {
   createMemoryBoardContent,
   createMemoryBoardJobRuntime,
   createMemoryBoardStore,
+  grantBoardCapability,
+  resolveCapabilityFeatureIds,
   type BoardClientToolExecutor,
   type BoardContentPort,
   type BoardJobRuntimePort,
@@ -39,7 +41,12 @@ export interface UseWorkbenchBoardWiringInput {
   boardJobRuntime?: BoardJobRuntimePort
 }
 
-export interface WorkbenchBoardWiring {
+export type BoardCapabilityApi = {
+  resolveFeatureIds: (taskId: string | null) => Promise<string[]>
+  grantCapability: (taskId: string) => Promise<void>
+}
+
+export interface WorkbenchBoardWiring extends BoardCapabilityApi {
   store: BoardStorePort
   revision: number
   refresh: BoardRefreshController
@@ -49,6 +56,20 @@ export interface WorkbenchBoardWiring {
   attachPreviewOpener: (
     opener: (boardId: string, title?: string) => void,
   ) => void
+}
+
+export function createBoardCapabilityApi(
+  store: BoardStorePort,
+): BoardCapabilityApi {
+  return {
+    resolveFeatureIds(taskId: string | null): Promise<string[]> {
+      if (!taskId) return Promise.resolve([])
+      return resolveCapabilityFeatureIds(store, taskId)
+    },
+    grantCapability(taskId: string): Promise<void> {
+      return grantBoardCapability(store, taskId)
+    },
+  }
 }
 
 function sidecarToken(): string | null {
@@ -150,5 +171,6 @@ export function useWorkbenchBoardWiring(
     attachPreviewOpener: (opener) => {
       openBoardPreviewRef.current = opener
     },
+    ...createBoardCapabilityApi(store),
   }
 }
