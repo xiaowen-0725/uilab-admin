@@ -1,6 +1,6 @@
 # uilab-admin 项目状态快照
 
-> 更新时间：2026-08-14
+> 更新时间：2026-08-17
 > 分支：`main`
 > 架构基线提交：`81731f8`
 > Phase 1 批次：Batch 1A `9a7b582` · Batch 1B `e22a8f4` · Batch 1C `c84be8d`
@@ -47,6 +47,7 @@
 | Browser test suite | **Green** | Workbench 单元 + 集成 + 视觉矩阵测试；Foundation/Admin 基线见既有证据 |
 | Capability Surface 可复现基线 (#56) | **Done** | 7 状态确定性 fixture + 视觉矩阵截图（`tests/visual/baselines/`）+ 键盘路径回归；从干净 checkout 可重现 |
 | 模板“产品打磨/去 demo 化” | **In progress** | Workbench Composer 本地产品体验已推进；Admin 去 demo 仍 planned |
+| Workbench Board（#111） | **In progress** | 模块骨架 + IDB v3 + 宿主 CSP/沙箱（#133/#134）+ `BoardWidgetHost`/桥 SDK（#135，`4874cd6`）；**无** Canvas / 作业运行时 / 示例板 |
 | npm 全局发布 CLI | **Not started** | 当前 repo-local |
 
 **结论：**
@@ -273,6 +274,7 @@ uilab-templates/
 3. ~~Phase 4 VoltAgent Runtime + projection~~
 4. Phase 5–6 补 Review / Terminal / Artifact 目录（Document/Browser 打开文件 MVP 已有）
 5. UI Lab 真源正式发布与 `shadcn add` 回装流程固化
+6. Board：~~宿主 CSP + `BoardWidgetHost`/桥~~（#134/#135）→ Canvas / 三处 UI（#136）与侧车工具族（#137）
 
 ### Wave C — 装配系统增强
 

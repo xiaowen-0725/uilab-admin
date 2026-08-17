@@ -1,6 +1,6 @@
 # Spec: Workbench Board（看板 / 小组件 / 取数作业）
 
-**Status:** design-complete / implementation-pending（设计全部定案；实施 ticket 待 #124 落地后切出）
+**Status:** implementation in progress（#133/#134/#135 已落地；Canvas / 作业运行时 / 示例板未交付）
 **Map:** [#111 Workbench Board 首版可执行规格](https://github.com/xiaowen-0725/uilab-admin/issues/111)
 **ADR:**
 
