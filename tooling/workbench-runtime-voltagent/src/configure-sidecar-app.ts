@@ -14,6 +14,7 @@ import {
 import type { OfficeConnectorRuntime } from './capability/office-connector-runtime.js'
 import type { CapabilitySnapshotExpert } from './capability/types.js'
 import type { AgentProfile } from './profile.js'
+import { resolveDenoExecutable } from './tools/board-job-executor.js'
 import {
   getSharedBoardRuntime,
   type BoardRuntime,
@@ -122,7 +123,14 @@ export async function configureSidecarApp<
 
   const boardRuntime = input.boardRuntime ?? getSharedBoardRuntime()
   boardRuntime.mountRoutes(app)
-  logger.info('board staging routes mounted')
+  const deno = await resolveDenoExecutable()
+  if (deno) {
+    logger.info(`board staging and job routes mounted deno=${deno}`)
+  } else {
+    logger.error(
+      'board staging and job routes mounted; Deno not found — 取数作业不可用',
+    )
+  }
 
   const experts = await loadExpertsOrDefault(input.loadExperts, logger)
   try {

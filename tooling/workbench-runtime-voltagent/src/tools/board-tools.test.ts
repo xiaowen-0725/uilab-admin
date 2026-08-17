@@ -14,11 +14,13 @@ after(async () => {
 })
 
 async function runtime() {
-  const stagingRoot = await mkdtemp(path.join(os.tmpdir(), 'board-staging-'))
-  tempRoots.push(stagingRoot)
+  const root = await mkdtemp(path.join(os.tmpdir(), 'board-runtime-'))
+  tempRoots.push(root)
   return createBoardRuntime({
-    stagingRoot,
+    stagingRoot: path.join(root, 'staging'),
+    jobsRoot: path.join(root, 'jobs'),
     token: 'test-sidecar-token',
+    env: { WORKSPACE_ROOT: path.join(root, 'workspace') },
   })
 }
 

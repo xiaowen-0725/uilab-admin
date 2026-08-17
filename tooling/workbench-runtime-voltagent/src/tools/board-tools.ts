@@ -6,6 +6,10 @@
 import { createTool } from '@voltagent/core'
 import { z } from 'zod'
 import { BOARD_JOB_FINISH_TOOL } from './board-policy.js'
+import {
+  installFromFinishedDraft,
+  type BoardJobStore,
+} from './board-job-store.js'
 import type { BoardStaging } from './board-staging.js'
 import { isBoardToolError } from './board-types.js'
 import {
@@ -74,7 +78,7 @@ function jobDraft(jobId: string, buildId: string) {
   }
 }
 
-export function createBoardTools(staging: BoardStaging) {
+export function createBoardTools(staging: BoardStaging, jobs: BoardJobStore) {
   const board_widget_begin = createTool({
     name: 'board_widget_begin',
     description:
@@ -150,7 +154,7 @@ export function createBoardTools(staging: BoardStaging) {
     name: BOARD_JOB_FINISH_TOOL,
     description:
       '结束作业分片写入、静态校验并请求用户批准。必须 export function run(ctx)，禁止 import、Deno.env、Deno.run 与路径逃逸。' +
-      '这是唯一授予新网络能力的动作：批准后同一份代码可被重复执行而不再逐次确认（运行时另票交付）。' +
+      '这是唯一授予新网络能力的动作：批准后同一份代码可被重复执行而不再逐次确认。' +
       '失败只回错误码与 hint；成功返回 jobId 与 codeHash，不含代码。' +
       '同一草稿最多自修 2 次。这是 board 族唯一需要审批的工具。',
     parameters: jobFinishParams,
@@ -165,6 +169,8 @@ export function createBoardTools(staging: BoardStaging) {
         },
       })
       if (isBoardToolError(result)) return result
+      const installed = await jobs.install(installFromFinishedDraft(jobId, result))
+      if (isBoardToolError(installed)) return installed
       return {
         jobId,
         codeHash: result.hash,

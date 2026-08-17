@@ -1,6 +1,6 @@
 /**
  * BoardJobRuntimePort — run an approved job once (first-run / refresh).
- * Deno execution itself is Ticket 139; this port is the trigger seam.
+ * Product adapter is HTTP → sidecar Deno executor (#139).
  */
 
 export type BoardJobRunOk = {
@@ -17,7 +17,7 @@ export type BoardJobRunFailure = {
 export type BoardJobRunResult = BoardJobRunOk | BoardJobRunFailure
 
 export interface BoardJobRuntimePort {
-  /** Product path is false until Ticket 139 lands Deno. */
+  /** False skips first-run (tests / explicit unavailability). Omit on the live HTTP adapter. */
   readonly available?: boolean
   runJob(jobId: string): Promise<BoardJobRunResult>
 }

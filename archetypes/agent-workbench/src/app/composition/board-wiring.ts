@@ -8,11 +8,11 @@ import {
   createBoardClientToolExecutor,
   createBoardPreviewPolicy,
   createHttpBoardContent,
+  createHttpBoardJobRuntime,
   createIdbBoardStore,
   createMemoryBoardContent,
   createMemoryBoardJobRuntime,
   createMemoryBoardStore,
-  createUnavailableBoardJobRuntime,
   type BoardClientToolExecutor,
   type BoardContentPort,
   type BoardJobRuntimePort,
@@ -48,9 +48,20 @@ export interface WorkbenchBoardWiring {
   ) => void
 }
 
+function sidecarToken(): string | null {
+  return (
+    (import.meta.env.VITE_UILAB_SIDECAR_TOKEN as string | undefined) ??
+    (import.meta.env.UILAB_SIDECAR_TOKEN as string | undefined) ??
+    null
+  )
+}
+
 function defaultJobRuntime(): BoardJobRuntimePort {
   if (INSTANT_DEMO) return createMemoryBoardJobRuntime()
-  return createUnavailableBoardJobRuntime()
+  return createHttpBoardJobRuntime({
+    baseUrl: resolveVoltAgentBaseUrl(),
+    token: sidecarToken(),
+  })
 }
 
 export function useWorkbenchBoardWiring(
@@ -66,10 +77,7 @@ export function useWorkbenchBoardWiring(
     if (INSTANT_DEMO) return createMemoryBoardContent()
     return createHttpBoardContent({
       baseUrl: resolveVoltAgentBaseUrl(),
-      token:
-        (import.meta.env.VITE_UILAB_SIDECAR_TOKEN as string | undefined) ??
-        (import.meta.env.UILAB_SIDECAR_TOKEN as string | undefined) ??
-        null,
+      token: sidecarToken(),
     })
   }, [input.boardContent])
   const jobRuntime = useMemo(

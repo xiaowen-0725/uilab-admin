@@ -44,6 +44,8 @@ export { IdbBoardStore, createIdbBoardStore } from './adapters/idb-board-store'
 export type { IdbBoardStoreOptions } from './adapters/idb-board-store'
 export { createHttpBoardContent } from './adapters/http-board-content'
 export type { HttpBoardContentOptions } from './adapters/http-board-content'
+export { createHttpBoardJobRuntime } from './adapters/http-board-job-runtime'
+export type { HttpBoardJobRuntimeOptions } from './adapters/http-board-job-runtime'
 export {
   MemoryBoardContent,
   createMemoryBoardContent,

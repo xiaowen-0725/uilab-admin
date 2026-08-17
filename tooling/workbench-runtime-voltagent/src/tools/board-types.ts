@@ -23,6 +23,10 @@ export const BOARD_TOOL_ERROR_CODES = [
   'already_running',
   'runtime_unavailable',
   'not_authorized',
+  'not_approved',
+  'code_hash_mismatch',
+  'deno_not_found',
+  'output_too_large',
   'repair_budget_exhausted',
 ] as const
 

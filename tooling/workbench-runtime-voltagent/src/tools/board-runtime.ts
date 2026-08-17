@@ -7,6 +7,13 @@ import type { Tool } from '@voltagent/core'
 import type { Env, Hono, Schema } from 'hono'
 import { defaultRuntimeConfigDir } from '../plugin/auth-binding-persist.js'
 import { resolveSidecarHttpToken } from './board-auth.js'
+import {
+  BoardJobExecutor,
+  resolveDenoExecutable,
+  type ResolveDeno,
+} from './board-job-executor.js'
+import { mountBoardJobRoutes } from './board-job-http.js'
+import { BoardJobStore, defaultBoardJobsRoot } from './board-job-store.js'
 import { mountBoardStagingRoutes } from './board-http.js'
 import { BoardStaging } from './board-staging.js'
 import { boardClientTools } from './board-client-tools.js'
@@ -14,13 +21,17 @@ import { boardToolsList, createBoardTools, type BoardTools } from './board-tools
 
 export type CreateBoardRuntimeInput = {
   stagingRoot?: string
+  jobsRoot?: string
   token?: string | null
   env?: Record<string, string | undefined>
   now?: () => number
+  resolveDeno?: ResolveDeno
 }
 
 export type BoardRuntime = {
   staging: BoardStaging
+  jobs: BoardJobStore
+  executor: BoardJobExecutor
   tools: BoardTools
   toolList: Tool[]
   token: string | null
@@ -41,15 +52,26 @@ export function createBoardRuntime(input: CreateBoardRuntimeInput = {}): BoardRu
     root: input.stagingRoot ?? defaultBoardStagingRoot(env),
     now: input.now,
   })
-  const tools = createBoardTools(staging)
+  const jobs = new BoardJobStore(
+    input.jobsRoot ?? defaultBoardJobsRoot(env),
+    env,
+  )
+  const executor = new BoardJobExecutor(
+    jobs,
+    input.resolveDeno ?? (() => resolveDenoExecutable(env)),
+  )
+  const tools = createBoardTools(staging, jobs)
   const token = resolveSidecarHttpToken(env, input.token)
   return {
     staging,
+    jobs,
+    executor,
     tools,
     toolList: [...boardToolsList(tools), ...boardClientTools],
     token,
     mountRoutes(app) {
       mountBoardStagingRoutes(app, { staging, token, env })
+      mountBoardJobRoutes(app, { jobs, executor, token, env })
     },
   }
 }
