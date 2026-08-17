@@ -10,7 +10,10 @@
 
 // --- VoltAgent RuntimePort adapter ---
 export { createVoltAgentRuntimeAdapter } from './voltagent/voltagent-runtime-adapter'
-export type { VoltAgentRuntimeAdapterOptions } from './voltagent/voltagent-runtime-adapter'
+export type {
+  ClientToolExecutor,
+  VoltAgentRuntimeAdapterOptions,
+} from './voltagent/voltagent-runtime-adapter'
 
 // --- EventStorePort adapters ---
 export { createMemoryEventStore } from './memory-event-store'

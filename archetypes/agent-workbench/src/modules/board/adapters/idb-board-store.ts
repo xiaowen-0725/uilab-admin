@@ -27,6 +27,7 @@ import {
 } from '../model/types'
 import {
   BoardStorePortError,
+  type BoardAtomicCommitInput,
   type BoardStorePort,
 } from '../ports/board-store-port'
 
@@ -39,8 +40,16 @@ const BOARD_STORES = [
 
 type BoardStoreName = (typeof BOARD_STORES)[number]
 
+export type IdbBoardStoreOptions = {
+  /** Test-only: abort the atomic commit after earlier puts succeed. */
+  failOnPutStore?: BoardStoreName
+}
+
 export class IdbBoardStore implements BoardStorePort {
-  constructor(private readonly db: IDBDatabase) {}
+  constructor(
+    private readonly db: IDBDatabase,
+    private readonly options: IdbBoardStoreOptions = {},
+  ) {}
 
   listBoards(): Promise<readonly BoardRecord[]> {
     return this.read(STORE_BOARDS, (tx) => getAllRows<BoardRecord>(tx, STORE_BOARDS))
@@ -171,6 +180,19 @@ export class IdbBoardStore implements BoardStorePort {
     })
   }
 
+  commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
+    return this.write(BOARD_STORES, async (tx) => {
+      await putValue(tx, STORE_BOARDS, await mergeBoardInTx(tx, input))
+      await putValue(tx, STORE_BOARD_WIDGETS, input.widget)
+      if (this.options.failOnPutStore === STORE_WIDGET_DATA_JOBS) {
+        throw new Error('injected widgetDataJobs write failure')
+      }
+      if (input.job) {
+        await putValue(tx, STORE_WIDGET_DATA_JOBS, input.job)
+      }
+    })
+  }
+
   appendPlacement(boardId: BoardId, placement: BoardPlacement): Promise<void> {
     return this.write(STORE_BOARDS, async (tx) => {
       const board = await getRow<BoardRecord>(tx, STORE_BOARDS, boardId)
@@ -223,8 +245,32 @@ export class IdbBoardStore implements BoardStorePort {
   }
 }
 
-export function createIdbBoardStore(db: IDBDatabase): IdbBoardStore {
-  return new IdbBoardStore(db)
+export function createIdbBoardStore(
+  db: IDBDatabase,
+  options?: IdbBoardStoreOptions,
+): IdbBoardStore {
+  return new IdbBoardStore(db, options)
+}
+
+async function mergeBoardInTx(
+  tx: IDBTransaction,
+  input: BoardAtomicCommitInput,
+): Promise<BoardRecord> {
+  const live = await getRow<BoardRecord>(tx, STORE_BOARDS, input.board.id)
+  if (!live) return input.board
+  const alreadyPlaced = live.placements.some(
+    (item) => item.widgetId === input.widget.id,
+  )
+  const placements =
+    input.appendPlacement && !alreadyPlaced
+      ? [...live.placements, input.appendPlacement]
+      : live.placements
+  return {
+    ...live,
+    updatedAt: input.board.updatedAt,
+    createdByTaskId: live.createdByTaskId ?? input.board.createdByTaskId,
+    placements,
+  }
 }
 
 async function deleteWidgetInTx(

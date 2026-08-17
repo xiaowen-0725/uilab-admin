@@ -12,6 +12,8 @@ export interface BoardPreviewLoaderProps {
   theme: WidgetTheme
   onOpenFull: (boardId: string) => void
   onClose: () => void
+  /** Bump after commit / first-run so an already-open preview reloads. */
+  revision?: number
 }
 
 export function BoardPreviewLoader({
@@ -20,6 +22,7 @@ export function BoardPreviewLoader({
   theme,
   onOpenFull,
   onClose,
+  revision = 0,
 }: BoardPreviewLoaderProps) {
   const [view, setView] = useState<BoardView | null | undefined>(undefined)
   const [hint, setHint] = useState<string | null>(null)
@@ -32,7 +35,7 @@ export function BoardPreviewLoader({
     return () => {
       cancelled = true
     }
-  }, [boardId, store])
+  }, [boardId, revision, store])
 
   if (view === undefined) {
     return (

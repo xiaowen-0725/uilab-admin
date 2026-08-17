@@ -53,11 +53,15 @@ export async function addWidgetToBoard(
   if (board.placements.length >= BOARD_WIDGET_LIMIT) {
     throw new BoardWidgetLimitError(input.boardId)
   }
-  await store.putWidget(input.widget)
-  if (input.job) {
-    await store.putJob(input.job)
-  }
-  await store.appendPlacement(input.boardId, input.placement)
+  await store.commitAtomically({
+    board: {
+      ...board,
+      updatedAt: new Date().toISOString(),
+    },
+    widget: input.widget,
+    job: input.job,
+    appendPlacement: input.placement,
+  })
 }
 
 /**

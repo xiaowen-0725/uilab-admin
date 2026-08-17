@@ -238,4 +238,53 @@ describe('IdbBoardStore', () => {
     })
     db.close()
   })
+
+  it('rolls back boards and widgets when the job write fails in the same transaction', async () => {
+    const name = uniqueDbName('atomic')
+    opened.push(name)
+    const db = await openWorkbenchIdb({ name })
+    const store = createIdbBoardStore(db, { failOnPutStore: 'widgetDataJobs' })
+
+    await expect(
+      store.commitAtomically({
+        board: board({ placements: [placement()] }),
+        widget: widget(),
+        job: job(),
+      }),
+    ).rejects.toThrow(/injected widgetDataJobs write failure/)
+
+    const clean = createIdbBoardStore(db)
+    expect(await clean.getBoard('board-1')).toBeNull()
+    expect(await clean.getWidget('widget-1')).toBeNull()
+    expect(await clean.getJob('job-1')).toBeNull()
+    db.close()
+  })
+
+  it('appends a placement onto the live board row', async () => {
+    const name = uniqueDbName('append')
+    opened.push(name)
+    const db = await openWorkbenchIdb({ name })
+    const store = createIdbBoardStore(db)
+    const userPlacement = placement({
+      mountId: 'mount-user',
+      widgetId: 'widget-user',
+      y: 4,
+    })
+    await store.putBoard(board({ placements: [userPlacement] }))
+
+    await store.commitAtomically({
+      board: board({
+        placements: [placement()],
+        updatedAt: '2026-08-17T00:00:00.000Z',
+      }),
+      widget: widget(),
+      appendPlacement: placement(),
+    })
+
+    expect((await store.getBoard('board-1'))?.placements).toEqual([
+      userPlacement,
+      placement(),
+    ])
+    db.close()
+  })
 })

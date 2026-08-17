@@ -34,6 +34,7 @@ export interface BoardSurfaceWiring {
   store: BoardStorePort
   onOpenFull: (boardId: string) => void
   onClosePreview: (tabId: string) => void
+  revision?: number
 }
 
 export function createWorkbenchSurfaceRegistry(
@@ -60,6 +61,7 @@ export function createWorkbenchSurfaceRegistry(
         <BoardPreviewLoader
           boardId={props.resourceKey}
           store={board.store}
+          revision={board.revision}
           theme={
             document.documentElement.classList.contains('dark')
               ? 'dark'

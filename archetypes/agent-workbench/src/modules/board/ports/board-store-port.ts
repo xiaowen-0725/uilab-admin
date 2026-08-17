@@ -78,4 +78,18 @@ export interface BoardStorePort {
 
   /** Append one placement. Never replaces the existing array. */
   appendPlacement(boardId: BoardId, placement: BoardPlacement): Promise<void>
+
+  /**
+   * Write board + widget + optional job in one transaction.
+   * Any store failure aborts the whole commit — no half-written board.
+   */
+  commitAtomically(input: BoardAtomicCommitInput): Promise<void>
+}
+
+export interface BoardAtomicCommitInput {
+  board: BoardRecord
+  widget: BoardWidgetRecord
+  job?: WidgetDataJobRecord
+  /** Agent path: append onto the live board row. Never replace `placements`. */
+  appendPlacement?: BoardPlacement
 }

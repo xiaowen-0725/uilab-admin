@@ -31,13 +31,17 @@ import {
   type TurnStatus,
   type TurnStatusIndex,
 } from '@/modules/task'
-import { createVoltAgentRuntimeAdapter } from '@/modules/task-runtime'
+import {
+  createVoltAgentRuntimeAdapter,
+  type ClientToolExecutor,
+} from '@/modules/task-runtime'
 import type { WorkbenchPersistence } from './workbench-boot'
 
 export interface CreateWorkbenchRuntimePortsOptions {
   voltAgentBaseUrl?: string
   voltAgentId?: string
   projectId?: string
+  clientToolExecutor?: ClientToolExecutor
 }
 
 export interface WorkbenchRuntimePorts {
@@ -61,6 +65,7 @@ export function createWorkbenchRuntimePorts(
     baseUrl: voltBase,
     agentId: options.voltAgentId ?? resolveVoltAgentId(),
     projectId,
+    clientToolExecutor: options.clientToolExecutor,
   })
 
   const capabilityPort: CapabilitySnapshotPort =
@@ -162,6 +167,7 @@ export interface UseWorkbenchRuntimeWiringOptions {
   projectId: string
   persistence: WorkbenchPersistence
   bootReady: boolean
+  clientToolExecutor?: ClientToolExecutor
 }
 
 export interface WorkbenchRuntimeWiring {
@@ -182,12 +188,13 @@ export interface WorkbenchRuntimeWiring {
 export function useWorkbenchRuntimeWiring(
   options: UseWorkbenchRuntimeWiringOptions
 ): WorkbenchRuntimeWiring {
-  const { eventStore, projectId, persistence, bootReady } = options
+  const { eventStore, projectId, persistence, bootReady, clientToolExecutor } =
+    options
 
   // Ports: factory once per mount (stable across renders).
   const portsRef = useRef<WorkbenchRuntimePorts | null>(null)
   if (portsRef.current == null) {
-    portsRef.current = createWorkbenchRuntimePorts()
+    portsRef.current = createWorkbenchRuntimePorts({ clientToolExecutor })
   }
   const ports = portsRef.current
 

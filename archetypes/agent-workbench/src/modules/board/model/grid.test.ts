@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampPlacement,
+  firstEmptySlot,
   deltaToCells,
   layoutRows,
   moveItem,
@@ -21,6 +22,13 @@ function placementOf(items: GridItem[], id: string) {
 }
 
 describe('board grid', () => {
+  it('places a new widget in the first empty slot without overlapping', () => {
+    expect(firstEmptySlot([])).toEqual({ x: 0, y: 0, w: 4, h: 4 })
+    expect(
+      firstEmptySlot([{ x: 0, y: 0, w: 4, h: 4 }]),
+    ).toEqual({ x: 4, y: 0, w: 4, h: 4 })
+  })
+
   it('keeps placements inside the column count and above the minimum size', () => {
     expect(clampPlacement({ x: 11, y: 0, w: 6, h: 4 })).toEqual({
       x: 6,

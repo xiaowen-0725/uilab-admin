@@ -60,7 +60,33 @@ export function mountBoardStagingRoutes<
     c.header('Content-Type', contentTypeFor(result.kind))
     c.header('X-Content-Hash', result.hash)
     c.header('X-Byte-Length', String(result.bytes))
+    c.header('X-Draft-Kind', result.kind)
+    c.header('X-Draft-Title', encodeURIComponent(result.title))
+    if (result.description) {
+      c.header('X-Draft-Description', encodeURIComponent(result.description))
+    }
+    if (result.allowedHosts?.length) {
+      c.header('X-Allowed-Hosts', result.allowedHosts.join(','))
+    }
+    if (result.widgetId) c.header('X-Widget-Id', result.widgetId)
+    if (result.jobId) c.header('X-Job-Id', result.jobId)
     c.header('Cache-Control', 'no-store')
     return c.body(result.content)
+  })
+
+  app.get('/board/staging', async (c) => {
+    if (
+      !authorizeSidecarToolSurface({
+        authorization: c.req.header('authorization'),
+        token,
+      })
+    ) {
+      return c.json(
+        boardToolError('not_authorized', '缺少或无效的本机侧车凭据，拒绝读取草稿'),
+        401,
+      )
+    }
+    const drafts = await input.staging.listDrafts()
+    return c.json({ drafts })
   })
 }

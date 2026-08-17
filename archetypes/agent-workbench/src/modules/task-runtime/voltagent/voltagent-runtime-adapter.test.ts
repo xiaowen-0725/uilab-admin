@@ -1179,6 +1179,84 @@ describe('VoltAgentRuntimeAdapter', () => {
     })
   })
 
+  it('board_commit is executed on the client and resumes with a scalar output', async () => {
+    const executor = vi.fn(async () => ({
+      ok: true,
+      boardId: 'board-1',
+      widgetId: 'w-1',
+      mountId: 'm-1',
+      placement: { x: 0, y: 0, w: 4, h: 4 },
+    }))
+    let call = 0
+    let resumeBody = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        return new Response(
+          sseBody([
+            {
+              type: 'tool-call',
+              toolCallId: 'call-commit',
+              toolName: 'board_commit',
+              args: {
+                widgetId: 'w-1',
+                draftId: 'b-1',
+                contentHash: 'abc',
+              },
+            },
+            { type: 'finish', finishReason: 'tool-calls' },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      resumeBody = String(init?.body ?? '')
+      return new Response(sseBody([{ type: 'finish', finishReason: 'stop' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-17T04:00:00.000Z',
+      clientToolExecutor: executor,
+    })
+    const events = collectEvents(adapter, 'task-board')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-board',
+      issuedAt: '2026-08-17T04:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-board',
+      schemaVersion: 1,
+      taskId: 'task-board',
+      inputText: '做一块看板',
+      proposedTurnId: 'turn-board',
+    })
+    await vi.waitFor(() => {
+      expect(executor).toHaveBeenCalled()
+      expect(call).toBeGreaterThanOrEqual(2)
+    })
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).toContain('tool.started')
+    expect(types).toContain('tool.completed')
+    const completed = events.find(
+      (e) => e.kind === 'event' && e.envelope.eventType === 'tool.completed',
+    )
+    expect(
+      completed && completed.kind === 'event' ? completed.envelope.payload : null,
+    ).toMatchObject({
+      toolName: 'board_commit',
+      output: { ok: true, boardId: 'board-1', widgetId: 'w-1' },
+    })
+    expect(resumeBody).toContain('board_commit')
+    expect(resumeBody).not.toContain('<html')
+  })
+
   it('getCapabilities marks runInput as supported', async () => {
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',

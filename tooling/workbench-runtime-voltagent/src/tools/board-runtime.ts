@@ -3,11 +3,13 @@
  */
 
 import path from 'node:path'
+import type { Tool } from '@voltagent/core'
 import type { Env, Hono, Schema } from 'hono'
 import { defaultRuntimeConfigDir } from '../plugin/auth-binding-persist.js'
 import { resolveSidecarHttpToken } from './board-auth.js'
 import { mountBoardStagingRoutes } from './board-http.js'
 import { BoardStaging } from './board-staging.js'
+import { boardClientTools } from './board-client-tools.js'
 import { boardToolsList, createBoardTools, type BoardTools } from './board-tools.js'
 
 export type CreateBoardRuntimeInput = {
@@ -20,7 +22,7 @@ export type CreateBoardRuntimeInput = {
 export type BoardRuntime = {
   staging: BoardStaging
   tools: BoardTools
-  toolList: ReturnType<typeof boardToolsList>
+  toolList: Tool[]
   token: string | null
   mountRoutes: <E extends Env, S extends Schema, BasePath extends string>(
     app: Hono<E, S, BasePath>,
@@ -44,7 +46,7 @@ export function createBoardRuntime(input: CreateBoardRuntimeInput = {}): BoardRu
   return {
     staging,
     tools,
-    toolList: boardToolsList(tools),
+    toolList: [...boardToolsList(tools), ...boardClientTools],
     token,
     mountRoutes(app) {
       mountBoardStagingRoutes(app, { staging, token, env })

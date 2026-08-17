@@ -9,6 +9,7 @@
 
 export {
   BOARD_WIDGET_LIMIT,
+  DEFAULT_WIDGET_SPAN,
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
 } from './model/types'
@@ -32,10 +33,28 @@ export type {
   WidgetSpan,
 } from './model/types'
 
-export type { BoardStoreError, BoardStorePort } from './ports/board-store-port'
+export type {
+  BoardAtomicCommitInput,
+  BoardStoreError,
+  BoardStorePort,
+} from './ports/board-store-port'
 export { BoardStorePortError } from './ports/board-store-port'
 
 export { IdbBoardStore, createIdbBoardStore } from './adapters/idb-board-store'
+export type { IdbBoardStoreOptions } from './adapters/idb-board-store'
+export { createHttpBoardContent } from './adapters/http-board-content'
+export type { HttpBoardContentOptions } from './adapters/http-board-content'
+export {
+  MemoryBoardContent,
+  createMemoryBoardContent,
+} from './adapters/memory-board-content'
+export {
+  MemoryBoardJobRuntime,
+  createMemoryBoardJobRuntime,
+  createUnavailableBoardJobRuntime,
+} from './adapters/memory-board-job-runtime'
+export type { BoardContentPort } from './ports/board-content-port'
+export type { BoardJobRuntimePort } from './ports/board-job-runtime-port'
 
 export {
   addWidgetToBoard,
@@ -45,6 +64,31 @@ export {
 } from './application/board-commands'
 export type { AddWidgetToBoardInput } from './application/board-commands'
 export { loadBoardList, loadBoardView } from './application/load-board-view'
+export {
+  commitBoardDraft,
+  readBoardStatus,
+  runCommittedJob,
+} from './application/board-write-channel'
+export type {
+  BoardCommitInput,
+  BoardCommitOk,
+  BoardStatusInput,
+  BoardStatusOk,
+  BoardToolFailure,
+} from './application/board-write-channel'
+export {
+  BOARD_CLIENT_TOOL_NAMES,
+  createBoardClientToolExecutor,
+  isBoardClientTool,
+} from './application/board-client-tools'
+export type {
+  BoardClientToolExecutor,
+  BoardCommitEffects,
+} from './application/board-client-tools'
+export {
+  BoardPreviewPolicy,
+  createBoardPreviewPolicy,
+} from './application/board-preview-policy'
 export { createMemoryBoardStore, MemoryBoardStore } from './adapters/memory-board-store'
 
 export {
@@ -98,9 +142,11 @@ export {
   THUMBNAIL_GEOMETRY,
   THUMBNAIL_SCALE,
   THUMBNAIL_SLOTS,
+  firstEmptySlot,
   moveItem,
   resizeItem,
 } from './model/grid'
+export { hashBoardContent } from './model/content-hash'
 export { DRAG_HANDLE_ATTR } from './model/drag-handle'
 export { formatRelative } from './model/relative-time'
 export type { BoardListCard, BoardView } from './model/board-view'

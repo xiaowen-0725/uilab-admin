@@ -31,7 +31,11 @@ describe('decideApprovalResponse', () => {
       'dock',
     )
     expect(AUTO_APPROVE_WRITE_TOOLS).toContain('board_widget_begin')
+    expect(AUTO_APPROVE_WRITE_TOOLS).toContain('board_commit')
     expect(decideApprovalResponse('auto-approve', 'board_widget_finish')).toBe(
+      'approve',
+    )
+    expect(decideApprovalResponse('auto-approve', 'board_commit')).toBe(
       'approve',
     )
   })

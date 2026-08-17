@@ -46,6 +46,7 @@ describe('createWorkbenchSurfaceRegistry', () => {
           listRuns: async () => [],
           recordRun: async () => {},
           appendPlacement: async () => {},
+          commitAtomically: async () => {},
         },
         onOpenFull: () => {},
         onClosePreview: () => {},

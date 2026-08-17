@@ -183,6 +183,25 @@ export interface ThumbnailSlot {
   placement: GridPlacement
 }
 
+/** First cell that does not overlap existing placements. Agent commits only append. */
+export function firstEmptySlot(
+  placements: readonly GridPlacement[],
+  span: WidgetSpan = { w: 4, h: 4 },
+  columns = GRID_COLUMNS,
+): GridPlacement {
+  const w = Math.max(MIN_WIDGET_W, Math.min(columns, Math.round(span.w)))
+  const h = Math.max(MIN_WIDGET_H, Math.round(span.h))
+  for (let y = 0; y < 10_000; y += 1) {
+    for (let x = 0; x <= columns - w; x += 1) {
+      const candidate = { x, y, w, h }
+      if (!placements.some((item) => overlaps(item, candidate))) {
+        return candidate
+      }
+    }
+  }
+  return { x: 0, y: 0, w, h }
+}
+
 export function toThumbnailSlots(
   widgetIds: string[],
   slots = THUMBNAIL_SLOTS,

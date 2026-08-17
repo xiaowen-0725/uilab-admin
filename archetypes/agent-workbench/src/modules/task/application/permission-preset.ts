@@ -24,6 +24,7 @@ export const AUTO_APPROVE_WRITE_TOOLS = [
   'board_widget_finish',
   'board_job_begin',
   'board_job_append',
+  'board_commit',
 ] as const
 
 const AUTO_APPROVE_WRITE_TOOL_SET: ReadonlySet<string> = new Set(

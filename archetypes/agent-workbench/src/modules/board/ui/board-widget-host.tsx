@@ -133,6 +133,7 @@ export function BoardWidgetHost({
       )}
       data-testid='board-widget-host'
       data-widget-id={widgetId}
+      data-has-latest={data == null ? 'false' : 'true'}
       data-phase={bridge.phase}
       data-chrome={chrome}
       aria-label={title}

@@ -111,6 +111,12 @@ export interface WidgetJobRunRecord {
 export const BOARD_WIDGET_LIMIT = 20
 export const WIDGET_JOB_RUN_LIMIT = 10
 
+export const DEFAULT_WIDGET_SPAN = {
+  min: { w: 2, h: 2 },
+  default: { w: 4, h: 4 },
+  max: { w: 8, h: 8 },
+} as const
+
 export function isJobRunnable(job: WidgetDataJobRecord): boolean {
   return Boolean(job.approved?.code && job.approved.codeHash)
 }

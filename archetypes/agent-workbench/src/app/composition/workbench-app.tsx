@@ -5,10 +5,10 @@
  * This file assembles them into Shell + thin chrome (boot screen, delete dialog).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  createIdbBoardStore,
-  createMemoryBoardStore,
-  type BoardStorePort,
+import type {
+  BoardContentPort,
+  BoardJobRuntimePort,
+  BoardStorePort,
 } from '@/modules/board'
 import {
   putSessionPointer,
@@ -39,10 +39,14 @@ import {
 import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useWorkbenchBoardWiring } from './board-wiring'
 import { DeleteProjectConfirmDialog } from './delete-project-confirm-dialog'
 import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
 import { useBusyTaskIds, useWorkbenchRuntimeWiring } from './runtime-wiring'
-import { useWorkbenchSurfaceAssembly } from './surface-assembly'
+import {
+  openWorkSurfaceFromRuntimePayload,
+  useWorkbenchSurfaceAssembly,
+} from './surface-assembly'
 import {
   createNewChatTask,
   decideNewChat,
@@ -70,6 +74,10 @@ export interface WorkbenchAppProps {
   hostPort?: HostPort
   /** Optional Board store injection (tests). */
   boardStore?: BoardStorePort
+  /** Optional staging content port (tests). */
+  boardContent?: BoardContentPort
+  /** Optional job runtime (tests inject a first-run fake). */
+  boardJobRuntime?: BoardJobRuntimePort
 }
 
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
@@ -104,6 +112,8 @@ export function WorkbenchApp({
   idbName,
   hostPort: hostPortProp,
   boardStore: boardStoreProp,
+  boardContent: boardContentProp,
+  boardJobRuntime: boardJobRuntimeProp,
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
@@ -136,12 +146,15 @@ export function WorkbenchApp({
     eventStore,
   } = boot
 
-  const boardOpenerRef = useRef<((boardId?: string) => void) | null>(null)
-  const boardStore = useMemo(() => {
-    if (boardStoreProp) return boardStoreProp
-    if (db) return createIdbBoardStore(db)
-    return createMemoryBoardStore()
-  }, [boardStoreProp, db])
+  const board = useWorkbenchBoardWiring({
+    db,
+    selectedTaskId: session.view.selectedTaskId,
+    closeWorkSurfaceTab: session.commands.closeWorkSurfaceTab,
+    boardStore: boardStoreProp,
+    boardContent: boardContentProp,
+    boardJobRuntime: boardJobRuntimeProp,
+  })
+  const { boardOpenerRef } = board
 
   // --- Catalog + selection ---
   const catalogView = useProjectCatalog(catalogController)
@@ -184,6 +197,7 @@ export function WorkbenchApp({
     projectId: projectId ?? DEFAULT_PROJECT_ID,
     persistence,
     bootReady,
+    clientToolExecutor: board.executor,
   })
   const {
     controller: runtimeController,
@@ -202,15 +216,6 @@ export function WorkbenchApp({
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
-  const boardWiring = useMemo(
-    () => ({
-      store: boardStore,
-      onOpenFull: (boardId: string) => boardOpenerRef.current?.(boardId),
-      onClosePreview: (tabId: string) =>
-        session.commands.closeWorkSurfaceTab(tabId),
-    }),
-    [boardStore, session.commands],
-  )
   const surface = useWorkbenchSurfaceAssembly({
     documentSource,
     hasOpenWorkTabs,
@@ -218,7 +223,19 @@ export function WorkbenchApp({
     runtimeController,
     selectedTaskId: taskId,
     bootReady,
-    board: boardWiring,
+    board: board.surface,
+  })
+  board.attachPreviewOpener((boardId, title) => {
+    openWorkSurfaceFromRuntimePayload(
+      surface.surfaceRegistry,
+      session.commands.openWorkSurfaceTab,
+      {
+        kind: 'board',
+        resourceKey: boardId,
+        title,
+        focus: 'pane',
+      },
+    )
   })
 
   // Persist session pointers (IDB product path).
@@ -757,7 +774,7 @@ export function WorkbenchApp({
           }
           capabilityController={capabilityController}
           surfaceRegistry={surface.surfaceRegistry}
-          boardStore={boardStore}
+          boardStore={board.store}
           taskExists={(id) => Boolean(catalogController?.getTaskRow(id))}
           boardOpenerRef={boardOpenerRef}
           onOpenFileRef={surface.onOpenFileRef}

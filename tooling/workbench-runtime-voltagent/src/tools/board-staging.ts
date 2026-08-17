@@ -182,12 +182,26 @@ export class BoardStaging {
   }
 
   async readReadyContent(buildId: string): Promise<
-    | { content: string; hash: string; bytes: number; kind: BoardDraftKind }
+    | {
+        content: string
+        hash: string
+        bytes: number
+        kind: BoardDraftKind
+        title: string
+        description?: string
+        allowedHosts?: string[]
+        widgetId?: string
+        jobId?: string
+      }
     | BoardToolError
   > {
     return this.withLock(buildId, async () => {
       const loaded = await this.loadMeta(buildId)
       if (!loaded) return boardToolError('unknown_build', '未知的草稿')
+      if (this.isExpired(loaded)) {
+        await rm(this.draftDir(buildId), { recursive: true, force: true })
+        return boardToolError('unknown_build', '草稿已过期或不存在，请重新 begin / finish')
+      }
       if (loaded.status === 'consumed') {
         return boardToolError('build_not_ready', '该草稿已被拉取，不可二次读取')
       }
@@ -204,8 +218,49 @@ export class BoardStaging {
         hash: loaded.contentHash,
         bytes: loaded.bytes,
         kind: loaded.kind,
+        title: loaded.title,
+        description: loaded.description,
+        allowedHosts: loaded.allowedHosts,
+        widgetId: loaded.widgetId,
+        jobId: loaded.jobId,
       }
     })
+  }
+
+  async listDrafts(): Promise<
+    Array<{
+      draftId: string
+      kind: BoardDraftKind
+      status: BoardDraftMeta['status']
+      title: string
+      widgetId?: string
+      jobId?: string
+      contentHash?: string
+    }>
+  > {
+    await this.sweepExpired()
+    let names: string[]
+    try {
+      names = await readdir(this.root)
+    } catch {
+      return []
+    }
+    const drafts = await Promise.all(
+      names.map(async (name) => {
+        const meta = await this.loadMeta(name)
+        if (!meta || meta.status === 'consumed') return null
+        return {
+          draftId: meta.buildId,
+          kind: meta.kind,
+          status: meta.status,
+          title: meta.title,
+          widgetId: meta.widgetId,
+          jobId: meta.jobId,
+          contentHash: meta.contentHash,
+        }
+      }),
+    )
+    return drafts.filter((row) => row !== null)
   }
 
   async sweepExpired(): Promise<void> {
@@ -215,7 +270,6 @@ export class BoardStaging {
     } catch {
       return
     }
-    const cutoff = this.now() - this.ttlMs
     await Promise.all(
       names.map(async (name) => {
         const meta = await this.loadMeta(name)
@@ -223,8 +277,7 @@ export class BoardStaging {
           await rm(this.draftDir(name), { recursive: true, force: true })
           return
         }
-        const updated = Date.parse(meta.updatedAt)
-        if (!Number.isFinite(updated) || updated < cutoff || meta.status === 'consumed') {
+        if (this.isExpired(meta) || meta.status === 'consumed') {
           await rm(this.draftDir(name), { recursive: true, force: true })
         }
       }),
@@ -268,6 +321,11 @@ export class BoardStaging {
       return boardToolError('unknown_build', 'id 与 buildId 不匹配')
     }
     return loaded
+  }
+
+  private isExpired(meta: BoardDraftMeta): boolean {
+    const updated = Date.parse(meta.updatedAt)
+    return !Number.isFinite(updated) || updated < this.now() - this.ttlMs
   }
 
   private touch(meta: BoardDraftMeta): void {

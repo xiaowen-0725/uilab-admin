@@ -9,7 +9,7 @@
 
 import os from 'node:os'
 import path from 'node:path'
-import { BOARD_SIDECAR_TOOLS } from './tools/board-policy.js'
+import { BOARD_ALL_TOOLS } from './tools/board-policy.js'
 
 export type AgentProfile = 'office' | 'minimal'
 
@@ -82,7 +82,7 @@ export const OFFICE_FS_TOOL_NAMES = [
   'grep',
 ] as const
 
-export const BOARD_TOOL_NAMES = BOARD_SIDECAR_TOOLS
+export const BOARD_TOOL_NAMES = BOARD_ALL_TOOLS
 
 export const MINIMAL_TOOL_NAMES = [
   'read_file',

@@ -14,7 +14,15 @@ export const BOARD_SIDECAR_TOOLS = [
   BOARD_JOB_FINISH_TOOL,
 ] as const
 
+export const BOARD_CLIENT_TOOLS = ['board_status', 'board_commit'] as const
+
+export const BOARD_ALL_TOOLS = [
+  ...BOARD_SIDECAR_TOOLS,
+  ...BOARD_CLIENT_TOOLS,
+] as const
+
 export type BoardSidecarToolName = (typeof BOARD_SIDECAR_TOOLS)[number]
+export type BoardClientToolName = (typeof BOARD_CLIENT_TOOLS)[number]
 
 /** The five tools that auto-approve; board_job_finish stays off this list. */
 export const BOARD_AUTO_APPROVE_TOOLS = BOARD_SIDECAR_TOOLS.filter(

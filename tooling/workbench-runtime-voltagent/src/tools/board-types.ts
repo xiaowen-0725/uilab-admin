@@ -65,6 +65,46 @@ export type BoardJobFinishResult = {
   codeHash: string
 }
 
+export type BoardStatusBoard = {
+  id: string
+  title: string
+  widgetCount: number
+  remaining: number
+}
+
+export type BoardStatusCommitted = {
+  widgetId: string
+  boardId: string
+  contentHash: string
+  jobId?: string
+  codeHash?: string
+}
+
+export type BoardStatusStaging = {
+  draftId: string
+  kind: BoardDraftKind
+  status: BoardDraftStatus
+  title: string
+  widgetId?: string
+  jobId?: string
+  contentHash?: string
+}
+
+export type BoardStatusResult = {
+  boards: BoardStatusBoard[]
+  targetExists?: boolean
+  committed: BoardStatusCommitted[]
+  staging: BoardStatusStaging[]
+}
+
+export type BoardCommitResult = {
+  boardId: string
+  widgetId: string
+  mountId: string
+  placement: { x: number; y: number; w: number; h: number }
+  jobId?: string
+}
+
 export type BoardDraftKind = 'widget' | 'job'
 
 export type BoardDraftStatus = 'open' | 'ready' | 'consumed'

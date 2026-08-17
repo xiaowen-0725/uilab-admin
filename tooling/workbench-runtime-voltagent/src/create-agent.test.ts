@@ -638,6 +638,8 @@ describe('createWorkbenchAgent', () => {
         'board_job_begin',
         'board_job_append',
         'board_job_finish',
+        'board_status',
+        'board_commit',
       ],
     )
 
@@ -665,6 +667,8 @@ function assertRegisteredBoardTools(fullState: {
     'board_job_begin',
     'board_job_append',
     'board_job_finish',
+    'board_status',
+    'board_commit',
   ]) {
     assert.ok(names.includes(name), `missing board tool ${name}`)
   }

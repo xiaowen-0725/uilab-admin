@@ -320,6 +320,19 @@ describe('board tool policy', () => {
     )
   })
 
+  it('registers board_status and board_commit as client-side tools', async () => {
+    const board = await runtime()
+    const names = board.toolList.map((tool) => tool.name)
+    assert.ok(names.includes('board_status'))
+    assert.ok(names.includes('board_commit'))
+    const status = board.toolList.find((tool) => tool.name === 'board_status')
+    const commit = board.toolList.find((tool) => tool.name === 'board_commit')
+    assert.equal(status?.execute, undefined)
+    assert.equal(commit?.execute, undefined)
+    assert.notEqual(status?.needsApproval, true)
+    assert.notEqual(commit?.needsApproval, true)
+  })
+
   it('marks only board_job_finish as needing approval', async () => {
     const board = await runtime()
     assert.notEqual(board.tools.board_widget_begin.needsApproval, true)
