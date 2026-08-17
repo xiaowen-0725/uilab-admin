@@ -4,10 +4,11 @@ import { createIdbBoardStore } from '../adapters/idb-board-store'
 import { createMemoryBoardStore } from '../adapters/memory-board-store'
 import { EXAMPLE_PRESETS } from '../fixtures/example-presets'
 import { BOARD_PRESETS_INSTALLED_KEY } from '../model/preset-install'
+import type { WidgetDataJobRecord } from '../model/types'
 import type { BoardStorePort } from '../ports/board-store-port'
 import { ensureExampleBoards } from './ensure-example-boards'
 
-async function jobsOn(store: BoardStorePort) {
+async function jobsOn(store: BoardStorePort): Promise<WidgetDataJobRecord[]> {
   const jobs = []
   for (const board of await store.listBoards()) {
     for (const placement of board.placements) {

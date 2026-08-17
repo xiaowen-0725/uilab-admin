@@ -111,7 +111,6 @@ export interface BoardWidgetHostProps {
   inert?: boolean
   /** Example boards with prefilled data and no job (spec §9.5). */
   exampleDataHint?: string | null
-  exampleDataNudge?: string | null
   className?: string
 }
 
@@ -143,7 +142,6 @@ export function BoardWidgetHost({
   movable = false,
   inert = false,
   exampleDataHint = null,
-  exampleDataNudge = null,
   className,
 }: BoardWidgetHostProps) {
   const heartbeatEnabled = heartbeat ?? chrome !== 'none'
@@ -214,10 +212,9 @@ export function BoardWidgetHost({
             <span
               className='max-w-[52%] truncate text-[10px] leading-tight text-muted-foreground'
               data-testid='board-widget-example-data'
-              title={[exampleDataHint, exampleDataNudge].filter(Boolean).join(' ')}
+              title={exampleDataHint}
             >
               {exampleDataHint}
-              {exampleDataNudge ? ` · ${exampleDataNudge}` : ''}
             </span>
           ) : null}
           {showRunError ? (

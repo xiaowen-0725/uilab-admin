@@ -56,6 +56,13 @@ async function seedBoard(store: BoardStorePort) {
   })
 }
 
+function cardById(id: string): Element | undefined {
+  return page
+    .getByTestId('board-card')
+    .elements()
+    .find((node) => node.getAttribute('data-board-id') === id)
+}
+
 function WorkspaceHarness({
   store,
   jobRuntime,
@@ -184,10 +191,7 @@ describe('BoardWorkspace refresh', () => {
 
     await userEvent.click(page.getByTestId('board-breadcrumb-root'))
     await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
-    const seeded = page
-      .getByTestId('board-card')
-      .elements()
-      .find((node) => node.getAttribute('data-board-id') === 'board-1')
+    const seeded = cardById('board-1')
     expect(seeded).toBeTruthy()
     await userEvent.click(seeded as HTMLElement)
 
@@ -280,10 +284,7 @@ describe('BoardWorkspace example boards', () => {
     )
 
     await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
-    const guide = page
-      .getByTestId('board-card')
-      .elements()
-      .find((node) => node.getAttribute('data-board-id') === 'example:getting-started')
+    const guide = cardById('example:getting-started')
     await userEvent.click(guide as HTMLElement)
     await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
     await userEvent.click(page.getByTestId('board-delete'))
@@ -306,10 +307,7 @@ describe('BoardWorkspace example boards', () => {
     )
 
     await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
-    const guide = page
-      .getByTestId('board-card')
-      .elements()
-      .find((node) => node.getAttribute('data-board-id') === 'example:getting-started')
+    const guide = cardById('example:getting-started')
     expect(guide).toBeTruthy()
     await userEvent.click(guide as HTMLElement)
 

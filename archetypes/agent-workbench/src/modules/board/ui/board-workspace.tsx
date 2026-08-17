@@ -92,6 +92,12 @@ export function BoardWorkspace({
     }
   }, [boardId, refresh, store, generation, revision])
 
+  const deleteBoard = useCallback(async () => {
+    if (!detail) return
+    await store.deleteBoard(detail.board.id)
+    onOpenList()
+  }, [detail, onOpenList, store])
+
   const persistLayout = useCallback(
     async (placements: BoardPlacement[]) => {
       if (!boardId) return
@@ -176,12 +182,7 @@ export function BoardWorkspace({
         onCreateByChat={onCreateByChat}
         onOpenSourceTask={onOpenSourceTask}
         onRevokeJob={(jobId) => void revoke(jobId)}
-        onDeleteBoard={() => {
-          void (async () => {
-            await store.deleteBoard(detail.board.id)
-            onOpenList()
-          })()
-        }}
+        onDeleteBoard={() => void deleteBoard()}
         refreshHint={refreshHint}
         runtimeUnavailable={runtimeUnavailable}
       />

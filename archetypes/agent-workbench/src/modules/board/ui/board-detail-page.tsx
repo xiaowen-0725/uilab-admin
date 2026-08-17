@@ -3,6 +3,10 @@ import { ChevronRight, MessageSquarePlus, RefreshCw, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  EXAMPLE_DATA_HINT,
+  EXAMPLE_DATA_NUDGE,
+} from '../fixtures/example-presets'
+import {
   gridItemsToPlacements,
   lastRunForWidget,
   placementsToGridItems,
@@ -10,18 +14,25 @@ import {
   type BoardView,
 } from '../model/board-view'
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
+import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import type { BoardPlacement, BoardWidgetId } from '../model/types'
 import type { WidgetTheme } from '../model/widget-document'
-import {
-  EXAMPLE_DATA_HINT,
-  EXAMPLE_DATA_NUDGE,
-} from '../fixtures/example-presets'
-import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import { BoardCanvas } from './board-canvas'
 import { BoardJobDialog } from './board-job-dialog'
 import { BoardWidgetHost } from './board-widget-host'
 
 export const JOB_RUNTIME_UNAVAILABLE = JOB_RUNTIME_DISCONNECTED
+
+function exampleDataHintFor(
+  view: BoardView,
+  widgetId: BoardWidgetId,
+): string | null {
+  const widget = view.widgets.get(widgetId)
+  if (!view.board.isExample || widget?.latestData == null || view.jobs.get(widgetId)) {
+    return null
+  }
+  return `${EXAMPLE_DATA_HINT} · ${EXAMPLE_DATA_NUDGE}`
+}
 
 export interface BoardDetailPageProps {
   view: BoardView
@@ -63,12 +74,6 @@ export function BoardDetailPage({
   const lastRun = job ? (lastRunForWidget(view, job.widgetId) ?? null) : null
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
-  const exampleUnbound = (widgetId: BoardWidgetId) => {
-    const widget = view.widgets.get(widgetId)
-    return Boolean(
-      board.isExample && widget?.latestData != null && !view.jobs.get(widgetId),
-    )
-  }
   const jobCount = view.jobs.size
   let refreshAllTitle = '全部刷新'
   if (jobCount === 0) refreshAllTitle = '这个看板没有取数作业'
@@ -212,7 +217,6 @@ export function BoardDetailPage({
               const widget = widgetOnMount(view, mountId)
               if (!widget) return null
               const last = lastRunForWidget(view, widget.id)
-              const unbound = exampleUnbound(widget.id)
               return (
                 <BoardWidgetHost
                   widgetId={widget.id}
@@ -226,8 +230,7 @@ export function BoardDetailPage({
                   status={widget.status}
                   runError={last?.errorMessage}
                   runtimeUnavailable={runtimeUnavailable}
-                  exampleDataHint={unbound ? EXAMPLE_DATA_HINT : null}
-                  exampleDataNudge={unbound ? EXAMPLE_DATA_NUDGE : null}
+                  exampleDataHint={exampleDataHintFor(view, widget.id)}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
                   onOpenJob={() => setJobWidgetId(widget.id)}
@@ -273,12 +276,7 @@ export function BoardDetailPage({
             status={expanded.status}
             runError={expandedRun?.errorMessage}
             runtimeUnavailable={runtimeUnavailable}
-            exampleDataHint={
-              exampleUnbound(expanded.id) ? EXAMPLE_DATA_HINT : null
-            }
-            exampleDataNudge={
-              exampleUnbound(expanded.id) ? EXAMPLE_DATA_NUDGE : null
-            }
+            exampleDataHint={exampleDataHintFor(view, expanded.id)}
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}
             className='min-h-0 flex-1'

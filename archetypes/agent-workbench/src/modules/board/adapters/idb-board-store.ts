@@ -46,6 +46,7 @@ const BOARD_STORES = [
 ] as const
 
 type BoardStoreName = (typeof BOARD_STORES)[number]
+type TxStore = BoardStoreName | typeof STORE_METADATA
 
 export type IdbBoardStoreOptions = {
   /** Test-only: abort the atomic commit after earlier puts succeed. */
@@ -202,14 +203,19 @@ export class IdbBoardStore implements BoardStorePort {
   }
 
   getInstalledPresets(): Promise<Readonly<Record<string, number>>> {
-    return this.readMetadata((row) => parsePresetMap(row?.value))
+    return this.read(STORE_METADATA, async (tx) =>
+      parsePresetMap((await getMetadataRow(tx))?.value),
+    )
   }
 
   recordPresetInstalled(presetId: string, version: number): Promise<void> {
-    return this.writeMetadata((current) => ({
-      ...current,
-      [presetId]: version,
-    }))
+    return this.write(STORE_METADATA, async (tx) => {
+      const current = parsePresetMap((await getMetadataRow(tx))?.value)
+      await putValue(tx, STORE_METADATA, {
+        key: BOARD_PRESETS_INSTALLED_KEY,
+        value: { ...current, [presetId]: version },
+      } satisfies MetadataRecord)
+    })
   }
 
   appendPlacement(boardId: BoardId, placement: BoardPlacement): Promise<void> {
@@ -238,59 +244,26 @@ export class IdbBoardStore implements BoardStorePort {
   }
 
   private read<T>(
-    store: BoardStoreName | readonly BoardStoreName[],
+    store: TxStore | readonly BoardStoreName[],
     fn: (tx: IDBTransaction) => Promise<T>,
   ): Promise<T> {
     return this.transact(store, 'readonly', fn)
   }
 
   private write(
-    store: BoardStoreName | readonly BoardStoreName[],
+    store: TxStore | readonly BoardStoreName[],
     fn: (tx: IDBTransaction) => Promise<void>,
   ): Promise<void> {
     return this.transact(store, 'readwrite', fn)
   }
 
   private async transact<T>(
-    store: BoardStoreName | readonly BoardStoreName[],
+    store: TxStore | readonly BoardStoreName[],
     mode: IDBTransactionMode,
     fn: (tx: IDBTransaction) => Promise<T>,
   ): Promise<T> {
     try {
       return await runTransaction(this.db, store, mode, fn)
-    } catch (err) {
-      throw toStoreError(err)
-    }
-  }
-
-  private async readMetadata<T>(
-    fn: (row: MetadataRecord | undefined) => T,
-  ): Promise<T> {
-    try {
-      return await runTransaction(
-        this.db,
-        STORE_METADATA,
-        'readonly',
-        async (tx) => fn(await getMetadataRow(tx)),
-      )
-    } catch (err) {
-      throw toStoreError(err)
-    }
-  }
-
-  private async writeMetadata(
-    next: (current: Record<string, number>) => Record<string, number>,
-  ): Promise<void> {
-    try {
-      await runTransaction(this.db, STORE_METADATA, 'readwrite', async (tx) => {
-        const current = parsePresetMap((await getMetadataRow(tx))?.value)
-        await idbRequest(
-          tx.objectStore(STORE_METADATA).put({
-            key: BOARD_PRESETS_INSTALLED_KEY,
-            value: next(current),
-          } satisfies MetadataRecord),
-        )
-      })
     } catch (err) {
       throw toStoreError(err)
     }
@@ -372,7 +345,7 @@ async function getByIndex<T>(
 
 async function putValue(
   tx: IDBTransaction,
-  store: BoardStoreName,
+  store: TxStore,
   value: unknown,
 ): Promise<void> {
   await idbRequest(tx.objectStore(store).put(value))

@@ -8,7 +8,6 @@
  * a new presetId.
  */
 
-import { addWidgetToBoard } from './board-commands'
 import {
   EXAMPLE_PRESETS,
   buildExampleBoard,
@@ -16,27 +15,22 @@ import {
   type ExamplePreset,
 } from '../fixtures/example-presets'
 import type { BoardStorePort } from '../ports/board-store-port'
+import { addWidgetToBoard } from './board-commands'
 
 export async function ensureExampleBoards(store: BoardStorePort): Promise<void> {
-  const boards = await store.listBoards()
   const installed = { ...(await store.getInstalledPresets()) }
 
-  for (const board of boards) {
+  for (const board of await store.listBoards()) {
     if (!board.presetId || installed[board.presetId] != null) continue
     const version = board.presetVersion ?? 1
     await store.recordPresetInstalled(board.presetId, version)
     installed[board.presetId] = version
   }
 
-  const present = new Set(
-    boards.map((board) => board.presetId).filter((id): id is string => Boolean(id)),
-  )
   const now = new Date().toISOString()
   for (const preset of EXAMPLE_PRESETS) {
     if (installed[preset.id] != null) continue
-    if (!present.has(preset.id)) {
-      await installPreset(store, preset, now)
-    }
+    await installPreset(store, preset, now)
     await store.recordPresetInstalled(preset.id, preset.version)
     installed[preset.id] = preset.version
   }

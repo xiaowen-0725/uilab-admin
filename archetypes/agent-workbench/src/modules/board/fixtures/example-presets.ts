@@ -58,7 +58,7 @@ const NARROW = {
   max: { w: 6, h: 8 },
 } as const
 
-export const GETTING_STARTED_PRESET: ExamplePreset = {
+const GETTING_STARTED_PRESET: ExamplePreset = {
   id: 'getting-started',
   version: 1,
   boardId: 'example:getting-started',
@@ -103,7 +103,7 @@ export const GETTING_STARTED_PRESET: ExamplePreset = {
   ],
 }
 
-export const DAILY_BRIEF_PRESET: ExamplePreset = {
+const DAILY_BRIEF_PRESET: ExamplePreset = {
   id: 'daily-brief',
   version: 1,
   boardId: 'example:daily-brief',
