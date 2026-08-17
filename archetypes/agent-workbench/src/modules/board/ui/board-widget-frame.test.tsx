@@ -27,6 +27,13 @@ function probeSrcDoc(nonce: string, body: string): string {
   return `<!doctype html><script nonce="${nonce}">${body}</script>`
 }
 
+function selfNavScript(type: string): string {
+  return `try{location='https://example.com'}catch(e){}
+           setTimeout(function(){
+             parent.postMessage({type:'${type}',href:String(location.href)},'*')
+           },80)`
+}
+
 describe('BoardWidgetFrame', () => {
   it('pairs sandbox and csp on the widget iframe', async () => {
     const nonce = readHostCspNonce()
@@ -61,13 +68,7 @@ describe('BoardWidgetFrame', () => {
     )
     await render(
       <BoardWidgetFrame
-        srcDoc={probeSrcDoc(
-          nonce,
-          `try{location='https://example.com'}catch(e){}
-           setTimeout(function(){
-             parent.postMessage({type:'board-widget-nav',href:String(location.href)},'*')
-           },80)`,
-        )}
+        srcDoc={probeSrcDoc(nonce, selfNavScript('board-widget-nav'))}
       />,
     )
     const message = await result
@@ -82,13 +83,7 @@ describe('BoardWidgetFrame', () => {
     )
     const iframe = document.createElement('iframe')
     iframe.setAttribute('sandbox', 'allow-scripts')
-    iframe.srcdoc = probeSrcDoc(
-      nonce,
-      `try{location='https://example.com'}catch(e){}
-       setTimeout(function(){
-         parent.postMessage({type:'board-host-frame-src-nav',href:String(location.href)},'*')
-       },80)`,
-    )
+    iframe.srcdoc = probeSrcDoc(nonce, selfNavScript('board-host-frame-src-nav'))
     document.body.appendChild(iframe)
     try {
       const message = await result

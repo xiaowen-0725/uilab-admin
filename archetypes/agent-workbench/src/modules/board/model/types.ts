@@ -118,8 +118,15 @@ export function isJobRunnable(job: WidgetDataJobRecord): boolean {
 export function widgetStatusForRun(
   status: WidgetJobRunStatus,
 ): BoardWidgetStatus {
-  if (status === 'running') return 'running'
-  if (status === 'cancelled') return 'cancelled'
-  if (status === 'success') return 'idle'
-  return 'error'
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'cancelled':
+      return 'cancelled'
+    case 'success':
+      return 'idle'
+    case 'error':
+    case 'timeout':
+      return 'error'
+  }
 }

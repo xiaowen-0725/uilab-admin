@@ -19,16 +19,14 @@ const reactDomRoot = path.dirname(require.resolve('react-dom/package.json'))
 function resolveDevConnect(server: ViteDevServer | undefined): string {
   if (!server) return ''
   const configured = server.config.server.port ?? 5174
-  const address = server.httpServer?.address()
-  const actual =
-    typeof address === 'object' && address ? address.port : configured
-  const ports = new Set([5174, configured, actual].filter((port) => port > 0))
-  const extras: string[] = []
-  for (const port of ports) {
-    extras.push(`ws://localhost:${port}`, `ws://127.0.0.1:${port}`)
-  }
-  extras.push('ws://localhost:*', 'ws://127.0.0.1:*')
-  return extras.join(' ')
+  const bound = server.httpServer?.address()
+  const actualPort = typeof bound === 'object' && bound ? bound.port : configured
+  const ports = [...new Set([5174, configured, actualPort].filter((port) => port > 0))]
+  const listed = ports.flatMap((port) => [
+    `ws://localhost:${port}`,
+    `ws://127.0.0.1:${port}`,
+  ])
+  return [...listed, 'ws://localhost:*', 'ws://127.0.0.1:*'].join(' ')
 }
 
 function workbenchCspPlugin(): Plugin {

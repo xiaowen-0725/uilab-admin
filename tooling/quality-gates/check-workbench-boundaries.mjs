@@ -670,12 +670,11 @@ function isNonceSource(source) {
 }
 
 function coversSource(hostSources, widgetSource) {
-  if (hostSources.includes('*')) return true
-  if (hostSources.includes(widgetSource)) return true
-  if (isNonceSource(widgetSource)) {
-    return hostSources.some((source) => isNonceSource(source))
-  }
-  return false
+  return (
+    hostSources.includes('*') ||
+    hostSources.includes(widgetSource) ||
+    (isNonceSource(widgetSource) && hostSources.some(isNonceSource))
+  )
 }
 
 function hostCspCoversWidgetCsp(hostPolicy, widgetPolicy) {
@@ -685,12 +684,6 @@ function hostCspCoversWidgetCsp(hostPolicy, widgetPolicy) {
   for (const [directive, widgetSources] of widget) {
     if (isNoneOnly(widgetSources)) continue
     const hostSources = host.get(directive) ?? host.get('default-src') ?? []
-    if (isNoneOnly(hostSources)) {
-      for (const source of widgetSources) {
-        if (source !== "'none'") missing.push(`${directive} ${source}`)
-      }
-      continue
-    }
     for (const source of widgetSources) {
       if (source === "'none'") continue
       if (coversSource(hostSources, source)) continue
