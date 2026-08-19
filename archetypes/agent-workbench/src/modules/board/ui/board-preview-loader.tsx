@@ -5,8 +5,10 @@ import {
 } from '../application/board-refresh'
 import { loadBoardView } from '../application/load-board-view'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
+import { anonymousIdentitySnapshot } from '../model/widget-render-state'
 import type { BoardView } from '../model/board-view'
 import type { BoardStorePort } from '../ports/board-store-port'
+import type { IdentityScopePort } from '../ports/identity-scope-port'
 import type { WidgetTheme } from '../model/widget-document'
 import { BoardPreviewPanel } from './board-preview-panel'
 
@@ -19,6 +21,7 @@ export interface BoardPreviewLoaderProps {
   /** Bump after commit / first-run so an already-open preview reloads. */
   revision?: number
   refresh?: BoardRefreshController
+  identityScope?: IdentityScopePort
 }
 
 export function BoardPreviewLoader({
@@ -29,20 +32,24 @@ export function BoardPreviewLoader({
   onClose,
   revision = 0,
   refresh,
+  identityScope,
 }: BoardPreviewLoaderProps) {
+  const identity = identityScope?.getSnapshot() ?? anonymousIdentitySnapshot()
   const [view, setView] = useState<BoardView | null | undefined>(undefined)
   const [hint, setHint] = useState<string | null>(null)
   const [runtimeUnavailable, setRuntimeUnavailable] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void loadBoardView(store, boardId).then((next) => {
+    void loadBoardView(store, boardId, {
+      principalKey: identity.principalKey,
+    }).then((next) => {
       if (!cancelled) setView(next)
     })
     return () => {
       cancelled = true
     }
-  }, [boardId, revision, store])
+  }, [boardId, identity.principalKey, revision, store])
 
   useEffect(() => {
     if (!refresh) return
@@ -68,7 +75,11 @@ export function BoardPreviewLoader({
       return
     }
     setHint(null)
-    setView(await loadBoardView(store, boardId))
+    setView(
+      await loadBoardView(store, boardId, {
+        principalKey: identity.principalKey,
+      }),
+    )
   }
 
   if (view === undefined) {
@@ -99,6 +110,7 @@ export function BoardPreviewLoader({
         view={view}
         theme={theme}
         runtimeUnavailable={runtimeUnavailable}
+        identity={identity}
         onOpenFull={onOpenFull}
         onRefreshAll={() => void refreshAll()}
         onClose={onClose}

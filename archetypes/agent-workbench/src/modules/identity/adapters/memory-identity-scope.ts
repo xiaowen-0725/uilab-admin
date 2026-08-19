@@ -28,6 +28,8 @@ export interface MemoryIdentityScope extends IdentityScopePort {
   getTenantId(): string | null
   signIn(input: MemoryIdentitySession): void
   signOut(): void
+  /** Passive invalidation — identity and authorization stay, session is unproven. */
+  invalidateSession(): void
   setAuthorizedResources(resources: readonly AuthorizedResource[]): void
 }
 
@@ -95,11 +97,17 @@ export function createMemoryIdentityScope(
       notify('signed_in')
     },
     signOut() {
-      if (!valid) return
+      const alreadyCleared = !valid && resources.length === 0 && tenantId === null
+      if (alreadyCleared) return
       tenantId = null
       valid = false
       resources = []
       notify('signed_out')
+    },
+    invalidateSession() {
+      if (!valid) return
+      valid = false
+      notify('session_invalidated')
     },
     setAuthorizedResources(nextResources) {
       if (!valid) return

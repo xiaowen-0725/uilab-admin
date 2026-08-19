@@ -24,6 +24,7 @@ import {
   BoardPreviewLoader,
   type BoardRefreshController,
   type BoardStorePort,
+  type IdentityScopePort,
 } from '@/modules/board'
 
 /**
@@ -37,6 +38,7 @@ export interface BoardSurfaceWiring {
   onClosePreview: (tabId: string) => void
   revision?: number
   refresh?: BoardRefreshController
+  identityScope?: IdentityScopePort
 }
 
 export function createWorkbenchSurfaceRegistry(
@@ -65,6 +67,7 @@ export function createWorkbenchSurfaceRegistry(
           store={board.store}
           revision={board.revision}
           refresh={board.refresh}
+          identityScope={board.identityScope}
           theme={
             document.documentElement.classList.contains('dark')
               ? 'dark'

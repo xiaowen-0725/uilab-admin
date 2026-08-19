@@ -4,6 +4,7 @@ import {
   BoardWorkspace,
   type BoardRefreshController,
   type BoardStorePort,
+  type IdentityScopePort,
 } from '@/modules/board'
 import {
   CapabilityManagementSurface,
@@ -140,6 +141,7 @@ export interface WorkbenchShellProps {
   boardStore?: BoardStorePort | null
   boardRefresh?: BoardRefreshController | null
   boardRevision?: number
+  boardIdentityScope?: IdentityScopePort | null
   taskExists?: (taskId: string) => boolean
   boardOpenerRef?: MutableRefObject<((boardId?: string) => void) | null>
 }
@@ -173,6 +175,7 @@ export function WorkbenchShell({
   boardStore = null,
   boardRefresh = null,
   boardRevision = 0,
+  boardIdentityScope = null,
   taskExists = () => false,
   boardOpenerRef,
 }: WorkbenchShellProps) {
@@ -477,6 +480,7 @@ export function WorkbenchShell({
               theme={boardTheme}
               refresh={boardRefresh ?? undefined}
               revision={boardRevision}
+              identityScope={boardIdentityScope ?? undefined}
               taskExists={taskExists}
               onOpenList={() => openBoard()}
               onOpenBoard={(id) => openBoard(id)}

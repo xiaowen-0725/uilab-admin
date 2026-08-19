@@ -85,10 +85,24 @@ export function createControllableBoardJobRuntime(): ControllableBoardJobRuntime
         active -= 1
       }
     },
+    evaluate(request) {
+      if (request.kind === 'query') {
+        return this.runJob(request.queryName ?? request.jobId ?? 'query')
+      }
+      return defaultEvaluateDataSource(this, request)
+    },
     complete(jobId, result) {
       const queue = waiters.get(jobId)
       const resolve = queue?.shift()
       if (resolve) resolve(result)
+    },
+    cancelJob(jobId) {
+      const queue = waiters.get(jobId)
+      if (!queue) return
+      for (const resolve of queue) {
+        resolve({ ok: false, error: 'cancelled', hint: '已取消' })
+      }
+      waiters.delete(jobId)
     },
     completeAll(result) {
       for (const queue of waiters.values()) {

@@ -30,6 +30,7 @@ const view: BoardView = {
     ],
   ]),
   jobs: new Map(),
+  sources: new Map(),
   lastRunByJobId: new Map(),
 }
 

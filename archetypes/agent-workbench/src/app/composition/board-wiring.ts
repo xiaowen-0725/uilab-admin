@@ -2,7 +2,7 @@
  * Composition Board wiring — store / identity / content / client-tool / preview.
  * Keeps workbench-app a thin assembler (AGENTS.md rule 16).
  */
-import { useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
   createBoardClientToolExecutor,
@@ -130,10 +130,12 @@ export function useWorkbenchBoardWiring(
       createBoardRefreshController({
         store,
         runtime: jobRuntime,
+        identityScope,
         onChange: bumpRevision,
       }),
-    [jobRuntime, store],
+    [identityScope, jobRuntime, store],
   )
+  useEffect(() => () => refresh.dispose(), [refresh])
   const selectedTaskIdRef = useRef(input.selectedTaskId)
   selectedTaskIdRef.current = input.selectedTaskId
   const openBoardPreviewRef = useRef<
@@ -161,13 +163,21 @@ export function useWorkbenchBoardWiring(
       store,
       revision,
       refresh,
+      identityScope,
       onOpenFull: (boardId: string) => boardOpenerRef.current?.(boardId),
       onClosePreview: (tabId: string) => {
         previewPolicy.onUserClose()
         input.closeWorkSurfaceTab(tabId)
       },
     }),
-    [input.closeWorkSurfaceTab, previewPolicy, refresh, revision, store],
+    [
+      identityScope,
+      input.closeWorkSurfaceTab,
+      previewPolicy,
+      refresh,
+      revision,
+      store,
+    ],
   )
 
   return {

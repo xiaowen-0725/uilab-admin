@@ -2,6 +2,7 @@
  * In-memory BoardStorePort for tests and Memory boot.
  */
 
+import { commitFenceRejects } from '../model/identity-barrier'
 import {
   hydrateWidgetFromSnapshot,
   jobSourceWrite,
@@ -32,9 +33,11 @@ import {
   BoardStorePortError,
   mergeBoardForCommit,
   type BoardAtomicCommitInput,
+  type BoardRunCommitOptions,
   type BoardSnapshotReadOptions,
   type BoardStorePort,
   type BoardStructureFilter,
+  type IdentityBarrierInput,
 } from '../ports/board-store-port'
 
 export class MemoryBoardStore implements BoardStorePort {
@@ -44,6 +47,8 @@ export class MemoryBoardStore implements BoardStorePort {
   private readonly runs = new Map<string, WidgetJobRunRecord>()
   private readonly sources = new Map<WidgetDataSourceId, WidgetDataSourceRecord>()
   private readonly snapshots = new Map<string, WidgetDataSnapshotRecord>()
+  private readonly identityEpochs = new Map<string, number>()
+  private readonly liveExecutions = new Map<string, string>()
   private presetsInstalled: Record<string, number> = {}
   private capableTaskIds: string[] = []
 
@@ -130,6 +135,26 @@ export class MemoryBoardStore implements BoardStorePort {
     return [...this.snapshots.values()].filter((row) => row.widgetId === widgetId)
   }
 
+  async deleteSnapshot(
+    widgetId: BoardWidgetId,
+    principalKey: string,
+  ): Promise<void> {
+    this.snapshots.delete(snapshotStorageKey(widgetId, principalKey))
+  }
+
+  async applyIdentityBarrier(input: IdentityBarrierInput): Promise<void> {
+    this.identityEpochs.set(input.principalKey, input.generation)
+    for (const [key, principal] of [...this.liveExecutions]) {
+      if (principal === input.principalKey) this.liveExecutions.delete(key)
+    }
+    if (!input.deleteSnapshots) return
+    for (const [key, snapshot] of this.snapshots) {
+      if (snapshot.principalKey === input.principalKey) {
+        this.snapshots.delete(key)
+      }
+    }
+  }
+
   async deleteWidget(widgetId: BoardWidgetId): Promise<void> {
     this.deleteWidgetSync(widgetId)
   }
@@ -166,10 +191,17 @@ export class MemoryBoardStore implements BoardStorePort {
   async recordRun(
     run: WidgetJobRunRecord,
     data?: unknown,
-    options?: BoardSnapshotReadOptions,
+    options?: BoardRunCommitOptions,
   ): Promise<void> {
     const job = this.jobs.get(run.jobId)
-    if (!job || !isJobRunnable(job)) {
+    if (job && !isJobRunnable(job)) {
+      throw new BoardStorePortError({
+        code: 'conflict',
+        message: '作业尚未获批，不能运行',
+        retriable: false,
+      })
+    }
+    if (!job && !options?.allowMissingJob) {
       throw new BoardStorePortError({
         code: 'conflict',
         message: '作业尚未获批，不能运行',
@@ -186,13 +218,30 @@ export class MemoryBoardStore implements BoardStorePort {
     }
     const widget = this.widgets.get(run.widgetId)
     if (!widget) return
+    const principalKey = options?.principalKey ?? ANONYMOUS_PRINCIPAL_KEY
+    if (run.status === 'running' && options?.executionKey) {
+      this.liveExecutions.set(options.executionKey, principalKey)
+    }
     const snapshot = successSnapshotForRun(
       widget.id,
       run,
       data,
-      options?.principalKey,
+      principalKey,
     )
-    if (snapshot) await this.putSnapshot(snapshot)
+    if (
+      snapshot &&
+      !commitFenceRejects(
+        options?.expectedGeneration,
+        this.identityEpochs.get(principalKey),
+        options?.executionKey,
+        Object.fromEntries(this.liveExecutions),
+      )
+    ) {
+      await this.putSnapshot(snapshot)
+    }
+    if (run.status !== 'running' && options?.executionKey) {
+      this.liveExecutions.delete(options.executionKey)
+    }
     this.widgets.set(widget.id, widgetRowAfterRun(widget, run))
   }
 

@@ -12,7 +12,9 @@ import {
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import type { BoardListCard, BoardView } from '../model/board-view'
 import type { BoardId, BoardPlacement, BoardWidgetId } from '../model/types'
+import { IDENTITY_NEEDS_RELOGIN, anonymousIdentitySnapshot } from '../model/widget-render-state'
 import type { BoardStorePort } from '../ports/board-store-port'
+import type { IdentityScopePort } from '../ports/identity-scope-port'
 import type { WidgetTheme } from '../model/widget-document'
 import { BoardDetailPage } from './board-detail-page'
 import { BoardListPage } from './board-list-page'
@@ -29,6 +31,7 @@ export interface BoardWorkspaceProps {
   refresh?: BoardRefreshController
   /** Bump when a shared controller writes a run (preview / first-run). */
   revision?: number
+  identityScope?: IdentityScopePort
 }
 
 export function BoardWorkspace({
@@ -42,6 +45,7 @@ export function BoardWorkspace({
   onOpenSourceTask,
   refresh,
   revision = 0,
+  identityScope,
 }: BoardWorkspaceProps) {
   const [cards, setCards] = useState<BoardListCard[]>([])
   const [detail, setDetail] = useState<BoardView | null | undefined>(undefined)
@@ -51,6 +55,12 @@ export function BoardWorkspace({
   const openedBoardRef = useRef<string | null>(null)
 
   const reload = useCallback(() => setGeneration((value) => value + 1), [])
+  const identity = identityScope?.getSnapshot() ?? anonymousIdentitySnapshot()
+
+  useEffect(() => {
+    if (!identityScope) return
+    return identityScope.subscribeInvalidation(() => reload())
+  }, [identityScope, reload])
 
   useEffect(() => {
     if (!refresh) {
@@ -73,7 +83,9 @@ export function BoardWorkspace({
     }
     void (async () => {
       if (boardId) {
-        const next = await loadBoardView(store, boardId)
+        const next = await loadBoardView(store, boardId, {
+          principalKey: identity.principalKey,
+        })
         if (cancelled) return
         setDetail(next)
         const firstOpen = openedBoardRef.current !== boardId
@@ -84,13 +96,15 @@ export function BoardWorkspace({
       openedBoardRef.current = null
       await refresh?.reconcileOrphans()
       await ensureExampleBoards(store)
-      const next = await loadBoardList(store)
+      const next = await loadBoardList(store, {
+        principalKey: identity.principalKey,
+      })
       if (!cancelled) setCards(next)
     })()
     return () => {
       cancelled = true
     }
-  }, [boardId, refresh, store, generation, revision])
+  }, [boardId, identity.principalKey, refresh, store, generation, revision])
 
   const deleteBoard = useCallback(async () => {
     if (!detail) return
@@ -122,15 +136,19 @@ export function BoardWorkspace({
         setRefreshHint(JOB_RUNTIME_DISCONNECTED)
         return
       }
-      const job = detail.jobs.get(widgetId)
-      if (!job) {
+      const source = detail.sources.get(widgetId)
+      if (!detail.jobs.get(widgetId) && source?.kind !== 'query') {
         setRefreshHint('这个小组件没有取数作业')
         return
       }
-      const outcome = await refresh.refreshJob(job.id)
+      const outcome = await refresh.refreshWidget(widgetId)
       if (outcome.kind === 'unavailable') {
         setRuntimeUnavailable(true)
         setRefreshHint(outcome.hint)
+        return
+      }
+      if (outcome.kind === 'masked') {
+        setRefreshHint(IDENTITY_NEEDS_RELOGIN)
         return
       }
       if (outcome.kind === 'finished' && outcome.status !== 'success') {
@@ -185,6 +203,7 @@ export function BoardWorkspace({
         onDeleteBoard={() => void deleteBoard()}
         refreshHint={refreshHint}
         runtimeUnavailable={runtimeUnavailable}
+        identity={identity}
       />
     )
   }
@@ -193,6 +212,7 @@ export function BoardWorkspace({
     <BoardListPage
       boards={cards}
       theme={theme}
+      identity={identity}
       onOpenBoard={onOpenBoard}
       onCreateByChat={onCreateByChat}
     />

@@ -11,8 +11,11 @@ import {
   lastRunForWidget,
   placementsToGridItems,
   widgetOnMount,
+  widgetRenderState,
   type BoardView,
 } from '../model/board-view'
+import { anonymousIdentitySnapshot } from '../model/widget-render-state'
+import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import type { BoardPlacement, BoardWidgetId } from '../model/types'
@@ -48,6 +51,7 @@ export interface BoardDetailPageProps {
   onDeleteBoard?: () => void
   refreshHint?: string | null
   runtimeUnavailable?: boolean
+  identity?: IdentityScopeSnapshot
 }
 
 export function BoardDetailPage({
@@ -64,12 +68,16 @@ export function BoardDetailPage({
   onDeleteBoard,
   refreshHint,
   runtimeUnavailable = false,
+  identity = anonymousIdentitySnapshot(),
 }: BoardDetailPageProps) {
   const { board } = view
   const [expandedId, setExpandedId] = useState<BoardWidgetId | null>(null)
   const [jobWidgetId, setJobWidgetId] = useState<BoardWidgetId | null>(null)
   const expanded = expandedId ? view.widgets.get(expandedId) : undefined
   const expandedRun = expanded ? lastRunForWidget(view, expanded.id) : undefined
+  const expandedPainted = expanded
+    ? widgetRenderState(view, expanded, identity)
+    : undefined
   const job = jobWidgetId ? (view.jobs.get(jobWidgetId) ?? null) : null
   const lastRun = job ? (lastRunForWidget(view, job.widgetId) ?? null) : null
   const sourceTaskId = board.createdByTaskId
@@ -218,17 +226,19 @@ export function BoardDetailPage({
               const widget = widgetOnMount(view, mountId)
               if (!widget) return null
               const last = lastRunForWidget(view, widget.id)
+              const painted = widgetRenderState(view, widget, identity)
               return (
                 <BoardWidgetHost
                   widgetId={widget.id}
                   title={widget.title}
                   html={widget.html}
-                  data={widget.latestData}
+                  data={painted.data}
                   theme={theme}
                   canSubmit={Boolean(widget.events?.submit)}
                   chrome='full'
                   movable
                   status={widget.status}
+                  identityChrome={painted.chrome}
                   runError={last?.errorMessage}
                   runtimeUnavailable={runtimeUnavailable}
                   hasJob={view.jobs.has(widget.id)}
@@ -271,11 +281,12 @@ export function BoardDetailPage({
             widgetId={expanded.id}
             title={expanded.title}
             html={expanded.html}
-            data={expanded.latestData}
+            data={expandedPainted?.data}
             theme={theme}
             canSubmit={Boolean(expanded.events?.submit)}
             chrome='full'
             status={expanded.status}
+            identityChrome={expandedPainted?.chrome}
             runError={expandedRun?.errorMessage}
             runtimeUnavailable={runtimeUnavailable}
             hasJob={view.jobs.has(expanded.id)}

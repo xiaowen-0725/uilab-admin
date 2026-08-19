@@ -40,6 +40,7 @@ function view(createdByTaskId?: string, job?: WidgetDataJobRecord): BoardView {
     board: board(createdByTaskId),
     widgets: new Map([['w1', widget()]]),
     jobs,
+    sources: new Map(),
     lastRunByJobId: new Map(),
   }
 }
@@ -107,6 +108,7 @@ describe('BoardDetailPage', () => {
           board: { ...board(), isExample: true, title: '示例：每日速递' },
           widgets: new Map([['w1', sample]]),
           jobs: new Map(),
+          sources: new Map(),
           lastRunByJobId: new Map(),
         }}
         theme='light'

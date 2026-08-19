@@ -146,6 +146,53 @@ describe('BoardWidgetHost', () => {
     expect(onSubmit).toHaveBeenCalledWith({ afterSave: 'hi' })
   })
 
+  it('shows 需重新登录 independently from a last-update-failed mark', async () => {
+    await render(
+      <BoardWidgetHost
+        widgetId='w-masked'
+        title='收入'
+        html={probeHtml('widget.ready()')}
+        theme='light'
+        status='error'
+        runError='上次更新失败'
+        identityChrome='needs_relogin'
+      />,
+    )
+
+    await expectPhase('ready')
+    expect(hostElement().getAttribute('data-has-latest')).toBe('false')
+    expect(hostElement().getAttribute('data-identity-chrome')).toBe(
+      'needs_relogin',
+    )
+    await expect
+      .element(page.getByTestId('board-widget-needs-relogin'))
+      .toHaveAccessibleName('需重新登录')
+    expect(page.getByTestId('board-widget-run-error').elements()).toHaveLength(0)
+  })
+
+  it('keeps a last-update-failed mark visible when data is still shown', async () => {
+    await render(
+      <BoardWidgetHost
+        widgetId='w-stale'
+        title='收入'
+        html={probeHtml('widget.ready()')}
+        data={{ quote: 1 }}
+        theme='light'
+        status='error'
+        runError='上次更新失败'
+      />,
+    )
+
+    await expectPhase('ready')
+    expect(hostElement().getAttribute('data-has-latest')).toBe('true')
+    await expect
+      .element(page.getByTestId('board-widget-run-error'))
+      .toHaveAccessibleName('上次更新失败')
+    expect(page.getByTestId('board-widget-needs-relogin').elements()).toHaveLength(
+      0,
+    )
+  })
+
   it('keeps the error chrome after a later ready', async () => {
     await render(
       <BoardWidgetHost

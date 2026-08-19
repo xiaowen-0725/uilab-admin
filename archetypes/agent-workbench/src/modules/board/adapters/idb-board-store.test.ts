@@ -450,4 +450,37 @@ describe('IdbBoardStore', () => {
     expect(await store.listSnapshots('widget-1')).toEqual([])
     db.close()
   })
+
+  it('rejects a late success after the identity barrier deletes the snapshot', async () => {
+    const { db, store } = await openStore()
+    await store.putWidget(widget())
+    await store.putJob(job())
+    await store.putSnapshot({
+      widgetId: 'widget-1',
+      principalKey: 'alice',
+      data: { n: 1 },
+      capturedAt: NOW,
+    })
+
+    await store.applyIdentityBarrier({
+      principalKey: 'alice',
+      generation: 2,
+      deleteSnapshots: true,
+    })
+    await store.recordRun(
+      run({
+        id: 'run-late',
+        status: 'success',
+        finishedAt: NOW,
+      }),
+      { n: 99 },
+      { principalKey: 'alice', expectedGeneration: 1 },
+    )
+
+    expect(await store.getSnapshot('widget-1', 'alice')).toBeNull()
+    expect(
+      (await store.getWidget('widget-1', { principalKey: 'alice' }))?.latestData,
+    ).toBeUndefined()
+    db.close()
+  })
 })

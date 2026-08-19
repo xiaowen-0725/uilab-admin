@@ -44,6 +44,7 @@ export interface IdentityScopeSnapshot {
 
 export type IdentityInvalidationReason =
   | 'signed_out'
+  | 'session_invalidated'
   | 'signed_in'
   | 'authorization_changed'
 

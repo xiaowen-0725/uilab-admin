@@ -2,6 +2,12 @@ import { LayoutGrid, MessageSquarePlus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BoardListCard } from '../model/board-view'
+import type { WidgetDataSourceRecord } from '../model/types'
+import {
+  anonymousIdentitySnapshot,
+  resolveWidgetRenderState,
+} from '../model/widget-render-state'
+import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import {
   THUMBNAIL_GEOMETRY,
   THUMBNAIL_SCALE,
@@ -29,6 +35,7 @@ export interface BoardListPageProps {
   onOpenBoard: (boardId: string) => void
   onCreateByChat: () => void
   onWidgetReady?: (widgetId: string, elapsedMs: number) => void
+  identity?: IdentityScopeSnapshot
 }
 
 export function BoardListPage({
@@ -38,6 +45,7 @@ export function BoardListPage({
   onOpenBoard,
   onCreateByChat,
   onWidgetReady,
+  identity = anonymousIdentitySnapshot(),
 }: BoardListPageProps) {
   return (
     <div
@@ -82,6 +90,7 @@ export function BoardListPage({
                   card={card}
                   theme={theme}
                   thumbnailMode={thumbnailMode}
+                  identity={identity}
                   onOpen={onOpenBoard}
                   onWidgetReady={onWidgetReady}
                 />
@@ -98,12 +107,14 @@ function BoardCard({
   card,
   theme,
   thumbnailMode,
+  identity,
   onOpen,
   onWidgetReady,
 }: {
   card: BoardListCard
   theme: WidgetTheme
   thumbnailMode: ThumbnailMode
+  identity: IdentityScopeSnapshot
   onOpen: (boardId: string) => void
   onWidgetReady?: (widgetId: string, elapsedMs: number) => void
 }) {
@@ -135,6 +146,8 @@ function BoardCard({
           renderItem={(id) => (
             <ThumbnailCell
               widget={widgets.find((candidate) => candidate.id === id)}
+              source={card.sources?.get(id)}
+              identity={identity}
               theme={theme}
               thumbnailMode={thumbnailMode}
               onWidgetReady={onWidgetReady}
@@ -171,11 +184,15 @@ function BoardCard({
 
 function ThumbnailCell({
   widget,
+  source,
+  identity,
   theme,
   thumbnailMode,
   onWidgetReady,
 }: {
   widget: BoardListCard['widgets'][number] | undefined
+  source?: WidgetDataSourceRecord
+  identity: IdentityScopeSnapshot
   theme: WidgetTheme
   thumbnailMode: ThumbnailMode
   onWidgetReady?: (widgetId: string, elapsedMs: number) => void
@@ -188,6 +205,11 @@ function ThumbnailCell({
       />
     )
   }
+  const painted = resolveWidgetRenderState({
+    latestData: widget.latestData,
+    source,
+    identity,
+  })
   if (thumbnailMode === 'static') {
     return (
       <div
@@ -213,13 +235,14 @@ function ThumbnailCell({
           widgetId={widget.id}
           title={widget.title}
           html={widget.html}
-          data={widget.latestData}
+          data={painted.data}
           theme={theme}
           chrome='none'
           heartbeat={false}
           inert
           hasJob={false}
           status={widget.status}
+          identityChrome={painted.chrome}
           onReady={(elapsedMs) => onWidgetReady?.(widget.id, elapsedMs)}
           className='rounded-md'
         />

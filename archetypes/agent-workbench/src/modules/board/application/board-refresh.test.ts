@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createMemoryIdentityScope } from '@/modules/identity'
 import {
   createControllableBoardJobRuntime,
   createMemoryBoardJobRuntime,
@@ -11,10 +12,12 @@ import {
   mapJobRuntimeHint,
   parseJobResult,
 } from '../model/refresh-policy'
+import { resolveWidgetRenderState } from '../model/widget-render-state'
 import type {
   BoardRecord,
   BoardWidgetRecord,
   WidgetDataJobRecord,
+  WidgetDataSourceRecord,
 } from '../model/types'
 import {
   createBoardRefreshController,
@@ -337,5 +340,326 @@ describe('createBoardRefreshController', () => {
       latestData: { n: 0 },
       status: 'idle',
     })
+  })
+})
+
+const SITE_READ = {
+  type: 'site',
+  id: 'site-1',
+  name: 'North',
+  permissions: ['read'],
+}
+
+function querySource(
+  widgetId: string,
+  overrides: Partial<WidgetDataSourceRecord> = {},
+): WidgetDataSourceRecord {
+  return {
+    id: `source:${widgetId}`,
+    widgetId,
+    kind: 'query',
+    trigger: { kind: 'manual' },
+    referencableByJob: true,
+    queryName: 'site_report',
+    parameters: { siteIds: ['site-1'] },
+    parameterSchema: {
+      siteIds: { type: 'resource', resourceType: 'site' },
+    },
+    requiredPermissions: ['read'],
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  }
+}
+
+async function seedAliceJob(
+  store: ReturnType<typeof createMemoryBoardStore>,
+) {
+  await store.putBoard(board())
+  await store.putWidget(
+    widget('w1', { latestData: { n: 0 }, latestDataAt: NOW }),
+    { principalKey: 'alice' },
+  )
+  await store.putJob(job('j1', 'w1'))
+}
+
+describe('data-source evaluator identity semantics', () => {
+  it('keeps the snapshot on network, timeout, and cancel failures', async () => {
+    const store = createMemoryBoardStore()
+    await seedAliceJob(store)
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+
+    for (const error of ['runtime_unavailable', 'timeout', 'cancelled'] as const) {
+      const controller = createBoardRefreshController({
+        store,
+        runtime: {
+          async runJob() {
+            return { ok: false, error, hint: error }
+          },
+        },
+        identityScope: scope,
+        now: () => new Date(NOW),
+      })
+      await controller.refreshJob('j1')
+      expect(
+        await store.getWidget('w1', { principalKey: 'alice' }),
+      ).toMatchObject({ latestData: { n: 0 } })
+      controller.dispose()
+    }
+  })
+
+  it('masks on session invalidation and restores the same snapshot after re-login', async () => {
+    const store = createMemoryBoardStore()
+    await seedAliceJob(store)
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const controller = createBoardRefreshController({
+      store,
+      runtime: createMemoryBoardJobRuntime({ n: 1 }),
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    scope.invalidateSession()
+    const masked = await controller.refreshJob('j1')
+    expect(masked).toEqual({ kind: 'masked', reason: 'needs_relogin' })
+    expect(await store.getSnapshot('w1', 'alice')).toMatchObject({ data: { n: 0 } })
+    expect(
+      resolveWidgetRenderState({
+        latestData: (await store.getWidget('w1', { principalKey: 'alice' }))
+          ?.latestData,
+        source: await store.getDataSourceByWidgetId('w1'),
+        identity: scope.getSnapshot(),
+      }),
+    ).toMatchObject({ masked: true, chrome: 'needs_relogin', data: undefined })
+
+    scope.signIn({ principalKey: 'alice', resources: [SITE_READ] })
+    expect(
+      resolveWidgetRenderState({
+        latestData: (await store.getWidget('w1', { principalKey: 'alice' }))
+          ?.latestData,
+        source: await store.getDataSourceByWidgetId('w1'),
+        identity: scope.getSnapshot(),
+      }),
+    ).toMatchObject({ masked: false, data: { n: 0 } })
+    controller.dispose()
+  })
+
+  it('clears the snapshot and stops refresh when requiredPermissions are not met', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    await store.putWidget(
+      widget('w1', { latestData: { revenue: 9 }, latestDataAt: NOW }),
+      { principalKey: 'alice' },
+    )
+    await store.putDataSource(
+      querySource('w1', { requiredPermissions: ['read', 'finance'] }),
+    )
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const runtime = createMemoryBoardJobRuntime({ revenue: 10 })
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    expect(await controller.refreshWidget('w1')).toEqual({
+      kind: 'cleared',
+      reason: 'permission_revoked',
+    })
+    expect(await store.getSnapshot('w1', 'alice')).toBeNull()
+    expect(await controller.refreshWidget('w1')).toEqual({
+      kind: 'cleared',
+      reason: 'permission_revoked',
+    })
+    await controller.refreshStaleOnOpen('board-1')
+    expect(await store.getSnapshot('w1', 'alice')).toBeNull()
+    controller.dispose()
+  })
+
+  it('lets the no-identity path keep public-job data after a network failure', async () => {
+    const store = createMemoryBoardStore()
+    await seedThreeJobs(store)
+    const controller = createBoardRefreshController({
+      store,
+      runtime: {
+        async runJob() {
+          return { ok: false, error: 'timeout', hint: 'timeout' }
+        },
+      },
+      now: () => new Date(NOW),
+    })
+    await controller.refreshJob('j1')
+    expect(await store.getWidget('w1')).toMatchObject({
+      latestData: { n: 0 },
+      status: 'error',
+    })
+    controller.dispose()
+  })
+
+  it('discards a late success that finishes after sign-out', async () => {
+    const store = createMemoryBoardStore()
+    await seedAliceJob(store)
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const runtime = createControllableBoardJobRuntime()
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    const pending = controller.refreshJob('j1')
+    await expect
+      .poll(async () => (await store.getWidget('w1', { principalKey: 'alice' }))?.status)
+      .toBe('running')
+
+    scope.signOut()
+    await expect.poll(async () => store.getSnapshot('w1', 'alice')).toBeNull()
+
+    runtime.complete('j1', { ok: true, payload: { n: 99 } })
+    expect(await pending).toEqual({ kind: 'rejected', reason: 'stale_commit' })
+    expect(await store.getSnapshot('w1', 'alice')).toBeNull()
+    expect(await store.getBoard('board-1')).toMatchObject({ id: 'board-1' })
+    expect(await store.getWidget('w1')).toMatchObject({ id: 'w1' })
+    controller.dispose()
+  })
+
+  it('rejects a late success that finishes after permission revoke', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    await store.putWidget(
+      widget('w1', { latestData: { revenue: 9 }, latestDataAt: NOW }),
+      { principalKey: 'alice' },
+    )
+    await store.putDataSource(querySource('w1'))
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const runtime = createControllableBoardJobRuntime()
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    const pending = controller.refreshWidget('w1')
+    await expect.poll(() => runtime.calls).toContain('site_report')
+
+    scope.setAuthorizedResources([])
+    await expect.poll(async () => store.getSnapshot('w1', 'alice')).toBeNull()
+
+    runtime.complete('site_report', { ok: true, payload: { revenue: 99 } })
+    expect(await pending).toEqual({ kind: 'rejected', reason: 'stale_commit' })
+    expect(await store.getSnapshot('w1', 'alice')).toBeNull()
+    controller.dispose()
+  })
+
+  it('keeps per-identity snapshots isolated and deletes only the signed-out principal', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    await store.putWidget(
+      widget('w1', { latestData: { owner: 'alice' }, latestDataAt: NOW }),
+      { principalKey: 'alice' },
+    )
+    await store.putJob(job('j1', 'w1'))
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const controller = createBoardRefreshController({
+      store,
+      runtime: createMemoryBoardJobRuntime({ owner: 'bob' }),
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    scope.signIn({
+      principalKey: 'bob',
+      resources: [{ ...SITE_READ, id: 'site-2', name: 'South' }],
+    })
+    expect(
+      (await store.getWidget('w1', { principalKey: 'bob' }))?.latestData,
+    ).toBeUndefined()
+    expect(await store.getSnapshot('w1', 'alice')).toMatchObject({
+      data: { owner: 'alice' },
+    })
+
+    await controller.refreshJob('j1')
+    expect(await store.getSnapshot('w1', 'bob')).toMatchObject({
+      data: { owner: 'bob' },
+    })
+    expect(await store.getSnapshot('w1', 'alice')).toMatchObject({
+      data: { owner: 'alice' },
+    })
+
+    scope.signIn({ principalKey: 'alice', resources: [SITE_READ] })
+    expect(
+      (await store.getWidget('w1', { principalKey: 'alice' }))?.latestData,
+    ).toEqual({ owner: 'alice' })
+
+    scope.signOut()
+    await expect.poll(async () => store.getSnapshot('w1', 'alice')).toBeNull()
+    expect(await store.getSnapshot('w1', 'bob')).toMatchObject({
+      data: { owner: 'bob' },
+    })
+    expect(await store.getBoard('board-1')).toMatchObject({ title: '刷新板' })
+    expect(await store.getWidget('w1')).toMatchObject({ id: 'w1' })
+    controller.dispose()
+  })
+
+  it('does not mask or clear a preset source on logout', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard({ ...board(), isExample: true })
+    await store.putWidget(
+      widget('w1', { latestData: { value: 128 }, latestDataAt: NOW }),
+    )
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const controller = createBoardRefreshController({
+      store,
+      runtime: createMemoryBoardJobRuntime({ value: 0 }),
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    expect(await store.getDataSourceByWidgetId('w1')).toMatchObject({
+      kind: 'preset',
+    })
+    expect(await controller.refreshWidget('w1')).toEqual({
+      kind: 'skipped',
+      reason: 'preset',
+    })
+    scope.signOut()
+    await expect
+      .poll(async () => store.getSnapshot('w1', 'alice'))
+      .toBeNull()
+    expect(await store.getSnapshot('w1', 'anonymous')).toMatchObject({
+      data: { value: 128 },
+    })
+    expect(
+      resolveWidgetRenderState({
+        latestData: (await store.getWidget('w1'))?.latestData,
+        source: await store.getDataSourceByWidgetId('w1'),
+        identity: scope.getSnapshot(),
+      }),
+    ).toMatchObject({ masked: false, data: { value: 128 } })
+    controller.dispose()
   })
 })

@@ -4,8 +4,11 @@ import {
   lastRunForWidget,
   placementsToGridItems,
   widgetOnMount,
+  widgetRenderState,
   type BoardView,
 } from '../model/board-view'
+import { anonymousIdentitySnapshot } from '../model/widget-render-state'
+import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import { BOARD_PREVIEW_WIDTH, PREVIEW_GEOMETRY } from '../model/grid'
 import type { WidgetTheme } from '../model/widget-document'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
@@ -19,6 +22,7 @@ export interface BoardPreviewPanelProps {
   onRefreshAll?: () => void
   onClose: () => void
   runtimeUnavailable?: boolean
+  identity?: IdentityScopeSnapshot
 }
 
 /**
@@ -33,6 +37,7 @@ export function BoardPreviewPanel({
   onRefreshAll,
   onClose,
   runtimeUnavailable = false,
+  identity = anonymousIdentitySnapshot(),
 }: BoardPreviewPanelProps) {
   const { board } = view
   const jobCount = view.jobs.size
@@ -103,15 +108,17 @@ export function BoardPreviewPanel({
             const widget = widgetOnMount(view, mountId)
             if (!widget) return null
             const last = lastRunForWidget(view, widget.id)
+            const painted = widgetRenderState(view, widget, identity)
             return (
               <BoardWidgetHost
                 widgetId={widget.id}
                 title={widget.title}
                 html={widget.html}
-                data={widget.latestData}
+                data={painted.data}
                 theme={theme}
                 chrome='compact'
                 status={widget.status}
+                identityChrome={painted.chrome}
                 runError={last?.errorMessage}
                 runtimeUnavailable={runtimeUnavailable}
                 hasJob={view.jobs.has(widget.id)}

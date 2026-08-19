@@ -30,6 +30,22 @@ export interface BoardSnapshotReadOptions {
   principalKey?: string
 }
 
+export interface BoardRunCommitOptions extends BoardSnapshotReadOptions {
+  /** Generation captured at evaluate start; rechecked in the write transaction. */
+  expectedGeneration?: number
+  /** Claim captured at evaluate start (scheduling / identity fence). */
+  executionKey?: string
+  /** Query / source evaluation may record a run without a job row. */
+  allowMissingJob?: boolean
+}
+
+export interface IdentityBarrierInput {
+  principalKey: string
+  generation: number
+  /** Active sign-out: delete every snapshot row for this principal. */
+  deleteSnapshots: boolean
+}
+
 export interface BoardStoreError {
   code:
     | 'quota_exceeded'
@@ -102,6 +118,14 @@ export interface BoardStorePort {
     widgetId: BoardWidgetId,
   ): Promise<readonly WidgetDataSnapshotRecord[]>
 
+  deleteSnapshot(widgetId: BoardWidgetId, principalKey: string): Promise<void>
+
+  /**
+   * Persist the identity epoch (and optionally wipe that principal's snapshots)
+   * in one transaction so a late success cannot write through the fence.
+   */
+  applyIdentityBarrier(input: IdentityBarrierInput): Promise<void>
+
   getJob(jobId: WidgetDataJobId): Promise<WidgetDataJobRecord | null>
 
   getJobByWidgetId(widgetId: BoardWidgetId): Promise<WidgetDataJobRecord | null>
@@ -123,7 +147,7 @@ export interface BoardStorePort {
   recordRun(
     run: WidgetJobRunRecord,
     data?: unknown,
-    options?: BoardSnapshotReadOptions,
+    options?: BoardRunCommitOptions,
   ): Promise<void>
 
   /** Append one placement. Never replaces the existing array. */

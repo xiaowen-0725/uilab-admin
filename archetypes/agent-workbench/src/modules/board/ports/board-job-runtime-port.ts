@@ -35,6 +35,8 @@ export interface WidgetDataSourcePort {
   probe?(): Promise<BoardJobRunResult>
   /** Job kind: existing sidecar Deno endpoint. */
   runJob(jobId: string): Promise<BoardJobRunResult>
+  /** Best-effort cancel of an in-flight evaluate / runJob (logout / revoke). */
+  cancelJob?(jobId: string): void
   /**
    * preset: return prefilled data; job: delegate to `runJob`; query: reserved.
    * Optional so existing runJob-only test doubles keep working.

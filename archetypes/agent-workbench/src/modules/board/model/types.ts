@@ -127,12 +127,25 @@ export type WidgetDataSourceTrigger =
   | { kind: 'onOpen' }
   | { kind: 'schedule' }
 
+/** Resource-ref parameter (ADR-0024 §2). Other param kinds stay unstructured. */
+export interface DataSourceResourceParameterDecl {
+  type: 'resource'
+  resourceType: string
+}
+
 export interface WidgetDataSourceRecord {
   id: WidgetDataSourceId
   widgetId: BoardWidgetId
   kind: WidgetDataSourceKind
   trigger: WidgetDataSourceTrigger
   parameters?: Record<string, unknown>
+  /** Marks which parameters are resource refs for gate ②. */
+  parameterSchema?: Record<string, DataSourceResourceParameterDecl>
+  /**
+   * Fail-closed for `query`: undeclared permissions refuse evaluation.
+   * Checked as `resource.permissions ⊇ requiredPermissions`.
+   */
+  requiredPermissions?: string[]
   /** ADR-0024 §7 — type only; job `ctx.query` consumption is not implemented. */
   referencableByJob: boolean
   /** Present when `kind === 'job'`. */

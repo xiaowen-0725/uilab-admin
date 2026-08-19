@@ -21,6 +21,12 @@ import {
   parseTaskIdList,
 } from '../model/board-capability-ledger'
 import {
+  IDENTITY_LIVE_EXECUTIONS_KEY,
+  commitFenceRejects,
+  identityEpochMetadataKey,
+  parseLiveExecutions,
+} from '../model/identity-barrier'
+import {
   hydrateWidgetFromSnapshot,
   jobSourceWrite,
   missingPresetSource,
@@ -53,9 +59,11 @@ import {
   BoardStorePortError,
   mergeBoardForCommit,
   type BoardAtomicCommitInput,
+  type BoardRunCommitOptions,
   type BoardSnapshotReadOptions,
   type BoardStorePort,
   type BoardStructureFilter,
+  type IdentityBarrierInput,
 } from '../ports/board-store-port'
 
 const BOARD_STORES = [
@@ -80,8 +88,16 @@ const MIGRATE_STORES = [
   STORE_WIDGET_DATA_SNAPSHOTS,
 ] as const
 
+const RECORD_RUN_STORES = [...BOARD_STORES, STORE_METADATA] as const
+
+const IDENTITY_BARRIER_STORES = [
+  STORE_WIDGET_DATA_SNAPSHOTS,
+  STORE_METADATA,
+] as const
+
 type BoardStoreName = (typeof BOARD_STORES)[number]
 type TxStore = BoardStoreName | typeof STORE_METADATA
+type TxStores = TxStore | readonly TxStore[]
 
 export type IdbBoardStoreOptions = {
   /** Test-only: abort the atomic commit after earlier puts succeed. */
@@ -210,6 +226,51 @@ export class IdbBoardStore implements BoardStorePort {
     )
   }
 
+  deleteSnapshot(
+    widgetId: BoardWidgetId,
+    principalKey: string,
+  ): Promise<void> {
+    return this.afterMigrate(() =>
+      this.write(STORE_WIDGET_DATA_SNAPSHOTS, (tx) =>
+        remove(tx, STORE_WIDGET_DATA_SNAPSHOTS, [widgetId, principalKey]),
+      ),
+    )
+  }
+
+  applyIdentityBarrier(input: IdentityBarrierInput): Promise<void> {
+    return this.afterMigrate(() =>
+      this.write(IDENTITY_BARRIER_STORES, async (tx) => {
+        await putValue(tx, STORE_METADATA, {
+          key: identityEpochMetadataKey(input.principalKey),
+          value: input.generation,
+        } satisfies MetadataRecord)
+        const live = parseLiveExecutions(
+          (await getMetadataRow(tx, IDENTITY_LIVE_EXECUTIONS_KEY))?.value,
+        )
+        for (const [key, principal] of Object.entries(live)) {
+          if (principal === input.principalKey) delete live[key]
+        }
+        await putValue(tx, STORE_METADATA, {
+          key: IDENTITY_LIVE_EXECUTIONS_KEY,
+          value: live,
+        } satisfies MetadataRecord)
+        if (!input.deleteSnapshots) return
+        const rows = await getAllRows<WidgetDataSnapshotRecord>(
+          tx,
+          STORE_WIDGET_DATA_SNAPSHOTS,
+        )
+        for (const row of rows) {
+          if (row.principalKey === input.principalKey) {
+            await remove(tx, STORE_WIDGET_DATA_SNAPSHOTS, [
+              row.widgetId,
+              row.principalKey,
+            ])
+          }
+        }
+      }),
+    )
+  }
+
   getJob(jobId: WidgetDataJobId): Promise<WidgetDataJobRecord | null> {
     return this.afterMigrate(() => this.get(STORE_WIDGET_DATA_JOBS, jobId))
   }
@@ -266,15 +327,22 @@ export class IdbBoardStore implements BoardStorePort {
   recordRun(
     run: WidgetJobRunRecord,
     data?: unknown,
-    options?: BoardSnapshotReadOptions,
+    options?: BoardRunCommitOptions,
   ): Promise<void> {
-    return this.afterMigrate(() => this.write(BOARD_STORES, async (tx) => {
+    return this.afterMigrate(() => this.write(RECORD_RUN_STORES, async (tx) => {
       const job = await getRow<WidgetDataJobRecord>(
         tx,
         STORE_WIDGET_DATA_JOBS,
         run.jobId,
       )
-      if (!job || !isJobRunnable(job)) {
+      if (job && !isJobRunnable(job)) {
+        throw new BoardStorePortError({
+          code: 'conflict',
+          message: '作业尚未获批，不能运行',
+          retriable: false,
+        })
+      }
+      if (!job && !options?.allowMissingJob) {
         throw new BoardStorePortError({
           code: 'conflict',
           message: '作业尚未获批，不能运行',
@@ -298,14 +366,43 @@ export class IdbBoardStore implements BoardStorePort {
         run.widgetId,
       )
       if (!widget) return
+      const principalKey = options?.principalKey ?? ANONYMOUS_PRINCIPAL_KEY
+      const live = parseLiveExecutions(
+        (await getMetadataRow(tx, IDENTITY_LIVE_EXECUTIONS_KEY))?.value,
+      )
+      if (run.status === 'running' && options?.executionKey) {
+        live[options.executionKey] = principalKey
+        await putValue(tx, STORE_METADATA, {
+          key: IDENTITY_LIVE_EXECUTIONS_KEY,
+          value: live,
+        } satisfies MetadataRecord)
+      }
       const snapshot = successSnapshotForRun(
         widget.id,
         run,
         data,
-        options?.principalKey,
+        principalKey,
       )
-      if (snapshot) {
+      const epoch = parseEpoch(
+        (await getMetadataRow(tx, identityEpochMetadataKey(principalKey)))?.value,
+      )
+      if (
+        snapshot &&
+        !commitFenceRejects(
+          options?.expectedGeneration,
+          epoch,
+          options?.executionKey,
+          live,
+        )
+      ) {
         await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, snapshot)
+      }
+      if (run.status !== 'running' && options?.executionKey) {
+        delete live[options.executionKey]
+        await putValue(tx, STORE_METADATA, {
+          key: IDENTITY_LIVE_EXECUTIONS_KEY,
+          value: live,
+        } satisfies MetadataRecord)
       }
       await putValue(tx, STORE_BOARD_WIDGETS, widgetRowAfterRun(widget, run))
     }))
@@ -414,21 +511,21 @@ export class IdbBoardStore implements BoardStorePort {
   }
 
   private read<T>(
-    store: TxStore | readonly BoardStoreName[],
+    store: TxStores,
     fn: (tx: IDBTransaction) => Promise<T>,
   ): Promise<T> {
     return this.transact(store, 'readonly', fn)
   }
 
   private write(
-    store: TxStore | readonly BoardStoreName[],
+    store: TxStores,
     fn: (tx: IDBTransaction) => Promise<void>,
   ): Promise<void> {
     return this.transact(store, 'readwrite', fn)
   }
 
   private async transact<T>(
-    store: TxStore | readonly BoardStoreName[],
+    store: TxStores,
     mode: IDBTransactionMode,
     fn: (tx: IDBTransaction) => Promise<T>,
   ): Promise<T> {
@@ -697,6 +794,10 @@ async function getMetadataRow(
       .objectStore(STORE_METADATA)
       .get(key) as IDBRequest<MetadataRecord | undefined>,
   )
+}
+
+function parseEpoch(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function toStoreError(err: unknown): BoardStorePortError {

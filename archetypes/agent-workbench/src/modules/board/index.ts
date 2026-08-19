@@ -23,6 +23,7 @@ export type {
   BoardWidgetRecord,
   BoardWidgetStatus,
   DataSlotSpec,
+  DataSourceResourceParameterDecl,
   JobContext,
   SubmitSpec,
   WidgetDataJobId,
@@ -47,10 +48,12 @@ export {
 
 export type {
   BoardAtomicCommitInput,
+  BoardRunCommitOptions,
   BoardSnapshotReadOptions,
   BoardStoreError,
   BoardStorePort,
   BoardStructureFilter,
+  IdentityBarrierInput,
 } from './ports/board-store-port'
 export { BoardStorePortError } from './ports/board-store-port'
 export type {
@@ -117,6 +120,10 @@ export type {
   BoardRefreshController,
   RefreshOutcome,
 } from './application/board-refresh'
+export {
+  IDENTITY_NEEDS_RELOGIN,
+} from './model/widget-render-state'
+export type { WidgetIdentityChrome } from './model/widget-render-state'
 export {
   BOARD_JOB_DEFAULT_TIMEOUT_MS,
   BOARD_JOB_MAX_TIMEOUT_MS,

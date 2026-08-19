@@ -1,6 +1,6 @@
 import { useMemo, useRef, type ReactNode } from 'react'
 import { DRAG_HANDLE_ATTR } from '../model/drag-handle'
-import { Ellipsis, Expand, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Ellipsis, Expand, Lock, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -11,6 +11,10 @@ import {
 import { cn } from '@/lib/utils'
 import type { BoardWidgetId, BoardWidgetStatus } from '../model/types'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
+import {
+  IDENTITY_NEEDS_RELOGIN,
+  type WidgetIdentityChrome,
+} from '../model/widget-render-state'
 import {
   buildWidgetDocument,
   type WidgetTheme,
@@ -113,6 +117,8 @@ export interface BoardWidgetHostProps {
   /** Sole loading source — must come from widget.status, not a local boolean. */
   status?: BoardWidgetStatus
   runError?: string | null
+  /** Render-time identity chrome — not a run status (ADR-0025). */
+  identityChrome?: WidgetIdentityChrome
   runtimeUnavailable?: boolean
   /** When false, hide the runtime warning and disable refresh. Default true. */
   hasJob?: boolean
@@ -151,6 +157,7 @@ export function BoardWidgetHost({
   heartbeatMissLimit,
   status = 'idle',
   runError = null,
+  identityChrome = 'none',
   runtimeUnavailable = false,
   hasJob = true,
   onRefresh,
@@ -196,8 +203,9 @@ export function BoardWidgetHost({
   const titleClass = chrome === 'full' ? 'text-[13px]' : 'text-[12px]'
   const running = status === 'running'
   const refreshLabel = refreshButtonLabel(running, runtimeUnavailable, hasJob)
-  const showRunError = status === 'error' && Boolean(runError)
-  const showRuntimeWarn = runtimeUnavailable && hasJob
+  const needsRelogin = identityChrome === 'needs_relogin'
+  const showRunError = !needsRelogin && status === 'error' && Boolean(runError)
+  const showRuntimeWarn = !needsRelogin && runtimeUnavailable && hasJob
 
   return (
     <section
@@ -210,6 +218,7 @@ export function BoardWidgetHost({
       data-has-latest={data == null ? 'false' : 'true'}
       data-latest-preview={latestPreview(data) ?? undefined}
       data-widget-status={status}
+      data-identity-chrome={identityChrome}
       data-phase={bridge.phase}
       data-chrome={chrome}
       aria-label={title}
@@ -242,6 +251,15 @@ export function BoardWidgetHost({
             >
               {exampleDataHint}
             </span>
+          ) : null}
+          {needsRelogin ? (
+            <ChromeStatusIcon
+              testId='board-widget-needs-relogin'
+              label={IDENTITY_NEEDS_RELOGIN}
+              tone='destructive'
+            >
+              <Lock className='size-3.5' aria-hidden />
+            </ChromeStatusIcon>
           ) : null}
           {showRunError ? (
             <ChromeStatusIcon
@@ -348,14 +366,28 @@ export function BoardWidgetHost({
       ) : null}
 
       <div className='relative min-h-0 flex-1'>
-        {chrome === 'none' && (running || (status === 'error' && runError)) ? (
+        {chrome === 'none' && (running || needsRelogin || (status === 'error' && runError)) ? (
           <span
             className='pointer-events-none absolute right-1 top-1 z-10 inline-flex size-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground'
-            data-testid={running ? 'board-widget-thumb-running' : 'board-widget-run-error'}
-            title={running ? '正在刷新' : runError ?? undefined}
+            data-testid={
+              running
+                ? 'board-widget-thumb-running'
+                : needsRelogin
+                  ? 'board-widget-needs-relogin'
+                  : 'board-widget-run-error'
+            }
+            title={
+              running
+                ? '正在刷新'
+                : needsRelogin
+                  ? IDENTITY_NEEDS_RELOGIN
+                  : runError ?? undefined
+            }
           >
             {running ? (
               <RefreshCw className='size-2.5 animate-spin' aria-hidden />
+            ) : needsRelogin ? (
+              <Lock className='size-2.5 text-destructive' aria-hidden />
             ) : (
               <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
             )}

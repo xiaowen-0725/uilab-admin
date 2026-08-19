@@ -3,13 +3,19 @@
  * Grid items are keyed by mountId so the same widget can exist twice (fullscreen).
  */
 
+import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import type { GridItem } from './grid'
+import {
+  resolveWidgetRenderState,
+  type WidgetRenderState,
+} from './widget-render-state'
 import type {
   BoardPlacement,
   BoardRecord,
   BoardWidgetId,
   BoardWidgetRecord,
   WidgetDataJobRecord,
+  WidgetDataSourceRecord,
   WidgetJobRunRecord,
 } from './types'
 
@@ -17,12 +23,14 @@ export interface BoardView {
   board: BoardRecord
   widgets: ReadonlyMap<BoardWidgetId, BoardWidgetRecord>
   jobs: ReadonlyMap<BoardWidgetId, WidgetDataJobRecord>
+  sources: ReadonlyMap<BoardWidgetId, WidgetDataSourceRecord>
   lastRunByJobId: ReadonlyMap<string, WidgetJobRunRecord>
 }
 
 export interface BoardListCard {
   board: BoardRecord
   widgets: readonly BoardWidgetRecord[]
+  sources?: ReadonlyMap<BoardWidgetId, WidgetDataSourceRecord>
 }
 
 export function placementsToGridItems(
@@ -71,4 +79,16 @@ export function lastRunForWidget(
 ): WidgetJobRunRecord | undefined {
   const job = view.jobs.get(widgetId)
   return job ? view.lastRunByJobId.get(job.id) : undefined
+}
+
+export function widgetRenderState(
+  view: BoardView,
+  widget: BoardWidgetRecord,
+  identity: IdentityScopeSnapshot,
+): WidgetRenderState {
+  return resolveWidgetRenderState({
+    latestData: widget.latestData,
+    source: view.sources.get(widget.id),
+    identity,
+  })
 }
