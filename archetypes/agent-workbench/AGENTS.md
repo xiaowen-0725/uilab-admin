@@ -29,9 +29,11 @@
 - **Question Request**：侧车 `ask_user_question`（client-side tool，无 execute / 无 needsApproval）→ `input.requested` → Timeline 内联卡片；用户点选项 / Other / 跳过 / Composer 直接回复后走 `provideRunInput`（`runInput: true`）恢复 Turn。任何 Permission Preset 都不得自动作答。steer 仍未交付。
 - **VoltAgent 侧车 ≠ 远程生产集群** — 本机执行；批准后可能写入工作区文件。无 Desktop Host（Web/测试降级）时，写盘范围由侧车自身 `WORKSPACE_ROOT` 环境决定，不受项目选择约束；桌面产品路径才有项目根写盘约束。
 
-### 可选 Local VoltAgent 侧车
+### Local VoltAgent 侧车（日常必须开）
 
-`VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程。侧车 `AGENT_PROFILE=minimal|office`。
+人眼验收 / 日常运行 **必须** `pnpm dev:workbench`（前端）和 `pnpm dev:workbench-runtime`（侧车）一起开，不要只开前端。只开前端时页面能看，但对话走不了 Runtime，有作业的看板刷新会报运行时未连接。
+
+`VITE_RUNTIME_ADAPTER=voltagent` + `pnpm dev:workbench-runtime`：本机 `RuntimePort` Adapter，**不是**多租户生产 Runtime；密钥与工具副作用在侧车进程。侧车 `AGENT_PROFILE=minimal|office`。取数作业还需要本机 PATH 上有 Deno。
 
 默认包级 `test` 不要求侧车，也不打真 Runtime submit。submit → 「已处理」只走 `test:live-runtime`（需先 `pnpm dev:workbench-runtime`，且侧车可达）；否则 skip。不把 Fake Runtime 装回产品 boot（ADR-0018）。
 
@@ -63,7 +65,7 @@ src/
     task-runtime/      # VoltAgent Adapter + EventStore 实现（叶层，无 React）
     work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
     capabilities/      # 连接器 / 技能 / 专家 snapshot 与选择
-    board/             # Board 实体 + BoardStorePort + BoardWidgetHost / 桥 + Canvas / 列表详情预览；作业执行走侧车 Deno 端点；刷新语义（#140）已交付
+    board/             # Board 实体 + BoardStorePort + BoardWidgetHost / 桥 + Canvas / 列表详情预览；作业执行走侧车 Deno 端点；刷新语义（#140）+ 零作业示例板（#141）+ agent 面契约（#142）已交付
   components/ui/       # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
   lib/                 # cn 等应用侧工具（叶层，无 React）
   config/              # fixtures / captures / runtime-adapter（叶层，无 React）

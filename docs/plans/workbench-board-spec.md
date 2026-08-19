@@ -1,14 +1,16 @@
 # Spec: Workbench Board（看板 / 小组件 / 取数作业）
 
-**Status:** implementation in progress（#133–#140 已落地；示例板 / agent 面契约未交付）
+**Status:** first version shipped（#133–#142 已落地：模块/桥/网格/侧车工具/commit/作业端点/刷新语义/零作业示例板/agent 面契约。取数作业仍依赖本机侧车 + Deno；无 Deno 时示例板可看、有作业的刷新给诚实原因。合同收口见 #111。）
 **Map:** [#111 Workbench Board 首版可执行规格](https://github.com/xiaowen-0725/uilab-admin/issues/111)
 **ADR:**
 
 - [0021-workbench-csp-and-widget-subdocument-policy](../adr/0021-workbench-csp-and-widget-subdocument-policy.md)
 - [0022-board-module-entities-and-split-write-channel](../adr/0022-board-module-entities-and-split-write-channel.md)
 - [0023-widget-data-job-deno-runtime-and-one-time-consent](../adr/0023-widget-data-job-deno-runtime-and-one-time-consent.md)
+- [0024-widget-data-source-model-and-product-identity-layering](../adr/0024-widget-data-source-model-and-product-identity-layering.md)（**演进设计定稿，未实施**：数据来源三 kind / query / 身份分层 / 调度归属）
+- [0025-latest-data-failure-semantics-under-permissioned-identity](../adr/0025-latest-data-failure-semantics-under-permissioned-identity.md)（**演进设计定稿，未实施**：有身份时部分推翻 §8.4）
 
-**Vocabulary:** 根 [`CONTEXT.md`](../../CONTEXT.md)（Board / Board Widget / Widget Data Job 三条已登记）
+**Vocabulary:** 根 [`CONTEXT.md`](../../CONTEXT.md)（Board / Board Widget / Widget Data Job / Widget Data Source / Product Identity / Authorized Resource / 预置看板 已登记）
 **Research:**
 
 - [board-widget-srcdoc-sandbox-2026-08-15](../research/board-widget-srcdoc-sandbox-2026-08-15.md)（不透明源沙箱实测）
@@ -61,8 +63,8 @@ Board 是应用级全局实体，由新增 Deep Module `modules/board` 拥有，
 
 ### Non-goals（首版）
 
-- **定时调度**（模型层预留 `trigger`，无调度器、无启停 UI）。
-- **需要认证的数据源**（只支持公开端点；不复用 connector 凭据、不持用户密钥）。
+- **定时调度**（模型层预留 `trigger`，无调度器、无启停 UI）。演进设计已定稿于 ADR-0024 §4：trigger 挂 Widget Data Source，求值器在渲染层，真后台由 Desktop Host 唤起。
+- **需要认证的数据源**（只支持公开端点；不复用 connector 凭据、不持用户密钥）。演进设计已定稿于 ADR-0024：`query` kind + Product Identity，凭据不出侧车、不进模型代码。
 - **agent 删除任何东西**（Board / widget / job 都只能由用户在 UI 上删）。
 - Timeline 内联单个 widget、批注模式、「整理」自动布局、「做同款」、固定至桌面、导出/导入/同步、widget 版本历史、同一 widget 放置到多块 Board。
 - SDK 的 `files` 与 `allow-downloads`。
@@ -552,6 +554,8 @@ interface JobContext {
 
 runner import 作业模块并调用 `run(ctx)`；**顶层脚本不是入口**。返回值即产物。**不提供 `ctx.fetch` 包装**——约束已由 `--allow-net` 在进程层强制，再包一层只会给人「绕过包装就能出网」的错觉。
 
+**预留（ADR-0024 §7，v1 不实现）**：`JobContext` 为 `ctx.query(name, params)` 留可选位——作业沙箱内调用插件声明查询，侧车代理执行并做参数级校验，凭据不进作业代码。实现推后，但 `JobContext` 与数据来源声明的类型签名按此设计（声明侧含「可被作业引用」标记）。
+
 ### 7.5 超时、配额、产物
 
 - 默认超时 **60 s**，单 job 可配 `timeoutMs`，**硬上限 120 s**；超时即强杀（未给 `--allow-run`，作业无法 spawn 子进程，所以进程树就是它自己）。
@@ -605,6 +609,8 @@ POST /board/runs/:runId/cancel     → 取消
 失败 / 超时 / 取消**天然不覆盖上次成功数据**（§1.3 结构保证）。**UI 规则**：失败后 widget **继续显示上一次的成功数据**，错误标记只出现在宿主 chrome 上（角标 + hover 说明最近一次失败原因）。
 
 这是「没有启停概念时失败态怎么表达才不误导」的答案：**不误导的做法是不要让 widget 变空白。** 一块显示着昨天数据、角上标着「上次更新失败」的 widget 是诚实的；一块空白 widget 是在撒谎说没有数据。
+
+**适用边界（2026-08-18 补）**：本节规则适用于**同一有效身份下的取数失败**（公开数据与示例板恒满足）。引入 Product Identity 后，登录失效须**遮蔽**旧数据、权限回收须**清除**旧数据——见 ADR-0025，那两类不适用「继续显示旧数」。
 
 **无侧车 / 未装 Deno**：按 ADR-0018 诚实报错。刷新按钮**保持可点**，点击后给出明确原因（「未检测到本机运行时」/「未安装 Deno，无法执行取数作业」）；启动探测已知不可用时 chrome 常驻提示图标。**不得把按钮做成灰的且什么也不说**——那违反 Workbench `AGENTS.md` 硬规则 12。
 

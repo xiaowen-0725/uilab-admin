@@ -141,7 +141,8 @@ pnpm --filter @uilab/agent-workbench test
 ```bash
 pnpm dev                 # Admin（兼容默认）
 pnpm dev:admin
-pnpm dev:workbench
+pnpm dev:workbench              # Workbench 前端；必须与侧车同时开
+pnpm dev:workbench-runtime      # Workbench 侧车（对话 / 审批 / 取数作业）
 pnpm preview:workbench
 ```
 

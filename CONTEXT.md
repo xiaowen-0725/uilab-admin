@@ -191,6 +191,22 @@ _Avoid_: Dashboard, Canvas, Workspace, Work Surface, Task Context Panel
 Board 上一块可独立渲染的单元（用户可见中文文案「小组件」），实现形态为 Agent 生成的单文件 HTML/JS，运行在不透明源沙箱内且无网络、无存储、无导航能力；外部数据只能由 Widget Data Job 经宿主桥投入。
 _Avoid_: Card, Panel, Component, Work Surface, Plugin, Artifact
 
+**Widget Data Source**:
+Board Widget 数据供给的一等抽象，kind 为 `preset`（预填数据）/ `job`（已批准的零依赖取数代码）/ `query`（插件声明的结构化查询，侧车以 Product Identity 加签执行）；触发策略（trigger）挂在 Data Source 上，一个 widget 只绑一个来源。设计定稿见 ADR-0024，实施未落地。
+_Avoid_: Data Feed, Connector, 数据集, Widget Data Job（作上位词）
+
 **Widget Data Job**:
-为 Board Widget 取数或计算的可重复执行作业（用户可见中文文案「取数作业」），是 widget 外部数据的唯一来源；代码写入时一次授权、之后运行静默，执行不经 Agent Runtime 也不需要 Task。
-_Avoid_: Automation, Cron Task, 定时任务, Runtime Command, Tool Call
+为 Board Widget 取数或计算的可重复执行作业（用户可见中文文案「取数作业」），即 kind 为 `job` 的 Widget Data Source 的实现载体：一段被批准过的零依赖取数代码。代码写入时一次授权、之后运行静默，执行不经 Agent Runtime 也不需要 Task；调度与触发不属于 Job，属于 Widget Data Source。
+_Avoid_: Automation, Cron Task, 定时任务, Runtime Command, Tool Call, Widget Data Source（作同义词）
+
+**Product Identity**:
+垂直派生应用的应用级登录身份：决定租户、可访问的 Authorized Resource 与权限，是产品前提而非可选接入。由 `modules/identity` 拥有，Board 经窄端口消费；模板自带「无身份」默认实现。与 Connector 分层：Connector 可缺，Product Identity 缺失则垂直应用无意义。设计定稿见 ADR-0024。
+_Avoid_: Connector, Account Binding, 登录态（作主名）, Capability
+
+**Authorized Resource**:
+Product Identity 授权快照中的类型化资源条目（`type` / `id` / `name` / `permissions`），`type` 由垂直插件声明（如 parking-lot、warehouse）；求值器按它做参数级校验，端口与模板层不出现领域词。
+_Avoid_: 车场（作模板层词）, Scope, Permission Preset
+
+**预置看板 (Preset Board)**:
+插件贡献的看板模板（placements + widget + query 绑定），安装后走真求值取真数据；复用 `presetId` / `presetVersion` 安装机制。与示例板不同：示例板是模板自带的 `preset` kind 假数据教学样本。
+_Avoid_: 示例板, Example Board, Dashboard Template

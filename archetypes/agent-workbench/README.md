@@ -17,7 +17,7 @@
 | Work Surface Host + Document / Browser | **shipped**（点文件 / URL 打开；无 Artifact 目录） |
 | Capability Surface（连接器 / 技能 / 专家） | **shipped**（打开 / 状态 / 选用；OAuth 产品化未做） |
 | 最小 Electron Desktop Host（Spec-α） | **shipped**（`dev:desktop`；无安装器） |
-| Board（看板 / 小组件 / 取数作业） | **in progress**（模块 + Host/桥 + Canvas + 侧车工具族 + Deno 执行端点已落地；刷新/状态语义未交付；见 [workbench-board-spec](../../docs/plans/workbench-board-spec.md)） |
+| Board（看板 / 小组件 / 取数作业） | **shipped**（列表/详情/预览 + 零作业示例板 + 刷新语义 + agent 面契约；取数作业需侧车与 Deno，无 Deno 时零作业示例仍可看，有作业的刷新给诚实原因。见 [workbench-board-spec](../../docs/plans/workbench-board-spec.md)） |
 | Review / Terminal / 可编辑 Editor / Spreadsheet | **planned** |
 | Artifact 实体目录、steer、Runtime retry | **planned** |
 | `uilab-admin init` 生成 Workbench | **planned**（Phase 8） |
@@ -25,13 +25,20 @@
 
 ## 快速开始
 
-在仓库根：
+日常跑 Workbench **必须同时开两个进程**，不要只开前端：
 
 ```bash
 pnpm install
-pnpm dev:workbench              # Web（无 Host：打开文件夹禁用，默认项目夹具）
-pnpm dev:workbench-desktop      # 桌面优先验收（Spec-α Electron）
-pnpm dev:workbench-runtime      # 仅侧车；桌面路径通常由 Host 按项目根 spawn
+pnpm dev:workbench              # 前端 http://localhost:5174/
+pnpm dev:workbench-runtime      # 侧车 http://localhost:3141（对话 / 审批 / 取数作业）
+```
+
+只开前端时：页面能看，但对话走不了 Runtime，有作业的看板刷新会报运行时未连接。取数作业还需要本机 PATH 上有 [Deno](https://deno.land/)（侧车用它跑隔离脚本；零作业示例板不需要）。
+
+桌面路径：
+
+```bash
+pnpm dev:workbench-desktop      # 桌面优先验收（Spec-α Electron；Host 通常会按项目根再拉侧车）
 ```
 
 包级：

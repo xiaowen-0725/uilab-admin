@@ -20,7 +20,8 @@ pnpm install
 | Command | Scope |
 |---|---|
 | `pnpm dev` | Run Admin in development mode |
-| `pnpm dev:workbench` | Run Workbench at `http://localhost:5174/` |
+| `pnpm dev:workbench` | Workbench 前端 `http://localhost:5174/`。日常运行必须与侧车同时开，不要只开前端 |
+| `pnpm dev:workbench-runtime` | Workbench 侧车 `http://localhost:3141`（对话 / 审批 / 取数作业） |
 | `pnpm build` | Build Foundation, Admin, and Workbench |
 | `pnpm typecheck` | Typecheck Foundation, Admin, and Workbench |
 | `pnpm test` | Run all three packages' browser-headless tests |
