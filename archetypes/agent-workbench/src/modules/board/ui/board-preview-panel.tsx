@@ -35,6 +35,13 @@ export function BoardPreviewPanel({
   runtimeUnavailable = false,
 }: BoardPreviewPanelProps) {
   const { board } = view
+  const jobCount = view.jobs.size
+  const refreshTitle =
+    jobCount === 0
+      ? '这个看板没有取数作业'
+      : runtimeUnavailable
+        ? JOB_RUNTIME_DISCONNECTED
+        : '刷新'
 
   return (
     <aside
@@ -54,8 +61,9 @@ export function BoardPreviewPanel({
           variant='ghost'
           className='size-7'
           data-testid='board-preview-refresh'
-          aria-label='刷新'
-          title={runtimeUnavailable ? JOB_RUNTIME_DISCONNECTED : '刷新'}
+          aria-label={refreshTitle}
+          title={refreshTitle}
+          disabled={jobCount === 0}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />
@@ -106,6 +114,7 @@ export function BoardPreviewPanel({
                 status={widget.status}
                 runError={last?.errorMessage}
                 runtimeUnavailable={runtimeUnavailable}
+                hasJob={view.jobs.has(widget.id)}
                 className='h-full'
               />
             )

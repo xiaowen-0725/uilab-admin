@@ -20,6 +20,16 @@ import { useWidgetBridge } from './use-widget-bridge'
 
 export type WidgetChrome = 'full' | 'compact' | 'none'
 
+/** Short host-visible summary of prefilled data — used by tests and AT. */
+export function latestPreview(data: unknown): string | null {
+  if (data == null || typeof data !== 'object') return null
+  const row = data as Record<string, unknown>
+  if (row.value != null) return String(row.value)
+  if (typeof row.headline === 'string' && row.headline.trim()) return row.headline
+  if (Array.isArray(row.points)) return `points:${row.points.length}`
+  return null
+}
+
 function ChromeStatusIcon({
   testId,
   label,
@@ -46,8 +56,13 @@ function ChromeStatusIcon({
   )
 }
 
-function refreshButtonLabel(running: boolean, runtimeUnavailable: boolean): string {
+function refreshButtonLabel(
+  running: boolean,
+  runtimeUnavailable: boolean,
+  hasJob: boolean,
+): string {
   if (running) return '正在刷新'
+  if (!hasJob) return '这个小组件没有取数作业'
   if (runtimeUnavailable) return JOB_RUNTIME_DISCONNECTED
   return '刷新'
 }
@@ -93,10 +108,14 @@ export interface BoardWidgetHostProps {
   chrome?: WidgetChrome
   /** Detail / preview only. List thumbnails must leave this off. */
   heartbeat?: boolean
+  heartbeatMs?: number
+  heartbeatMissLimit?: number
   /** Sole loading source — must come from widget.status, not a local boolean. */
   status?: BoardWidgetStatus
   runError?: string | null
   runtimeUnavailable?: boolean
+  /** When false, hide the runtime warning and disable refresh. Default true. */
+  hasJob?: boolean
   onRefresh?: () => void
   onExpand?: () => void
   onOpenJob?: () => void
@@ -128,9 +147,12 @@ export function BoardWidgetHost({
   canSubmit = false,
   chrome = 'full',
   heartbeat,
+  heartbeatMs,
+  heartbeatMissLimit,
   status = 'idle',
   runError = null,
   runtimeUnavailable = false,
+  hasJob = true,
   onRefresh,
   onExpand,
   onOpenJob,
@@ -159,6 +181,8 @@ export function BoardWidgetHost({
     canSubmit,
     documentKey: html,
     heartbeat: heartbeatEnabled,
+    heartbeatMs,
+    heartbeatMissLimit,
     onSaveInput,
     onSubmit,
     onOpenLink,
@@ -171,8 +195,9 @@ export function BoardWidgetHost({
   const headerClass = chrome === 'full' ? 'h-9' : 'h-7'
   const titleClass = chrome === 'full' ? 'text-[13px]' : 'text-[12px]'
   const running = status === 'running'
-  const refreshLabel = refreshButtonLabel(running, runtimeUnavailable)
+  const refreshLabel = refreshButtonLabel(running, runtimeUnavailable, hasJob)
   const showRunError = status === 'error' && Boolean(runError)
+  const showRuntimeWarn = runtimeUnavailable && hasJob
 
   return (
     <section
@@ -183,6 +208,7 @@ export function BoardWidgetHost({
       data-testid='board-widget-host'
       data-widget-id={widgetId}
       data-has-latest={data == null ? 'false' : 'true'}
+      data-latest-preview={latestPreview(data) ?? undefined}
       data-widget-status={status}
       data-phase={bridge.phase}
       data-chrome={chrome}
@@ -226,7 +252,7 @@ export function BoardWidgetHost({
               <TriangleAlert className='size-3.5' aria-hidden />
             </ChromeStatusIcon>
           ) : null}
-          {runtimeUnavailable ? (
+          {showRuntimeWarn ? (
             <ChromeStatusIcon
               testId='board-widget-runtime-missing'
               label={JOB_RUNTIME_DISCONNECTED}
@@ -238,7 +264,7 @@ export function BoardWidgetHost({
           <ChromeIconButton
             testId='board-widget-refresh'
             label={refreshLabel}
-            disabled={running}
+            disabled={running || !hasJob}
             onClick={onRefresh}
           >
             <RefreshCw

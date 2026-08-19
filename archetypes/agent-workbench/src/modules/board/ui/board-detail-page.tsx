@@ -165,6 +165,7 @@ export function BoardDetailPage({
           variant='outline'
           data-testid='board-refresh-all'
           title={refreshAllTitle}
+          disabled={jobCount === 0}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />
@@ -230,6 +231,7 @@ export function BoardDetailPage({
                   status={widget.status}
                   runError={last?.errorMessage}
                   runtimeUnavailable={runtimeUnavailable}
+                  hasJob={view.jobs.has(widget.id)}
                   exampleDataHint={exampleDataHintFor(view, widget.id)}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
@@ -276,6 +278,7 @@ export function BoardDetailPage({
             status={expanded.status}
             runError={expandedRun?.errorMessage}
             runtimeUnavailable={runtimeUnavailable}
+            hasJob={view.jobs.has(expanded.id)}
             exampleDataHint={exampleDataHintFor(view, expanded.id)}
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}

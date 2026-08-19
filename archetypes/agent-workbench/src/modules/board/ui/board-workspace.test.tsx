@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { StrictMode, useMemo, useState } from 'react'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
@@ -271,6 +271,68 @@ describe('BoardWorkspace example boards', () => {
     } finally {
       window.removeEventListener('securitypolicyviolation', onViolation)
     }
+  })
+
+  it('opens 每日速递 and every widget becomes ready with prefilled data', async () => {
+    const store = createMemoryBoardStore()
+    await render(
+      <StrictMode>
+        <WorkspaceHarness
+          store={store}
+          jobRuntime={createUnavailableBoardJobRuntime()}
+          startOnDetail={false}
+          width={1200}
+        />
+      </StrictMode>,
+    )
+
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
+    const brief = cardById('example:daily-brief')
+    expect(brief).toBeTruthy()
+    await userEvent.click(brief as HTMLElement)
+
+    await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
+    await expect
+      .poll(() => page.getByTestId('board-widget-host').elements().length)
+      .toBe(3)
+    await expect
+      .poll(
+        () =>
+          page
+            .getByTestId('board-widget-host')
+            .elements()
+            .every((node) => node.getAttribute('data-phase') === 'ready'),
+        { timeout: 8000 },
+      )
+      .toBe(true)
+
+    const hosts = page.getByTestId('board-widget-host').elements()
+    expect(
+      new Set(hosts.map((node) => node.getAttribute('aria-label'))),
+    ).toEqual(new Set(['本周访问', '未读消息', '今日摘要']))
+    const previewByTitle = new Map(
+      hosts.map((node) => [
+        node.getAttribute('aria-label'),
+        node.getAttribute('data-latest-preview'),
+      ]),
+    )
+    expect(previewByTitle.get('未读消息')).toBe('128')
+    expect(previewByTitle.get('今日摘要')).toBe('周三速递')
+    expect(previewByTitle.get('本周访问')).toBe('points:7')
+    for (const host of hosts) {
+      expect(host.getAttribute('data-has-latest')).toBe('true')
+      expect(host.querySelector('[data-testid="board-widget-error"]')).toBeNull()
+      expect(
+        host.querySelector('[data-testid="board-widget-runtime-missing"]'),
+      ).toBeNull()
+    }
+    expect(page.getByTestId('board-refresh-all')).toBeDisabled()
+    expect(
+      page
+        .getByTestId('board-widget-refresh')
+        .elements()
+        .every((node) => (node as HTMLButtonElement).disabled),
+    ).toBe(true)
   })
 
   it('deletes an example board and does not recreate it on the next list visit', async () => {

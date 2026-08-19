@@ -124,6 +124,9 @@ describe('BoardDetailPage', () => {
     expect(page.getByTestId('board-widget-example-data')).toHaveTextContent(
       '想让它每天自动更新？在对话里说一声',
     )
+    expect(page.getByTestId('board-refresh-all')).toBeDisabled()
+    expect(page.getByTestId('board-widget-refresh')).toBeDisabled()
+    expect(page.getByTestId('board-widget-runtime-missing').elements()).toHaveLength(0)
   })
 
   it('opens the job dialog with authorized status and revoke', async () => {

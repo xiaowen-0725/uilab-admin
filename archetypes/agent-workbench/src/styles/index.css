@@ -17,6 +17,7 @@
 :root {
   /* Codex Desktop left rail CDP: 306 CSS px */
   --navigator-width: 306px;
+  --navigator-rail-width: 48px;
   /* Codex content column ~736 */
   --content-max-width: 736px;
   /* Timeline chat rhythm — grok-app comfortable/md */
@@ -148,7 +149,7 @@
   flex-shrink: 0;
   /* min-width:0 so flex does not lock to Navigator content width when collapsed. */
   min-width: 0;
-  width: 0;
+  width: var(--navigator-rail-width);
   overflow: hidden;
   transition: width var(--nav-motion-duration) var(--ease-drawer);
 }
@@ -174,6 +175,23 @@
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
+}
+
+.nav-collapsed-rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  display: flex;
+  width: var(--navigator-rail-width);
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+  pointer-events: auto;
+}
+
+[data-slot='workbench-shell'][data-nav-open='true'] .nav-collapsed-rail {
+  display: none;
 }
 
 /* Workspace — flush foreground plane (no inset / radius / border / shadow). */

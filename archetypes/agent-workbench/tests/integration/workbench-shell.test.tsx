@@ -7,6 +7,7 @@ import { page, userEvent } from 'vitest/browser'
 /** Workspace is full-bleed on every viewport: no outer margin. */
 const INSET = 0
 const NAV_WIDTH = 306
+const NAV_RAIL_WIDTH = 48
 const TOOLBAR_HEIGHT = 44
 const GEOMETRY_TOLERANCE = 2
 
@@ -207,6 +208,23 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
+  it('collapsed icon rail still opens Board', async () => {
+    await page.viewport(1440, 900)
+    await renderWorkbenchWithTask()
+
+    await userEvent.click(page.getByTestId('toggle-navigator'))
+    await expect
+      .element(page.getByTestId('workbench-shell'))
+      .toHaveAttribute('data-nav-open', 'false')
+
+    await userEvent.click(page.getByTestId('navigator-rail-board'))
+    await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
+    expect(page.getByTestId('workbench-shell').element()).toHaveAttribute(
+      'data-destination',
+      'board',
+    )
+  })
+
   it('Task-only: 44px Task toolbar, single title, no subtitle, icon controls', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
@@ -308,7 +326,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
-  it('1440 collapsed by pointer: Navigator inert, full-bleed, animated motion', async () => {
+  it('1440 collapsed by pointer: Navigator inert, icon rail stays, animated motion', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
 
@@ -341,7 +359,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
           .getByTestId('workbench-workspace')
           .element()
           .getBoundingClientRect()
-        return Math.abs(wsBox.left - INSET) <= GEOMETRY_TOLERANCE
+        return Math.abs(wsBox.left - NAV_RAIL_WIDTH) <= GEOMETRY_TOLERANCE
       })
       .toBe(true)
 
@@ -349,9 +367,17 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .getByTestId('workbench-workspace')
       .element()
       .getBoundingClientRect()
-    // Collapsed: flush left; workspace expands into remaining viewport.
-    expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
-    expect(wsBox.width).toBeGreaterThan(1400 - INSET * 2 - GEOMETRY_TOLERANCE)
+    // Collapsed: 48px icon rail stays; destinations remain clickable.
+    expect(Math.abs(wsBox.left - NAV_RAIL_WIDTH)).toBeLessThanOrEqual(
+      GEOMETRY_TOLERANCE,
+    )
+    expect(wsBox.width).toBeGreaterThan(
+      1400 - NAV_RAIL_WIDTH - INSET * 2 - GEOMETRY_TOLERANCE,
+    )
+    await expect
+      .element(page.getByTestId('navigator-collapsed-rail'))
+      .toBeInTheDocument()
+    expect(visibleByTestId('navigator-rail-board')).toHaveLength(1)
   })
 
   it('Navigator account menu opens upward with settings and sign-out fixtures', async () => {
@@ -872,13 +898,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect.element(shell).toHaveAttribute('data-nav-open', 'false')
     await expect.element(shell).toHaveAttribute('data-nav-motion', 'animated')
 
-    // After collapse, re-open control moves to Work toolbar (rail is gone).
+    // After collapse, re-open control stays on the icon rail (not Work toolbar).
     navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
-    const workToolbar = document.querySelector(
-      '[data-slot="work-surface-toolbar"]'
-    ) as HTMLElement
-    expect(workToolbar.contains(navToggles[0]!)).toBe(true)
+    const collapsedRail = page.getByTestId('navigator-collapsed-rail').element()
+    expect(collapsedRail.contains(navToggles[0]!)).toBe(true)
   })
 
   it('760 serial Work: unique toggle-navigator lives in Work toolbar and is clickable', async () => {

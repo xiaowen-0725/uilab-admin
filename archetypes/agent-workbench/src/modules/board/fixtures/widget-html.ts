@@ -4,7 +4,7 @@
  */
 
 const SHELL = [
-  'body{padding:12px;font:13px/1.5 system-ui,sans-serif;color:var(--widget-fg);background:var(--widget-bg)}',
+  'body{padding:12px;font:13px/1.5 system-ui,sans-serif;color:var(--widget-fg,#0d0d0d);background:var(--widget-bg,#ffffff)}',
   'h1,p,ul{margin:0 0 8px}h1{font-size:14px;font-weight:600}',
   '.muted{color:var(--widget-muted)}',
   'button,input{font:inherit;color:inherit;background:var(--widget-bg);border:1px solid var(--widget-border);border-radius:6px;padding:4px 8px}',
@@ -177,6 +177,7 @@ export const DAILY_BRIEF_STAT_HTML = page(
     '  document.getElementById("delta").textContent = row.delta == null ? "" : ("较昨日 +" + row.delta);',
     '}',
     'widget.onDataChange(paint);',
+    'if (widget.capabilities && widget.capabilities.canSubmit) widget.submit({ painted: widget.data });',
     'widget.ready();',
   ].join(''),
 )
@@ -215,6 +216,7 @@ export const DAILY_BRIEF_FORM_HTML = page(
     '  widget.resize();',
     '});',
     'widget.onDataChange(paint);',
+    'if (widget.capabilities && widget.capabilities.canSubmit) widget.submit({ painted: widget.data });',
     'widget.ready();',
   ].join(''),
 )

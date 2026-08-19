@@ -44,6 +44,33 @@ describe('BoardWidgetFrame', () => {
     expect(iframe.getAttribute('csp')).toBe(buildWidgetIframeCsp(nonce))
   })
 
+  it('runs a nonce script after srcdoc is reassigned over about:blank', async () => {
+    const nonce = readHostCspNonce()
+    const second = waitForWidgetMessage<{ type: string; href: string }>(
+      'board-widget-reassign',
+    )
+    await render(
+      <BoardWidgetFrame
+        srcDoc={probeSrcDoc(
+          nonce,
+          `parent.postMessage({type:'board-widget-first',href:String(location.href)},'*')`,
+        )}
+      />,
+    )
+    const iframe = page.getByTestId('board-widget-frame').element() as HTMLIFrameElement
+    iframe.src = 'about:blank'
+    await new Promise<void>((resolve) => {
+      iframe.addEventListener('load', () => resolve(), { once: true })
+    })
+    iframe.removeAttribute('src')
+    iframe.srcdoc = probeSrcDoc(
+      nonce,
+      `parent.postMessage({type:'board-widget-reassign',href:String(location.href)},'*')`,
+    )
+    const message = await second
+    expect(message.href).toMatch(/srcdoc|about:srcdoc/i)
+  })
+
   it('loads about:srcdoc and runs a nonce script under the host policy', async () => {
     const nonce = readHostCspNonce()
     const ready = waitForWidgetMessage<{ type: string; href: string }>(

@@ -152,8 +152,8 @@ function themeVarBlock(theme: WidgetTheme): string {
     'html, body { margin: 0; padding: 0; min-height: 100%; }',
     'body {',
     '  font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;',
-    '  color: var(--widget-fg);',
-    '  background: var(--widget-bg);',
+    '  color: var(--widget-fg, #0d0d0d);',
+    '  background: var(--widget-bg, #ffffff);',
     '}',
     `html { color-scheme: ${theme}; }`,
   ].join('\n')

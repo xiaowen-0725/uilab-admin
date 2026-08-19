@@ -1,6 +1,8 @@
+import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
+import { DAILY_BRIEF_STAT_HTML } from '../fixtures/widget-html'
 import { WIDGET_THEME_VARS } from '../model/widget-document'
 import { BoardWidgetHost } from './board-widget-host'
 
@@ -42,6 +44,81 @@ describe('BoardWidgetHost', () => {
     expect(frame().contentDocument).toBeNull()
     await expectPhase('ready')
     expect(onSubmit).toHaveBeenCalledWith({ seen: { marker: 'first' } })
+  })
+
+  it('paints prefilled example data after a StrictMode remount', async () => {
+    const onSubmit = vi.fn()
+    await render(
+      <StrictMode>
+        <BoardWidgetHost
+          widgetId='example:daily-brief:stat'
+          title='未读消息'
+          html={probeHtml(
+            'widget.onDataChange(function (data) { widget.submit({ painted: data }); }); widget.ready();',
+          )}
+          data={{ value: 128, label: '未读消息', delta: 12 }}
+          theme='dark'
+          canSubmit
+          onSubmit={onSubmit}
+        />
+      </StrictMode>,
+    )
+
+    await expectPhase('ready')
+    expect(onSubmit).toHaveBeenCalledWith({
+      painted: { value: 128, label: '未读消息', delta: 12 },
+    })
+    expect(hostElement().getAttribute('data-has-latest')).toBe('true')
+    expect(page.getByTestId('board-widget-error').elements()).toHaveLength(0)
+  })
+
+  it('still paints prefilled data after the user reloads the widget', async () => {
+    const onSubmit = vi.fn()
+    const html = probeHtml(
+      'widget.onDataChange(function (data) { widget.submit({ painted: data }); }); widget.ready();',
+    )
+    await render(
+      <BoardWidgetHost
+        widgetId='w-reassign'
+        title='重装'
+        html={html}
+        data={{ value: 128 }}
+        theme='dark'
+        canSubmit
+        onSubmit={onSubmit}
+      />,
+    )
+    await expectPhase('ready')
+    onSubmit.mockClear()
+
+    await userEvent.click(page.getByTestId('board-widget-more'))
+    await userEvent.click(page.getByTestId('board-widget-menu-reload'))
+
+    await expect
+      .poll(() => onSubmit.mock.calls.at(-1)?.[0], { timeout: 4000 })
+      .toEqual({ painted: { value: 128 } })
+    await expectPhase('ready')
+    expect(page.getByTestId('board-widget-error').elements()).toHaveLength(0)
+  })
+
+  it('runs the daily-brief stat fixture against prefilled latestData', async () => {
+    const onReady = vi.fn()
+    await render(
+      <StrictMode>
+        <BoardWidgetHost
+          widgetId='example:daily-brief:stat'
+          title='未读消息'
+          html={DAILY_BRIEF_STAT_HTML}
+          data={{ value: 128, label: '未读消息', delta: 12 }}
+          theme='dark'
+          onReady={onReady}
+        />
+      </StrictMode>,
+    )
+
+    await expectPhase('ready')
+    expect(onReady).toHaveBeenCalled()
+    expect(page.getByTestId('board-widget-error').elements()).toHaveLength(0)
   })
 
   it('lets startup code read a non-empty widget.data after init', async () => {
@@ -201,36 +278,76 @@ describe('BoardWidgetHost', () => {
     expect(onSubmit).toHaveBeenCalledTimes(callsBefore)
   })
 
-  it(
-    'marks a silent widget dead within about 15s and offers reload',
-    { timeout: 20_000 },
-    async () => {
-      await render(
+  it('paints the real 未读消息 fixture as 128', async () => {
+    const onSubmit = vi.fn()
+    await render(
+      <StrictMode>
         <BoardWidgetHost
-          widgetId='w-loop'
-          title='无响应'
-          html={probeHtml('widget.ready();')}
-          data={{}}
-          theme='light'
-          heartbeat
-        />,
-      )
+          widgetId='example:daily-brief:stat'
+          title='未读消息'
+          html={DAILY_BRIEF_STAT_HTML}
+          data={{ value: 128, label: '未读消息', delta: 12 }}
+          theme='dark'
+          canSubmit
+          onSubmit={onSubmit}
+        />
+      </StrictMode>,
+    )
 
-      await expectPhase('ready')
-      // Headless Chromium keeps srcdoc in the host renderer, so `while (true)`
-      // would freeze the suite. Replacing the document drops the port the same
-      // way a blocked widget event loop stops pongs — the host still counts
-      // three misses.
-      const iframe = frame()
-      iframe.removeAttribute('src')
-      iframe.srcdoc = '<!doctype html><title>gone</title>'
+    await expectPhase('ready')
+    expect(hostElement().getAttribute('data-latest-preview')).toBe('128')
+    expect(onSubmit).toHaveBeenCalledWith({
+      painted: { value: 128, label: '未读消息', delta: 12 },
+    })
+  })
 
-      await expect
-        .poll(() => hostElement().getAttribute('data-phase'), { timeout: 16_000 })
-        .toBe('dead')
-      await expect
-        .element(page.getByTestId('board-widget-reload'))
-        .toHaveTextContent('重新加载')
-    },
-  )
+  it('keeps a healthy widget ready across heartbeat beats', async () => {
+    await render(
+      <BoardWidgetHost
+        widgetId='w-alive'
+        title='心跳'
+        html={probeHtml('widget.ready();')}
+        data={{}}
+        theme='light'
+        heartbeat
+        heartbeatMs={40}
+        heartbeatMissLimit={3}
+      />,
+    )
+
+    await expectPhase('ready')
+    await new Promise((resolve) => window.setTimeout(resolve, 200))
+    expect(hostElement().getAttribute('data-phase')).toBe('ready')
+    expect(page.getByTestId('board-widget-error').elements()).toHaveLength(0)
+  })
+
+  it('marks a silent widget dead after missed heartbeats and offers reload', async () => {
+    await render(
+      <BoardWidgetHost
+        widgetId='w-loop'
+        title='无响应'
+        html={probeHtml('widget.ready();')}
+        data={{}}
+        theme='light'
+        heartbeat
+        heartbeatMs={40}
+        heartbeatMissLimit={3}
+      />,
+    )
+
+    await expectPhase('ready')
+    // Headless Chromium keeps srcdoc in the host renderer, so `while (true)`
+    // would freeze the suite. Parking on about:blank drops the document
+    // without a new handshake — the host still counts three missed pongs.
+    const iframe = frame()
+    iframe.removeAttribute('srcdoc')
+    iframe.src = 'about:blank'
+
+    await expect
+      .poll(() => hostElement().getAttribute('data-phase'), { timeout: 2000 })
+      .toBe('dead')
+    await expect
+      .element(page.getByTestId('board-widget-reload'))
+      .toHaveTextContent('重新加载')
+  })
 })

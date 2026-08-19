@@ -163,7 +163,7 @@ function BoardCard({
       </div>
       <p className='text-xs text-muted-foreground'>
         {widgets.length} 个小组件 · {formatRelative(board.updatedAt)}更新
-        {hiddenCount > 0 ? ` · 缩略图未显示 ${hiddenCount} 个` : ''}
+        {hiddenCount > 0 ? ` · 另有 ${hiddenCount} 个未放入预览` : ''}
       </p>
     </div>
   )
@@ -199,7 +199,7 @@ function ThumbnailCell({
     )
   }
   return (
-    <div className='h-full w-full overflow-hidden rounded-md'>
+    <div className='relative h-full w-full overflow-hidden rounded-md'>
       <div
         className='origin-top-left'
         data-testid='board-thumbnail-scale'
@@ -218,11 +218,18 @@ function ThumbnailCell({
           chrome='none'
           heartbeat={false}
           inert
+          hasJob={false}
           status={widget.status}
           onReady={(elapsedMs) => onWidgetReady?.(widget.id, elapsedMs)}
           className='rounded-md'
         />
       </div>
+      <span
+        className='absolute inset-x-0 bottom-0 truncate bg-background/80 px-1 py-0.5 text-[9px] leading-tight text-foreground'
+        data-testid='board-thumbnail-title'
+      >
+        {widget.title}
+      </span>
     </div>
   )
 }

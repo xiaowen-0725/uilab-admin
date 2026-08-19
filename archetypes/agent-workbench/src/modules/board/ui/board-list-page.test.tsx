@@ -91,11 +91,39 @@ describe('BoardListPage', () => {
     )
 
     expect(page.getByTestId('board-thumbnail-placeholder').elements()).toHaveLength(3)
+    expect(page.getByTestId('board-thumbnail-title')).toHaveTextContent('计数器')
     expect(page.getByTestId('board-example-badge')).toHaveTextContent('示例')
 
     const open = page.getByTestId('board-card-open')
     ;(open.element() as HTMLElement).focus()
     await userEvent.keyboard('{Enter}')
     expect(onOpenBoard).toHaveBeenCalledWith('board-1')
+  })
+
+  it('describes overflow widgets as preview slots, not a render failure', async () => {
+    await render(
+      <BoardListPage
+        boards={[
+          card(
+            {},
+            [
+              widget('w1', '一'),
+              widget('w2', '二'),
+              widget('w3', '三'),
+              widget('w4', '四'),
+              widget('w5', '五'),
+            ],
+          ),
+        ]}
+        theme='light'
+        onOpenBoard={() => {}}
+        onCreateByChat={() => {}}
+      />,
+    )
+
+    expect(page.getByTestId('board-card')).toHaveTextContent('另有 1 个未放入预览')
+    expect(page.getByTestId('board-card').element().textContent).not.toContain(
+      '缩略图未显示',
+    )
   })
 })

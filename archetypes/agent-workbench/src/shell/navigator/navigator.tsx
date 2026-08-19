@@ -610,6 +610,66 @@ export function Navigator({
   return panel
 }
 
+export function NavigatorCollapsedRail({
+  activeDestination,
+  onNewChat,
+  onOpenBoard,
+  onOpenCapabilities,
+  onToggleNavigator,
+}: {
+  activeDestination: ShellDestination
+  onNewChat?: () => void
+  onOpenBoard?: () => void
+  onOpenCapabilities?: () => void
+  onToggleNavigator?: () => void
+}) {
+  const handleNavClick = (item: NavItem) => {
+    if (item.action === 'new-chat') onNewChat?.()
+    if (item.action === 'open-capabilities') onOpenCapabilities?.()
+    if (item.action === 'open-board') onOpenBoard?.()
+  }
+
+  return (
+    <nav
+      className='nav-collapsed-rail bg-sidebar text-sidebar-foreground'
+      data-testid='navigator-collapsed-rail'
+      aria-label='收起的工作台导航'
+    >
+      <RailIconButton
+        tabIndex={0}
+        pressed={false}
+        ariaLabel='打开导航'
+        testId='toggle-navigator'
+        title='打开导航'
+        onClick={() => onToggleNavigator?.()}
+      >
+        <PanelLeft className='size-3.5' aria-hidden />
+      </RailIconButton>
+      {NAV_ITEMS.filter((item) => item.action != null).map((item) => {
+        const Icon = item.icon
+        const selected = isNavItemCurrent(item, activeDestination)
+        return (
+          <RailIconButton
+            key={item.id}
+            tabIndex={0}
+            pressed={selected}
+            ariaLabel={item.label}
+            testId={
+              item.action === 'new-chat'
+                ? 'navigator-rail-new-chat'
+                : `navigator-rail-${item.id}`
+            }
+            title={item.label}
+            onClick={() => handleNavClick(item)}
+          >
+            <Icon className='size-3.5' aria-hidden />
+          </RailIconButton>
+        )
+      })}
+    </nav>
+  )
+}
+
 function RailIconButton({
   tabIndex,
   pressed,

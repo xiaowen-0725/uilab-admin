@@ -34,7 +34,8 @@ function setRef(
 
 /**
  * Policy seam: srcdoc iframe with sandbox + csp paired.
- * Unload uses about:blank; the next srcdoc assign removes src first.
+ * Unload clears srcdoc/src. Do not park on about:blank — Chrome can keep
+ * that src across the next srcdoc assign and skip the widget handshake.
  */
 export function BoardWidgetFrame({
   srcDoc,
@@ -46,14 +47,29 @@ export function BoardWidgetFrame({
 }: BoardWidgetFrameProps) {
   const nonce = readHostCspNonce()
   const nodeRef = useRef<HTMLIFrameElement | null>(null)
+  const assignedRef = useRef<{ srcDoc: string; assignKey: number } | null>(null)
 
   useLayoutEffect(() => {
     const node = nodeRef.current
     if (!node) return
-    node.removeAttribute('src')
-    node.srcdoc = srcDoc
+    const prev = assignedRef.current
+    const alreadyAssigned =
+      prev?.srcDoc === srcDoc &&
+      prev.assignKey === assignKey &&
+      node.srcdoc === srcDoc
+    if (!alreadyAssigned) {
+      assignedRef.current = { srcDoc, assignKey }
+      node.removeAttribute('src')
+      node.srcdoc = srcDoc
+    }
     return () => {
-      node.src = 'about:blank'
+      // Same-node srcdoc replace must not clear first — that fires a blank
+      // load, closes the MessageChannel, and the heartbeat calls the widget dead.
+      if (nodeRef.current !== node) {
+        assignedRef.current = null
+        node.removeAttribute('srcdoc')
+        node.removeAttribute('src')
+      }
     }
   }, [srcDoc, assignKey])
 

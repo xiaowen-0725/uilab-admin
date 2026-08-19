@@ -23,6 +23,8 @@ export interface WidgetBridgeOptions {
   inputs: Record<string, unknown>
   canSubmit: boolean
   heartbeat: boolean
+  heartbeatMs?: number
+  heartbeatMissLimit?: number
   /** Changes when the srcdoc string is rebuilt so the bridge remounts with it. */
   documentKey: string
   onSaveInput?: (key: string, value: unknown) => void
@@ -49,6 +51,8 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
     inputs,
     canSubmit,
     heartbeat,
+    heartbeatMs = WIDGET_HEARTBEAT_MS,
+    heartbeatMissLimit = WIDGET_HEARTBEAT_MISS_LIMIT,
     documentKey,
     onSaveInput,
     onSubmit,
@@ -99,7 +103,11 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
 
   const post = useCallback((message: HostToWidgetMessage) => {
     if (messageByteLength(message) > WIDGET_MESSAGE_MAX_BYTES) return
-    portRef.current?.postMessage(message)
+    try {
+      portRef.current?.postMessage(message)
+    } catch {
+      // Closed after a blank iframe load / remount. Heartbeat must not throw.
+    }
   }, [])
 
   const showHint = useCallback((message: string, code: string) => {
@@ -196,12 +204,15 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
     const iframe = iframeRef.current
     const target = iframe?.contentWindow
     if (!iframe || !target) return
-    if (iframe.getAttribute('src') === 'about:blank') return
+    // Cleanup may leave src="about:blank" while srcdoc already holds the
+    // widget. That load is the widget, not the unload.
+    if (iframe.getAttribute('src') === 'about:blank' && !iframe.srcdoc) return
 
     portRef.current?.close()
     const channel = new MessageChannel()
     portRef.current = channel.port1
     handshakeDoneRef.current = false
+    lastPongAtRef.current = performance.now()
     channel.port1.onmessage = (event: MessageEvent<WidgetToHostMessage>) => {
       handleInbound(event.data)
     }
@@ -269,7 +280,7 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
   useEffect(() => {
     if (!heartbeat || !portOpen || phase !== 'ready') return
     lastPongAtRef.current = performance.now()
-    const silenceLimit = WIDGET_HEARTBEAT_MS * WIDGET_HEARTBEAT_MISS_LIMIT
+    const silenceLimit = heartbeatMs * heartbeatMissLimit
 
     const beat = () => {
       post({ type: 'ping' })
@@ -279,9 +290,9 @@ export function useWidgetBridge(options: WidgetBridgeOptions): WidgetBridge {
     }
 
     beat()
-    const timer = window.setInterval(beat, WIDGET_HEARTBEAT_MS)
+    const timer = window.setInterval(beat, heartbeatMs)
     return () => window.clearInterval(timer)
-  }, [heartbeat, portOpen, phase, post])
+  }, [heartbeat, heartbeatMs, heartbeatMissLimit, portOpen, phase, post])
 
   useEffect(() => {
     if (!portOpen) return

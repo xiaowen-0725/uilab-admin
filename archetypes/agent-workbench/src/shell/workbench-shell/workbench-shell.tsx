@@ -29,7 +29,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
-import { Navigator } from '../navigator/navigator'
+import { Navigator, NavigatorCollapsedRail } from '../navigator/navigator'
 import {
   TASK_SURFACE_MIN_WIDTH,
   WORK_SURFACE_MIN_WIDTH,
@@ -432,8 +432,17 @@ export function WorkbenchShell({
 
       {/* Wide: reserved Navigator stays mounted for interruptible collapse. */}
       {navigatorMode === 'reserved' ? (
-        <div className='nav-reserved-gap' aria-hidden={!view.navigatorOpen}>
-          <div className='nav-reserved-inner'>
+        <div className='nav-reserved-gap'>
+          {!view.navigatorOpen ? (
+            <NavigatorCollapsedRail
+              activeDestination={activeDestination}
+              onNewChat={startNewChatFromShell}
+              onOpenBoard={() => openBoard()}
+              onOpenCapabilities={openCapabilities}
+              onToggleNavigator={toggleNavigatorFromPointer}
+            />
+          ) : null}
+          <div className='nav-reserved-inner' aria-hidden={!view.navigatorOpen}>
             <Navigator
               {...navigatorShared}
               mode='reserved'
@@ -493,7 +502,9 @@ export function WorkbenchShell({
                 Nav toggle lives on the left rail (WorkBuddy-style) when open.
                 Only re-open here when the rail is collapsed (reserved gap is 0).
               */}
-                {!view.navigatorOpen && !workFullStage ? (
+                {!view.navigatorOpen &&
+                !workFullStage &&
+                navigatorMode === 'overlay' ? (
                   <ToolbarIconButton
                     testId='toggle-navigator'
                     pressed={false}
@@ -615,7 +626,8 @@ export function WorkbenchShell({
                 // the toggle lives on the Navigator toolbar (not duplicated here).
                 workFullStage &&
                 view.layout.workSurfaceVisible &&
-                !view.navigatorOpen ? (
+                !view.navigatorOpen &&
+                navigatorMode === 'overlay' ? (
                   <ToolbarIconButton
                     testId='toggle-navigator'
                     pressed={false}
