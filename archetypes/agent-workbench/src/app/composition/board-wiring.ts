@@ -21,7 +21,9 @@ import {
   type BoardJobRuntimePort,
   type BoardRefreshController,
   type BoardStorePort,
+  type IdentityScopePort,
 } from '@/modules/board'
+import { createAnonymousIdentityScope } from '@/modules/identity'
 import type { WorkbenchSessionCommands } from '@/modules/workbench-session'
 import type { BoardSurfaceWiring } from './surface-assembly'
 
@@ -39,6 +41,7 @@ export interface UseWorkbenchBoardWiringInput {
   boardStore?: BoardStorePort
   boardContent?: BoardContentPort
   boardJobRuntime?: BoardJobRuntimePort
+  identityScope?: IdentityScopePort
 }
 
 export type BoardCapabilityApi = {
@@ -48,6 +51,7 @@ export type BoardCapabilityApi = {
 
 export interface WorkbenchBoardWiring extends BoardCapabilityApi {
   store: BoardStorePort
+  identityScope: IdentityScopePort
   revision: number
   refresh: BoardRefreshController
   executor: BoardClientToolExecutor
@@ -88,6 +92,12 @@ function defaultJobRuntime(): BoardJobRuntimePort {
   })
 }
 
+export function resolveIdentityScope(
+  injected?: IdentityScopePort,
+): IdentityScopePort {
+  return injected ?? createAnonymousIdentityScope()
+}
+
 export function useWorkbenchBoardWiring(
   input: UseWorkbenchBoardWiringInput,
 ): WorkbenchBoardWiring {
@@ -107,6 +117,10 @@ export function useWorkbenchBoardWiring(
   const jobRuntime = useMemo(
     () => input.boardJobRuntime ?? defaultJobRuntime(),
     [input.boardJobRuntime],
+  )
+  const identityScope = useMemo(
+    () => resolveIdentityScope(input.identityScope),
+    [input.identityScope],
   )
   const previewPolicy = useMemo(() => createBoardPreviewPolicy(), [])
   const [revision, setRevision] = useState(0)
@@ -158,6 +172,7 @@ export function useWorkbenchBoardWiring(
 
   return {
     store,
+    identityScope,
     revision,
     refresh,
     executor: async (args) =>

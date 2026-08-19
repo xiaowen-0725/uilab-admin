@@ -1,6 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { createMemoryBoardStore } from '@/modules/board'
-import { createBoardCapabilityApi } from './board-wiring'
+import {
+  ANONYMOUS_IDENTITY_GENERATION,
+  ANONYMOUS_PRINCIPAL_KEY,
+  createMemoryBoardStore,
+} from '@/modules/board'
+import { createMemoryIdentityScope } from '@/modules/identity'
+import { createBoardCapabilityApi, resolveIdentityScope } from './board-wiring'
+
+describe('resolveIdentityScope', () => {
+  it('defaults to the no-identity adapter', () => {
+    const scope = resolveIdentityScope()
+    expect(scope.getSnapshot()).toEqual({
+      principalKey: ANONYMOUS_PRINCIPAL_KEY,
+      generation: ANONYMOUS_IDENTITY_GENERATION,
+      valid: true,
+      authorization: { kind: 'unrestricted' },
+    })
+  })
+
+  it('keeps an injected scope', () => {
+    const injected = createMemoryIdentityScope({ principalKey: 'alice' })
+    expect(resolveIdentityScope(injected)).toBe(injected)
+  })
+})
 
 describe('createBoardCapabilityApi', () => {
   it('resolves no features until the Task is granted', async () => {

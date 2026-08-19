@@ -53,6 +53,19 @@ export type {
   BoardStructureFilter,
 } from './ports/board-store-port'
 export { BoardStorePortError } from './ports/board-store-port'
+export type {
+  AuthorizedResource,
+  IdentityAuthorization,
+  IdentityInvalidationEvent,
+  IdentityInvalidationReason,
+  IdentityScopePort,
+  IdentityScopeSnapshot,
+  IdentityScopeUnsubscribe,
+} from './ports/identity-scope-port'
+export {
+  ANONYMOUS_IDENTITY_GENERATION,
+  UNRESTRICTED_AUTHORIZATION,
+} from './ports/identity-scope-port'
 
 export { IdbBoardStore, createIdbBoardStore } from './adapters/idb-board-store'
 export type { IdbBoardStoreOptions } from './adapters/idb-board-store'

@@ -9,6 +9,7 @@ import {
   type BoardContentPort,
   type BoardJobRuntimePort,
   type BoardStorePort,
+  type IdentityScopePort,
 } from '@/modules/board'
 import {
   putSessionPointer,
@@ -78,6 +79,8 @@ export interface WorkbenchAppProps {
   boardContent?: BoardContentPort
   /** Optional job runtime (tests inject a first-run fake). */
   boardJobRuntime?: BoardJobRuntimePort
+  /** Optional Product Identity (tests). Product default is the no-identity adapter. */
+  identityScope?: IdentityScopePort
 }
 
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
@@ -114,6 +117,7 @@ export function WorkbenchApp({
   boardStore: boardStoreProp,
   boardContent: boardContentProp,
   boardJobRuntime: boardJobRuntimeProp,
+  identityScope: identityScopeProp,
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
@@ -153,6 +157,7 @@ export function WorkbenchApp({
     boardStore: boardStoreProp,
     boardContent: boardContentProp,
     boardJobRuntime: boardJobRuntimeProp,
+    identityScope: identityScopeProp,
   })
   const { boardOpenerRef } = board
 

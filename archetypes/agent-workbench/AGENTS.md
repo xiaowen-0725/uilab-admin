@@ -66,6 +66,7 @@ src/
     work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
     capabilities/      # 连接器 / 技能 / 专家 snapshot 与选择
     board/             # Board 实体 + BoardStorePort + BoardWidgetHost / 桥 + Canvas / 列表详情预览；作业执行走侧车 Deno 端点；刷新语义（#140）+ 零作业示例板（#141）+ agent 面契约（#142）已交付
+    identity/          # Product Identity 领域；无身份默认 adapter 满足 Board 的 IdentityScopePort
   components/ui/       # shadcn Base UI（Button/Input 为 Foundation 兼容 re-export）
   lib/                 # cn 等应用侧工具（叶层，无 React）
   config/              # fixtures / captures / runtime-adapter（叶层，无 React）

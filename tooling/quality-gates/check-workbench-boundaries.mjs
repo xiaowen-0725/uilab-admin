@@ -581,6 +581,7 @@ async function checkSources() {
     'src/modules/project/index.ts',
     'src/modules/project/ports/host-wire.ts',
     'src/modules/board/index.ts',
+    'src/modules/identity/index.ts',
   ]
   for (const p of required) {
     await mustExist(path.join(workbenchRoot, p), p)
