@@ -13,4 +13,5 @@ export {
   createMemoryIdentityScope,
   type MemoryIdentityScope,
   type MemoryIdentitySeed,
+  type MemoryIdentitySession,
 } from './adapters/memory-identity-scope'

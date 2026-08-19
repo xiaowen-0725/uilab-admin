@@ -10,23 +10,18 @@ import type {
   IdentityScopeUnsubscribe,
 } from '@/modules/board'
 
-const ANONYMOUS_SNAPSHOT: IdentityScopeSnapshot = {
-  principalKey: 'anonymous',
-  generation: 0,
-  valid: true,
-  authorization: { kind: 'unrestricted' },
+function anonymousSnapshot(): IdentityScopeSnapshot {
+  return {
+    principalKey: 'anonymous',
+    generation: 0,
+    valid: true,
+    authorization: { kind: 'unrestricted' },
+  }
 }
 
 export function createAnonymousIdentityScope(): IdentityScopePort {
   return {
-    getSnapshot() {
-      return {
-        principalKey: ANONYMOUS_SNAPSHOT.principalKey,
-        generation: ANONYMOUS_SNAPSHOT.generation,
-        valid: ANONYMOUS_SNAPSHOT.valid,
-        authorization: { kind: 'unrestricted' },
-      }
-    },
+    getSnapshot: anonymousSnapshot,
     subscribeInvalidation(): IdentityScopeUnsubscribe {
       return () => {}
     },

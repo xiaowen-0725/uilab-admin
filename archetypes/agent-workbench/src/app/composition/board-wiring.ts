@@ -1,5 +1,5 @@
 /**
- * Composition Board wiring — store / content / client-tool executor / preview.
+ * Composition Board wiring — store / identity / content / client-tool / preview.
  * Keeps workbench-app a thin assembler (AGENTS.md rule 16).
  */
 import { useMemo, useRef, useState, type MutableRefObject } from 'react'

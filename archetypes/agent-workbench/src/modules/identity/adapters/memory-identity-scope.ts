@@ -14,20 +14,19 @@ import type {
   IdentityScopeUnsubscribe,
 } from '@/modules/board'
 
-export interface MemoryIdentitySeed {
+export interface MemoryIdentitySession {
   principalKey: string
   tenantId?: string | null
   resources?: readonly AuthorizedResource[]
+}
+
+export interface MemoryIdentitySeed extends MemoryIdentitySession {
   generation?: number
 }
 
 export interface MemoryIdentityScope extends IdentityScopePort {
   getTenantId(): string | null
-  signIn(input: {
-    principalKey: string
-    tenantId?: string | null
-    resources?: readonly AuthorizedResource[]
-  }): void
+  signIn(input: MemoryIdentitySession): void
   signOut(): void
   setAuthorizedResources(resources: readonly AuthorizedResource[]): void
 }
@@ -35,11 +34,11 @@ export interface MemoryIdentityScope extends IdentityScopePort {
 function cloneResources(
   resources: readonly AuthorizedResource[],
 ): AuthorizedResource[] {
-  return resources.map((item) => ({
-    type: item.type,
-    id: item.id,
-    name: item.name,
-    permissions: [...item.permissions],
+  return resources.map((resource) => ({
+    type: resource.type,
+    id: resource.id,
+    name: resource.name,
+    permissions: [...resource.permissions],
   }))
 }
 
@@ -49,49 +48,36 @@ function restricted(
   return { kind: 'resources', resources: cloneResources(resources) }
 }
 
-function freezeSnapshot(snapshot: IdentityScopeSnapshot): IdentityScopeSnapshot {
-  return {
-    principalKey: snapshot.principalKey,
-    generation: snapshot.generation,
-    valid: snapshot.valid,
-    authorization:
-      snapshot.authorization.kind === 'unrestricted'
-        ? { kind: 'unrestricted' }
-        : restricted(snapshot.authorization.resources),
-  }
-}
-
 export function createMemoryIdentityScope(
   seed: MemoryIdentitySeed,
 ): MemoryIdentityScope {
+  let principalKey = seed.principalKey
   let tenantId = seed.tenantId ?? null
-  let snapshot: IdentityScopeSnapshot = {
-    principalKey: seed.principalKey,
-    generation: seed.generation ?? 0,
-    valid: true,
-    authorization: restricted(seed.resources ?? []),
-  }
+  let generation = seed.generation ?? 0
+  let valid = true
+  let resources = cloneResources(seed.resources ?? [])
   const listeners = new Set<(event: IdentityInvalidationEvent) => void>()
 
-  function commit(
-    reason: IdentityInvalidationReason,
-    next: Omit<IdentityScopeSnapshot, 'generation'>,
-  ): void {
-    snapshot = freezeSnapshot({
-      ...next,
-      generation: snapshot.generation + 1,
-    })
+  function getSnapshot(): IdentityScopeSnapshot {
+    return {
+      principalKey,
+      generation,
+      valid,
+      authorization: restricted(resources),
+    }
+  }
+
+  function notify(reason: IdentityInvalidationReason): void {
+    generation += 1
     const event: IdentityInvalidationEvent = {
       reason,
-      snapshot: freezeSnapshot(snapshot),
+      snapshot: getSnapshot(),
     }
     for (const listener of [...listeners]) listener(event)
   }
 
   return {
-    getSnapshot() {
-      return freezeSnapshot(snapshot)
-    },
+    getSnapshot,
     subscribeInvalidation(listener): IdentityScopeUnsubscribe {
       listeners.add(listener)
       return () => {
@@ -103,28 +89,22 @@ export function createMemoryIdentityScope(
     },
     signIn(input) {
       tenantId = input.tenantId ?? null
-      commit('signed_in', {
-        principalKey: input.principalKey,
-        valid: true,
-        authorization: restricted(input.resources ?? []),
-      })
+      principalKey = input.principalKey
+      valid = true
+      resources = cloneResources(input.resources ?? [])
+      notify('signed_in')
     },
     signOut() {
-      if (!snapshot.valid) return
+      if (!valid) return
       tenantId = null
-      commit('signed_out', {
-        principalKey: snapshot.principalKey,
-        valid: false,
-        authorization: restricted([]),
-      })
+      valid = false
+      resources = []
+      notify('signed_out')
     },
-    setAuthorizedResources(resources) {
-      if (!snapshot.valid) return
-      commit('authorization_changed', {
-        principalKey: snapshot.principalKey,
-        valid: true,
-        authorization: restricted(resources),
-      })
+    setAuthorizedResources(nextResources) {
+      if (!valid) return
+      resources = cloneResources(nextResources)
+      notify('authorization_changed')
     },
   }
 }
