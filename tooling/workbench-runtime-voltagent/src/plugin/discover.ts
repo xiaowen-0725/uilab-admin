@@ -14,6 +14,8 @@ import type {
   McpContribution,
   PluginContributes,
   PluginManifest,
+  QueryContribution,
+  QueryParameterDecl,
   SkillsContribution,
 } from './manifest.js'
 import { parseEnvStringList } from './parse-util.js'
@@ -115,7 +117,7 @@ export function parsePluginManifestJson(
       ok: false,
       id,
       reason:
-        '外部 plugin.json 禁止 contributes.tools（不可加载任意 JS）；仅允许 connectors / mcp / cli / skills / auth',
+        '外部 plugin.json 禁止 contributes.tools（不可加载任意 JS）；仅允许 connectors / mcp / cli / skills / auth / queries',
     }
   }
 
@@ -609,7 +611,115 @@ function parseContributes(
     contributes.auth = auth.value
   }
 
+  if (raw.queries != null) {
+    const queries = parseQueryContributions(raw.queries)
+    if (!queries.ok) return queries
+    contributes.queries = queries.value
+  }
+
   return { ok: true, contributes }
+}
+
+const QUERY_SCALAR_TYPES = new Set([
+  'string',
+  'number',
+  'boolean',
+  'string_array',
+])
+
+function parseQueryContributions(raw: unknown): ParseResult<QueryContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'contributes.queries 必须是数组' }
+  }
+  const queries: QueryContribution[] = []
+  const names = new Set<string>()
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'query 项必须是对象' }
+    }
+    if (item.handler != null || item.module != null || item.execute != null) {
+      return {
+        ok: false,
+        reason: '外部 plugin.json 禁止查询实现字段（handler/module/execute）',
+      }
+    }
+    const name = asString(item.name)
+    const title = asString(item.title)
+    if (!name) return { ok: false, reason: 'query.name 必填' }
+    if (!title) return { ok: false, reason: 'query.title 必填' }
+    if (names.has(name)) {
+      return { ok: false, reason: `query.name 重复：${name}` }
+    }
+    names.add(name)
+    const parameters = parseQueryParameters(item.parameters)
+    if (!parameters.ok) return parameters
+    if (item.requiredPermissions != null && !Array.isArray(item.requiredPermissions)) {
+      return { ok: false, reason: 'query.requiredPermissions 必须是字符串数组' }
+    }
+    const requiredPermissions = asStringArray(item.requiredPermissions) ?? []
+    if (
+      item.referencableByJob != null &&
+      typeof item.referencableByJob !== 'boolean'
+    ) {
+      return { ok: false, reason: 'query.referencableByJob 必须是布尔' }
+    }
+    queries.push({
+      name,
+      title,
+      parameters: parameters.value,
+      requiredPermissions,
+      referencableByJob: item.referencableByJob !== false,
+    })
+  }
+  return { ok: true, value: queries }
+}
+
+function parseQueryParameters(
+  raw: unknown,
+): ParseResult<Record<string, QueryParameterDecl>> {
+  if (raw == null) return { ok: true, value: {} }
+  if (!isRecord(raw)) {
+    return { ok: false, reason: 'query.parameters 必须是对象' }
+  }
+  const parameters: Record<string, QueryParameterDecl> = {}
+  for (const [key, decl] of Object.entries(raw)) {
+    if (!isRecord(decl)) {
+      return { ok: false, reason: `query.parameters.${key} 必须是对象` }
+    }
+    const type = asString(decl.type)
+    if (type === 'resource') {
+      const resourceType = asString(decl.resourceType)
+      if (!resourceType) {
+        return { ok: false, reason: `query.parameters.${key}.resourceType 必填` }
+      }
+      if (
+        decl.requiredPermissions != null &&
+        !Array.isArray(decl.requiredPermissions)
+      ) {
+        return {
+          ok: false,
+          reason: `query.parameters.${key}.requiredPermissions 必须是字符串数组`,
+        }
+      }
+      const extra = asStringArray(decl.requiredPermissions)
+      parameters[key] = extra
+        ? { type: 'resource', resourceType, requiredPermissions: extra }
+        : { type: 'resource', resourceType }
+      continue
+    }
+    if (type && QUERY_SCALAR_TYPES.has(type)) {
+      parameters[key] = {
+        type: type as 'string' | 'number' | 'boolean' | 'string_array',
+        required: decl.required !== false,
+      }
+      continue
+    }
+    return {
+      ok: false,
+      reason: `不支持的 query 参数类型：${type ?? '(missing)'}`,
+    }
+  }
+  return { ok: true, value: parameters }
 }
 
 export async function loadPluginJsonFile(

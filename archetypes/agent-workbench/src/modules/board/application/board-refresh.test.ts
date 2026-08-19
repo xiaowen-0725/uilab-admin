@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createHttpBoardJobRuntime } from '../adapters/http-board-job-runtime'
 import { createMemoryIdentityScope } from '@/modules/identity'
 import {
   createControllableBoardJobRuntime,
@@ -660,6 +661,82 @@ describe('data-source evaluator identity semantics', () => {
         identity: scope.getSnapshot(),
       }),
     ).toMatchObject({ masked: false, data: { value: 128 } })
+    controller.dispose()
+  })
+
+  it('writes a successful query payload into the identity snapshot', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    await store.putWidget(widget('w1'), { principalKey: 'alice' })
+    await store.putDataSource(querySource('w1'))
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const controller = createBoardRefreshController({
+      store,
+      runtime: {
+        async runJob() {
+          return { ok: false, error: 'unused', hint: '' }
+        },
+        async evaluate(request) {
+          expect(request).toMatchObject({
+            kind: 'query',
+            queryName: 'site_report',
+            queryParams: { siteIds: ['site-1'] },
+          })
+          return { ok: true, payload: { occupancy: 0.42 } }
+        },
+      },
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    await expect(controller.refreshWidget('w1')).resolves.toMatchObject({
+      kind: 'finished',
+      status: 'success',
+    })
+    expect(await store.getSnapshot('w1', 'alice')).toMatchObject({
+      data: { occupancy: 0.42 },
+    })
+    controller.dispose()
+  })
+
+  it('stores a sidecar query payload after HTTP evaluate', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    await store.putWidget(widget('w1'), { principalKey: 'alice' })
+    await store.putDataSource(querySource('w1'))
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('http://sidecar/board/queries/site_report/run')
+      expect(init?.body).toBe(JSON.stringify({ params: { siteIds: ['site-1'] } }))
+      return new Response(
+        JSON.stringify({ ok: true, payload: { occupancy: 0.42 } }),
+        { status: 200 },
+      )
+    })
+    const controller = createBoardRefreshController({
+      store,
+      runtime: createHttpBoardJobRuntime({
+        baseUrl: 'http://sidecar',
+        token: 'secret',
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+      identityScope: scope,
+      now: () => new Date(NOW),
+    })
+
+    await expect(controller.refreshWidget('w1')).resolves.toMatchObject({
+      kind: 'finished',
+      status: 'success',
+    })
+    expect(await store.getSnapshot('w1', 'alice')).toMatchObject({
+      data: { occupancy: 0.42 },
+    })
     controller.dispose()
   })
 })

@@ -44,6 +44,8 @@ describe('createOfficeConnectorRuntime canonical tool ownership', () => {
       listManifests: () => manifests,
       listConnectorDescriptors: () => [descriptor],
       listFakeCatalog: () => [],
+      listQueryCatalog: () => [],
+      listQueryHandlers: () => ({}),
       resolveEnabledIds: () => [PLUGIN_A, PLUGIN_B],
       refreshAuthStatuses: async () => authStatuses,
       getAuthRuntimeStores: () => ({ bindingStore, secretStore }),
@@ -89,6 +91,7 @@ describe('createOfficeConnectorRuntime canonical tool ownership', () => {
       discoveryFailures: [],
       skillRoots: [],
       skillsResults: [],
+      queries: [],
       disconnect: async () => {},
     } satisfies PluginRegistryLoadResult
     const runtime = createOfficeConnectorRuntime({

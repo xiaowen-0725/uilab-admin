@@ -98,6 +98,8 @@ export type {
   PluginContributes,
   PluginKind,
   PluginManifest,
+  QueryContribution,
+  QueryParameterDecl,
   SkillsContribution,
 } from './manifest.js'
 
@@ -167,7 +169,24 @@ export {
 export type {
   BuiltinPluginPackage,
   FakeCatalogEntry,
+  QueryHandler,
+  QueryHandlerInput,
 } from './plugin-package.js'
+
+export type { QueryCatalogEntry } from './query-catalog.js'
+export { collectQueryHandlers, listQueryCatalog } from './query-catalog.js'
+
+export {
+  QUERY_FIXTURE_BEARER_ENV,
+  QUERY_FIXTURE_DEFAULT_RESOURCES,
+  QUERY_FIXTURE_PACKAGE,
+  QUERY_FIXTURE_PACKAGE_ID,
+  QUERY_FIXTURE_PLUGIN_ID,
+  QUERY_FIXTURE_UPSTREAM_ORIGIN,
+  QUERY_SITE_FINANCE,
+  QUERY_SITE_SUMMARY,
+  createQueryFixtureUpstream,
+} from './query-fixture-package.js'
 
 export { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
 

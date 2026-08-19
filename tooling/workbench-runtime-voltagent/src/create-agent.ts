@@ -42,7 +42,10 @@ import {
   assembleTurnTools,
   BOARD_TOOL_INSTRUCTIONS,
 } from './tools/board-agent-contract.js'
-import { getSharedBoardRuntime } from './tools/board-runtime.js'
+import {
+  getSharedBoardRuntime,
+  productIdentityFromEnv,
+} from './tools/board-runtime.js'
 import { workbenchTools } from './tools.js'
 import {
   PLAN_TOOL_INSTRUCTIONS,
@@ -168,6 +171,11 @@ export async function createWorkbenchAgent(
     })
     const manifests = registry.listManifests()
     const plugins = await registry.load({ workspaceRoot })
+    getSharedBoardRuntime({ env }).attachQueries({
+      catalog: registry.listQueryCatalog(),
+      handlers: registry.listQueryHandlers(),
+      identity: productIdentityFromEnv(env),
+    })
 
     // Soft-fail optional skills plugins; only hard-fail when skills.office itself fails.
     const officeSkillsFailed = plugins.skillsResults.find(

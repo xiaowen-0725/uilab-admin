@@ -47,17 +47,22 @@ export type PluginDoctorReport = {
   json: { ok: boolean; findings: DoctorFinding[] }
 }
 
-function contributeSummary(rec: PluginRuntimeRecord): string[] {
+function contributeSummary(
+  rec: PluginRuntimeRecord,
+  queryPluginIds: ReadonlySet<string>,
+): string[] {
   const tags: string[] = []
   if (rec.mcp.length > 0) tags.push('mcp')
   if (rec.cli.length > 0) tags.push('cli')
   if (rec.skills) tags.push('skills')
   if (rec.auth.length > 0) tags.push('auth')
+  if (queryPluginIds.has(rec.id)) tags.push('queries')
   // discovery synthetic rows may have none
   return tags
 }
 
 export function toListRows(result: PluginRegistryLoadResult): PluginListRow[] {
+  const queryPluginIds = new Set((result.queries ?? []).map((query) => query.pluginId))
   return result.plugins.map((p) => ({
     id: p.id,
     name: p.name,
@@ -65,7 +70,7 @@ export function toListRows(result: PluginRegistryLoadResult): PluginListRow[] {
     kind: p.kind,
     enabled: p.enabled,
     loadStatus: p.loadStatus,
-    contributes: contributeSummary(p),
+    contributes: contributeSummary(p, queryPluginIds),
     reason: p.reason ? sanitizeHint(p.reason) : undefined,
   }))
 }

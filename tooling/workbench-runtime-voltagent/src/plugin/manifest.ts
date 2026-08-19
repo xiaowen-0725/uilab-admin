@@ -269,6 +269,35 @@ export type AuthResourceContribution = {
   }
 }
 
+/**
+ * Resource-ref or scalar query parameter. `type` is plugin-declared;
+ * this file must stay free of vertical domain words.
+ */
+export type QueryParameterDecl =
+  | {
+      type: 'resource'
+      resourceType: string
+      /** Extra permissions for this parameter; unioned with the query-level list. */
+      requiredPermissions?: string[]
+    }
+  | {
+      type: 'string' | 'number' | 'boolean' | 'string_array'
+      required?: boolean
+    }
+
+/**
+ * Plugin-declared structured query. `requiredPermissions` is fail-closed at
+ * execute time: missing or empty refuses the run.
+ */
+export type QueryContribution = {
+  name: string
+  /** User-visible title (Chinese-first). */
+  title: string
+  parameters: Record<string, QueryParameterDecl>
+  requiredPermissions: string[]
+  referencableByJob: boolean
+}
+
 export type PluginContributes = {
   mcp?: McpContribution[]
   skills?: SkillsContribution
@@ -276,6 +305,11 @@ export type PluginContributes = {
   auth?: AuthResourceContribution[]
   /** Product metadata owned by this Plugin; projected generically by Host. */
   connectors?: ConnectorContribution[]
+  /**
+   * Structured queries (ADR-0024 §2). Declaration only — trusted handlers
+   * live on BuiltinPluginPackage, never in filesystem plugin.json.
+   */
+  queries?: QueryContribution[]
   /** Later tickets: tools */
 }
 

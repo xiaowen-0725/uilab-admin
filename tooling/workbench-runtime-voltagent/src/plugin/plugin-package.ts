@@ -14,6 +14,15 @@
 
 import type { PluginManifest } from './manifest.js'
 
+/** Trusted in-process query implementation. Receives a signed fetch, never raw secrets. */
+export type QueryHandlerInput = {
+  name: string
+  params: Record<string, unknown>
+  fetch: typeof fetch
+}
+
+export type QueryHandler = (input: QueryHandlerInput) => Promise<unknown>
+
 /** Deterministic Fake catalog entry for a connector declared by this package. */
 export type FakeCatalogEntry = {
   /** The connector id this entry projects (must match a ConnectorContribution.id). */
@@ -37,4 +46,9 @@ export type BuiltinPluginPackage = {
   brandIconKey?: string
   /** Deterministic Fake catalog entries for connectors declared by this package. */
   fakeCatalog?: FakeCatalogEntry[]
+  /**
+   * Trusted query implementations keyed by QueryContribution.name.
+   * Filesystem plugin.json cannot supply these.
+   */
+  queryHandlers?: Record<string, QueryHandler>
 }

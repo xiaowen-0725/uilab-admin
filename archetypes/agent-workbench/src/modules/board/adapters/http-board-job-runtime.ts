@@ -75,16 +75,20 @@ function failureFromStatus(
   )
 }
 
-function failureFromCatch(err: unknown): BoardJobRunFailure {
+function failureFromCatch(
+  err: unknown,
+  channel: 'job' | 'query' = 'job',
+): BoardJobRunFailure {
+  const label = channel === 'query' ? '查询执行端点' : '作业执行端点'
   if (isNetworkClassError(err)) {
     return failure(
       'runtime_unavailable',
-      '作业执行端点不可达，侧车未连接或网络错误',
+      `${label}不可达，侧车未连接或网络错误`,
     )
   }
   return failure(
     'runtime_unavailable',
-    err instanceof Error ? err.message : '作业执行端点不可达',
+    err instanceof Error ? err.message : `${label}不可达`,
   )
 }
 
@@ -169,8 +173,44 @@ export function createHttpBoardJobRuntime(
       }
     },
     runJob,
-    evaluate(request: WidgetDataSourceEvaluateRequest): Promise<BoardJobRunResult> {
-      return defaultEvaluateDataSource({ runJob }, request)
+    async evaluate(
+      request: WidgetDataSourceEvaluateRequest,
+    ): Promise<BoardJobRunResult> {
+      if (request.kind !== 'query') {
+        return defaultEvaluateDataSource({ runJob }, request)
+      }
+      const name = request.queryName?.trim() ?? ''
+      if (!name) return failure('unknown_query', '缺少 queryName')
+      try {
+        const res = await fetchImpl(
+          `${baseUrl}/board/queries/${encodeURIComponent(name)}/run`,
+          {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ params: request.queryParams ?? {} }),
+          },
+        )
+        const body = await readErrorBody(res)
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            return failure(
+              body?.error ?? 'not_authorized',
+              body?.hint ?? '缺少或无效的本机侧车凭据，无法执行查询',
+            )
+          }
+          return failure(
+            body?.error ?? 'runtime_unavailable',
+            body?.hint ?? `查询执行端点不可达（HTTP ${res.status}）`,
+          )
+        }
+        const parsed = body as { ok?: boolean; payload?: unknown; error?: string; hint?: string } | null
+        if (parsed && parsed.ok === false) {
+          return failure(parsed.error ?? 'runtime_unavailable', parsed.hint ?? '查询执行失败')
+        }
+        return { ok: true, payload: parsed && 'payload' in parsed ? parsed.payload : parsed }
+      } catch (err) {
+        return failureFromCatch(err, 'query')
+      }
     },
   }
 }

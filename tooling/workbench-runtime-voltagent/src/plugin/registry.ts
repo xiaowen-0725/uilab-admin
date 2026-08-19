@@ -21,6 +21,12 @@ import { BUILTIN_PLUGINS } from './builtins.js'
 import { DEMO_EXAMPLE_PACKAGE } from './demo-package.js'
 import { FEISHU_PLUGIN_PACKAGE } from './feishu-package.js'
 import { GITHUB_PLUGIN_PACKAGE } from './github-package.js'
+import { QUERY_FIXTURE_PACKAGE } from './query-fixture-package.js'
+import {
+  collectQueryHandlers,
+  listQueryCatalog,
+  type QueryCatalogEntry,
+} from './query-catalog.js'
 import {
   projectConnectorDescriptors,
   type ConnectorDescriptor,
@@ -29,7 +35,11 @@ import {
   discoverLocalPlugins,
   type PluginDiscoveryFailure,
 } from './discover.js'
-import type { FakeCatalogEntry, BuiltinPluginPackage } from './plugin-package.js'
+import type {
+  FakeCatalogEntry,
+  BuiltinPluginPackage,
+  QueryHandler,
+} from './plugin-package.js'
 import {
   loadCliContributions,
   type CliLoadStatus,
@@ -100,6 +110,8 @@ export type PluginRegistryLoadResult = {
   authStatusLine: string
   /** Local plugin.json discovery failures (isolated; builtins still load) */
   discoveryFailures: PluginDiscoveryFailure[]
+  /** Structured queries from enabled plugin manifests (ADR-0024 §2). */
+  queries: QueryCatalogEntry[]
   /** Virtual skill roots for Workspace.skills.rootPaths */
   skillRoots: string[]
   skillsResults: SkillsSeedResult[]
@@ -118,6 +130,10 @@ export type PluginRegistry = {
   listConnectorDescriptors(): ConnectorDescriptor[]
   /** Deterministic Fake catalog entries from registered packages (#49). */
   listFakeCatalog(): FakeCatalogEntry[]
+  /** Enabled plugin query declarations (no endpoints, no credentials). */
+  listQueryCatalog(): QueryCatalogEntry[]
+  /** Trusted in-process query handlers from enabled packages. */
+  listQueryHandlers(): Record<string, QueryHandler>
   /** Enabled plugin ids for this env/config */
   resolveEnabledIds(): string[]
   /** Re-probe auth resources without reconnecting MCP or rebuilding tools. */
@@ -195,6 +211,10 @@ export function createPluginRegistry(
   const byId = new Map(manifests.map((m) => [m.id, m]))
   const discoveryFailures = options.discoveryFailures ?? []
   const connectorDescriptors = projectConnectorDescriptors(manifests)
+
+  function enabledIdSet(): Set<string> {
+    return new Set(resolveEnabledIds())
+  }
 
   function resolveEnabledIds(): string[] {
     if (options.enabledIds) return [...options.enabledIds]
@@ -275,6 +295,8 @@ export function createPluginRegistry(
     listManifests: () => [...manifests],
     listConnectorDescriptors: () => [...connectorDescriptors],
     listFakeCatalog: () => [...fakeCatalog],
+    listQueryCatalog: () => listQueryCatalog(manifests, enabledIdSet()),
+    listQueryHandlers: () => collectQueryHandlers(packages, enabledIdSet()),
     resolveEnabledIds,
     refreshAuthStatuses: () =>
       resolvePluginAuthStatuses(buildAuthItems(), authOpts),
@@ -567,6 +589,7 @@ export function createPluginRegistry(
         discoveryFailures: [...discoveryFailures],
         skillRoots: skillsAgg.virtualRoots,
         skillsResults: skillsAgg.results,
+        queries: listQueryCatalog(manifests, enabled),
         disconnect: mcpAgg.disconnect,
       }
     },
@@ -589,6 +612,7 @@ export async function createPluginRegistryFromEnv(
     DEMO_EXAMPLE_PACKAGE,
     GITHUB_PLUGIN_PACKAGE,
     FEISHU_PLUGIN_PACKAGE,
+    QUERY_FIXTURE_PACKAGE,
   ]
   const reservedIds = new Set(builtins.map((m) => m.id))
   for (const pkg of packages) {
