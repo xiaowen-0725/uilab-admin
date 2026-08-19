@@ -178,6 +178,8 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(HOST_IPC.getRuntimeStatus, async () => runtimeStatus)
+  // Board schedule wake: send HOST_IPC.boardRefreshWake to the renderer.
+  // Host must not fetch widget data or write IDB.
 }
 
 app.whenReady().then(() => {

@@ -36,6 +36,11 @@ export interface HostPort {
   startRuntime(workspaceRoot: string): Promise<HostStartRuntimeResult>
   stopRuntime(): Promise<void>
   getRuntimeStatus(): Promise<HostRuntimeStatus>
+  /**
+   * Desktop Host wake: renderer should run one due-source evaluation pass.
+   * Host must not fetch or persist board data. Web adapters are no-ops.
+   */
+  subscribeBoardRefreshWake(listener: () => void): () => void
 }
 
 export const HOST_UNAVAILABLE_MESSAGE =

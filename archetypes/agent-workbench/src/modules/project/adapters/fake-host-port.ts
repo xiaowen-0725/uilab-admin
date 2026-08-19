@@ -34,6 +34,7 @@ export interface FakeHostPort extends HostPort {
   setPickResult(result: PickDirectoryResult): void
   setStartDelayMs(ms: number): void
   setRuntimeStatus(status: HostRuntimeStatus): void
+  emitBoardRefreshWake(): void
 }
 
 export function createFakeHostPort(
@@ -48,6 +49,7 @@ export function createFakeHostPort(
     ...(options.existingDirectories ?? []).map((dir) => normalizeLocalRoot(dir)),
   ])
   const calls: HostPortCall[] = []
+  const wakeListeners = new Set<() => void>()
   let pickResult: PickDirectoryResult = options.pickResult ?? {
     canceled: true,
   }
@@ -78,6 +80,10 @@ export function createFakeHostPort(
     },
     setRuntimeStatus(status) {
       runtimeStatus = status
+    },
+    emitBoardRefreshWake() {
+      record('emitBoardRefreshWake', [])
+      for (const listener of [...wakeListeners]) listener()
     },
     isAvailable() {
       return available
@@ -126,6 +132,13 @@ export function createFakeHostPort(
       record('getRuntimeStatus', [])
       if (!available) return 'error'
       return runtimeStatus
+    },
+    subscribeBoardRefreshWake(listener) {
+      record('subscribeBoardRefreshWake', [])
+      wakeListeners.add(listener)
+      return () => {
+        wakeListeners.delete(listener)
+      }
     },
   }
 

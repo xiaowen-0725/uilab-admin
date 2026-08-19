@@ -483,4 +483,40 @@ describe('IdbBoardStore', () => {
     ).toBeUndefined()
     db.close()
   })
+
+  it('serializes schedule lease claims so only one instance holds a due source', async () => {
+    const { db, store } = await openStore()
+    const first = await store.claimScheduleLease({
+      sourceId: 'source:widget-1',
+      instanceId: 'tab-a',
+      executionKey: 'exec_a',
+      leaseMs: 60_000,
+      nowIso: NOW,
+      principalKey: 'anonymous',
+    })
+    const second = await store.claimScheduleLease({
+      sourceId: 'source:widget-1',
+      instanceId: 'tab-b',
+      executionKey: 'exec_b',
+      leaseMs: 60_000,
+      nowIso: NOW,
+      principalKey: 'anonymous',
+    })
+    expect(first).toMatchObject({ ok: true, lease: { executionKey: 'exec_a' } })
+    expect(second).toMatchObject({ ok: false, reason: 'held' })
+
+    const takeover = await store.claimScheduleLease({
+      sourceId: 'source:widget-1',
+      instanceId: 'tab-b',
+      executionKey: 'exec_b',
+      leaseMs: 60_000,
+      nowIso: '2026-08-16T00:02:00.000Z',
+      principalKey: 'anonymous',
+    })
+    expect(takeover).toMatchObject({
+      ok: true,
+      lease: { executionKey: 'exec_b', claimGeneration: 2 },
+    })
+    db.close()
+  })
 })

@@ -58,6 +58,9 @@ export function createElectronHostAdapter(
     getRuntimeStatus() {
       return bridge.getRuntimeStatus()
     },
+    subscribeBoardRefreshWake(listener) {
+      return bridge.onBoardRefreshWake(listener)
+    },
   }
 }
 

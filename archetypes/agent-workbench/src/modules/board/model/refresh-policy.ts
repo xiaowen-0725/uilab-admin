@@ -5,15 +5,25 @@
  * Timeout stays with the sidecar (60 s default, 120 s hard cap, ADR-0023).
  * Stale 15 min: shorter than 5 min re-hits the sidecar when flipping list/detail;
  * longer than 1 h leaves morning data hanging through the afternoon.
- * Never-run widgets (no latestDataAt) count as stale. No scheduled refresh in v1.
+ * Never-run widgets (no latestDataAt) count as stale.
+ * Foreground schedule ticks every 15 s; Host wake is a separate poke.
  */
+
+import type { WidgetDataSourceTrigger } from './types'
 
 export const BOARD_REFRESH_POLL_INTERVAL_MS = 1_000
 export const BOARD_REFRESH_STALE_MS = 15 * 60 * 1_000
 export const BOARD_REFRESH_CONCURRENCY = 2
+/** How often the renderer looks for due `schedule` sources while visible. */
+export const BOARD_SCHEDULE_TICK_MS = 15_000
 /** Sidecar default / hard cap (ADR-0023). Renderer poll budget is the hard cap plus one extra tick. */
 export const BOARD_JOB_DEFAULT_TIMEOUT_MS = 60_000
 export const BOARD_JOB_MAX_TIMEOUT_MS = 120_000
+/**
+ * Longer than the sidecar hard cap so a healthy run is not stolen in the last
+ * seconds; an expired lease then means the other instance is gone or hung.
+ */
+export const BOARD_SCHEDULE_LEASE_MS = BOARD_JOB_MAX_TIMEOUT_MS + 30_000
 
 export const JOB_RUNTIME_DISCONNECTED = '运行时未连接'
 export const JOB_DENO_MISSING = '未安装 Deno，无法执行取数作业'
@@ -66,4 +76,21 @@ export function isWidgetDataStale(
   const at = Date.parse(latestDataAt)
   if (Number.isNaN(at)) return true
   return nowMs - at >= staleMs
+}
+
+export function scheduleEveryMs(
+  trigger: WidgetDataSourceTrigger,
+): number | null {
+  if (trigger.kind !== 'schedule') return null
+  return trigger.everyMs ?? BOARD_REFRESH_STALE_MS
+}
+
+export function isScheduleDue(
+  trigger: WidgetDataSourceTrigger,
+  latestDataAt: string | undefined,
+  nowMs: number,
+): boolean {
+  const everyMs = scheduleEveryMs(trigger)
+  if (everyMs === null) return false
+  return isWidgetDataStale(latestDataAt, nowMs, everyMs)
 }

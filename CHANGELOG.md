@@ -2,6 +2,7 @@
 
 ### Added
 
+- Workbench Board renderer scheduling (#147): `trigger` on Widget Data Source drives on-open stale refresh and foreground due-time evaluation through the same evaluator; IDB lease claims plus execution-key fence stop two tabs from double-fetching or applying a late result; Desktop `HostPort` can poke a wake (Host never fetches or writes IDB); Web honestly degrades to open + foreground ticks
 - Workbench Board refresh semantics (#140): four triggers (chrome / refresh-all / first-run / stale-on-open), concurrency 2, `widget.status` as the sole loading source, failed runs keep last data, honest sidecar/Deno errors. Poll 1 s, stale 15 min, timeout 60 s / 120 s cap
 - Workbench Board Deno job runtime (#139): sidecar `POST /board/jobs/:jobId/run` + poll/cancel; CLI flags are the permission contract; results over 512 KiB fail with `output_too_large` (no `artifactRef`); missing Deno reports `deno_not_found`
 - **Phase 3C Workbench Composer fidelity**: UI Lab `agent-composer` motion block under `src/components/motion/agent-composer` (portal menus, full-width add/`/` panels, skill tags, mode badges)

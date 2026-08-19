@@ -30,6 +30,7 @@ export const HOST_IPC = {
   startRuntime: 'host:startRuntime',
   stopRuntime: 'host:stopRuntime',
   getRuntimeStatus: 'host:getRuntimeStatus',
+  boardRefreshWake: 'host:boardRefreshWake',
 } as const
 
 export type HostIpcChannel = (typeof HOST_IPC)[keyof typeof HOST_IPC]
@@ -43,4 +44,6 @@ export interface WorkbenchHostBridge {
   startRuntime(workspaceRoot: string): Promise<HostStartRuntimeResult>
   stopRuntime(): Promise<void>
   getRuntimeStatus(): Promise<HostRuntimeStatus>
+  /** Main → renderer poke. Host never fetches or writes IDB. */
+  onBoardRefreshWake(listener: () => void): () => void
 }

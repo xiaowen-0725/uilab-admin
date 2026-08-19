@@ -125,7 +125,7 @@ export type WidgetDataSourceKind = 'preset' | 'job' | 'query'
 export type WidgetDataSourceTrigger =
   | { kind: 'manual' }
   | { kind: 'onOpen' }
-  | { kind: 'schedule' }
+  | { kind: 'schedule'; everyMs?: number }
 
 /** Resource-ref parameter (ADR-0024 §2). Other param kinds stay unstructured. */
 export interface DataSourceResourceParameterDecl {

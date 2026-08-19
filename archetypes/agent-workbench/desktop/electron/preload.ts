@@ -30,6 +30,15 @@ const bridge: WorkbenchHostBridge = {
   getRuntimeStatus() {
     return ipcRenderer.invoke(HOST_IPC.getRuntimeStatus)
   },
+  onBoardRefreshWake(listener) {
+    const handler = (): void => {
+      listener()
+    }
+    ipcRenderer.on(HOST_IPC.boardRefreshWake, handler)
+    return () => {
+      ipcRenderer.removeListener(HOST_IPC.boardRefreshWake, handler)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('__workbenchHost', bridge)

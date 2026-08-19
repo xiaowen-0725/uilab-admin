@@ -158,6 +158,7 @@ export function WorkbenchApp({
     boardContent: boardContentProp,
     boardJobRuntime: boardJobRuntimeProp,
     identityScope: identityScopeProp,
+    hostPort,
   })
   const { boardOpenerRef } = board
 

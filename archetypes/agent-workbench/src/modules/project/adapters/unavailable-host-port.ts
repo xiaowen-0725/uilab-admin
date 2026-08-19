@@ -28,5 +28,8 @@ export function createUnavailableHostPort(
     async getRuntimeStatus(): Promise<HostRuntimeStatus> {
       return 'error'
     },
+    subscribeBoardRefreshWake() {
+      return () => {}
+    },
   }
 }

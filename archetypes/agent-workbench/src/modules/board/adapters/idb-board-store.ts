@@ -28,6 +28,15 @@ import {
   type LiveExecutionMap,
 } from '../model/identity-barrier'
 import {
+  SCHEDULE_LEASES_METADATA_KEY,
+  parseScheduleLeases,
+  resolveScheduleClaim,
+  scheduleCommitFenceRejects,
+  type ClaimScheduleLeaseInput,
+  type ClaimScheduleLeaseResult,
+  type ScheduleLeaseRecord,
+} from '../model/schedule-lease'
+import {
   hydrateWidgetFromSnapshot,
   jobSourceWrite,
   missingPresetSource,
@@ -90,6 +99,7 @@ const MIGRATE_STORES = [
 ] as const
 
 const RECORD_RUN_STORES = [...BOARD_STORES, STORE_METADATA] as const
+const DELETE_STORES = RECORD_RUN_STORES
 
 const IDENTITY_BARRIER_STORES = [
   STORE_WIDGET_DATA_SNAPSHOTS,
@@ -131,7 +141,7 @@ export class IdbBoardStore implements BoardStorePort {
   }
 
   deleteBoard(boardId: BoardId): Promise<void> {
-    return this.afterMigrate(() => this.write(BOARD_STORES, async (tx) => {
+    return this.afterMigrate(() => this.write(DELETE_STORES, async (tx) => {
       const board = await getRow<BoardRecord>(tx, STORE_BOARDS, boardId)
       if (!board) return
       await remove(tx, STORE_BOARDS, boardId)
@@ -176,7 +186,7 @@ export class IdbBoardStore implements BoardStorePort {
 
   deleteWidget(widgetId: BoardWidgetId): Promise<void> {
     return this.afterMigrate(() =>
-      this.write(BOARD_STORES, (tx) => deleteWidgetInTx(tx, widgetId)),
+      this.write(DELETE_STORES, (tx) => deleteWidgetInTx(tx, widgetId)),
     )
   }
 
@@ -252,6 +262,16 @@ export class IdbBoardStore implements BoardStorePort {
           input.principalKey,
         )
         await writeLiveExecutions(tx, live)
+        const leases = parseScheduleLeases(
+          (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+        )
+        let leaseChanged = false
+        for (const [id, lease] of Object.entries(leases)) {
+          if (lease.principalKey !== input.principalKey) continue
+          delete leases[id]
+          leaseChanged = true
+        }
+        if (leaseChanged) await writeScheduleLeases(tx, leases)
         if (!input.deleteSnapshots) return
         const rows = await getAllRows<WidgetDataSnapshotRecord>(
           tx,
@@ -299,7 +319,7 @@ export class IdbBoardStore implements BoardStorePort {
   }
 
   deleteJob(jobId: WidgetDataJobId): Promise<void> {
-    return this.afterMigrate(() => this.write(BOARD_STORES, async (tx) => {
+    return this.afterMigrate(() => this.write(DELETE_STORES, async (tx) => {
       const job = await getRow<WidgetDataJobRecord>(tx, STORE_WIDGET_DATA_JOBS, jobId)
       if (!job) return
       await deleteJobAndRunsInTx(tx, jobId)
@@ -373,6 +393,12 @@ export class IdbBoardStore implements BoardStorePort {
       const epoch = parseEpoch(
         (await getMetadataRow(tx, identityEpochMetadataKey(principalKey)))?.value,
       )
+      const source = await sourceByWidgetInTx(tx, run.widgetId)
+      const lease = source
+        ? parseScheduleLeases(
+            (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+          )[source.id]
+        : undefined
       if (
         snapshot &&
         !commitFenceRejects(
@@ -380,6 +406,11 @@ export class IdbBoardStore implements BoardStorePort {
           epoch,
           options?.executionKey,
           live,
+        ) &&
+        !scheduleCommitFenceRejects(
+          options?.expectedClaimGeneration,
+          lease,
+          options?.executionKey,
         )
       ) {
         await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, snapshot)
@@ -390,6 +421,51 @@ export class IdbBoardStore implements BoardStorePort {
       }
       await putValue(tx, STORE_BOARD_WIDGETS, widgetRowAfterRun(widget, run))
     }))
+  }
+
+  claimScheduleLease(
+    input: ClaimScheduleLeaseInput,
+  ): Promise<ClaimScheduleLeaseResult> {
+    return this.afterMigrate(() =>
+      this.transact(STORE_METADATA, 'readwrite', async (tx) => {
+        const leases = parseScheduleLeases(
+          (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+        )
+        const current = leases[input.sourceId]
+        const result = resolveScheduleClaim(current, input)
+        if (!result.ok) return result
+        if (current?.executionKey && current.executionKey !== input.executionKey) {
+          const live = parseLiveExecutions(
+            (await getMetadataRow(tx, IDENTITY_LIVE_EXECUTIONS_KEY))?.value,
+          )
+          delete live[current.executionKey]
+          await writeLiveExecutions(tx, live)
+        }
+        leases[input.sourceId] = result.lease
+        await writeScheduleLeases(tx, leases)
+        return result
+      }),
+    )
+  }
+
+  getScheduleLease(sourceId: string): Promise<ScheduleLeaseRecord | null> {
+    return this.read(STORE_METADATA, async (tx) => {
+      const leases = parseScheduleLeases(
+        (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+      )
+      return leases[sourceId] ?? null
+    })
+  }
+
+  releaseScheduleLease(sourceId: string, executionKey: string): Promise<void> {
+    return this.write(STORE_METADATA, async (tx) => {
+      const leases = parseScheduleLeases(
+        (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+      )
+      if (leases[sourceId]?.executionKey !== executionKey) return
+      delete leases[sourceId]
+      await writeScheduleLeases(tx, leases)
+    })
   }
 
   commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
@@ -696,7 +772,9 @@ async function deleteSourcesForWidget(
   widgetId: BoardWidgetId,
 ): Promise<void> {
   const source = await sourceByWidgetInTx(tx, widgetId)
-  if (source) await remove(tx, STORE_WIDGET_DATA_SOURCES, source.id)
+  if (!source) return
+  await dropScheduleLease(tx, source.id)
+  await remove(tx, STORE_WIDGET_DATA_SOURCES, source.id)
 }
 
 async function deleteJobSourceInTx(
@@ -705,6 +783,7 @@ async function deleteJobSourceInTx(
 ): Promise<void> {
   const source = await sourceByWidgetInTx(tx, job.widgetId)
   if (source?.jobId === job.id) {
+    await dropScheduleLease(tx, source.id)
     await remove(tx, STORE_WIDGET_DATA_SOURCES, source.id)
   }
 }
@@ -803,6 +882,28 @@ async function writeLiveExecutions(
     key: IDENTITY_LIVE_EXECUTIONS_KEY,
     value: live,
   } satisfies MetadataRecord)
+}
+
+async function writeScheduleLeases(
+  tx: IDBTransaction,
+  leases: Record<string, ScheduleLeaseRecord>,
+): Promise<void> {
+  await putValue(tx, STORE_METADATA, {
+    key: SCHEDULE_LEASES_METADATA_KEY,
+    value: leases,
+  } satisfies MetadataRecord)
+}
+
+async function dropScheduleLease(
+  tx: IDBTransaction,
+  sourceId: string,
+): Promise<void> {
+  const leases = parseScheduleLeases(
+    (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+  )
+  if (!(sourceId in leases)) return
+  delete leases[sourceId]
+  await writeScheduleLeases(tx, leases)
 }
 
 function toStoreError(err: unknown): BoardStorePortError {

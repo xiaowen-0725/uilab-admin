@@ -7,8 +7,10 @@ import {
   createUnavailableBoardJobRuntime,
 } from '../adapters/memory-board-job-runtime'
 import { createMemoryBoardStore } from '../adapters/memory-board-store'
+import { createFakeScheduleWake } from '../adapters/schedule-wake'
 import {
   BOARD_REFRESH_CONCURRENCY,
+  isScheduleDue,
   isWidgetDataStale,
   mapJobRuntimeHint,
   parseJobResult,
@@ -131,6 +133,19 @@ describe('isWidgetDataStale', () => {
     expect(isWidgetDataStale(NOW, Date.parse(NOW))).toBe(false)
     expect(
       isWidgetDataStale(NOW, Date.parse(NOW) + 15 * 60 * 1000),
+    ).toBe(true)
+  })
+
+  it('treats a schedule source as due after everyMs', () => {
+    expect(
+      isScheduleDue({ kind: 'manual' }, NOW, Date.parse(NOW) + 20 * 60 * 1000),
+    ).toBe(false)
+    expect(
+      isScheduleDue(
+        { kind: 'schedule', everyMs: 15 * 60 * 1000 },
+        NOW,
+        Date.parse(NOW) + 20 * 60 * 1000,
+      ),
     ).toBe(true)
   })
 })
@@ -737,6 +752,192 @@ describe('data-source evaluator identity semantics', () => {
     expect(await store.getSnapshot('w1', 'alice')).toMatchObject({
       data: { occupancy: 0.42 },
     })
+    controller.dispose()
+  })
+})
+
+async function seedScheduleJob(
+  store: ReturnType<typeof createMemoryBoardStore>,
+  everyMs = 15 * 60 * 1000,
+) {
+  await store.putBoard(board())
+  await store.putWidget(
+    widget('w1', { latestData: { n: 0 }, latestDataAt: NOW }),
+  )
+  await store.putJob(job('j1', 'w1'))
+  await store.putDataSource({
+    id: 'source:w1',
+    widgetId: 'w1',
+    kind: 'job',
+    jobId: 'j1',
+    trigger: { kind: 'schedule', everyMs },
+    referencableByJob: false,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
+}
+
+describe('foreground schedule and host wake', () => {
+  it('evaluates a due schedule source once', async () => {
+    const store = createMemoryBoardStore()
+    await seedScheduleJob(store)
+    const runtime = createMemoryBoardJobRuntime({ n: 2 })
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      now: () => new Date('2026-08-17T06:20:00.000Z'),
+    })
+
+    const outcomes = await controller.evaluateDue()
+    expect(outcomes).toEqual([
+      expect.objectContaining({ kind: 'finished', status: 'success' }),
+    ])
+    expect(await store.getWidget('w1')).toMatchObject({
+      latestData: { n: 2 },
+      status: 'idle',
+    })
+    controller.dispose()
+  })
+
+  it('does not evaluate when the session is invalid and marks 需重新登录', async () => {
+    const store = createMemoryBoardStore()
+    await seedScheduleJob(store)
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [SITE_READ],
+    })
+    const runtime = createControllableBoardJobRuntime()
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      identityScope: scope,
+      now: () => new Date('2026-08-17T06:20:00.000Z'),
+    })
+
+    scope.invalidateSession()
+    expect(await controller.evaluateDue()).toEqual([
+      { kind: 'masked', reason: 'needs_relogin' },
+    ])
+    expect(runtime.calls).toEqual([])
+    expect(
+      resolveWidgetRenderState({
+        latestData: (await store.getWidget('w1', { principalKey: 'alice' }))
+          ?.latestData,
+        source: await store.getDataSourceByWidgetId('w1'),
+        identity: scope.getSnapshot(),
+      }),
+    ).toMatchObject({ masked: true, chrome: 'needs_relogin' })
+    controller.dispose()
+  })
+
+  it('lets only one instance claim a due source; the other takes over after expiry', async () => {
+    const store = createMemoryBoardStore()
+    await seedScheduleJob(store)
+    const runtime = createControllableBoardJobRuntime()
+    let now = new Date('2026-08-17T06:20:00.000Z')
+    const shared = {
+      store,
+      runtime,
+      now: () => now,
+      leaseMs: 1_000,
+    }
+    const first = createBoardRefreshController({
+      ...shared,
+      instanceId: 'tab-a',
+    })
+    const second = createBoardRefreshController({
+      ...shared,
+      instanceId: 'tab-b',
+    })
+
+    const pendingA = first.evaluateDue()
+    await expect.poll(() => runtime.calls).toEqual(['j1'])
+
+    const blocked = await second.evaluateDue()
+    expect(blocked).toEqual([{ kind: 'already_running' }])
+    expect(runtime.calls).toEqual(['j1'])
+
+    now = new Date('2026-08-17T06:20:02.000Z')
+    const pendingB = second.evaluateDue()
+    await expect.poll(() => runtime.calls).toEqual(['j1', 'j1'])
+
+    runtime.complete('j1', { ok: true, payload: { owner: 'a' } })
+    expect(await pendingA).toEqual([
+      { kind: 'rejected', reason: 'stale_commit' },
+    ])
+    expect(await store.getWidget('w1')).toMatchObject({
+      latestData: { n: 0 },
+    })
+
+    runtime.complete('j1', { ok: true, payload: { owner: 'b' } })
+    expect(await pendingB).toEqual([
+      expect.objectContaining({ kind: 'finished', status: 'success' }),
+    ])
+    expect(await store.getWidget('w1')).toMatchObject({
+      latestData: { owner: 'b' },
+    })
+    first.dispose()
+    second.dispose()
+  })
+
+  it('does not fire schedule again when stale-on-open already started the same source', async () => {
+    const store = createMemoryBoardStore()
+    await seedScheduleJob(store)
+    const runtime = createControllableBoardJobRuntime()
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      now: () => new Date('2026-08-17T06:20:00.000Z'),
+    })
+
+    const opened = controller.refreshStaleOnOpen('board-1')
+    await expect
+      .poll(async () => (await store.getWidget('w1'))?.status)
+      .toBe('running')
+    expect(await controller.evaluateDue()).toEqual([])
+    expect(runtime.calls).toEqual(['j1'])
+
+    runtime.complete('j1', { ok: true, payload: { n: 3 } })
+    await opened
+    expect(runtime.calls).toEqual(['j1'])
+    controller.dispose()
+  })
+
+  it('does not auto-evaluate a manual source even when it is stale', async () => {
+    const store = createMemoryBoardStore()
+    await seedThreeJobs(store)
+    const runtime = createMemoryBoardJobRuntime({ n: 9 })
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      now: () => new Date('2026-08-17T08:00:00.000Z'),
+    })
+
+    expect(await controller.evaluateDue()).toEqual([])
+    expect(await controller.refreshJob('j1')).toMatchObject({
+      kind: 'finished',
+      status: 'success',
+    })
+    expect(await store.getWidget('w1')).toMatchObject({ latestData: { n: 9 } })
+    controller.dispose()
+  })
+
+  it('runs one due pass when the fake host wake fires', async () => {
+    const store = createMemoryBoardStore()
+    await seedScheduleJob(store)
+    const runtime = createMemoryBoardJobRuntime({ n: 4 })
+    const wake = createFakeScheduleWake()
+    const controller = createBoardRefreshController({
+      store,
+      runtime,
+      wake,
+      now: () => new Date('2026-08-17T06:20:00.000Z'),
+    })
+
+    wake.emit()
+    await expect
+      .poll(async () => (await store.getWidget('w1'))?.latestData)
+      .toEqual({ n: 4 })
     controller.dispose()
   })
 })

@@ -4,6 +4,13 @@
 
 import { commitFenceRejects } from '../model/identity-barrier'
 import {
+  resolveScheduleClaim,
+  scheduleCommitFenceRejects,
+  type ClaimScheduleLeaseInput,
+  type ClaimScheduleLeaseResult,
+  type ScheduleLeaseRecord,
+} from '../model/schedule-lease'
+import {
   hydrateWidgetFromSnapshot,
   jobSourceWrite,
   missingPresetSource,
@@ -49,6 +56,7 @@ export class MemoryBoardStore implements BoardStorePort {
   private readonly snapshots = new Map<string, WidgetDataSnapshotRecord>()
   private readonly identityEpochs = new Map<string, number>()
   private readonly liveExecutions = new Map<string, string>()
+  private readonly leases = new Map<string, ScheduleLeaseRecord>()
   private presetsInstalled: Record<string, number> = {}
   private capableTaskIds: string[] = []
 
@@ -147,6 +155,9 @@ export class MemoryBoardStore implements BoardStorePort {
     for (const [key, principal] of [...this.liveExecutions]) {
       if (principal === input.principalKey) this.liveExecutions.delete(key)
     }
+    for (const [id, lease] of [...this.leases]) {
+      if (lease.principalKey === input.principalKey) this.leases.delete(id)
+    }
     if (!input.deleteSnapshots) return
     for (const [key, snapshot] of this.snapshots) {
       if (snapshot.principalKey === input.principalKey) {
@@ -221,6 +232,8 @@ export class MemoryBoardStore implements BoardStorePort {
       data,
       principalKey,
     )
+    const source = this.sourceForWidget(run.widgetId)
+    const lease = source ? this.leases.get(source.id) : undefined
     if (
       snapshot &&
       !commitFenceRejects(
@@ -228,6 +241,11 @@ export class MemoryBoardStore implements BoardStorePort {
         this.identityEpochs.get(principalKey),
         options?.executionKey,
         Object.fromEntries(this.liveExecutions),
+      ) &&
+      !scheduleCommitFenceRejects(
+        options?.expectedClaimGeneration,
+        lease,
+        options?.executionKey,
       )
     ) {
       await this.putSnapshot(snapshot)
@@ -236,6 +254,31 @@ export class MemoryBoardStore implements BoardStorePort {
       this.liveExecutions.delete(options.executionKey)
     }
     this.widgets.set(widget.id, widgetRowAfterRun(widget, run))
+  }
+
+  async claimScheduleLease(
+    input: ClaimScheduleLeaseInput,
+  ): Promise<ClaimScheduleLeaseResult> {
+    const current = this.leases.get(input.sourceId)
+    const result = resolveScheduleClaim(current, input)
+    if (!result.ok) return result
+    if (current?.executionKey && current.executionKey !== input.executionKey) {
+      this.liveExecutions.delete(current.executionKey)
+    }
+    this.leases.set(input.sourceId, result.lease)
+    return result
+  }
+
+  async getScheduleLease(sourceId: string): Promise<ScheduleLeaseRecord | null> {
+    return this.leases.get(sourceId) ?? null
+  }
+
+  async releaseScheduleLease(
+    sourceId: string,
+    executionKey: string,
+  ): Promise<void> {
+    const current = this.leases.get(sourceId)
+    if (current?.executionKey === executionKey) this.leases.delete(sourceId)
   }
 
   async commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
@@ -349,7 +392,10 @@ export class MemoryBoardStore implements BoardStorePort {
     const job = this.jobForWidget(widgetId)
     if (job) this.deleteJobAndRuns(job.id)
     for (const source of [...this.sources.values()]) {
-      if (source.widgetId === widgetId) this.sources.delete(source.id)
+      if (source.widgetId === widgetId) {
+        this.leases.delete(source.id)
+        this.sources.delete(source.id)
+      }
     }
     for (const [key, snapshot] of this.snapshots) {
       if (snapshot.widgetId === widgetId) this.snapshots.delete(key)
@@ -363,7 +409,10 @@ export class MemoryBoardStore implements BoardStorePort {
     }
     this.jobs.delete(jobId)
     for (const source of [...this.sources.values()]) {
-      if (source.jobId === jobId) this.sources.delete(source.id)
+      if (source.jobId === jobId) {
+        this.leases.delete(source.id)
+        this.sources.delete(source.id)
+      }
     }
   }
 }

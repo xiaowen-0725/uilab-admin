@@ -55,6 +55,26 @@ export type {
   BoardStructureFilter,
   IdentityBarrierInput,
 } from './ports/board-store-port'
+export type {
+  ClaimScheduleLeaseInput,
+  ClaimScheduleLeaseResult,
+  ScheduleLeaseRecord,
+} from './model/schedule-lease'
+export {
+  SCHEDULE_LEASES_METADATA_KEY,
+  isLeaseHeld,
+  resolveScheduleClaim,
+  scheduleCommitFenceRejects,
+} from './model/schedule-lease'
+export type {
+  HostWakeSubscribe,
+  ScheduleWakePort,
+  ScheduleWakeUnsubscribe,
+} from './ports/schedule-wake-port'
+export {
+  createFakeScheduleWake,
+  createHostScheduleWake,
+} from './adapters/schedule-wake'
 export { BoardStorePortError } from './ports/board-store-port'
 export type {
   AuthorizedResource,
@@ -130,12 +150,16 @@ export {
   BOARD_REFRESH_CONCURRENCY,
   BOARD_REFRESH_POLL_INTERVAL_MS,
   BOARD_REFRESH_STALE_MS,
+  BOARD_SCHEDULE_LEASE_MS,
+  BOARD_SCHEDULE_TICK_MS,
   JOB_DENO_MISSING,
   JOB_INVALID_RESULT,
   JOB_RUNTIME_DISCONNECTED,
+  isScheduleDue,
   isWidgetDataStale,
   mapJobRuntimeHint,
   parseJobResult,
+  scheduleEveryMs,
 } from './model/refresh-policy'
 export type {
   BoardCommitInput,

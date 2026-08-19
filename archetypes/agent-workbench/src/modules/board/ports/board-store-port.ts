@@ -4,6 +4,11 @@
  */
 
 import type {
+  ClaimScheduleLeaseInput,
+  ClaimScheduleLeaseResult,
+  ScheduleLeaseRecord,
+} from '../model/schedule-lease'
+import type {
   BoardId,
   BoardPlacement,
   BoardRecord,
@@ -35,6 +40,8 @@ export interface BoardRunCommitOptions extends BoardSnapshotReadOptions {
   expectedGeneration?: number
   /** Claim captured at evaluate start (scheduling / identity fence). */
   executionKey?: string
+  /** Lease generation captured at claim; rechecked with the schedule fence. */
+  expectedClaimGeneration?: number
   /** Query / source evaluation may record a run without a job row. */
   allowMissingJob?: boolean
 }
@@ -125,6 +132,19 @@ export interface BoardStorePort {
    * in one transaction so a late success cannot write through the fence.
    */
   applyIdentityBarrier(input: IdentityBarrierInput): Promise<void>
+
+  /**
+   * Exclusive IDB claim for a due source. Expired leases are stealable.
+   * Takeover evicts the previous execution key from the live-execution map.
+   */
+  claimScheduleLease(
+    input: ClaimScheduleLeaseInput,
+  ): Promise<ClaimScheduleLeaseResult>
+
+  getScheduleLease(sourceId: string): Promise<ScheduleLeaseRecord | null>
+
+  /** Drop the lease only when `executionKey` still owns it. */
+  releaseScheduleLease(sourceId: string, executionKey: string): Promise<void>
 
   getJob(jobId: WidgetDataJobId): Promise<WidgetDataJobRecord | null>
 

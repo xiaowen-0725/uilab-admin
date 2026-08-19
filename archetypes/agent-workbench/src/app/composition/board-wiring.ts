@@ -5,9 +5,11 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
+  BOARD_SCHEDULE_TICK_MS,
   createBoardClientToolExecutor,
   createBoardPreviewPolicy,
   createBoardRefreshController,
+  createHostScheduleWake,
   createHttpBoardContent,
   createHttpBoardJobRuntime,
   createIdbBoardStore,
@@ -23,6 +25,7 @@ import {
   type BoardStorePort,
   type IdentityScopePort,
 } from '@/modules/board'
+import type { HostPort } from '@/modules/project'
 import { createAnonymousIdentityScope } from '@/modules/identity'
 import type { WorkbenchSessionCommands } from '@/modules/workbench-session'
 import type { BoardSurfaceWiring } from './surface-assembly'
@@ -42,6 +45,7 @@ export interface UseWorkbenchBoardWiringInput {
   boardContent?: BoardContentPort
   boardJobRuntime?: BoardJobRuntimePort
   identityScope?: IdentityScopePort
+  hostPort?: HostPort
 }
 
 export type BoardCapabilityApi = {
@@ -125,6 +129,10 @@ export function useWorkbenchBoardWiring(
   const previewPolicy = useMemo(() => createBoardPreviewPolicy(), [])
   const [revision, setRevision] = useState(0)
   const bumpRevision = () => setRevision((value) => value + 1)
+  const wake = useMemo(
+    () => createHostScheduleWake(input.hostPort),
+    [input.hostPort],
+  )
   const refresh = useMemo(
     () =>
       createBoardRefreshController({
@@ -132,8 +140,11 @@ export function useWorkbenchBoardWiring(
         runtime: jobRuntime,
         identityScope,
         onChange: bumpRevision,
+        wake,
+        instanceId: crypto.randomUUID(),
+        foregroundTickMs: INSTANT_DEMO ? undefined : BOARD_SCHEDULE_TICK_MS,
       }),
-    [identityScope, jobRuntime, store],
+    [identityScope, jobRuntime, store, wake],
   )
   useEffect(() => () => refresh.dispose(), [refresh])
   const selectedTaskIdRef = useRef(input.selectedTaskId)

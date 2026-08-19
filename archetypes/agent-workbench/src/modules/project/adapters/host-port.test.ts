@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createElectronHostAdapter,
+  createFakeHostPort,
   createUnavailableHostPort,
   createWorkbenchHostPort,
   HOST_IPC,
@@ -17,7 +18,24 @@ describe('HostPort adapters (renderer)', () => {
       startRuntime: 'host:startRuntime',
       stopRuntime: 'host:stopRuntime',
       getRuntimeStatus: 'host:getRuntimeStatus',
+      boardRefreshWake: 'host:boardRefreshWake',
     })
+  })
+
+  it('fake host can emit a board refresh wake without fetching data', () => {
+    const host = createFakeHostPort()
+    const listener = vi.fn()
+    const stop = host.subscribeBoardRefreshWake(listener)
+    host.emitBoardRefreshWake()
+    expect(listener).toHaveBeenCalledTimes(1)
+    stop()
+    host.emitBoardRefreshWake()
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('unavailable host wake subscription is a no-op', () => {
+    const host = createUnavailableHostPort()
+    expect(host.subscribeBoardRefreshWake(() => {})).toEqual(expect.any(Function))
   })
 
   it('unavailable host fails closed with Chinese copy', async () => {

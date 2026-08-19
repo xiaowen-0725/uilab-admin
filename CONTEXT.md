@@ -192,7 +192,7 @@ Board 上一块可独立渲染的单元（用户可见中文文案「小组件�
 _Avoid_: Card, Panel, Component, Work Surface, Plugin, Artifact
 
 **Widget Data Source**:
-Board Widget 数据供给的一等抽象，kind 为 `preset`（预填数据）/ `job`（已批准的零依赖取数代码）/ `query`（插件声明的结构化查询，侧车以 Product Identity 加签执行）；触发策略（trigger）挂在 Data Source 上，一个 widget 只绑一个来源。模型与 IDB v4 快照分区已落地（#143）；求值器四道闸与三类失败语义已落地（#145）；query 声明与侧车执行通道已落地（#146）；调度见后续票。
+Board Widget 数据供给的一等抽象，kind 为 `preset`（预填数据）/ `job`（已批准的零依赖取数代码）/ `query`（插件声明的结构化查询，侧车以 Product Identity 加签执行）；触发策略（trigger）挂在 Data Source 上，一个 widget 只绑一个来源。模型与 IDB v4 快照分区已落地（#143）；求值器四道闸与三类失败语义已落地（#145）；query 声明与侧车执行通道已落地（#146）；渲染层调度（打开即刷 + 前台到点刷 + IDB 租约认领 + Host 唤醒钩子）已落地（#147）。
 _Avoid_: Data Feed, Connector, 数据集, Widget Data Job（作上位词）
 
 **Widget Data Job**:

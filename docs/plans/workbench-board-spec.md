@@ -7,7 +7,7 @@
 - [0021-workbench-csp-and-widget-subdocument-policy](../adr/0021-workbench-csp-and-widget-subdocument-policy.md)
 - [0022-board-module-entities-and-split-write-channel](../adr/0022-board-module-entities-and-split-write-channel.md)
 - [0023-widget-data-job-deno-runtime-and-one-time-consent](../adr/0023-widget-data-job-deno-runtime-and-one-time-consent.md)
-- [0024-widget-data-source-model-and-product-identity-layering](../adr/0024-widget-data-source-model-and-product-identity-layering.md)（模型 / IDB v4 / 示例板 preset 已落地 #143；query / identity / 调度见后续票）
+- [0024-widget-data-source-model-and-product-identity-layering](../adr/0024-widget-data-source-model-and-product-identity-layering.md)（模型 / IDB v4 / 示例板 preset 已落地 #143；query / identity 已落地；渲染层调度已落地 #147）
 - [0025-latest-data-failure-semantics-under-permissioned-identity](../adr/0025-latest-data-failure-semantics-under-permissioned-identity.md)（快照 store 已落地 #143；失败语义求值器见 #145）
 
 **Vocabulary:** 根 [`CONTEXT.md`](../../CONTEXT.md)（Board / Board Widget / Widget Data Job / Widget Data Source / Product Identity / Authorized Resource / 预置看板 已登记）

@@ -1,19 +1,22 @@
 /**
- * Data-source evaluator — chrome / refresh-all / first-run / stale-on-open.
- * Four gates + failure semantics: ADR-0025. widget.status via recordRun is
- * the only loading source — UI must not keep its own.
+ * Data-source evaluator — chrome / refresh-all / first-run / stale-on-open /
+ * foreground schedule / Host wake. Four gates + failure semantics: ADR-0025.
+ * widget.status via recordRun is the only loading source — UI must not keep its own.
  */
 
 import { snapshotStorageKey } from '../model/data-source'
 import {
   BOARD_REFRESH_CONCURRENCY,
   BOARD_REFRESH_STALE_MS,
+  BOARD_SCHEDULE_LEASE_MS,
+  isScheduleDue,
   isWidgetDataStale,
   JOB_ORPHANED_RUN,
   JOB_RUNTIME_DISCONNECTED,
   mapJobRuntimeHint,
   parseJobResult,
 } from '../model/refresh-policy'
+import { scheduleCommitFenceRejects } from '../model/schedule-lease'
 import { authorizeDataSourceParameters } from '../model/source-authorization'
 import {
   anonymousIdentitySnapshot,
@@ -36,6 +39,7 @@ import type {
   IdentityScopePort,
   IdentityScopeSnapshot,
 } from '../ports/identity-scope-port'
+import type { ScheduleWakePort } from '../ports/schedule-wake-port'
 
 export type RefreshMode = 'refresh' | 'first-run'
 
@@ -78,6 +82,8 @@ export interface ExecuteJobRunInput {
   identityScope?: IdentityScopePort
   claims?: Map<string, EvaluationClaim>
   stoppedRefresh?: Set<string>
+  executionKey?: string
+  expectedClaimGeneration?: number
 }
 
 export interface BoardRefreshController {
@@ -85,6 +91,7 @@ export interface BoardRefreshController {
   refreshWidget(widgetId: string): Promise<RefreshOutcome>
   refreshBoard(boardId: string): Promise<RefreshOutcome[]>
   refreshStaleOnOpen(boardId: string): Promise<RefreshOutcome[]>
+  evaluateDue(): Promise<RefreshOutcome[]>
   reconcileOrphans(boardId?: string): Promise<void>
   isInFlight(jobId: WidgetDataJobId): boolean
   probe(): Promise<{ ok: true } | { ok: false; error: string; hint: string }>
@@ -217,13 +224,16 @@ async function evaluateBoundSource(
     }
   }
 
-  if (widget.status === 'running') {
+  if (
+    widget.status === 'running' &&
+    input.expectedClaimGeneration === undefined
+  ) {
     return { kind: 'already_running', runId: widget.lastRunId }
   }
   if (input.runtime.available === false) return unavailable()
 
   const runId = newId('run')
-  const executionKey = newId('exec')
+  const executionKey = input.executionKey ?? newId('exec')
   const startedAt = nowIso()
   const runtimeKey = evaluationRuntimeKey(
     input.sourceKind,
@@ -253,6 +263,7 @@ async function evaluateBoundSource(
     {
       principalKey,
       executionKey,
+      expectedClaimGeneration: input.expectedClaimGeneration,
       allowMissingJob: input.sourceKind === 'query',
     },
   )
@@ -268,7 +279,16 @@ async function evaluateBoundSource(
       : await input.runtime.runJob(input.jobId)
   const finishedAt = nowIso()
   const live = currentIdentity(input.identityScope)
-  const stale = isClaimStale(claims.get(executionKey), live)
+  const lease = source
+    ? await input.store.getScheduleLease(source.id)
+    : null
+  const stale =
+    isClaimStale(claims.get(executionKey), live) ||
+    scheduleCommitFenceRejects(
+      input.expectedClaimGeneration,
+      lease ?? undefined,
+      executionKey,
+    )
   claims.delete(executionKey)
 
   async function settle(
@@ -292,6 +312,7 @@ async function evaluateBoundSource(
         principalKey,
         expectedGeneration: claim.generation,
         executionKey,
+        expectedClaimGeneration: input.expectedClaimGeneration,
         allowMissingJob: input.sourceKind === 'query',
       },
     )
@@ -326,12 +347,19 @@ export function createBoardRefreshController(input: {
   onChange?: () => void
   concurrency?: number
   staleMs?: number
+  instanceId?: string
+  leaseMs?: number
+  wake?: ScheduleWakePort
+  foregroundTickMs?: number
+  isForeground?: () => boolean
 }): BoardRefreshController {
   const inFlight = new Set<string>()
   const claims = new Map<string, EvaluationClaim>()
   const stoppedRefresh = new Set<string>()
   const concurrency = input.concurrency ?? BOARD_REFRESH_CONCURRENCY
   const staleMs = input.staleMs ?? BOARD_REFRESH_STALE_MS
+  const instanceId = input.instanceId ?? newId('sched')
+  const leaseMs = input.leaseMs ?? BOARD_SCHEDULE_LEASE_MS
 
   function clock(): Date {
     return input.now ? input.now() : new Date()
@@ -451,25 +479,60 @@ export function createBoardRefreshController(input: {
     }
   }
 
-  function runExclusive(job: WidgetDataJobRecord): Promise<RefreshOutcome> {
+  function runExclusive(
+    job: WidgetDataJobRecord,
+    extras?: Pick<ExecuteJobRunInput, 'executionKey' | 'expectedClaimGeneration'>,
+  ): Promise<RefreshOutcome> {
     return runExclusiveKey(job.id, () =>
       executeJobRun({
         ...sharedEvaluateInput(),
         jobId: job.id,
         widgetId: job.widgetId,
+        ...extras,
       }),
     )
   }
 
-  function runQuery(source: WidgetDataSourceRecord): Promise<RefreshOutcome> {
+  function runQuery(
+    source: WidgetDataSourceRecord,
+    extras?: Pick<ExecuteJobRunInput, 'executionKey' | 'expectedClaimGeneration'>,
+  ): Promise<RefreshOutcome> {
     return runExclusiveKey(source.id, () =>
       evaluateBoundSource({
         ...sharedEvaluateInput(),
         jobId: source.id,
         widgetId: source.widgetId,
         sourceKind: 'query',
+        ...extras,
       }),
     )
+  }
+
+  async function withScheduleLease(
+    source: WidgetDataSourceRecord,
+    run: (
+      extras: Pick<ExecuteJobRunInput, 'executionKey' | 'expectedClaimGeneration'>,
+    ) => Promise<RefreshOutcome>,
+  ): Promise<RefreshOutcome> {
+    if (source.trigger.kind !== 'schedule') return run({})
+    const executionKey = newId('exec')
+    const claimed = await input.store.claimScheduleLease({
+      sourceId: source.id,
+      instanceId,
+      executionKey,
+      leaseMs,
+      nowIso: nowIso(),
+      principalKey: identity().principalKey,
+    })
+    if (!claimed.ok) return { kind: 'already_running' }
+    try {
+      return await run({
+        executionKey,
+        expectedClaimGeneration: claimed.lease.claimGeneration,
+      })
+    } finally {
+      await input.store.releaseScheduleLease(source.id, executionKey)
+    }
   }
 
   async function runPool(
@@ -536,6 +599,72 @@ export function createBoardRefreshController(input: {
     return widget?.status === 'running'
   }
 
+  async function sourcesOnBoards(): Promise<WidgetDataSourceRecord[]> {
+    const found: WidgetDataSourceRecord[] = []
+    for (const board of await input.store.listBoards()) {
+      for (const placement of board.placements) {
+        const source = await input.store.getDataSourceByWidgetId(
+          placement.widgetId,
+        )
+        if (source && source.kind !== 'preset') found.push(source)
+      }
+    }
+    return found
+  }
+
+  async function evaluateDue(): Promise<RefreshOutcome[]> {
+    if (!identity().valid) {
+      return [{ kind: 'masked', reason: 'needs_relogin' }]
+    }
+    const nowMs = clock().getTime()
+    const principalKey = identity().principalKey
+    const work: Array<() => Promise<RefreshOutcome>> = []
+    for (const source of await sourcesOnBoards()) {
+      if (source.trigger.kind !== 'schedule') continue
+      if (isRefreshStopped(source.widgetId)) continue
+      const widget = await input.store.getWidget(source.widgetId, {
+        principalKey,
+      })
+      if (!widget || !isScheduleDue(source.trigger, widget.latestDataAt, nowMs)) {
+        continue
+      }
+      if (source.kind === 'query') {
+        if (inFlight.has(source.id)) continue
+        work.push(() =>
+          withScheduleLease(source, (extras) => runQuery(source, extras)),
+        )
+        continue
+      }
+      const job = source.jobId
+        ? await input.store.getJob(source.jobId)
+        : await input.store.getJobByWidgetId(source.widgetId)
+      if (!job || !isJobRunnable(job) || inFlight.has(job.id)) continue
+      work.push(() =>
+        withScheduleLease(source, (extras) => runExclusive(job, extras)),
+      )
+    }
+    return runPool(work)
+  }
+
+  function isVisible(): boolean {
+    if (input.isForeground) return input.isForeground()
+    return (
+      typeof document === 'undefined' || document.visibilityState !== 'hidden'
+    )
+  }
+
+  const unsubWake = input.wake?.subscribe(() => {
+    void evaluateDue()
+  })
+  const tickMs = input.foregroundTickMs
+  const ticker =
+    tickMs && tickMs > 0
+      ? setInterval(() => {
+          if (!isVisible()) return
+          void evaluateDue()
+        }, tickMs)
+      : undefined
+
   async function markOrphaned(job: WidgetDataJobRecord): Promise<void> {
     const widget = await input.store.getWidget(job.widgetId, {
       principalKey: identity().principalKey,
@@ -567,6 +696,8 @@ export function createBoardRefreshController(input: {
     },
     dispose() {
       unsubscribe?.()
+      unsubWake?.()
+      if (ticker) clearInterval(ticker)
     },
     async probe() {
       if (input.runtime.available === false) {
@@ -626,7 +757,12 @@ export function createBoardRefreshController(input: {
         if (isRefreshStopped(job.widgetId) || (await isRunning(job))) continue
         const widget = await input.store.getWidget(job.widgetId, { principalKey })
         if (widget && isWidgetDataStale(widget.latestDataAt, nowMs, staleMs)) {
-          work.push(() => runExclusive(job))
+          const source = await input.store.getDataSourceByWidgetId(job.widgetId)
+          work.push(() =>
+            source
+              ? withScheduleLease(source, (extras) => runExclusive(job, extras))
+              : runExclusive(job),
+          )
         }
       }
       for (const source of await querySourcesOnBoard(boardId)) {
@@ -635,11 +771,14 @@ export function createBoardRefreshController(input: {
           principalKey,
         })
         if (widget && isWidgetDataStale(widget.latestDataAt, nowMs, staleMs)) {
-          work.push(() => runQuery(source))
+          work.push(() =>
+            withScheduleLease(source, (extras) => runQuery(source, extras)),
+          )
         }
       }
       return runPool(work)
     },
+    evaluateDue,
     async reconcileOrphans(boardId) {
       const boards = boardId
         ? [await input.store.getBoard(boardId)].filter(Boolean)
