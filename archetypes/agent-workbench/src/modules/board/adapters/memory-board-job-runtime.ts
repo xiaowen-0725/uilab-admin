@@ -2,12 +2,12 @@
  * In-memory BoardJobRuntimePort for tests and first-run fakes.
  */
 
-import type {
-  BoardJobRuntimePort,
-  BoardJobRunResult,
-  WidgetDataSourceEvaluateRequest,
+import {
+  defaultEvaluateDataSource,
+  type BoardJobRuntimePort,
+  type BoardJobRunResult,
+  type WidgetDataSourceEvaluateRequest,
 } from '../ports/board-job-runtime-port'
-import { defaultEvaluateDataSource } from '../ports/board-job-runtime-port'
 
 export class MemoryBoardJobRuntime implements BoardJobRuntimePort {
   constructor(private readonly payload: unknown = { ok: true, quote: '42' }) {}

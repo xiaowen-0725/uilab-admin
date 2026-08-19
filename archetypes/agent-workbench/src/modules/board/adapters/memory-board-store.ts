@@ -3,18 +3,19 @@
  */
 
 import {
-  createPresetDataSource,
-  dataSourceFromJob,
   hydrateWidgetFromSnapshot,
+  jobSourceWrite,
+  missingPresetSource,
   persistableWidgetRow,
   snapshotFromWidgetCompat,
   snapshotStorageKey,
+  successSnapshotForRun,
+  widgetRowAfterRun,
 } from '../model/data-source'
 import {
   ANONYMOUS_PRINCIPAL_KEY,
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
-  widgetStatusForRun,
   type BoardId,
   type BoardPlacement,
   type BoardRecord,
@@ -102,10 +103,7 @@ export class MemoryBoardStore implements BoardStorePort {
   async getDataSourceByWidgetId(
     widgetId: BoardWidgetId,
   ): Promise<WidgetDataSourceRecord | null> {
-    return (
-      [...this.sources.values()].find((source) => source.widgetId === widgetId) ??
-      null
-    )
+    return this.sourceForWidget(widgetId)
   }
 
   async putDataSource(source: WidgetDataSourceRecord): Promise<void> {
@@ -143,9 +141,7 @@ export class MemoryBoardStore implements BoardStorePort {
   async getJobByWidgetId(
     widgetId: BoardWidgetId,
   ): Promise<WidgetDataJobRecord | null> {
-    return (
-      [...this.jobs.values()].find((job) => job.widgetId === widgetId) ?? null
-    )
+    return this.jobForWidget(widgetId)
   }
 
   async putJob(job: WidgetDataJobRecord): Promise<void> {
@@ -190,22 +186,14 @@ export class MemoryBoardStore implements BoardStorePort {
     }
     const widget = this.widgets.get(run.widgetId)
     if (!widget) return
-    const occurredAt = run.finishedAt ?? run.startedAt
-    const next: BoardWidgetRecord = {
-      ...widget,
-      status: widgetStatusForRun(run.status),
-      lastRunId: run.id,
-      updatedAt: occurredAt,
-    }
-    if (run.status === 'success' && data !== undefined) {
-      await this.putSnapshot({
-        widgetId: widget.id,
-        principalKey: options?.principalKey ?? ANONYMOUS_PRINCIPAL_KEY,
-        data,
-        capturedAt: occurredAt,
-      })
-    }
-    this.widgets.set(widget.id, persistableWidgetRow(next))
+    const snapshot = successSnapshotForRun(
+      widget.id,
+      run,
+      data,
+      options?.principalKey,
+    )
+    if (snapshot) await this.putSnapshot(snapshot)
+    this.widgets.set(widget.id, widgetRowAfterRun(widget, run))
   }
 
   async commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
@@ -271,6 +259,19 @@ export class MemoryBoardStore implements BoardStorePort {
     })
   }
 
+  private sourceForWidget(
+    widgetId: BoardWidgetId,
+  ): WidgetDataSourceRecord | null {
+    return (
+      [...this.sources.values()].find((source) => source.widgetId === widgetId) ??
+      null
+    )
+  }
+
+  private jobForWidget(widgetId: BoardWidgetId): WidgetDataJobRecord | null {
+    return [...this.jobs.values()].find((job) => job.widgetId === widgetId) ?? null
+  }
+
   private writeWidgetRow(
     widget: BoardWidgetRecord,
     principalKey = ANONYMOUS_PRINCIPAL_KEY,
@@ -283,20 +284,15 @@ export class MemoryBoardStore implements BoardStorePort {
       )
     }
     this.widgets.set(widget.id, persistableWidgetRow(widget))
-    if (![...this.sources.values()].some((source) => source.widgetId === widget.id)) {
-      const source = createPresetDataSource(widget.id, widget.updatedAt)
-      this.sources.set(source.id, source)
-    }
+    const preset = missingPresetSource(this.sourceForWidget(widget.id), widget)
+    if (preset) this.sources.set(preset.id, preset)
   }
 
   private ensureJobSource(job: WidgetDataJobRecord): void {
-    const existing = [...this.sources.values()].find(
-      (source) => source.widgetId === job.widgetId,
-    )
-    if (existing?.kind === 'job' && existing.jobId === job.id) return
-    const source = dataSourceFromJob(job)
-    if (existing && existing.id !== source.id) this.sources.delete(existing.id)
-    this.sources.set(source.id, source)
+    const write = jobSourceWrite(this.sourceForWidget(job.widgetId), job)
+    if (!write) return
+    if (write.staleId) this.sources.delete(write.staleId)
+    this.sources.set(write.next.id, write.next)
   }
 
   private deleteWidgetSync(widgetId: BoardWidgetId): void {
@@ -308,7 +304,7 @@ export class MemoryBoardStore implements BoardStorePort {
         this.boards.set(board.id, { ...board, placements })
       }
     }
-    const job = [...this.jobs.values()].find((row) => row.widgetId === widgetId)
+    const job = this.jobForWidget(widgetId)
     if (job) this.deleteJobAndRuns(job.id)
     for (const source of [...this.sources.values()]) {
       if (source.widgetId === widgetId) this.sources.delete(source.id)

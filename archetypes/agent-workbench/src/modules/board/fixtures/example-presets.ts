@@ -3,12 +3,10 @@
  * Installed as ordinary user rows — editable, deletable, never upgraded in place.
  */
 
-import { createPresetDataSource } from '../model/data-source'
 import type {
   BoardPlacement,
   BoardRecord,
   BoardWidgetRecord,
-  WidgetDataSourceRecord,
 } from '../model/types'
 import {
   DAILY_BRIEF_CHART_HTML,
@@ -178,13 +176,6 @@ export function buildExampleBoard(
     createdAt: now,
     updatedAt: now,
   }
-}
-
-export function buildExampleDataSource(
-  spec: ExampleWidgetSpec,
-  now: string,
-): WidgetDataSourceRecord {
-  return createPresetDataSource(spec.id, now)
 }
 
 export function buildExampleWidget(

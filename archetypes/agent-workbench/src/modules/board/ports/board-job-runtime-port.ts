@@ -57,17 +57,19 @@ export async function defaultEvaluateDataSource(
   port: Pick<WidgetDataSourcePort, 'runJob'>,
   request: WidgetDataSourceEvaluateRequest,
 ): Promise<BoardJobRunResult> {
-  if (request.kind === 'preset') {
-    return { ok: true, payload: request.presetData ?? null }
-  }
-  if (request.kind === 'query') {
-    return {
-      ok: false,
-      error: 'not_implemented',
-      hint: QUERY_SOURCE_NOT_IMPLEMENTED,
+  switch (request.kind) {
+    case 'preset':
+      return { ok: true, payload: request.presetData ?? null }
+    case 'query':
+      return {
+        ok: false,
+        error: 'not_implemented',
+        hint: QUERY_SOURCE_NOT_IMPLEMENTED,
+      }
+    case 'job': {
+      const jobId = request.jobId?.trim() ?? ''
+      if (!jobId) return { ok: false, error: 'unknown_job', hint: '缺少 jobId' }
+      return port.runJob(jobId)
     }
   }
-  const jobId = request.jobId?.trim() ?? ''
-  if (!jobId) return { ok: false, error: 'unknown_job', hint: '缺少 jobId' }
-  return port.runJob(jobId)
 }

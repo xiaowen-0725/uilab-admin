@@ -29,6 +29,45 @@ function uniqueDbName(suffix: string): string {
   return `test-board-store-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function createV3Stores(db: IDBDatabase): void {
+  db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
+  db.createObjectStore(STORE_TASKS, { keyPath: 'id' }).createIndex(
+    'projectId',
+    'projectId',
+    { unique: false },
+  )
+  const events = db.createObjectStore(STORE_EVENTS, {
+    keyPath: ['taskId', 'taskSequence'],
+  })
+  events.createIndex('eventId', 'eventId', { unique: true })
+  events.createIndex('taskId', 'taskId', { unique: false })
+  db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'taskId' })
+  db.createObjectStore(STORE_COMMANDS, { keyPath: 'commandId' })
+  db.createObjectStore(STORE_SESSION, { keyPath: 'id' })
+  db.createObjectStore(STORE_METADATA, { keyPath: 'key' })
+  db.createObjectStore(STORE_BOARDS, { keyPath: 'id' })
+  db.createObjectStore(STORE_BOARD_WIDGETS, { keyPath: 'id' })
+  db.createObjectStore(STORE_WIDGET_DATA_JOBS, { keyPath: 'id' }).createIndex(
+    'widgetId',
+    'widgetId',
+    { unique: true },
+  )
+  db.createObjectStore(STORE_WIDGET_JOB_RUNS, { keyPath: 'id' }).createIndex(
+    'jobId',
+    'jobId',
+    { unique: false },
+  )
+}
+
+function openV3Database(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 3)
+    request.onupgradeneeded = () => createV3Stores(request.result)
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
 function board(overrides: Partial<BoardRecord> = {}): BoardRecord {
   return {
     id: 'board-1',
@@ -340,41 +379,7 @@ describe('IdbBoardStore', () => {
   it('upgrades a v3 leftover latestData row into the anonymous snapshot', async () => {
     const name = uniqueDbName('v3-upgrade')
     opened.push(name)
-    const v3 = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(name, 3)
-      request.onupgradeneeded = () => {
-        const db = request.result
-        db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
-        db.createObjectStore(STORE_TASKS, { keyPath: 'id' }).createIndex(
-          'projectId',
-          'projectId',
-          { unique: false },
-        )
-        const events = db.createObjectStore(STORE_EVENTS, {
-          keyPath: ['taskId', 'taskSequence'],
-        })
-        events.createIndex('eventId', 'eventId', { unique: true })
-        events.createIndex('taskId', 'taskId', { unique: false })
-        db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'taskId' })
-        db.createObjectStore(STORE_COMMANDS, { keyPath: 'commandId' })
-        db.createObjectStore(STORE_SESSION, { keyPath: 'id' })
-        db.createObjectStore(STORE_METADATA, { keyPath: 'key' })
-        db.createObjectStore(STORE_BOARDS, { keyPath: 'id' })
-        db.createObjectStore(STORE_BOARD_WIDGETS, { keyPath: 'id' })
-        db.createObjectStore(STORE_WIDGET_DATA_JOBS, { keyPath: 'id' }).createIndex(
-          'widgetId',
-          'widgetId',
-          { unique: true },
-        )
-        db.createObjectStore(STORE_WIDGET_JOB_RUNS, { keyPath: 'id' }).createIndex(
-          'jobId',
-          'jobId',
-          { unique: false },
-        )
-      }
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
+    const v3 = await openV3Database(name)
     await new Promise<void>((resolve, reject) => {
       const tx = v3.transaction(STORE_BOARD_WIDGETS, 'readwrite')
       tx.oncomplete = () => resolve()

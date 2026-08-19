@@ -4,11 +4,12 @@
 
 import {
   ANONYMOUS_PRINCIPAL_KEY,
+  widgetStatusForRun,
   type BoardWidgetRecord,
   type WidgetDataJobRecord,
   type WidgetDataSnapshotRecord,
   type WidgetDataSourceRecord,
-  type WidgetDataSourceTrigger,
+  type WidgetJobRunRecord,
 } from './types'
 
 export function dataSourceIdForWidget(widgetId: string): string {
@@ -63,12 +64,6 @@ export function snapshotFromWidgetCompat(
   }
 }
 
-export function leftoverJobTrigger(
-  job: WidgetDataJobRecord,
-): WidgetDataSourceTrigger {
-  return job.trigger ?? { kind: 'manual' }
-}
-
 export function dataSourceFromJob(
   job: WidgetDataJobRecord,
   now = job.updatedAt,
@@ -77,7 +72,7 @@ export function dataSourceFromJob(
     id: dataSourceIdForWidget(job.widgetId),
     widgetId: job.widgetId,
     kind: 'job',
-    trigger: leftoverJobTrigger(job),
+    trigger: job.trigger ?? { kind: 'manual' },
     referencableByJob: false,
     jobId: job.id,
     createdAt: job.createdAt,
@@ -97,5 +92,53 @@ export function createPresetDataSource(
     referencableByJob: false,
     createdAt: now,
     updatedAt: now,
+  }
+}
+
+export function jobSourceWrite(
+  existing: WidgetDataSourceRecord | null | undefined,
+  job: WidgetDataJobRecord,
+): { next: WidgetDataSourceRecord; staleId?: string } | null {
+  if (existing?.kind === 'job' && existing.jobId === job.id) return null
+  const next = dataSourceFromJob(job)
+  return {
+    next,
+    staleId: existing && existing.id !== next.id ? existing.id : undefined,
+  }
+}
+
+export function missingPresetSource(
+  existing: WidgetDataSourceRecord | null | undefined,
+  widget: BoardWidgetRecord,
+): WidgetDataSourceRecord | null {
+  if (existing) return null
+  return createPresetDataSource(widget.id, widget.updatedAt)
+}
+
+export function widgetRowAfterRun(
+  widget: BoardWidgetRecord,
+  run: WidgetJobRunRecord,
+): BoardWidgetRecord {
+  const occurredAt = run.finishedAt ?? run.startedAt
+  return persistableWidgetRow({
+    ...widget,
+    status: widgetStatusForRun(run.status),
+    lastRunId: run.id,
+    updatedAt: occurredAt,
+  })
+}
+
+export function successSnapshotForRun(
+  widgetId: string,
+  run: WidgetJobRunRecord,
+  data: unknown | undefined,
+  principalKey = ANONYMOUS_PRINCIPAL_KEY,
+): WidgetDataSnapshotRecord | null {
+  if (run.status !== 'success' || data === undefined) return null
+  return {
+    widgetId,
+    principalKey,
+    data,
+    capturedAt: run.finishedAt ?? run.startedAt,
   }
 }

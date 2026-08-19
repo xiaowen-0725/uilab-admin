@@ -21,11 +21,13 @@ import {
   parseTaskIdList,
 } from '../model/board-capability-ledger'
 import {
-  createPresetDataSource,
-  dataSourceFromJob,
   hydrateWidgetFromSnapshot,
+  jobSourceWrite,
+  missingPresetSource,
   persistableWidgetRow,
   snapshotFromWidgetCompat,
+  successSnapshotForRun,
+  widgetRowAfterRun,
 } from '../model/data-source'
 import {
   BOARD_PRESETS_INSTALLED_KEY,
@@ -35,7 +37,6 @@ import {
   ANONYMOUS_PRINCIPAL_KEY,
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
-  widgetStatusForRun,
   type BoardId,
   type BoardPlacement,
   type BoardRecord,
@@ -62,6 +63,19 @@ const BOARD_STORES = [
   STORE_BOARD_WIDGETS,
   STORE_WIDGET_DATA_JOBS,
   STORE_WIDGET_JOB_RUNS,
+  STORE_WIDGET_DATA_SOURCES,
+  STORE_WIDGET_DATA_SNAPSHOTS,
+] as const
+
+const WIDGET_WRITE_STORES = [
+  STORE_BOARD_WIDGETS,
+  STORE_WIDGET_DATA_SNAPSHOTS,
+  STORE_WIDGET_DATA_SOURCES,
+] as const
+
+const MIGRATE_STORES = [
+  STORE_BOARD_WIDGETS,
+  STORE_WIDGET_DATA_JOBS,
   STORE_WIDGET_DATA_SOURCES,
   STORE_WIDGET_DATA_SNAPSHOTS,
 ] as const
@@ -137,13 +151,8 @@ export class IdbBoardStore implements BoardStorePort {
     options?: BoardSnapshotReadOptions,
   ): Promise<void> {
     return this.afterMigrate(() =>
-      this.write(
-        [
-          STORE_BOARD_WIDGETS,
-          STORE_WIDGET_DATA_SNAPSHOTS,
-          STORE_WIDGET_DATA_SOURCES,
-        ],
-        (tx) => writeWidgetInTx(tx, widget, options?.principalKey),
+      this.write(WIDGET_WRITE_STORES, (tx) =>
+        writeWidgetInTx(tx, widget, options?.principalKey),
       ),
     )
   }
@@ -165,13 +174,7 @@ export class IdbBoardStore implements BoardStorePort {
   ): Promise<WidgetDataSourceRecord | null> {
     return this.afterMigrate(() =>
       this.read(STORE_WIDGET_DATA_SOURCES, async (tx) => {
-        const row = await getByIndex<WidgetDataSourceRecord>(
-          tx,
-          STORE_WIDGET_DATA_SOURCES,
-          'widgetId',
-          widgetId,
-        )
-        return row ?? null
+        return (await sourceByWidgetInTx(tx, widgetId)) ?? null
       }),
     )
   }
@@ -295,22 +298,16 @@ export class IdbBoardStore implements BoardStorePort {
         run.widgetId,
       )
       if (!widget) return
-      const occurredAt = run.finishedAt ?? run.startedAt
-      const next: BoardWidgetRecord = {
-        ...widget,
-        status: widgetStatusForRun(run.status),
-        lastRunId: run.id,
-        updatedAt: occurredAt,
+      const snapshot = successSnapshotForRun(
+        widget.id,
+        run,
+        data,
+        options?.principalKey,
+      )
+      if (snapshot) {
+        await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, snapshot)
       }
-      if (run.status === 'success' && data !== undefined) {
-        await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, {
-          widgetId: widget.id,
-          principalKey: options?.principalKey ?? ANONYMOUS_PRINCIPAL_KEY,
-          data,
-          capturedAt: occurredAt,
-        } satisfies WidgetDataSnapshotRecord)
-      }
-      await putValue(tx, STORE_BOARD_WIDGETS, persistableWidgetRow(next))
+      await putValue(tx, STORE_BOARD_WIDGETS, widgetRowAfterRun(widget, run))
     }))
   }
 
@@ -448,41 +445,33 @@ export class IdbBoardStore implements BoardStorePort {
   }
 
   private migrateLegacyRows(): Promise<void> {
-    return this.write(
-      [
-        STORE_BOARD_WIDGETS,
+    return this.write(MIGRATE_STORES, async (tx) => {
+      const jobs = await getAllRows<WidgetDataJobRecord>(
+        tx,
         STORE_WIDGET_DATA_JOBS,
-        STORE_WIDGET_DATA_SOURCES,
-        STORE_WIDGET_DATA_SNAPSHOTS,
-      ],
-      async (tx) => {
-        const jobs = await getAllRows<WidgetDataJobRecord>(
-          tx,
-          STORE_WIDGET_DATA_JOBS,
-        )
-        const jobByWidget = new Map(jobs.map((job) => [job.widgetId, job]))
-        for (const widget of await getAllRows<BoardWidgetRecord>(
-          tx,
-          STORE_BOARD_WIDGETS,
-        )) {
-          const snapshot = snapshotFromWidgetCompat(widget)
-          if (snapshot) {
-            const existing = await getSnapshotRow(
-              tx,
-              widget.id,
-              ANONYMOUS_PRINCIPAL_KEY,
-            )
-            if (!existing) {
-              await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, snapshot)
-            }
-            await putValue(tx, STORE_BOARD_WIDGETS, persistableWidgetRow(widget))
+      )
+      const jobByWidget = new Map(jobs.map((job) => [job.widgetId, job]))
+      for (const widget of await getAllRows<BoardWidgetRecord>(
+        tx,
+        STORE_BOARD_WIDGETS,
+      )) {
+        const snapshot = snapshotFromWidgetCompat(widget)
+        if (snapshot) {
+          const existing = await getSnapshotRow(
+            tx,
+            widget.id,
+            ANONYMOUS_PRINCIPAL_KEY,
+          )
+          if (!existing) {
+            await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, snapshot)
           }
-          const job = jobByWidget.get(widget.id)
-          if (job) await ensureJobSourceInTx(tx, job)
-          else await ensurePresetSourceInTx(tx, widget)
+          await putValue(tx, STORE_BOARD_WIDGETS, persistableWidgetRow(widget))
         }
-      },
-    )
+        const job = jobByWidget.get(widget.id)
+        if (job) await ensureJobSourceInTx(tx, job)
+        else await ensurePresetSourceInTx(tx, widget)
+      }
+    })
   }
 }
 
@@ -554,35 +543,32 @@ async function ensureJobSourceInTx(
   tx: IDBTransaction,
   job: WidgetDataJobRecord,
 ): Promise<void> {
-  const existing = await getByIndex<WidgetDataSourceRecord>(
-    tx,
-    STORE_WIDGET_DATA_SOURCES,
-    'widgetId',
-    job.widgetId,
-  )
-  const next = dataSourceFromJob(job)
-  if (existing?.kind === 'job' && existing.jobId === job.id) return
-  if (existing && existing.id !== next.id) {
-    await remove(tx, STORE_WIDGET_DATA_SOURCES, existing.id)
-  }
-  await putValue(tx, STORE_WIDGET_DATA_SOURCES, next)
+  const write = jobSourceWrite(await sourceByWidgetInTx(tx, job.widgetId), job)
+  if (!write) return
+  if (write.staleId) await remove(tx, STORE_WIDGET_DATA_SOURCES, write.staleId)
+  await putValue(tx, STORE_WIDGET_DATA_SOURCES, write.next)
 }
 
 async function ensurePresetSourceInTx(
   tx: IDBTransaction,
   widget: BoardWidgetRecord,
 ): Promise<void> {
-  const existing = await getByIndex<WidgetDataSourceRecord>(
+  const preset = missingPresetSource(
+    await sourceByWidgetInTx(tx, widget.id),
+    widget,
+  )
+  if (preset) await putValue(tx, STORE_WIDGET_DATA_SOURCES, preset)
+}
+
+async function sourceByWidgetInTx(
+  tx: IDBTransaction,
+  widgetId: BoardWidgetId,
+): Promise<WidgetDataSourceRecord | undefined> {
+  return getByIndex<WidgetDataSourceRecord>(
     tx,
     STORE_WIDGET_DATA_SOURCES,
     'widgetId',
-    widget.id,
-  )
-  if (existing) return
-  await putValue(
-    tx,
-    STORE_WIDGET_DATA_SOURCES,
-    createPresetDataSource(widget.id, widget.updatedAt),
+    widgetId,
   )
 }
 
@@ -628,12 +614,7 @@ async function deleteSourcesForWidget(
   tx: IDBTransaction,
   widgetId: BoardWidgetId,
 ): Promise<void> {
-  const source = await getByIndex<WidgetDataSourceRecord>(
-    tx,
-    STORE_WIDGET_DATA_SOURCES,
-    'widgetId',
-    widgetId,
-  )
+  const source = await sourceByWidgetInTx(tx, widgetId)
   if (source) await remove(tx, STORE_WIDGET_DATA_SOURCES, source.id)
 }
 
@@ -641,12 +622,7 @@ async function deleteJobSourceInTx(
   tx: IDBTransaction,
   job: WidgetDataJobRecord,
 ): Promise<void> {
-  const source = await getByIndex<WidgetDataSourceRecord>(
-    tx,
-    STORE_WIDGET_DATA_SOURCES,
-    'widgetId',
-    job.widgetId,
-  )
+  const source = await sourceByWidgetInTx(tx, job.widgetId)
   if (source?.jobId === job.id) {
     await remove(tx, STORE_WIDGET_DATA_SOURCES, source.id)
   }

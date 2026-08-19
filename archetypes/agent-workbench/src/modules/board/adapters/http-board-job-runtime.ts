@@ -7,13 +7,13 @@ import {
   BOARD_JOB_MAX_TIMEOUT_MS,
   BOARD_REFRESH_POLL_INTERVAL_MS,
 } from '../model/refresh-policy'
-import type {
-  BoardJobRunFailure,
-  BoardJobRuntimePort,
-  BoardJobRunResult,
-  WidgetDataSourceEvaluateRequest,
+import {
+  defaultEvaluateDataSource,
+  type BoardJobRunFailure,
+  type BoardJobRuntimePort,
+  type BoardJobRunResult,
+  type WidgetDataSourceEvaluateRequest,
 } from '../ports/board-job-runtime-port'
-import { defaultEvaluateDataSource } from '../ports/board-job-runtime-port'
 
 const NETWORK_ERROR_RE =
   /failed to fetch|load failed|networkerror|network request failed/i
