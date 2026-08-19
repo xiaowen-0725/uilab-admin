@@ -5,13 +5,19 @@
 import type {
   BoardJobRuntimePort,
   BoardJobRunResult,
+  WidgetDataSourceEvaluateRequest,
 } from '../ports/board-job-runtime-port'
+import { defaultEvaluateDataSource } from '../ports/board-job-runtime-port'
 
 export class MemoryBoardJobRuntime implements BoardJobRuntimePort {
   constructor(private readonly payload: unknown = { ok: true, quote: '42' }) {}
 
   async runJob(_jobId: string): Promise<BoardJobRunResult> {
     return { ok: true, payload: this.payload }
+  }
+
+  evaluate(request: WidgetDataSourceEvaluateRequest): Promise<BoardJobRunResult> {
+    return defaultEvaluateDataSource(this, request)
   }
 }
 

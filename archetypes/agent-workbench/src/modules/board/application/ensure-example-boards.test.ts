@@ -34,6 +34,23 @@ describe('ensureExampleBoards', () => {
       [...EXAMPLE_PRESETS.map((preset) => preset.id)].sort(),
     )
     expect(await jobsOn(store)).toEqual([])
+    for (const board of boards) {
+      for (const placement of board.placements) {
+        expect(await store.getDataSourceByWidgetId(placement.widgetId)).toMatchObject({
+          kind: 'preset',
+          widgetId: placement.widgetId,
+          trigger: { kind: 'manual' },
+        })
+      }
+    }
+    expect(await store.getWidget('example:daily-brief:stat')).toMatchObject({
+      latestData: { value: 128, label: '未读消息', delta: 12 },
+    })
+    expect(
+      await store.getSnapshot('example:daily-brief:stat', 'anonymous'),
+    ).toMatchObject({
+      data: { value: 128, label: '未读消息', delta: 12 },
+    })
     expect(await store.getInstalledPresets()).toEqual({
       'getting-started': 1,
       'daily-brief': 1,

@@ -11,6 +11,7 @@
 import {
   EXAMPLE_PRESETS,
   buildExampleBoard,
+  buildExampleDataSource,
   buildExampleWidget,
   type ExamplePreset,
 } from '../fixtures/example-presets'
@@ -46,6 +47,7 @@ async function installPreset(
     await addWidgetToBoard(store, {
       boardId: preset.boardId,
       widget: buildExampleWidget(spec, now),
+      dataSource: buildExampleDataSource(spec, now),
       placement: {
         mountId: `mount:${spec.id}`,
         widgetId: spec.id,

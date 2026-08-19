@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { deleteWorkbenchIdb, openWorkbenchIdb } from '@/app/persistence/workbench-idb'
+import {
+  STORE_BOARDS,
+  STORE_BOARD_WIDGETS,
+  STORE_COMMANDS,
+  STORE_EVENTS,
+  STORE_METADATA,
+  STORE_PROJECTS,
+  STORE_SESSION,
+  STORE_SNAPSHOTS,
+  STORE_TASKS,
+  STORE_WIDGET_DATA_JOBS,
+  STORE_WIDGET_JOB_RUNS,
+  deleteWorkbenchIdb,
+  openWorkbenchIdb,
+} from '@/app/persistence/workbench-idb'
 import {
   createIdbBoardStore,
   type BoardPlacement,
@@ -285,6 +299,150 @@ describe('IdbBoardStore', () => {
       userPlacement,
       placement(),
     ])
+    db.close()
+  })
+
+  it('migrates leftover latestData into the anonymous snapshot and keeps rendering it', async () => {
+    const name = uniqueDbName('legacy-latest')
+    opened.push(name)
+    const db = await openWorkbenchIdb({ name })
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('boardWidgets', 'readwrite')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.objectStore('boardWidgets').put(
+        widget({ latestData: { quote: 7 }, latestDataAt: NOW }),
+      )
+    })
+
+    const store = createIdbBoardStore(db)
+    expect(await store.getWidget('widget-1')).toMatchObject({
+      latestData: { quote: 7 },
+      latestDataAt: NOW,
+    })
+    expect(await store.getWidget('widget-1', { principalKey: 'alice' })).toMatchObject({
+      id: 'widget-1',
+    })
+    expect(
+      (await store.getWidget('widget-1', { principalKey: 'alice' }))?.latestData,
+    ).toBeUndefined()
+    expect(await store.getSnapshot('widget-1', 'anonymous')).toMatchObject({
+      data: { quote: 7 },
+      capturedAt: NOW,
+    })
+    expect(await store.getDataSourceByWidgetId('widget-1')).toMatchObject({
+      kind: 'preset',
+      widgetId: 'widget-1',
+    })
+    db.close()
+  })
+
+  it('upgrades a v3 leftover latestData row into the anonymous snapshot', async () => {
+    const name = uniqueDbName('v3-upgrade')
+    opened.push(name)
+    const v3 = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name, 3)
+      request.onupgradeneeded = () => {
+        const db = request.result
+        db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
+        db.createObjectStore(STORE_TASKS, { keyPath: 'id' }).createIndex(
+          'projectId',
+          'projectId',
+          { unique: false },
+        )
+        const events = db.createObjectStore(STORE_EVENTS, {
+          keyPath: ['taskId', 'taskSequence'],
+        })
+        events.createIndex('eventId', 'eventId', { unique: true })
+        events.createIndex('taskId', 'taskId', { unique: false })
+        db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'taskId' })
+        db.createObjectStore(STORE_COMMANDS, { keyPath: 'commandId' })
+        db.createObjectStore(STORE_SESSION, { keyPath: 'id' })
+        db.createObjectStore(STORE_METADATA, { keyPath: 'key' })
+        db.createObjectStore(STORE_BOARDS, { keyPath: 'id' })
+        db.createObjectStore(STORE_BOARD_WIDGETS, { keyPath: 'id' })
+        db.createObjectStore(STORE_WIDGET_DATA_JOBS, { keyPath: 'id' }).createIndex(
+          'widgetId',
+          'widgetId',
+          { unique: true },
+        )
+        db.createObjectStore(STORE_WIDGET_JOB_RUNS, { keyPath: 'id' }).createIndex(
+          'jobId',
+          'jobId',
+          { unique: false },
+        )
+      }
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    await new Promise<void>((resolve, reject) => {
+      const tx = v3.transaction(STORE_BOARD_WIDGETS, 'readwrite')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.objectStore(STORE_BOARD_WIDGETS).put(
+        widget({ latestData: { quote: 7 }, latestDataAt: NOW }),
+      )
+    })
+    v3.close()
+
+    const db = await openWorkbenchIdb({ name })
+    const store = createIdbBoardStore(db)
+    expect(await store.getWidget('widget-1')).toMatchObject({
+      latestData: { quote: 7 },
+    })
+    expect(await store.getSnapshot('widget-1', 'anonymous')).toMatchObject({
+      data: { quote: 7 },
+    })
+    db.close()
+  })
+
+  it('replaces a leftover preset source when a job is written', async () => {
+    const { db, store } = await openStore()
+    await store.putWidget(widget({ latestData: { quote: 1 }, latestDataAt: NOW }))
+    expect(await store.getDataSourceByWidgetId('widget-1')).toMatchObject({
+      kind: 'preset',
+    })
+    await store.putJob(job())
+    expect(await store.getDataSourceByWidgetId('widget-1')).toMatchObject({
+      kind: 'job',
+      jobId: 'job-1',
+    })
+    expect(await store.getWidget('widget-1')).toMatchObject({
+      latestData: { quote: 1 },
+    })
+    db.close()
+  })
+
+  it('keeps two principal snapshots from overwriting each other and cascades them on delete', async () => {
+    const { db, store } = await openStore()
+    await store.putWidget(widget())
+    await store.putSnapshot({
+      widgetId: 'widget-1',
+      principalKey: 'alice',
+      data: { n: 1 },
+      capturedAt: NOW,
+    })
+    await store.putSnapshot({
+      widgetId: 'widget-1',
+      principalKey: 'bob',
+      data: { n: 2 },
+      capturedAt: NOW,
+    })
+
+    expect(await store.getWidget('widget-1', { principalKey: 'alice' })).toMatchObject({
+      latestData: { n: 1 },
+    })
+    expect(await store.getWidget('widget-1', { principalKey: 'bob' })).toMatchObject({
+      latestData: { n: 2 },
+    })
+    expect(await store.getWidget('widget-1')).toMatchObject({
+      id: 'widget-1',
+    })
+    expect((await store.getWidget('widget-1'))?.latestData).toBeUndefined()
+
+    await store.deleteWidget('widget-1')
+    expect(await store.getWidget('widget-1')).toBeNull()
+    expect(await store.listSnapshots('widget-1')).toEqual([])
     db.close()
   })
 })

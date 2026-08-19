@@ -11,8 +11,24 @@ import type {
   BoardWidgetRecord,
   WidgetDataJobId,
   WidgetDataJobRecord,
+  WidgetDataSnapshotRecord,
+  WidgetDataSourceId,
+  WidgetDataSourceRecord,
   WidgetJobRunRecord,
 } from '../model/types'
+
+/**
+ * Reserved ADR-0025 §3 — structure may be filtered by identity in derived apps.
+ * Template default ignores this and returns all Board / widget structure.
+ */
+export interface BoardStructureFilter {
+  principalKey?: string
+}
+
+export interface BoardSnapshotReadOptions {
+  /** Snapshot slot to read or write. Defaults to the anonymous sentinel. */
+  principalKey?: string
+}
 
 export interface BoardStoreError {
   code:
@@ -40,21 +56,51 @@ export class BoardStorePortError extends Error {
 }
 
 export interface BoardStorePort {
-  listBoards(): Promise<readonly BoardRecord[]>
+  listBoards(filter?: BoardStructureFilter): Promise<readonly BoardRecord[]>
 
-  getBoard(boardId: BoardId): Promise<BoardRecord | null>
+  getBoard(
+    boardId: BoardId,
+    filter?: BoardStructureFilter,
+  ): Promise<BoardRecord | null>
 
   putBoard(board: BoardRecord): Promise<void>
 
-  /** Cascade-delete exclusive widgets → their jobs → their runs. */
+  /** Cascade-delete exclusive widgets → their jobs → their runs → sources → snapshots. */
   deleteBoard(boardId: BoardId): Promise<void>
 
-  getWidget(widgetId: BoardWidgetId): Promise<BoardWidgetRecord | null>
+  getWidget(
+    widgetId: BoardWidgetId,
+    options?: BoardSnapshotReadOptions,
+  ): Promise<BoardWidgetRecord | null>
 
-  putWidget(widget: BoardWidgetRecord): Promise<void>
+  putWidget(
+    widget: BoardWidgetRecord,
+    options?: BoardSnapshotReadOptions,
+  ): Promise<void>
 
-  /** Cascade-delete the job and runs; strip the widget from every Board. */
+  /** Cascade-delete the job, runs, source, and every identity snapshot; strip the widget from every Board. */
   deleteWidget(widgetId: BoardWidgetId): Promise<void>
+
+  getDataSource(
+    sourceId: WidgetDataSourceId,
+  ): Promise<WidgetDataSourceRecord | null>
+
+  getDataSourceByWidgetId(
+    widgetId: BoardWidgetId,
+  ): Promise<WidgetDataSourceRecord | null>
+
+  putDataSource(source: WidgetDataSourceRecord): Promise<void>
+
+  getSnapshot(
+    widgetId: BoardWidgetId,
+    principalKey: string,
+  ): Promise<WidgetDataSnapshotRecord | null>
+
+  putSnapshot(snapshot: WidgetDataSnapshotRecord): Promise<void>
+
+  listSnapshots(
+    widgetId: BoardWidgetId,
+  ): Promise<readonly WidgetDataSnapshotRecord[]>
 
   getJob(jobId: WidgetDataJobId): Promise<WidgetDataJobRecord | null>
 
@@ -72,9 +118,13 @@ export interface BoardStorePort {
 
   /**
    * Persist a run (trimmed to the 10 most recent) and project it onto the widget.
-   * `latestData` is written only when `run.status === 'success'`.
+   * A success snapshot is written only when `run.status === 'success'`.
    */
-  recordRun(run: WidgetJobRunRecord, data?: unknown): Promise<void>
+  recordRun(
+    run: WidgetJobRunRecord,
+    data?: unknown,
+    options?: BoardSnapshotReadOptions,
+  ): Promise<void>
 
   /** Append one placement. Never replaces the existing array. */
   appendPlacement(boardId: BoardId, placement: BoardPlacement): Promise<void>
@@ -106,6 +156,7 @@ export interface BoardAtomicCommitInput {
   board: BoardRecord
   widget: BoardWidgetRecord
   job?: WidgetDataJobRecord
+  dataSource?: WidgetDataSourceRecord
   /** Agent path: append onto the live board row. Never replace `placements`. */
   appendPlacement?: BoardPlacement
 }

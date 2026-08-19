@@ -7,6 +7,10 @@ export type BoardWidgetId = string
 export type WidgetDataJobId = string
 export type WidgetJobRunId = string
 export type BoardMountId = string
+export type WidgetDataSourceId = string
+
+/** Sentinel identity for the no-identity path (template default, example boards, public jobs). */
+export const ANONYMOUS_PRINCIPAL_KEY = 'anonymous'
 
 /** Grid span in column / row units. Geometry constants stay in code, not IDB. */
 export interface WidgetSpan {
@@ -57,6 +61,10 @@ export interface BoardWidgetRecord {
   slots?: { main?: DataSlotSpec }
   events?: { submit?: SubmitSpec }
   span: { min: WidgetSpan; default: WidgetSpan; max: WidgetSpan }
+  /**
+   * Compat view of the current identity's snapshot (ADR-0025 §1).
+   * Persisted in `widgetDataSnapshots`; leftover v3 rows may still carry these fields.
+   */
   latestData?: unknown
   latestDataAt?: string
   status: BoardWidgetStatus
@@ -87,7 +95,11 @@ export interface WidgetDataJobRecord {
   description: string
   purpose?: string
   enabled: boolean
-  trigger: { kind: 'manual' }
+  /**
+   * Leftover v3 field. Trigger lives on WidgetDataSource; ignored at runtime.
+   * Old IDB rows may still carry `{ kind: 'manual' }`.
+   */
+  trigger?: { kind: 'manual' }
   resultSchema?: unknown
   timeoutMs?: number
   approved?: WidgetJobApprovedSnapshot
@@ -106,6 +118,48 @@ export interface WidgetJobRunRecord {
   errorMessage?: string
   /** Reserved; v1 is always empty (spec revision 2026-08-16e). */
   artifactRef?: string
+}
+
+export type WidgetDataSourceKind = 'preset' | 'job' | 'query'
+
+export type WidgetDataSourceTrigger =
+  | { kind: 'manual' }
+  | { kind: 'onOpen' }
+  | { kind: 'schedule' }
+
+export interface WidgetDataSourceRecord {
+  id: WidgetDataSourceId
+  widgetId: BoardWidgetId
+  kind: WidgetDataSourceKind
+  trigger: WidgetDataSourceTrigger
+  parameters?: Record<string, unknown>
+  /** ADR-0024 §7 — type only; job `ctx.query` consumption is not implemented. */
+  referencableByJob: boolean
+  /** Present when `kind === 'job'`. */
+  jobId?: WidgetDataJobId
+  /** Present when `kind === 'query'`. Implementation is a later ticket. */
+  queryName?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WidgetDataSnapshotRecord {
+  widgetId: BoardWidgetId
+  principalKey: string
+  data: unknown
+  capturedAt: string
+}
+
+/**
+ * Job sandbox context (spec §7.4). `query` is reserved (ADR-0024 §7) and unused in v1.
+ */
+export interface JobContext {
+  runId: string
+  jobId: string
+  now: Date
+  timeZone: string
+  runDir: string
+  query?: (name: string, params: Record<string, unknown>) => Promise<unknown>
 }
 
 export const BOARD_WIDGET_LIMIT = 20

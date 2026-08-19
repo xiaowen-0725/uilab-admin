@@ -3,10 +3,12 @@
  * Installed as ordinary user rows — editable, deletable, never upgraded in place.
  */
 
+import { createPresetDataSource } from '../model/data-source'
 import type {
   BoardPlacement,
   BoardRecord,
   BoardWidgetRecord,
+  WidgetDataSourceRecord,
 } from '../model/types'
 import {
   DAILY_BRIEF_CHART_HTML,
@@ -108,7 +110,7 @@ const DAILY_BRIEF_PRESET: ExamplePreset = {
   version: 1,
   boardId: 'example:daily-brief',
   title: '示例：每日速递',
-  purpose: '用预填 latestData 展示图表、计数和表单，不绑定取数作业。',
+  purpose: '用 preset 数据来源展示图表、计数和表单，不绑定取数作业。',
   widgets: [
     {
       id: 'example:daily-brief:chart',
@@ -176,6 +178,13 @@ export function buildExampleBoard(
     createdAt: now,
     updatedAt: now,
   }
+}
+
+export function buildExampleDataSource(
+  spec: ExampleWidgetSpec,
+  now: string,
+): WidgetDataSourceRecord {
+  return createPresetDataSource(spec.id, now)
 }
 
 export function buildExampleWidget(

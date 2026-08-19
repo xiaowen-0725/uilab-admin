@@ -7,7 +7,7 @@
 
 export const WORKBENCH_IDB_NAME = 'uilab-agent-workbench'
 /** Schema algebra — bump only on structure migrations. */
-export const WORKBENCH_IDB_VERSION = 3
+export const WORKBENCH_IDB_VERSION = 4
 
 export const STORE_PROJECTS = 'projects'
 export const STORE_TASKS = 'tasks'
@@ -20,6 +20,8 @@ export const STORE_BOARDS = 'boards'
 export const STORE_BOARD_WIDGETS = 'boardWidgets'
 export const STORE_WIDGET_DATA_JOBS = 'widgetDataJobs'
 export const STORE_WIDGET_JOB_RUNS = 'widgetJobRuns'
+export const STORE_WIDGET_DATA_SOURCES = 'widgetDataSources'
+export const STORE_WIDGET_DATA_SNAPSHOTS = 'widgetDataSnapshots'
 
 export const SESSION_ROW_ID = 'current'
 
@@ -42,6 +44,8 @@ export type WorkbenchStoreName =
   | typeof STORE_BOARD_WIDGETS
   | typeof STORE_WIDGET_DATA_JOBS
   | typeof STORE_WIDGET_JOB_RUNS
+  | typeof STORE_WIDGET_DATA_SOURCES
+  | typeof STORE_WIDGET_DATA_SNAPSHOTS
 
 export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
   STORE_PROJECTS,
@@ -55,6 +59,8 @@ export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
   STORE_BOARD_WIDGETS,
   STORE_WIDGET_DATA_JOBS,
   STORE_WIDGET_JOB_RUNS,
+  STORE_WIDGET_DATA_SOURCES,
+  STORE_WIDGET_DATA_SNAPSHOTS,
 ]
 
 /** Session pointer row persisted in `session` store. */
@@ -115,12 +121,25 @@ function createWorkbenchStores(db: IDBDatabase): void {
     const runs = db.createObjectStore(STORE_WIDGET_JOB_RUNS, { keyPath: 'id' })
     runs.createIndex('jobId', 'jobId', { unique: false })
   }
+  if (!db.objectStoreNames.contains(STORE_WIDGET_DATA_SOURCES)) {
+    const sources = db.createObjectStore(STORE_WIDGET_DATA_SOURCES, {
+      keyPath: 'id',
+    })
+    sources.createIndex('widgetId', 'widgetId', { unique: true })
+  }
+  if (!db.objectStoreNames.contains(STORE_WIDGET_DATA_SNAPSHOTS)) {
+    const snapshots = db.createObjectStore(STORE_WIDGET_DATA_SNAPSHOTS, {
+      keyPath: ['widgetId', 'principalKey'],
+    })
+    snapshots.createIndex('widgetId', 'widgetId', { unique: false })
+  }
 }
 
 /**
  * Schema upgrades.
  * Version 2 drops local v1 event protocol data (wipe + recreate those stores only).
  * Version 3 additively creates Board stores; never delete existing stores.
+ * Version 4 additively creates Widget Data Source + identity-partitioned snapshot stores.
  * Called only from the shared shell's onupgradeneeded.
  */
 export function upgradeWorkbenchIdb(

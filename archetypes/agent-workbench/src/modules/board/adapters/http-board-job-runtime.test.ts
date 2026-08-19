@@ -105,4 +105,33 @@ describe('createHttpBoardJobRuntime', () => {
       hint: '作业执行端点不可达，侧车未连接或网络错误',
     })
   })
+
+  it('reads preset data without calling the job endpoint', async () => {
+    const fetchImpl = vi.fn(async () => new Response('missing', { status: 404 }))
+    const runtime = createHttpBoardJobRuntime({
+      baseUrl: 'http://sidecar',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    await expect(
+      runtime.evaluate?.({ kind: 'preset', presetData: { points: [1, 2] } }),
+    ).resolves.toEqual({
+      ok: true,
+      payload: { points: [1, 2] },
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('leaves query evaluation unimplemented', async () => {
+    const runtime = createHttpBoardJobRuntime({
+      baseUrl: 'http://sidecar',
+      fetchImpl: (async () => new Response('missing', { status: 404 })) as unknown as typeof fetch,
+    })
+    await expect(
+      runtime.evaluate?.({ kind: 'query', queryName: 'charge_report' }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: 'not_implemented',
+      hint: '查询数据来源尚未接通',
+    })
+  })
 })

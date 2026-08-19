@@ -357,7 +357,6 @@ function nextJobRecord(
     title: pull.title || previous?.title || '取数作业',
     description: pull.description || previous?.description || '',
     enabled: previous?.enabled ?? true,
-    trigger: { kind: 'manual' },
     approved: {
       code: pull.content,
       codeHash: pull.hash,

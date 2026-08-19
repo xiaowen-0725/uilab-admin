@@ -8,6 +8,7 @@
  */
 
 export {
+  ANONYMOUS_PRINCIPAL_KEY,
   BOARD_WIDGET_LIMIT,
   DEFAULT_WIDGET_SPAN,
   WIDGET_JOB_RUN_LIMIT,
@@ -22,9 +23,15 @@ export type {
   BoardWidgetRecord,
   BoardWidgetStatus,
   DataSlotSpec,
+  JobContext,
   SubmitSpec,
   WidgetDataJobId,
   WidgetDataJobRecord,
+  WidgetDataSnapshotRecord,
+  WidgetDataSourceId,
+  WidgetDataSourceKind,
+  WidgetDataSourceRecord,
+  WidgetDataSourceTrigger,
   WidgetJobApprovedSnapshot,
   WidgetJobPendingChange,
   WidgetJobRunId,
@@ -32,11 +39,18 @@ export type {
   WidgetJobRunStatus,
   WidgetSpan,
 } from './model/types'
+export {
+  createPresetDataSource,
+  dataSourceFromJob,
+  dataSourceIdForWidget,
+} from './model/data-source'
 
 export type {
   BoardAtomicCommitInput,
+  BoardSnapshotReadOptions,
   BoardStoreError,
   BoardStorePort,
+  BoardStructureFilter,
 } from './ports/board-store-port'
 export { BoardStorePortError } from './ports/board-store-port'
 
@@ -56,7 +70,16 @@ export {
   createUnavailableBoardJobRuntime,
 } from './adapters/memory-board-job-runtime'
 export type { BoardContentPort } from './ports/board-content-port'
-export type { BoardJobRuntimePort } from './ports/board-job-runtime-port'
+export type {
+  BoardJobRuntimePort,
+  WidgetDataSourceEvaluateRequest,
+  WidgetDataSourcePort,
+} from './ports/board-job-runtime-port'
+export {
+  QUERY_SOURCE_NOT_IMPLEMENTED,
+  defaultEvaluateDataSource,
+  evaluateWidgetDataSource,
+} from './ports/board-job-runtime-port'
 
 export {
   addWidgetToBoard,

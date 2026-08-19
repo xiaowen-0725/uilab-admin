@@ -8,6 +8,7 @@ import {
   type BoardPlacement,
   type BoardWidgetRecord,
   type WidgetDataJobRecord,
+  type WidgetDataSourceRecord,
 } from '../model/types'
 import {
   BoardStorePortError,
@@ -30,6 +31,7 @@ export interface AddWidgetToBoardInput {
   widget: BoardWidgetRecord
   placement: BoardPlacement
   job?: WidgetDataJobRecord
+  dataSource?: WidgetDataSourceRecord
 }
 
 /**
@@ -60,6 +62,7 @@ export async function addWidgetToBoard(
     },
     widget: input.widget,
     job: input.job,
+    dataSource: input.dataSource,
     appendPlacement: input.placement,
   })
 }

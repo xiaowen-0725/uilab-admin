@@ -11,7 +11,9 @@ import type {
   BoardJobRunFailure,
   BoardJobRuntimePort,
   BoardJobRunResult,
+  WidgetDataSourceEvaluateRequest,
 } from '../ports/board-job-runtime-port'
+import { defaultEvaluateDataSource } from '../ports/board-job-runtime-port'
 
 const NETWORK_ERROR_RE =
   /failed to fetch|load failed|networkerror|network request failed/i
@@ -142,6 +144,18 @@ export function createHttpBoardJobRuntime(
     return failure('runtime_unavailable', '等待作业结果超时')
   }
 
+  async function runJob(jobId: string): Promise<BoardJobRunResult> {
+    const id = jobId.trim()
+    if (!id) return failure('unknown_job', '缺少 jobId')
+    try {
+      const started = await postRun(id)
+      if (!started.ok) return started
+      return await waitForRun(started.runId)
+    } catch (err) {
+      return failureFromCatch(err)
+    }
+  }
+
   return {
     async probe(): Promise<BoardJobRunResult> {
       try {
@@ -154,16 +168,9 @@ export function createHttpBoardJobRuntime(
         return failureFromCatch(err)
       }
     },
-    async runJob(jobId: string): Promise<BoardJobRunResult> {
-      const id = jobId.trim()
-      if (!id) return failure('unknown_job', '缺少 jobId')
-      try {
-        const started = await postRun(id)
-        if (!started.ok) return started
-        return await waitForRun(started.runId)
-      } catch (err) {
-        return failureFromCatch(err)
-      }
+    runJob,
+    evaluate(request: WidgetDataSourceEvaluateRequest): Promise<BoardJobRunResult> {
+      return defaultEvaluateDataSource({ runJob }, request)
     },
   }
 }

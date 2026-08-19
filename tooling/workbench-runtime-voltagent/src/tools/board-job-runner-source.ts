@@ -26,7 +26,14 @@ const spec = JSON.parse(await Deno.readTextFile(runDir + "ctx.json")) as {
   runDir: string;
 };
 
-const ctx = {
+const ctx: {
+  runId: string;
+  jobId: string;
+  now: Date;
+  timeZone: string;
+  runDir: string;
+  query?: (name: string, params: Record<string, unknown>) => Promise<unknown>;
+} = {
   runId: spec.runId || runId,
   jobId: spec.jobId || jobId,
   now: new Date(spec.now),

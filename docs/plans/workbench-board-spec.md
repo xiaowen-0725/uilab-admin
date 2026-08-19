@@ -7,8 +7,8 @@
 - [0021-workbench-csp-and-widget-subdocument-policy](../adr/0021-workbench-csp-and-widget-subdocument-policy.md)
 - [0022-board-module-entities-and-split-write-channel](../adr/0022-board-module-entities-and-split-write-channel.md)
 - [0023-widget-data-job-deno-runtime-and-one-time-consent](../adr/0023-widget-data-job-deno-runtime-and-one-time-consent.md)
-- [0024-widget-data-source-model-and-product-identity-layering](../adr/0024-widget-data-source-model-and-product-identity-layering.md)（**演进设计定稿，未实施**：数据来源三 kind / query / 身份分层 / 调度归属）
-- [0025-latest-data-failure-semantics-under-permissioned-identity](../adr/0025-latest-data-failure-semantics-under-permissioned-identity.md)（**演进设计定稿，未实施**：有身份时部分推翻 §8.4）
+- [0024-widget-data-source-model-and-product-identity-layering](../adr/0024-widget-data-source-model-and-product-identity-layering.md)（模型 / IDB v4 / 示例板 preset 已落地 #143；query / identity / 调度见后续票）
+- [0025-latest-data-failure-semantics-under-permissioned-identity](../adr/0025-latest-data-failure-semantics-under-permissioned-identity.md)（快照 store 已落地 #143；失败语义求值器见 #145）
 
 **Vocabulary:** 根 [`CONTEXT.md`](../../CONTEXT.md)（Board / Board Widget / Widget Data Job / Widget Data Source / Product Identity / Authorized Resource / 预置看板 已登记）
 **Research:**
@@ -75,7 +75,7 @@ Board 是应用级全局实体，由新增 Deep Module `modules/board` 拥有，
 
 - **Board**：只拥有放置与布局，不拥有 widget 的实现与数据。**应用级全局**，不隶属 Project 或 Task。
 - **Board Widget**：一块可独立渲染的单元；实现是单文件 HTML/JS，跑在不透明源沙箱内。
-- **Widget Data Job**：widget 外部数据的**唯一**来源。
+- **Widget Data Job**：kind 为 `job` 的 Widget Data Source 的实现载体，不是数据来源上位词。
 
 **不要混用**：Board ≠ Work Surface（后者 task-scoped）；Widget Data Job ≠ Runtime Command / Tool Call（前者不走 agent loop）。
 

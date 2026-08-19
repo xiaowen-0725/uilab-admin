@@ -3,6 +3,15 @@
  */
 
 import {
+  createPresetDataSource,
+  dataSourceFromJob,
+  hydrateWidgetFromSnapshot,
+  persistableWidgetRow,
+  snapshotFromWidgetCompat,
+  snapshotStorageKey,
+} from '../model/data-source'
+import {
+  ANONYMOUS_PRINCIPAL_KEY,
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
   widgetStatusForRun,
@@ -13,13 +22,18 @@ import {
   type BoardWidgetRecord,
   type WidgetDataJobId,
   type WidgetDataJobRecord,
+  type WidgetDataSnapshotRecord,
+  type WidgetDataSourceId,
+  type WidgetDataSourceRecord,
   type WidgetJobRunRecord,
 } from '../model/types'
 import {
   BoardStorePortError,
   mergeBoardForCommit,
   type BoardAtomicCommitInput,
+  type BoardSnapshotReadOptions,
   type BoardStorePort,
+  type BoardStructureFilter,
 } from '../ports/board-store-port'
 
 export class MemoryBoardStore implements BoardStorePort {
@@ -27,14 +41,19 @@ export class MemoryBoardStore implements BoardStorePort {
   private readonly widgets = new Map<BoardWidgetId, BoardWidgetRecord>()
   private readonly jobs = new Map<WidgetDataJobId, WidgetDataJobRecord>()
   private readonly runs = new Map<string, WidgetJobRunRecord>()
+  private readonly sources = new Map<WidgetDataSourceId, WidgetDataSourceRecord>()
+  private readonly snapshots = new Map<string, WidgetDataSnapshotRecord>()
   private presetsInstalled: Record<string, number> = {}
   private capableTaskIds: string[] = []
 
-  async listBoards(): Promise<readonly BoardRecord[]> {
+  async listBoards(_filter?: BoardStructureFilter): Promise<readonly BoardRecord[]> {
     return [...this.boards.values()]
   }
 
-  async getBoard(boardId: BoardId): Promise<BoardRecord | null> {
+  async getBoard(
+    boardId: BoardId,
+    _filter?: BoardStructureFilter,
+  ): Promise<BoardRecord | null> {
     return this.boards.get(boardId) ?? null
   }
 
@@ -56,12 +75,61 @@ export class MemoryBoardStore implements BoardStorePort {
     }
   }
 
-  async getWidget(widgetId: BoardWidgetId): Promise<BoardWidgetRecord | null> {
-    return this.widgets.get(widgetId) ?? null
+  async getWidget(
+    widgetId: BoardWidgetId,
+    options?: BoardSnapshotReadOptions,
+  ): Promise<BoardWidgetRecord | null> {
+    const row = this.widgets.get(widgetId)
+    if (!row) return null
+    const principalKey = options?.principalKey ?? ANONYMOUS_PRINCIPAL_KEY
+    const snapshot = this.snapshots.get(snapshotStorageKey(widgetId, principalKey))
+    return hydrateWidgetFromSnapshot(row, snapshot, principalKey)
   }
 
-  async putWidget(widget: BoardWidgetRecord): Promise<void> {
-    this.widgets.set(widget.id, widget)
+  async putWidget(
+    widget: BoardWidgetRecord,
+    options?: BoardSnapshotReadOptions,
+  ): Promise<void> {
+    this.writeWidgetRow(widget, options?.principalKey)
+  }
+
+  async getDataSource(
+    sourceId: WidgetDataSourceId,
+  ): Promise<WidgetDataSourceRecord | null> {
+    return this.sources.get(sourceId) ?? null
+  }
+
+  async getDataSourceByWidgetId(
+    widgetId: BoardWidgetId,
+  ): Promise<WidgetDataSourceRecord | null> {
+    return (
+      [...this.sources.values()].find((source) => source.widgetId === widgetId) ??
+      null
+    )
+  }
+
+  async putDataSource(source: WidgetDataSourceRecord): Promise<void> {
+    this.sources.set(source.id, source)
+  }
+
+  async getSnapshot(
+    widgetId: BoardWidgetId,
+    principalKey: string,
+  ): Promise<WidgetDataSnapshotRecord | null> {
+    return this.snapshots.get(snapshotStorageKey(widgetId, principalKey)) ?? null
+  }
+
+  async putSnapshot(snapshot: WidgetDataSnapshotRecord): Promise<void> {
+    this.snapshots.set(
+      snapshotStorageKey(snapshot.widgetId, snapshot.principalKey),
+      snapshot,
+    )
+  }
+
+  async listSnapshots(
+    widgetId: BoardWidgetId,
+  ): Promise<readonly WidgetDataSnapshotRecord[]> {
+    return [...this.snapshots.values()].filter((row) => row.widgetId === widgetId)
   }
 
   async deleteWidget(widgetId: BoardWidgetId): Promise<void> {
@@ -82,6 +150,7 @@ export class MemoryBoardStore implements BoardStorePort {
 
   async putJob(job: WidgetDataJobRecord): Promise<void> {
     this.jobs.set(job.id, job)
+    this.ensureJobSource(job)
   }
 
   async deleteJob(jobId: WidgetDataJobId): Promise<void> {
@@ -98,7 +167,11 @@ export class MemoryBoardStore implements BoardStorePort {
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
   }
 
-  async recordRun(run: WidgetJobRunRecord, data?: unknown): Promise<void> {
+  async recordRun(
+    run: WidgetJobRunRecord,
+    data?: unknown,
+    options?: BoardSnapshotReadOptions,
+  ): Promise<void> {
     const job = this.jobs.get(run.jobId)
     if (!job || !isJobRunnable(job)) {
       throw new BoardStorePortError({
@@ -125,10 +198,14 @@ export class MemoryBoardStore implements BoardStorePort {
       updatedAt: occurredAt,
     }
     if (run.status === 'success' && data !== undefined) {
-      next.latestData = data
-      next.latestDataAt = occurredAt
+      await this.putSnapshot({
+        widgetId: widget.id,
+        principalKey: options?.principalKey ?? ANONYMOUS_PRINCIPAL_KEY,
+        data,
+        capturedAt: occurredAt,
+      })
     }
-    this.widgets.set(widget.id, next)
+    this.widgets.set(widget.id, persistableWidgetRow(next))
   }
 
   async commitAtomically(input: BoardAtomicCommitInput): Promise<void> {
@@ -136,8 +213,12 @@ export class MemoryBoardStore implements BoardStorePort {
       input.board.id,
       mergeBoardForCommit(this.boards.get(input.board.id), input),
     )
-    this.widgets.set(input.widget.id, input.widget)
-    if (input.job) this.jobs.set(input.job.id, input.job)
+    this.writeWidgetRow(input.widget)
+    if (input.job) {
+      this.jobs.set(input.job.id, input.job)
+      this.ensureJobSource(input.job)
+    }
+    if (input.dataSource) this.sources.set(input.dataSource.id, input.dataSource)
   }
 
   async getInstalledPresets(): Promise<Readonly<Record<string, number>>> {
@@ -190,6 +271,34 @@ export class MemoryBoardStore implements BoardStorePort {
     })
   }
 
+  private writeWidgetRow(
+    widget: BoardWidgetRecord,
+    principalKey = ANONYMOUS_PRINCIPAL_KEY,
+  ): void {
+    const snapshot = snapshotFromWidgetCompat(widget, principalKey)
+    if (snapshot) {
+      this.snapshots.set(
+        snapshotStorageKey(snapshot.widgetId, snapshot.principalKey),
+        snapshot,
+      )
+    }
+    this.widgets.set(widget.id, persistableWidgetRow(widget))
+    if (![...this.sources.values()].some((source) => source.widgetId === widget.id)) {
+      const source = createPresetDataSource(widget.id, widget.updatedAt)
+      this.sources.set(source.id, source)
+    }
+  }
+
+  private ensureJobSource(job: WidgetDataJobRecord): void {
+    const existing = [...this.sources.values()].find(
+      (source) => source.widgetId === job.widgetId,
+    )
+    if (existing?.kind === 'job' && existing.jobId === job.id) return
+    const source = dataSourceFromJob(job)
+    if (existing && existing.id !== source.id) this.sources.delete(existing.id)
+    this.sources.set(source.id, source)
+  }
+
   private deleteWidgetSync(widgetId: BoardWidgetId): void {
     for (const board of this.boards.values()) {
       const placements = board.placements.filter(
@@ -201,6 +310,12 @@ export class MemoryBoardStore implements BoardStorePort {
     }
     const job = [...this.jobs.values()].find((row) => row.widgetId === widgetId)
     if (job) this.deleteJobAndRuns(job.id)
+    for (const source of [...this.sources.values()]) {
+      if (source.widgetId === widgetId) this.sources.delete(source.id)
+    }
+    for (const [key, snapshot] of this.snapshots) {
+      if (snapshot.widgetId === widgetId) this.snapshots.delete(key)
+    }
     this.widgets.delete(widgetId)
   }
 
@@ -209,6 +324,9 @@ export class MemoryBoardStore implements BoardStorePort {
       if (run.jobId === jobId) this.runs.delete(run.id)
     }
     this.jobs.delete(jobId)
+    for (const source of [...this.sources.values()]) {
+      if (source.jobId === jobId) this.sources.delete(source.id)
+    }
   }
 }
 
