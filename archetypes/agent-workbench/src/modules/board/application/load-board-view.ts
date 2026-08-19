@@ -23,6 +23,18 @@ async function loadPlacedWidgets(
   return widgets
 }
 
+async function loadSourcesByWidget(
+  store: BoardStorePort,
+  placements: readonly BoardPlacement[],
+): Promise<Map<string, WidgetDataSourceRecord>> {
+  const sources = new Map<string, WidgetDataSourceRecord>()
+  for (const placement of placements) {
+    const source = await store.getDataSourceByWidgetId(placement.widgetId)
+    if (source) sources.set(placement.widgetId, source)
+  }
+  return sources
+}
+
 export async function loadBoardList(
   store: BoardStorePort,
   options?: BoardSnapshotReadOptions,
@@ -31,11 +43,7 @@ export async function loadBoardList(
   const cards: BoardListCard[] = []
   for (const board of boards) {
     const widgets = await loadPlacedWidgets(store, board.placements, options)
-    const sources = new Map<string, WidgetDataSourceRecord>()
-    for (const placement of board.placements) {
-      const source = await store.getDataSourceByWidgetId(placement.widgetId)
-      if (source) sources.set(placement.widgetId, source)
-    }
+    const sources = await loadSourcesByWidget(store, board.placements)
     cards.push({ board, widgets, sources })
   }
   return cards
@@ -55,11 +63,9 @@ export async function loadBoardView(
   }
 
   const jobs = new Map<string, WidgetDataJobRecord>()
-  const sources = new Map<string, WidgetDataSourceRecord>()
+  const sources = await loadSourcesByWidget(store, board.placements)
   const lastRunByJobId = new Map<string, WidgetJobRunRecord>()
   for (const placement of board.placements) {
-    const source = await store.getDataSourceByWidgetId(placement.widgetId)
-    if (source) sources.set(placement.widgetId, source)
     const job = await store.getJobByWidgetId(placement.widgetId)
     if (!job) continue
     jobs.set(placement.widgetId, job)

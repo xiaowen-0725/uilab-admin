@@ -125,19 +125,39 @@ function isClaimStale(
   claim: EvaluationClaim | undefined,
   live: IdentityScopeSnapshot,
 ): boolean {
-  if (!claim || claim.cancelled) return true
+  if (!claim || claim.cancelled || !live.valid) return true
   if (claim.principalKey !== live.principalKey) return true
-  if (claim.generation !== live.generation) return true
-  return !live.valid
+  return claim.generation !== live.generation
+}
+
+function evaluationRuntimeKey(
+  sourceKind: 'job' | 'query',
+  jobId: string,
+  source: WidgetDataSourceRecord | null,
+): string {
+  if (sourceKind === 'job') return jobId
+  return source?.queryName ?? source?.id ?? jobId
+}
+
+function evaluationJobId(
+  sourceKind: 'job' | 'query',
+  jobId: string,
+  source: WidgetDataSourceRecord | null,
+): string {
+  if (sourceKind === 'job') return jobId
+  return source?.id ?? jobId
+}
+
+function isUnavailable(
+  item: RefreshOutcome,
+): item is Extract<RefreshOutcome, { kind: 'unavailable' }> {
+  return item.kind === 'unavailable'
 }
 
 export function findUnavailable(
   outcomes: readonly RefreshOutcome[],
 ): Extract<RefreshOutcome, { kind: 'unavailable' }> | undefined {
-  return outcomes.find(
-    (item): item is Extract<RefreshOutcome, { kind: 'unavailable' }> =>
-      item.kind === 'unavailable',
-  )
+  return outcomes.find(isUnavailable)
 }
 
 export async function executeJobRun(
@@ -176,14 +196,17 @@ async function evaluateBoundSource(
     return { kind: 'masked', reason: 'needs_relogin' }
   }
 
-  const authorized = source
-    ? authorizeDataSourceParameters(source, identity.authorization)
-    : { ok: true as const }
-  if (!authorized.ok) {
-    await input.store.deleteSnapshot(input.widgetId, principalKey)
-    stopped.add(halted)
-    input.onStatus?.()
-    return { kind: 'cleared', reason: 'permission_revoked' }
+  if (source) {
+    const authorized = authorizeDataSourceParameters(
+      source,
+      identity.authorization,
+    )
+    if (!authorized.ok) {
+      await input.store.deleteSnapshot(input.widgetId, principalKey)
+      stopped.add(halted)
+      input.onStatus?.()
+      return { kind: 'cleared', reason: 'permission_revoked' }
+    }
   }
   stopped.delete(halted)
 
@@ -202,10 +225,11 @@ async function evaluateBoundSource(
   const runId = newId('run')
   const executionKey = newId('exec')
   const startedAt = nowIso()
-  const runtimeKey =
-    input.sourceKind === 'query'
-      ? (source?.queryName ?? source?.id ?? input.jobId)
-      : input.jobId
+  const runtimeKey = evaluationRuntimeKey(
+    input.sourceKind,
+    input.jobId,
+    source,
+  )
   const claim: EvaluationClaim = {
     widgetId: input.widgetId,
     runtimeKey,
@@ -216,8 +240,7 @@ async function evaluateBoundSource(
   }
   claims.set(executionKey, claim)
 
-  const runJobId =
-    input.sourceKind === 'job' ? input.jobId : (source?.id ?? input.jobId)
+  const runJobId = evaluationJobId(input.sourceKind, input.jobId, source)
   await input.store.recordRun(
     {
       id: runId,
@@ -278,7 +301,6 @@ async function evaluateBoundSource(
   }
 
   if (!result.ok && result.error === 'already_running') {
-    claims.delete(executionKey)
     return { kind: 'already_running', runId }
   }
 
@@ -310,8 +332,14 @@ export function createBoardRefreshController(input: {
   const stoppedRefresh = new Set<string>()
   const concurrency = input.concurrency ?? BOARD_REFRESH_CONCURRENCY
   const staleMs = input.staleMs ?? BOARD_REFRESH_STALE_MS
-  const clock = input.now ?? (() => new Date())
-  const nowIso = () => clock().toISOString()
+
+  function clock(): Date {
+    return input.now ? input.now() : new Date()
+  }
+
+  function nowIso(): string {
+    return clock().toISOString()
+  }
 
   const unsubscribe = input.identityScope?.subscribeInvalidation((event) => {
     cancelStaleClaims(event.snapshot)
@@ -320,6 +348,27 @@ export function createBoardRefreshController(input: {
 
   function identity(): IdentityScopeSnapshot {
     return currentIdentity(input.identityScope)
+  }
+
+  function sharedEvaluateInput(): Pick<
+    ExecuteJobRunInput,
+    | 'store'
+    | 'runtime'
+    | 'nowIso'
+    | 'onStatus'
+    | 'identityScope'
+    | 'claims'
+    | 'stoppedRefresh'
+  > {
+    return {
+      store: input.store,
+      runtime: input.runtime,
+      nowIso,
+      onStatus: input.onChange,
+      identityScope: input.identityScope,
+      claims,
+      stoppedRefresh,
+    }
   }
 
   function cancelStaleClaims(snapshot: IdentityScopeSnapshot): void {
@@ -352,91 +401,75 @@ export function createBoardRefreshController(input: {
     input.onChange?.()
   }
 
-  async function clearUnauthorizedWidgets(
-    snapshot: IdentityScopeSnapshot,
+  async function forEachWidgetSource(
+    visit: (source: WidgetDataSourceRecord) => Promise<void>,
   ): Promise<void> {
     for (const board of await input.store.listBoards()) {
       for (const placement of board.placements) {
         const source = await input.store.getDataSourceByWidgetId(
           placement.widgetId,
         )
-        if (!source || source.kind === 'preset') continue
-        const authorized = authorizeDataSourceParameters(
-          source,
-          snapshot.authorization,
-        )
-        if (authorized.ok) continue
-        await input.store.deleteSnapshot(
-          placement.widgetId,
-          snapshot.principalKey,
-        )
-        stoppedRefresh.add(stopKey(placement.widgetId, snapshot.principalKey))
+        if (source) await visit(source)
       }
     }
+  }
+
+  async function clearUnauthorizedWidgets(
+    snapshot: IdentityScopeSnapshot,
+  ): Promise<void> {
+    await forEachWidgetSource(async (source) => {
+      if (source.kind === 'preset') return
+      if (authorizeDataSourceParameters(source, snapshot.authorization).ok) {
+        return
+      }
+      await input.store.deleteSnapshot(source.widgetId, snapshot.principalKey)
+      stoppedRefresh.add(stopKey(source.widgetId, snapshot.principalKey))
+    })
   }
 
   async function restoreAuthorizedWidgets(
     snapshot: IdentityScopeSnapshot,
   ): Promise<void> {
-    for (const board of await input.store.listBoards()) {
-      for (const placement of board.placements) {
-        const source = await input.store.getDataSourceByWidgetId(
-          placement.widgetId,
-        )
-        if (!source) continue
-        if (
-          authorizeDataSourceParameters(source, snapshot.authorization).ok
-        ) {
-          stoppedRefresh.delete(
-            stopKey(placement.widgetId, snapshot.principalKey),
-          )
-        }
+    await forEachWidgetSource(async (source) => {
+      if (!authorizeDataSourceParameters(source, snapshot.authorization).ok) {
+        return
       }
-    }
+      stoppedRefresh.delete(stopKey(source.widgetId, snapshot.principalKey))
+    })
   }
 
-  async function runExclusive(job: WidgetDataJobRecord): Promise<RefreshOutcome> {
-    if (inFlight.has(job.id)) {
-      return { kind: 'already_running' }
-    }
-    inFlight.add(job.id)
-    try {
-      return await executeJobRun({
-        store: input.store,
-        runtime: input.runtime,
-        jobId: job.id,
-        widgetId: job.widgetId,
-        nowIso,
-        onStatus: input.onChange,
-        identityScope: input.identityScope,
-        claims,
-        stoppedRefresh,
-      })
-    } finally {
-      inFlight.delete(job.id)
-    }
-  }
-
-  async function runQuery(source: WidgetDataSourceRecord): Promise<RefreshOutcome> {
-    const key = source.id
+  async function runExclusiveKey(
+    key: string,
+    run: () => Promise<RefreshOutcome>,
+  ): Promise<RefreshOutcome> {
     if (inFlight.has(key)) return { kind: 'already_running' }
     inFlight.add(key)
     try {
-      return await evaluateBoundSource({
-        store: input.store,
-        runtime: input.runtime,
-        jobId: source.id,
-        widgetId: source.widgetId,
-        sourceKind: 'query',
-        nowIso,
-        onStatus: input.onChange,
-        identityScope: input.identityScope,
-        claims,
-        stoppedRefresh,
-      })
+      return await run()
     } finally {
       inFlight.delete(key)
     }
+  }
+
+  function runExclusive(job: WidgetDataJobRecord): Promise<RefreshOutcome> {
+    return runExclusiveKey(job.id, () =>
+      executeJobRun({
+        ...sharedEvaluateInput(),
+        jobId: job.id,
+        widgetId: job.widgetId,
+      }),
+    )
+  }
+
+  function runQuery(source: WidgetDataSourceRecord): Promise<RefreshOutcome> {
+    return runExclusiveKey(source.id, () =>
+      evaluateBoundSource({
+        ...sharedEvaluateInput(),
+        jobId: source.id,
+        widgetId: source.widgetId,
+        sourceKind: 'query',
+      }),
+    )
   }
 
   async function runPool(
@@ -444,7 +477,7 @@ export function createBoardRefreshController(input: {
   ): Promise<RefreshOutcome[]> {
     const outcomes: RefreshOutcome[] = []
     let cursor = 0
-    async function worker() {
+    async function worker(): Promise<void> {
       while (cursor < work.length) {
         const index = cursor
         cursor += 1
@@ -459,28 +492,36 @@ export function createBoardRefreshController(input: {
     return outcomes
   }
 
-  async function jobsOnBoard(boardId: string): Promise<WidgetDataJobRecord[]> {
+  async function collectOnBoard<T>(
+    boardId: string,
+    pick: (widgetId: string) => Promise<T | null | undefined>,
+  ): Promise<T[]> {
     const board = await input.store.getBoard(boardId)
     if (!board) return []
-    const jobs: WidgetDataJobRecord[] = []
+    const items: T[] = []
     for (const placement of board.placements) {
-      const job = await input.store.getJobByWidgetId(placement.widgetId)
-      if (job && isJobRunnable(job)) jobs.push(job)
+      const item = await pick(placement.widgetId)
+      if (item) items.push(item)
     }
-    return jobs
+    return items
   }
 
-  async function querySourcesOnBoard(
+  function jobsOnBoard(boardId: string): Promise<WidgetDataJobRecord[]> {
+    return collectOnBoard(boardId, async (widgetId) => {
+      const job = await input.store.getJobByWidgetId(widgetId)
+      if (!job || !isJobRunnable(job)) return null
+      return job
+    })
+  }
+
+  function querySourcesOnBoard(
     boardId: string,
   ): Promise<WidgetDataSourceRecord[]> {
-    const board = await input.store.getBoard(boardId)
-    if (!board) return []
-    const sources: WidgetDataSourceRecord[] = []
-    for (const placement of board.placements) {
-      const source = await input.store.getDataSourceByWidgetId(placement.widgetId)
-      if (source?.kind === 'query') sources.push(source)
-    }
-    return sources
+    return collectOnBoard(boardId, async (widgetId) => {
+      const source = await input.store.getDataSourceByWidgetId(widgetId)
+      if (source?.kind !== 'query') return null
+      return source
+    })
   }
 
   function isRefreshStopped(widgetId: string): boolean {

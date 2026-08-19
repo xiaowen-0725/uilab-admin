@@ -194,14 +194,7 @@ export class MemoryBoardStore implements BoardStorePort {
     options?: BoardRunCommitOptions,
   ): Promise<void> {
     const job = this.jobs.get(run.jobId)
-    if (job && !isJobRunnable(job)) {
-      throw new BoardStorePortError({
-        code: 'conflict',
-        message: '作业尚未获批，不能运行',
-        retriable: false,
-      })
-    }
-    if (!job && !options?.allowMissingJob) {
+    if ((job && !isJobRunnable(job)) || (!job && !options?.allowMissingJob)) {
       throw new BoardStorePortError({
         code: 'conflict',
         message: '作业尚未获批，不能运行',

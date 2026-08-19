@@ -15,6 +15,15 @@ import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import { BoardCanvas } from './board-canvas'
 import { BoardWidgetHost } from './board-widget-host'
 
+function previewRefreshTitle(
+  jobCount: number,
+  runtimeUnavailable: boolean,
+): string {
+  if (jobCount === 0) return '这个看板没有取数作业'
+  if (runtimeUnavailable) return JOB_RUNTIME_DISCONNECTED
+  return '刷新'
+}
+
 export interface BoardPreviewPanelProps {
   view: BoardView
   theme: WidgetTheme
@@ -41,12 +50,7 @@ export function BoardPreviewPanel({
 }: BoardPreviewPanelProps) {
   const { board } = view
   const jobCount = view.jobs.size
-  const refreshTitle =
-    jobCount === 0
-      ? '这个看板没有取数作业'
-      : runtimeUnavailable
-        ? JOB_RUNTIME_DISCONNECTED
-        : '刷新'
+  const refreshTitle = previewRefreshTitle(jobCount, runtimeUnavailable)
 
   return (
     <aside

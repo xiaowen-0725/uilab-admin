@@ -25,6 +25,7 @@ import {
   commitFenceRejects,
   identityEpochMetadataKey,
   parseLiveExecutions,
+  type LiveExecutionMap,
 } from '../model/identity-barrier'
 import {
   hydrateWidgetFromSnapshot,
@@ -244,28 +245,24 @@ export class IdbBoardStore implements BoardStorePort {
           key: identityEpochMetadataKey(input.principalKey),
           value: input.generation,
         } satisfies MetadataRecord)
-        const live = parseLiveExecutions(
-          (await getMetadataRow(tx, IDENTITY_LIVE_EXECUTIONS_KEY))?.value,
+        const live = omitPrincipalExecutions(
+          parseLiveExecutions(
+            (await getMetadataRow(tx, IDENTITY_LIVE_EXECUTIONS_KEY))?.value,
+          ),
+          input.principalKey,
         )
-        for (const [key, principal] of Object.entries(live)) {
-          if (principal === input.principalKey) delete live[key]
-        }
-        await putValue(tx, STORE_METADATA, {
-          key: IDENTITY_LIVE_EXECUTIONS_KEY,
-          value: live,
-        } satisfies MetadataRecord)
+        await writeLiveExecutions(tx, live)
         if (!input.deleteSnapshots) return
         const rows = await getAllRows<WidgetDataSnapshotRecord>(
           tx,
           STORE_WIDGET_DATA_SNAPSHOTS,
         )
         for (const row of rows) {
-          if (row.principalKey === input.principalKey) {
-            await remove(tx, STORE_WIDGET_DATA_SNAPSHOTS, [
-              row.widgetId,
-              row.principalKey,
-            ])
-          }
+          if (row.principalKey !== input.principalKey) continue
+          await remove(tx, STORE_WIDGET_DATA_SNAPSHOTS, [
+            row.widgetId,
+            row.principalKey,
+          ])
         }
       }),
     )
@@ -335,14 +332,7 @@ export class IdbBoardStore implements BoardStorePort {
         STORE_WIDGET_DATA_JOBS,
         run.jobId,
       )
-      if (job && !isJobRunnable(job)) {
-        throw new BoardStorePortError({
-          code: 'conflict',
-          message: '作业尚未获批，不能运行',
-          retriable: false,
-        })
-      }
-      if (!job && !options?.allowMissingJob) {
+      if ((job && !isJobRunnable(job)) || (!job && !options?.allowMissingJob)) {
         throw new BoardStorePortError({
           code: 'conflict',
           message: '作业尚未获批，不能运行',
@@ -372,10 +362,7 @@ export class IdbBoardStore implements BoardStorePort {
       )
       if (run.status === 'running' && options?.executionKey) {
         live[options.executionKey] = principalKey
-        await putValue(tx, STORE_METADATA, {
-          key: IDENTITY_LIVE_EXECUTIONS_KEY,
-          value: live,
-        } satisfies MetadataRecord)
+        await writeLiveExecutions(tx, live)
       }
       const snapshot = successSnapshotForRun(
         widget.id,
@@ -399,10 +386,7 @@ export class IdbBoardStore implements BoardStorePort {
       }
       if (run.status !== 'running' && options?.executionKey) {
         delete live[options.executionKey]
-        await putValue(tx, STORE_METADATA, {
-          key: IDENTITY_LIVE_EXECUTIONS_KEY,
-          value: live,
-        } satisfies MetadataRecord)
+        await writeLiveExecutions(tx, live)
       }
       await putValue(tx, STORE_BOARD_WIDGETS, widgetRowAfterRun(widget, run))
     }))
@@ -798,6 +782,27 @@ async function getMetadataRow(
 
 function parseEpoch(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function omitPrincipalExecutions(
+  live: LiveExecutionMap,
+  principalKey: string,
+): LiveExecutionMap {
+  const next: LiveExecutionMap = {}
+  for (const [key, principal] of Object.entries(live)) {
+    if (principal !== principalKey) next[key] = principal
+  }
+  return next
+}
+
+async function writeLiveExecutions(
+  tx: IDBTransaction,
+  live: LiveExecutionMap,
+): Promise<void> {
+  await putValue(tx, STORE_METADATA, {
+    key: IDENTITY_LIVE_EXECUTIONS_KEY,
+    value: live,
+  } satisfies MetadataRecord)
 }
 
 function toStoreError(err: unknown): BoardStorePortError {

@@ -71,6 +71,50 @@ function refreshButtonLabel(
   return '刷新'
 }
 
+type ThumbOverlayKind = 'running' | 'needs_relogin' | 'run_error'
+
+function resolveThumbOverlay(input: {
+  chrome: WidgetChrome
+  running: boolean
+  needsRelogin: boolean
+  status: BoardWidgetStatus
+  runError: string | null
+}): { kind: ThumbOverlayKind; testId: string; title: string } | null {
+  if (input.chrome !== 'none') return null
+  if (input.running) {
+    return {
+      kind: 'running',
+      testId: 'board-widget-thumb-running',
+      title: '正在刷新',
+    }
+  }
+  if (input.needsRelogin) {
+    return {
+      kind: 'needs_relogin',
+      testId: 'board-widget-needs-relogin',
+      title: IDENTITY_NEEDS_RELOGIN,
+    }
+  }
+  if (input.status === 'error' && input.runError) {
+    return {
+      kind: 'run_error',
+      testId: 'board-widget-run-error',
+      title: input.runError,
+    }
+  }
+  return null
+}
+
+function ThumbOverlayIcon({ kind }: { kind: ThumbOverlayKind }): ReactNode {
+  if (kind === 'running') {
+    return <RefreshCw className='size-2.5 animate-spin' aria-hidden />
+  }
+  if (kind === 'needs_relogin') {
+    return <Lock className='size-2.5 text-destructive' aria-hidden />
+  }
+  return <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
+}
+
 function ChromeIconButton({
   testId,
   label,
@@ -206,6 +250,13 @@ export function BoardWidgetHost({
   const needsRelogin = identityChrome === 'needs_relogin'
   const showRunError = !needsRelogin && status === 'error' && Boolean(runError)
   const showRuntimeWarn = !needsRelogin && runtimeUnavailable && hasJob
+  const thumbOverlay = resolveThumbOverlay({
+    chrome,
+    running,
+    needsRelogin,
+    status,
+    runError,
+  })
 
   return (
     <section
@@ -366,31 +417,13 @@ export function BoardWidgetHost({
       ) : null}
 
       <div className='relative min-h-0 flex-1'>
-        {chrome === 'none' && (running || needsRelogin || (status === 'error' && runError)) ? (
+        {thumbOverlay ? (
           <span
             className='pointer-events-none absolute right-1 top-1 z-10 inline-flex size-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground'
-            data-testid={
-              running
-                ? 'board-widget-thumb-running'
-                : needsRelogin
-                  ? 'board-widget-needs-relogin'
-                  : 'board-widget-run-error'
-            }
-            title={
-              running
-                ? '正在刷新'
-                : needsRelogin
-                  ? IDENTITY_NEEDS_RELOGIN
-                  : runError ?? undefined
-            }
+            data-testid={thumbOverlay.testId}
+            title={thumbOverlay.title}
           >
-            {running ? (
-              <RefreshCw className='size-2.5 animate-spin' aria-hidden />
-            ) : needsRelogin ? (
-              <Lock className='size-2.5 text-destructive' aria-hidden />
-            ) : (
-              <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
-            )}
+            <ThumbOverlayIcon kind={thumbOverlay.kind} />
           </span>
         ) : null}
         <BoardWidgetFrame
