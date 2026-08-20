@@ -13,14 +13,23 @@ import {
   SITE_WATCH_PRESET_ID,
 } from './query-fixture-package.js'
 
-function pluginJson(presetBoards: unknown) {
+function pluginJson(presetBoards: unknown, queries?: unknown) {
   return {
     schemaVersion: 1,
     id: 'local.preset',
     name: 'Local Preset',
     version: '0.1.0',
-    contributes: { presetBoards },
+    contributes: {
+      ...(queries !== undefined ? { queries } : {}),
+      presetBoards,
+    },
   }
+}
+
+const VALID_QUERY = {
+  name: 'site_summary',
+  title: '站点摘要',
+  requiredPermissions: ['read'],
 }
 
 const VALID_WIDGET = {
@@ -34,15 +43,18 @@ const VALID_WIDGET = {
 describe('parsePluginManifestJson presetBoards', () => {
   it('accepts a declarative preset board with a query binding and empty resource params', () => {
     const parsed = parsePluginManifestJson(
-      pluginJson([
-        {
-          presetId: 'site-watch',
-          version: 1,
-          title: '站点值班',
-          purpose: '盯站点摘要',
-          widgets: [VALID_WIDGET],
-        },
-      ]),
+      pluginJson(
+        [
+          {
+            presetId: 'site-watch',
+            version: 1,
+            title: '站点值班',
+            purpose: '盯站点摘要',
+            widgets: [VALID_WIDGET],
+          },
+        ],
+        [VALID_QUERY],
+      ),
       '/x/plugin.json',
     )
     assert.equal(parsed.ok, true)
@@ -84,6 +96,62 @@ describe('parsePluginManifestJson presetBoards', () => {
     )
     assert.equal(parsed.ok, false)
     if (!parsed.ok) assert.match(parsed.reason, /handler|实现/)
+  })
+
+  it('rejects widget HTML larger than 512 KiB', () => {
+    const parsed = parsePluginManifestJson(
+      pluginJson(
+        [
+          {
+            presetId: 'site-watch',
+            version: 1,
+            title: '站点值班',
+            widgets: [
+              {
+                ...VALID_WIDGET,
+                html: `<p>${'x'.repeat(512 * 1024 + 1)}</p>`,
+              },
+            ],
+          },
+        ],
+        [VALID_QUERY],
+      ),
+      '/x/plugin.json',
+    )
+    assert.equal(parsed.ok, false)
+    if (!parsed.ok) {
+      assert.equal(parsed.id, 'local.preset')
+      assert.match(parsed.reason, /512 KiB/)
+    }
+  })
+
+  it('rejects a preset board whose queryName is not declared on the same plugin', () => {
+    const parsed = parsePluginManifestJson(
+      pluginJson(
+        [
+          {
+            presetId: 'site-watch',
+            version: 1,
+            title: '站点值班',
+            widgets: [
+              {
+                ...VALID_WIDGET,
+                source: { kind: 'query', queryName: 'ghost_query' },
+              },
+            ],
+          },
+        ],
+        [VALID_QUERY],
+      ),
+      '/x/plugin.json',
+    )
+    assert.equal(parsed.ok, false)
+    if (!parsed.ok) {
+      assert.equal(parsed.id, 'local.preset')
+      assert.match(parsed.reason, /local\.preset/)
+      assert.match(parsed.reason, /site-watch/)
+      assert.match(parsed.reason, /ghost_query/)
+    }
   })
 })
 

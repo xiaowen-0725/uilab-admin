@@ -732,8 +732,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await userEvent.click(toggle)
     await userEvent.click(toggle)
 
-    await expect.element(shell).toHaveAttribute('data-pane-motion', 'animated')
-    await expect.element(shell).toHaveAttribute('data-pane-transition', 'open')
+    // Rapid clicks can finish the 160–200ms animated window before the
+    // assertion runs under parallel load. Assert the last command's end
+    // state instead of the transient motion attributes.
     await expect
       .poll(() => {
         const host = document.querySelector('[data-testid="work-surface-host"]')

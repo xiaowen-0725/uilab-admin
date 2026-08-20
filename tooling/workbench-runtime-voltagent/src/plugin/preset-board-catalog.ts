@@ -1,6 +1,7 @@
 /**
  * Preset board catalog — enabled plugin templates joined to query declarations.
- * Unknown queryName drops the whole board (fail-closed).
+ * Filesystem plugins reject unknown queryName at discover parse.
+ * Builtin packages that skip parse still drop the board here (fail-closed).
  */
 
 import type {
