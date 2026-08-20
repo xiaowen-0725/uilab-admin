@@ -616,16 +616,17 @@ function parseContributes(
     contributes.auth = auth.value
   }
 
+  const queryNames = new Set<string>()
   if (raw.queries != null) {
     const queries = parseQueryContributions(raw.queries)
     if (!queries.ok) return queries
     contributes.queries = queries.value
+    for (const query of queries.value) {
+      queryNames.add(query.name)
+    }
   }
 
   if (raw.presetBoards != null) {
-    const queryNames = new Set(
-      (contributes.queries ?? []).map((query) => query.name),
-    )
     const boards = parsePresetBoardContributions(
       raw.presetBoards,
       pluginId,
@@ -680,13 +681,11 @@ function parsePresetBoardContributions(
     if (widgets.value.length === 0) {
       return { ok: false, reason: 'presetBoard.widgets 不能为空' }
     }
-    const widgetWithUnknownQuery = widgets.value.find(
-      (widget) => !queryNames.has(widget.source.queryName),
-    )
-    if (widgetWithUnknownQuery) {
+    for (const widget of widgets.value) {
+      if (queryNames.has(widget.source.queryName)) continue
       return {
         ok: false,
-        reason: `插件 ${pluginId} 的 presetBoard ${presetId} 引用了未声明的 query：${widgetWithUnknownQuery.source.queryName}`,
+        reason: `插件 ${pluginId} 的 presetBoard ${presetId} 引用了未声明的 query：${widget.source.queryName}`,
       }
     }
     const board: PresetBoardContribution = {

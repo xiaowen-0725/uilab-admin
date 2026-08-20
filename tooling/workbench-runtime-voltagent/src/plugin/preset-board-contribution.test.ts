@@ -14,15 +14,18 @@ import {
 } from './query-fixture-package.js'
 
 function pluginJson(presetBoards: unknown, queries?: unknown) {
+  const contributes: { presetBoards: unknown; queries?: unknown } = {
+    presetBoards,
+  }
+  if (queries !== undefined) {
+    contributes.queries = queries
+  }
   return {
     schemaVersion: 1,
     id: 'local.preset',
     name: 'Local Preset',
     version: '0.1.0',
-    contributes: {
-      ...(queries !== undefined ? { queries } : {}),
-      presetBoards,
-    },
+    contributes,
   }
 }
 
@@ -109,7 +112,7 @@ describe('parsePluginManifestJson presetBoards', () => {
             widgets: [
               {
                 ...VALID_WIDGET,
-                html: `<p>${'x'.repeat(512 * 1024 + 1)}</p>`,
+                html: 'x'.repeat(512 * 1024 + 1),
               },
             ],
           },
