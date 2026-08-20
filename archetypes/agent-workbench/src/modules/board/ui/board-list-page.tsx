@@ -2,7 +2,7 @@ import { LayoutGrid, MessageSquarePlus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BoardListCard } from '../model/board-view'
-import { isPluginPresetBoard } from '../model/preset-board'
+import { boardOriginBadge } from '../model/preset-board'
 import type { WidgetDataSourceRecord } from '../model/types'
 import {
   anonymousIdentitySnapshot,
@@ -126,6 +126,7 @@ function BoardCard({
     placement: slot.placement,
   }))
   const hiddenCount = Math.max(0, widgets.length - THUMBNAIL_SLOTS)
+  const originBadge = boardOriginBadge(board)
 
   return (
     <div
@@ -169,13 +170,9 @@ function BoardCard({
         >
           {board.title}
         </button>
-        {board.isExample ? (
-          <Badge variant='secondary' data-testid='board-example-badge'>
-            示例
-          </Badge>
-        ) : isPluginPresetBoard(board) ? (
-          <Badge variant='secondary' data-testid='board-preset-badge'>
-            预置
+        {originBadge ? (
+          <Badge variant='secondary' data-testid={originBadge.testId}>
+            {originBadge.label}
           </Badge>
         ) : null}
       </div>

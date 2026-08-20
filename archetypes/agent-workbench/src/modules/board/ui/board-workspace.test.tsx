@@ -428,33 +428,37 @@ describe('BoardWorkspace example boards', () => {
   })
 })
 
+function siteWatchCatalog() {
+  return createMemoryBoardPresetCatalog([
+    {
+      pluginId: 'query.fixture',
+      presetId: 'site-watch',
+      version: 1,
+      title: '站点值班',
+      widgets: [
+        {
+          id: 'occupancy',
+          title: '满位',
+          html: WIDGET_HTML,
+          placement: { x: 0, y: 0, w: 6, h: 4 },
+          queryName: 'site_summary',
+          parameters: {},
+          parameterSchema: {
+            siteIds: { type: 'resource', resourceType: 'site' },
+          },
+          requiredPermissions: ['read'],
+          referencableByJob: true,
+          trigger: { kind: 'onOpen' },
+        },
+      ],
+    },
+  ])
+}
+
 describe('BoardWorkspace preset boards', () => {
   it('installs a plugin preset beside examples and shows 预置 plus 需登录', async () => {
     const store = createMemoryBoardStore()
-    const catalog = createMemoryBoardPresetCatalog([
-      {
-        pluginId: 'query.fixture',
-        presetId: 'site-watch',
-        version: 1,
-        title: '站点值班',
-        widgets: [
-          {
-            id: 'occupancy',
-            title: '满位',
-            html: WIDGET_HTML,
-            placement: { x: 0, y: 0, w: 6, h: 4 },
-            queryName: 'site_summary',
-            parameters: {},
-            parameterSchema: {
-              siteIds: { type: 'resource', resourceType: 'site' },
-            },
-            requiredPermissions: ['read'],
-            referencableByJob: true,
-            trigger: { kind: 'onOpen' },
-          },
-        ],
-      },
-    ])
+    const catalog = siteWatchCatalog()
 
     await render(
       <WorkspaceHarness
@@ -483,30 +487,7 @@ describe('BoardWorkspace preset boards', () => {
 
   it('shows 待绑定资源 when a signed-in user has not filled resource params', async () => {
     const store = createMemoryBoardStore()
-    const catalog = createMemoryBoardPresetCatalog([
-      {
-        pluginId: 'query.fixture',
-        presetId: 'site-watch',
-        version: 1,
-        title: '站点值班',
-        widgets: [
-          {
-            id: 'occupancy',
-            title: '满位',
-            html: WIDGET_HTML,
-            placement: { x: 0, y: 0, w: 6, h: 4 },
-            queryName: 'site_summary',
-            parameters: {},
-            parameterSchema: {
-              siteIds: { type: 'resource', resourceType: 'site' },
-            },
-            requiredPermissions: ['read'],
-            referencableByJob: true,
-            trigger: { kind: 'onOpen' },
-          },
-        ],
-      },
-    ])
+    const catalog = siteWatchCatalog()
     const identityScope = createMemoryIdentityScope({
       principalKey: 'alice',
       resources: [

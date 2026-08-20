@@ -14,7 +14,12 @@ export {
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
 } from './model/types'
-export { isPluginPresetBoard, presetBoardId, presetWidgetId } from './model/preset-board'
+export {
+  boardOriginBadge,
+  isPluginPresetBoard,
+  presetBoardId,
+  presetWidgetId,
+} from './model/preset-board'
 export type {
   BoardId,
   BoardMountId,
@@ -167,6 +172,8 @@ export {
   IDENTITY_NEEDS_LOGIN,
   IDENTITY_NEEDS_RELOGIN,
   IDENTITY_PERMISSION_REVOKED,
+  identityChromeLabel,
+  isIdentityLockedChrome,
 } from './model/widget-render-state'
 export type { WidgetIdentityChrome } from './model/widget-render-state'
 export {

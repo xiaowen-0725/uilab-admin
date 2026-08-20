@@ -16,17 +16,10 @@ import {
 } from '../fixtures/example-presets'
 import type { BoardStorePort } from '../ports/board-store-port'
 import { addWidgetToBoard } from './board-commands'
+import { hydratePresetInstallLedger } from './preset-install-ledger'
 
 export async function ensureExampleBoards(store: BoardStorePort): Promise<void> {
-  const installed = { ...(await store.getInstalledPresets()) }
-
-  for (const board of await store.listBoards()) {
-    if (!board.presetId || installed[board.presetId] != null) continue
-    const version = board.presetVersion ?? 1
-    await store.recordPresetInstalled(board.presetId, version)
-    installed[board.presetId] = version
-  }
-
+  const installed = await hydratePresetInstallLedger(store)
   const now = new Date().toISOString()
   for (const preset of EXAMPLE_PRESETS) {
     if (installed[preset.id] != null) continue

@@ -11,8 +11,22 @@ import type {
 import type { BoardPresetCatalogEntry, BoardPresetCatalogWidget } from '../ports/board-preset-catalog-port'
 import { dataSourceIdForWidget } from './data-source'
 
-export function isPluginPresetBoard(board: Pick<BoardRecord, 'isExample' | 'presetId'>): boolean {
+export function isPluginPresetBoard(
+  board: Pick<BoardRecord, 'isExample' | 'presetId'>,
+): boolean {
   return Boolean(board.presetId) && !board.isExample
+}
+
+export function boardOriginBadge(
+  board: Pick<BoardRecord, 'isExample' | 'presetId'>,
+): { testId: 'board-example-badge' | 'board-preset-badge'; label: '示例' | '预置' } | null {
+  if (board.isExample) {
+    return { testId: 'board-example-badge', label: '示例' }
+  }
+  if (isPluginPresetBoard(board)) {
+    return { testId: 'board-preset-badge', label: '预置' }
+  }
+  return null
 }
 
 export function presetBoardId(presetId: string): string {

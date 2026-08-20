@@ -653,12 +653,8 @@ function parsePresetBoardContributions(
     if (!isRecord(item)) {
       return { ok: false, reason: 'presetBoard 项必须是对象' }
     }
-    if (hasImplementationField(item)) {
-      return {
-        ok: false,
-        reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
-      }
-    }
+    const implemented = rejectImplemented(item)
+    if (implemented) return implemented
     const presetId = asString(item.presetId)
     const title = asString(item.title)
     if (!presetId) return { ok: false, reason: 'presetBoard.presetId 必填' }
@@ -700,12 +696,8 @@ function parsePresetBoardWidgets(
     if (!isRecord(item)) {
       return { ok: false, reason: 'presetBoard.widget 必须是对象' }
     }
-    if (hasImplementationField(item)) {
-      return {
-        ok: false,
-        reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
-      }
-    }
+    const implemented = rejectImplemented(item)
+    if (implemented) return implemented
     const id = asString(item.id)
     const title = asString(item.title)
     if (!id) return { ok: false, reason: 'presetBoard.widget.id 必填' }
@@ -745,12 +737,8 @@ function parsePresetBoardSource(raw: unknown): ParseResult<PresetBoardWidgetSour
   if (!isRecord(raw)) {
     return { ok: false, reason: 'presetBoard.widget.source 必须是对象' }
   }
-  if (hasImplementationField(raw)) {
-    return {
-      ok: false,
-      reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
-    }
-  }
+  const implemented = rejectImplemented(raw)
+  if (implemented) return implemented
   if (raw.kind !== 'query') {
     return { ok: false, reason: 'presetBoard.widget.source.kind 必须是 query' }
   }
@@ -844,6 +832,16 @@ function parseTrigger(
 
 function hasImplementationField(value: Record<string, unknown>): boolean {
   return IMPLEMENTATION_FIELDS.some((field) => value[field] != null)
+}
+
+function rejectImplemented(
+  value: Record<string, unknown>,
+): ParseResult<never> | null {
+  if (!hasImplementationField(value)) return null
+  return {
+    ok: false,
+    reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
+  }
 }
 
 function parseQueryContributions(raw: unknown): ParseResult<QueryContribution[]> {

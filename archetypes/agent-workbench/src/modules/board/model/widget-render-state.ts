@@ -42,30 +42,43 @@ export function anonymousIdentitySnapshot(): IdentityScopeSnapshot {
   }
 }
 
+export function identityChromeLabel(
+  chrome: WidgetIdentityChrome,
+): string | null {
+  switch (chrome) {
+    case 'needs_login':
+      return IDENTITY_NEEDS_LOGIN
+    case 'needs_relogin':
+      return IDENTITY_NEEDS_RELOGIN
+    case 'incomplete_binding':
+      return IDENTITY_INCOMPLETE_BINDING
+    case 'permission_revoked':
+      return IDENTITY_PERMISSION_REVOKED
+    case 'none':
+      return null
+  }
+}
+
+export function isIdentityLockedChrome(chrome: WidgetIdentityChrome): boolean {
+  return chrome !== 'none'
+}
+
 export function resolveWidgetRenderState(input: {
   latestData: unknown
   source?: WidgetDataSourceRecord | null
   identity: IdentityScopeSnapshot
 }): WidgetRenderState {
   if (input.source?.kind === 'preset') {
-    return { data: input.latestData, chrome: 'none', masked: false }
+    return visible(input.latestData)
   }
   if (
     input.source?.kind === 'query' &&
     input.identity.principalKey === ANONYMOUS_PRINCIPAL_KEY
   ) {
-    return {
-      data: undefined,
-      chrome: 'needs_login',
-      masked: true,
-    }
+    return hidden('needs_login')
   }
   if (!input.identity.valid) {
-    return {
-      data: undefined,
-      chrome: 'needs_relogin',
-      masked: true,
-    }
+    return hidden('needs_relogin')
   }
   if (input.source) {
     const authorized = authorizeDataSourceParameters(
@@ -73,14 +86,17 @@ export function resolveWidgetRenderState(input: {
       input.identity.authorization,
     )
     if (!authorized.ok) {
-      return {
-        data: undefined,
-        chrome: isAuthorizationRevoke(authorized)
-          ? 'permission_revoked'
-          : 'incomplete_binding',
-        masked: true,
-      }
+      if (isAuthorizationRevoke(authorized)) return hidden('permission_revoked')
+      return hidden('incomplete_binding')
     }
   }
-  return { data: input.latestData, chrome: 'none', masked: false }
+  return visible(input.latestData)
+}
+
+function hidden(chrome: WidgetIdentityChrome): WidgetRenderState {
+  return { data: undefined, chrome, masked: true }
+}
+
+function visible(data: unknown): WidgetRenderState {
+  return { data, chrome: 'none', masked: false }
 }

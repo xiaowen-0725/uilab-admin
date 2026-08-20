@@ -18,7 +18,7 @@ import { anonymousIdentitySnapshot } from '../model/widget-render-state'
 import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
-import { isPluginPresetBoard } from '../model/preset-board'
+import { boardOriginBadge } from '../model/preset-board'
 import type { BoardPlacement, BoardWidgetId } from '../model/types'
 import type { WidgetTheme } from '../model/widget-document'
 import { BoardCanvas } from './board-canvas'
@@ -72,6 +72,7 @@ export function BoardDetailPage({
   identity = anonymousIdentitySnapshot(),
 }: BoardDetailPageProps) {
   const { board } = view
+  const originBadge = boardOriginBadge(board)
   const [expandedId, setExpandedId] = useState<BoardWidgetId | null>(null)
   const [jobWidgetId, setJobWidgetId] = useState<BoardWidgetId | null>(null)
   const expanded = expandedId ? view.widgets.get(expandedId) : undefined
@@ -138,21 +139,13 @@ export function BoardDetailPage({
           >
             {board.title}
           </span>
-          {board.isExample ? (
+          {originBadge ? (
             <Badge
               variant='secondary'
               className='ml-1 shrink-0'
-              data-testid='board-example-badge'
+              data-testid={originBadge.testId}
             >
-              示例
-            </Badge>
-          ) : isPluginPresetBoard(board) ? (
-            <Badge
-              variant='secondary'
-              className='ml-1 shrink-0'
-              data-testid='board-preset-badge'
-            >
-              预置
+              {originBadge.label}
             </Badge>
           ) : null}
         </nav>
@@ -255,10 +248,7 @@ export function BoardDetailPage({
                   runError={last?.errorMessage}
                   runtimeUnavailable={runtimeUnavailable}
                   hasJob={view.jobs.has(widget.id)}
-                  canRefresh={
-                    view.jobs.has(widget.id) ||
-                    view.sources.get(widget.id)?.kind === 'query'
-                  }
+                  canRefresh={widgetCanRefresh(view, widget.id)}
                   exampleDataHint={exampleDataHintFor(view, widget.id)}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
@@ -307,10 +297,7 @@ export function BoardDetailPage({
             runError={expandedRun?.errorMessage}
             runtimeUnavailable={runtimeUnavailable}
             hasJob={view.jobs.has(expanded.id)}
-            canRefresh={
-              view.jobs.has(expanded.id) ||
-              view.sources.get(expanded.id)?.kind === 'query'
-            }
+            canRefresh={widgetCanRefresh(view, expanded.id)}
             exampleDataHint={exampleDataHintFor(view, expanded.id)}
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}
@@ -328,4 +315,8 @@ export function BoardDetailPage({
       />
     </div>
   )
+}
+
+function widgetCanRefresh(view: BoardView, widgetId: BoardWidgetId): boolean {
+  return view.jobs.has(widgetId) || view.sources.get(widgetId)?.kind === 'query'
 }

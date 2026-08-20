@@ -286,12 +286,7 @@ export async function commitBoardDraft(
     existingPlacement &&
     (!queryName || queryBindingMatches(existingSource, queryName, queryParams))
   ) {
-    return leakFreeCommit({
-      ok: true,
-      boardId: board.id,
-      widgetId,
-      mountId: existingPlacement.mountId,
-      placement: pickPlacement(existingPlacement),
+    return existingPlacementCommit(board, widgetId, existingPlacement, {
       jobId: jobId || undefined,
       queryName: queryNameOf(existingSource) ?? queryName,
       replayed: true,
@@ -306,12 +301,7 @@ export async function commitBoardDraft(
     !wantsJob
   ) {
     await store.putDataSource(keepSourceIdentity(querySource, existingSource))
-    return leakFreeCommit({
-      ok: true,
-      boardId: board.id,
-      widgetId,
-      mountId: existingPlacement.mountId,
-      placement: pickPlacement(existingPlacement),
+    return existingPlacementCommit(board, widgetId, existingPlacement, {
       queryName: querySource.queryName,
     })
   }
@@ -406,6 +396,28 @@ export async function runCommittedJob(
     widgetId: input.widgetId,
     mode: 'first-run',
     nowIso,
+  })
+}
+
+function existingPlacementCommit(
+  board: BoardRecord,
+  widgetId: string,
+  placement: BoardPlacement,
+  extras: {
+    jobId?: string
+    queryName?: string
+    replayed?: true
+  },
+): BoardCommitOk {
+  return leakFreeCommit({
+    ok: true,
+    boardId: board.id,
+    widgetId,
+    mountId: placement.mountId,
+    placement: pickPlacement(placement),
+    jobId: extras.jobId,
+    queryName: extras.queryName,
+    replayed: extras.replayed,
   })
 }
 

@@ -12,10 +12,8 @@ import { cn } from '@/lib/utils'
 import type { BoardWidgetId, BoardWidgetStatus } from '../model/types'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import {
-  IDENTITY_INCOMPLETE_BINDING,
-  IDENTITY_NEEDS_LOGIN,
-  IDENTITY_NEEDS_RELOGIN,
-  IDENTITY_PERMISSION_REVOKED,
+  identityChromeLabel,
+  isIdentityLockedChrome,
   type WidgetIdentityChrome,
 } from '../model/widget-render-state'
 import {
@@ -66,12 +64,22 @@ function ChromeStatusIcon({
 function refreshButtonLabel(
   running: boolean,
   runtimeUnavailable: boolean,
-  hasJob: boolean,
+  refreshable: boolean,
 ): string {
   if (running) return '正在刷新'
-  if (!hasJob) return '这个小组件没有取数作业'
+  if (!refreshable) return '这个小组件没有取数作业'
   if (runtimeUnavailable) return JOB_RUNTIME_DISCONNECTED
   return '刷新'
+}
+
+const IDENTITY_CHROME_TEST_ID: Record<
+  Exclude<WidgetIdentityChrome, 'none'>,
+  string
+> = {
+  needs_login: 'board-widget-needs-login',
+  needs_relogin: 'board-widget-needs-relogin',
+  incomplete_binding: 'board-widget-incomplete-binding',
+  permission_revoked: 'board-widget-permission-revoked',
 }
 
 type ThumbOverlayKind =
@@ -97,32 +105,14 @@ function resolveThumbOverlay(input: {
       title: '正在刷新',
     }
   }
-  if (input.identityChrome === 'needs_login') {
-    return {
-      kind: 'needs_login',
-      testId: 'board-widget-needs-login',
-      title: IDENTITY_NEEDS_LOGIN,
-    }
-  }
-  if (input.identityChrome === 'needs_relogin') {
-    return {
-      kind: 'needs_relogin',
-      testId: 'board-widget-needs-relogin',
-      title: IDENTITY_NEEDS_RELOGIN,
-    }
-  }
-  if (input.identityChrome === 'incomplete_binding') {
-    return {
-      kind: 'incomplete_binding',
-      testId: 'board-widget-incomplete-binding',
-      title: IDENTITY_INCOMPLETE_BINDING,
-    }
-  }
-  if (input.identityChrome === 'permission_revoked') {
-    return {
-      kind: 'permission_revoked',
-      testId: 'board-widget-permission-revoked',
-      title: IDENTITY_PERMISSION_REVOKED,
+  if (input.identityChrome !== 'none') {
+    const title = identityChromeLabel(input.identityChrome)
+    if (title) {
+      return {
+        kind: input.identityChrome,
+        testId: IDENTITY_CHROME_TEST_ID[input.identityChrome],
+        title,
+      }
     }
   }
   if (input.status === 'error' && input.runError) {
@@ -135,15 +125,35 @@ function resolveThumbOverlay(input: {
   return null
 }
 
+function IdentityChromeStatus({
+  chrome,
+}: {
+  chrome: Exclude<WidgetIdentityChrome, 'none'>
+}): ReactNode {
+  const label = identityChromeLabel(chrome)
+  if (!label) return null
+  const lock = chrome === 'needs_login' || chrome === 'needs_relogin'
+  return (
+    <ChromeStatusIcon
+      testId={IDENTITY_CHROME_TEST_ID[chrome]}
+      label={label}
+      tone='destructive'
+    >
+      {lock ? (
+        <Lock className='size-3.5' aria-hidden />
+      ) : (
+        <TriangleAlert className='size-3.5' aria-hidden />
+      )}
+    </ChromeStatusIcon>
+  )
+}
+
 function ThumbOverlayIcon({ kind }: { kind: ThumbOverlayKind }): ReactNode {
   if (kind === 'running') {
     return <RefreshCw className='size-2.5 animate-spin' aria-hidden />
   }
   if (kind === 'needs_relogin' || kind === 'needs_login') {
     return <Lock className='size-2.5 text-destructive' aria-hidden />
-  }
-  if (kind === 'incomplete_binding' || kind === 'permission_revoked') {
-    return <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
   }
   return <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
 }
@@ -284,12 +294,7 @@ export function BoardWidgetHost({
   const running = status === 'running'
   const refreshable = canRefresh ?? hasJob
   const refreshLabel = refreshButtonLabel(running, runtimeUnavailable, refreshable)
-  const needsRelogin = identityChrome === 'needs_relogin'
-  const needsLogin = identityChrome === 'needs_login'
-  const incompleteBinding = identityChrome === 'incomplete_binding'
-  const permissionRevoked = identityChrome === 'permission_revoked'
-  const identityLocked =
-    needsRelogin || needsLogin || incompleteBinding || permissionRevoked
+  const identityLocked = isIdentityLockedChrome(identityChrome)
   const showRunError = !identityLocked && status === 'error' && Boolean(runError)
   const showRuntimeWarn = !identityLocked && runtimeUnavailable && refreshable
   const thumbOverlay = resolveThumbOverlay({
@@ -345,41 +350,8 @@ export function BoardWidgetHost({
               {exampleDataHint}
             </span>
           ) : null}
-          {needsLogin ? (
-            <ChromeStatusIcon
-              testId='board-widget-needs-login'
-              label={IDENTITY_NEEDS_LOGIN}
-              tone='destructive'
-            >
-              <Lock className='size-3.5' aria-hidden />
-            </ChromeStatusIcon>
-          ) : null}
-          {needsRelogin ? (
-            <ChromeStatusIcon
-              testId='board-widget-needs-relogin'
-              label={IDENTITY_NEEDS_RELOGIN}
-              tone='destructive'
-            >
-              <Lock className='size-3.5' aria-hidden />
-            </ChromeStatusIcon>
-          ) : null}
-          {incompleteBinding ? (
-            <ChromeStatusIcon
-              testId='board-widget-incomplete-binding'
-              label={IDENTITY_INCOMPLETE_BINDING}
-              tone='destructive'
-            >
-              <TriangleAlert className='size-3.5' aria-hidden />
-            </ChromeStatusIcon>
-          ) : null}
-          {permissionRevoked ? (
-            <ChromeStatusIcon
-              testId='board-widget-permission-revoked'
-              label={IDENTITY_PERMISSION_REVOKED}
-              tone='destructive'
-            >
-              <TriangleAlert className='size-3.5' aria-hidden />
-            </ChromeStatusIcon>
+          {identityChrome !== 'none' ? (
+            <IdentityChromeStatus chrome={identityChrome} />
           ) : null}
           {showRunError ? (
             <ChromeStatusIcon

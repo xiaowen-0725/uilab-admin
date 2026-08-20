@@ -16,10 +16,9 @@ import type { BoardListCard, BoardView } from '../model/board-view'
 import type { BoardId, BoardPlacement, BoardWidgetId } from '../model/types'
 import {
   IDENTITY_INCOMPLETE_BINDING,
-  IDENTITY_NEEDS_LOGIN,
-  IDENTITY_NEEDS_RELOGIN,
   IDENTITY_PERMISSION_REVOKED,
   anonymousIdentitySnapshot,
+  identityChromeLabel,
 } from '../model/widget-render-state'
 import type { BoardPresetCatalogPort } from '../ports/board-preset-catalog-port'
 import type { BoardStorePort } from '../ports/board-store-port'
@@ -240,9 +239,7 @@ export function BoardWorkspace({
 
 function hintForOutcome(outcome: RefreshOutcome): string | null {
   if (outcome.kind === 'masked') {
-    return outcome.reason === 'needs_login'
-      ? IDENTITY_NEEDS_LOGIN
-      : IDENTITY_NEEDS_RELOGIN
+    return identityChromeLabel(outcome.reason)
   }
   if (outcome.kind === 'skipped' && outcome.reason === 'incomplete_binding') {
     return IDENTITY_INCOMPLETE_BINDING

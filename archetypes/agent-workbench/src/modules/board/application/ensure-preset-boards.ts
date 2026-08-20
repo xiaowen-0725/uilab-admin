@@ -11,24 +11,20 @@ import {
   buildPresetWidget,
   presetBoardId,
 } from '../model/preset-board'
-import type { BoardPresetCatalogPort } from '../ports/board-preset-catalog-port'
+import type {
+  BoardPresetCatalogEntry,
+  BoardPresetCatalogPort,
+} from '../ports/board-preset-catalog-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 import { addWidgetToBoard } from './board-commands'
+import { hydratePresetInstallLedger } from './preset-install-ledger'
 
 export async function ensurePresetBoards(
   store: BoardStorePort,
   catalog: BoardPresetCatalogPort,
   now = new Date().toISOString(),
 ): Promise<void> {
-  const installed = { ...(await store.getInstalledPresets()) }
-
-  for (const board of await store.listBoards()) {
-    if (!board.presetId || installed[board.presetId] != null) continue
-    const version = board.presetVersion ?? 1
-    await store.recordPresetInstalled(board.presetId, version)
-    installed[board.presetId] = version
-  }
-
+  const installed = await hydratePresetInstallLedger(store)
   for (const entry of await catalog.listPresetBoards()) {
     if (installed[entry.presetId] != null) continue
     await installPresetBoard(store, entry, now)
@@ -39,7 +35,7 @@ export async function ensurePresetBoards(
 
 async function installPresetBoard(
   store: BoardStorePort,
-  entry: Awaited<ReturnType<BoardPresetCatalogPort['listPresetBoards']>>[number],
+  entry: BoardPresetCatalogEntry,
   now: string,
 ): Promise<void> {
   await store.putBoard(buildPresetBoard(entry, now))
