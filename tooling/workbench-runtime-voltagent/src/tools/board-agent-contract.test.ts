@@ -135,8 +135,30 @@ describe('board writing-rule homology', () => {
     }
     assert.match(skill, /board_status/)
     assert.match(skill, /board_job_finish/)
+    assert.match(skill, /requiredPermissions/)
+    assert.match(skill, /queryName/)
+    assert.doesNotMatch(skill, /外部数据只能经取数作业/)
     assert.match(jobDoc, /full-access|完全访问/)
     assert.match(jobDoc, /取数作业/)
+  })
+
+  it('keeps model-visible surfaces free of upstream endpoints', async () => {
+    const endpoint = /https?:\/\/|query-fixture\.test|\/site-summary|\/site-finance/
+    const skill = await readFile(path.join(skillRoot, 'SKILL.md'), 'utf8')
+    const metrics = await readFile(
+      path.resolve(skillRoot, '../board-metrics/SKILL.md'),
+      'utf8',
+    )
+    for (const name of BOARD_ALL_TOOLS) {
+      assert.doesNotMatch(BOARD_TOOL_DESCRIPTIONS[name], endpoint)
+    }
+    for (const sentence of BOARD_INSTRUCTION_SENTENCES) {
+      assert.doesNotMatch(sentence, endpoint)
+    }
+    assert.doesNotMatch(skill, endpoint)
+    assert.doesNotMatch(metrics, endpoint)
+    assert.match(metrics, /requiredPermissions/)
+    assert.match(metrics, /permissions/)
   })
 
   it('keeps skill example widgets passing the validator', async () => {

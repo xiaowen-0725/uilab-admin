@@ -131,6 +131,8 @@ export type WidgetDataSourceTrigger =
 export interface DataSourceResourceParameterDecl {
   type: 'resource'
   resourceType: string
+  /** Extra permissions for this parameter; unioned with the query-level list. */
+  requiredPermissions?: string[]
 }
 
 export interface WidgetDataSourceRecord {

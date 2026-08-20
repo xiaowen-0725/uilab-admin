@@ -1,10 +1,15 @@
 /**
  * Client-side board_status / board_commit.
  * Pulls staging content, atomically persists, never returns HTML or job source.
+ *
+ * Query catalog is on board_status (not a new tool): identity is renderer-owned,
+ * the recipe already starts here, and sidecar query HTTP is not a model tool.
  */
 
 import { firstEmptySlot } from '../model/grid'
 import { hashBoardContent } from '../model/content-hash'
+import { assertNoEndpointLeak, containsEndpointLeak } from '../model/endpoint-leak'
+import { queryBindingMatches, validateQueryBinding } from '../model/query-binding'
 import {
   BOARD_WIDGET_LIMIT,
   DEFAULT_WIDGET_SPAN,
@@ -13,13 +18,23 @@ import {
   type BoardRecord,
   type BoardWidgetRecord,
   type WidgetDataJobRecord,
+  type WidgetDataSourceRecord,
 } from '../model/types'
 import type {
   BoardContentOk,
   BoardContentPort,
 } from '../ports/board-content-port'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
+import type {
+  BoardQueryCatalogEntry,
+} from '../ports/board-query-catalog-port'
+import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
+import {
+  UNRESTRICTED_AUTHORIZATION,
+  type IdentityAuthorization,
+} from '../ports/identity-scope-port'
 import type { BoardStorePort } from '../ports/board-store-port'
+import { anonymousIdentitySnapshot } from '../model/widget-render-state'
 import { executeJobRun } from './board-refresh'
 
 export type BoardToolFailure = {
@@ -41,6 +56,22 @@ export type BoardStatusCommitted = {
   contentHash: string
   jobId?: string
   codeHash?: string
+  queryName?: string
+}
+
+export type BoardStatusQuery = BoardQueryCatalogEntry
+
+export type BoardStatusResource = {
+  type: string
+  id: string
+  name: string
+  permissions: string[]
+}
+
+export type BoardStatusIdentity = {
+  kind: 'unrestricted' | 'resources'
+  valid: boolean
+  resources: BoardStatusResource[]
 }
 
 export type BoardStatusStaging = {
@@ -59,6 +90,8 @@ export type BoardStatusOk = {
   targetExists?: boolean
   committed: BoardStatusCommitted[]
   staging: BoardStatusStaging[]
+  queries: BoardStatusQuery[]
+  identity: BoardStatusIdentity
 }
 
 export type BoardCommitOk = {
@@ -68,6 +101,7 @@ export type BoardCommitOk = {
   mountId: string
   placement: { x: number; y: number; w: number; h: number }
   jobId?: string
+  queryName?: string
   /** Same content already committed — no-op, skip first-run. */
   replayed?: true
 }
@@ -86,7 +120,14 @@ export type BoardCommitInput = {
   jobId?: string
   jobDraftId?: string
   codeHash?: string
+  queryName?: string
+  queryParams?: Record<string, unknown>
   taskId?: string
+}
+
+export type BoardWriteChannelExtras = {
+  queries?: readonly BoardQueryCatalogEntry[]
+  identity?: IdentityScopeSnapshot
 }
 
 export type BoardWriteClock = () => string
@@ -123,6 +164,7 @@ export async function readBoardStatus(
   store: BoardStorePort,
   content: BoardContentPort | null,
   input: BoardStatusInput = {},
+  extras: BoardWriteChannelExtras = {},
 ): Promise<BoardStatusOk> {
   const boards = await store.listBoards()
   const listed: BoardStatusBoard[] = boards.map((board) => ({
@@ -138,12 +180,14 @@ export async function readBoardStatus(
       const widget = await store.getWidget(placement.widgetId)
       if (!widget) continue
       const job = await store.getJobByWidgetId(widget.id)
+      const source = await store.getDataSourceByWidgetId(widget.id)
       committed.push({
         widgetId: widget.id,
         boardId: board.id,
         contentHash: await hashBoardContent(widget.html),
         jobId: job?.id,
         codeHash: job?.approved?.codeHash,
+        queryName: source?.kind === 'query' ? source.queryName : undefined,
       })
     }
   }
@@ -158,16 +202,20 @@ export async function readBoardStatus(
   }
 
   const targetId = input.boardId?.trim()
+  const snapshot = extras.identity ?? anonymousIdentitySnapshot()
   const result: BoardStatusOk = {
     ok: true,
     boards: listed,
     committed,
     staging,
+    queries: publicQueries(extras.queries ?? []),
+    identity: publicIdentity(snapshot),
   }
   if (targetId) {
     result.targetExists = boards.some((board) => board.id === targetId)
   }
   assertNoContentLeak(result)
+  assertNoEndpointLeak({ queries: result.queries, identity: result.identity })
   return result
 }
 
@@ -176,6 +224,7 @@ export async function commitBoardDraft(
   content: BoardContentPort,
   input: BoardCommitInput,
   nowIso: BoardWriteClock = () => new Date().toISOString(),
+  extras: BoardWriteChannelExtras = {},
 ): Promise<BoardCommitOk | BoardToolFailure> {
   const widgetId = input.widgetId.trim()
   const draftId = pickDraftId(input)
@@ -187,8 +236,17 @@ export async function commitBoardDraft(
   const jobId = input.jobId?.trim()
   const jobDraftId = input.jobDraftId?.trim()
   const codeHash = input.codeHash?.trim()
+  const queryName = input.queryName?.trim()
+  const queryParams = input.queryParams ?? {}
   const wantsJob = Boolean(jobId || jobDraftId || codeHash)
+  const wantsQuery = Boolean(queryName)
   const jobReady = Boolean(jobId && jobDraftId && codeHash)
+  if (wantsJob && wantsQuery) {
+    return fail(
+      'validation_failed',
+      '作业与查询来源不能同时提交；业务数据用 queryName，公开数据用作业',
+    )
+  }
   if (wantsJob && !jobReady) {
     return fail(
       'build_not_ready',
@@ -197,6 +255,17 @@ export async function commitBoardDraft(
   }
 
   const now = nowIso()
+  let querySource: WidgetDataSourceRecord | undefined
+  if (wantsQuery && queryName) {
+    const bound = validateQueryBinding(
+      extras.queries ?? [],
+      { widgetId, queryName, params: queryParams, now },
+      authorizationOf(extras.identity),
+    )
+    if (!bound.ok) return bound
+    querySource = bound.source
+  }
+
   const existingWidget = await store.getWidget(widgetId)
   const home = await findWidgetHome(store, widgetId)
   const resolved = await resolveBoard(store, input, home?.board.id, now)
@@ -204,11 +273,13 @@ export async function commitBoardDraft(
   const { board, created } = resolved
 
   const existingPlacement = board.placements.find((item) => item.widgetId === widgetId)
+  const existingSource = await store.getDataSourceByWidgetId(widgetId)
   if (
     existingWidget &&
     existingPlacement &&
     (await hashBoardContent(existingWidget.html)) === contentHash &&
-    hashesMatch(await store.getJobByWidgetId(widgetId), codeHash)
+    hashesMatch(await store.getJobByWidgetId(widgetId), codeHash) &&
+    (!wantsQuery || queryBindingMatches(existingSource, queryName ?? '', queryParams))
   ) {
     return leakFreeCommit({
       ok: true,
@@ -217,6 +288,7 @@ export async function commitBoardDraft(
       mountId: existingPlacement.mountId,
       placement: pickPlacement(existingPlacement),
       jobId: jobId || undefined,
+      queryName: existingSource?.kind === 'query' ? existingSource.queryName : queryName,
       replayed: true,
     })
   }
@@ -269,12 +341,26 @@ export async function commitBoardDraft(
     createdByTaskId: board.createdByTaskId ?? (created ? input.taskId : undefined),
   }
 
+  if (querySource && existingSource) {
+    querySource = {
+      ...querySource,
+      id: existingSource.id,
+      createdAt: existingSource.createdAt,
+    }
+  }
+
+  const leftoverJob =
+    querySource ? await store.getJobByWidgetId(widgetId) : null
+
   await store.commitAtomically({
     board: nextBoard,
     widget,
     job,
+    dataSource: querySource,
     appendPlacement: !updating && !created ? placement : undefined,
   })
+
+  if (leftoverJob) await store.deleteJob(leftoverJob.id)
 
   return leakFreeCommit({
     ok: true,
@@ -283,6 +369,7 @@ export async function commitBoardDraft(
     mountId: placement.mountId,
     placement: pickPlacement(placement),
     jobId: job?.id,
+    queryName: querySource?.queryName,
   })
 }
 
@@ -432,6 +519,45 @@ async function resolveBoard(
     createdByTaskId: input.taskId,
   }
   return { ok: true, board, created: true }
+}
+
+function publicQueries(
+  queries: readonly BoardQueryCatalogEntry[],
+): BoardStatusQuery[] {
+  const listed: BoardStatusQuery[] = []
+  for (const query of queries) {
+    const entry: BoardStatusQuery = {
+      name: query.name,
+      title: query.title,
+      parameters: query.parameters,
+      requiredPermissions: [...query.requiredPermissions],
+      referencableByJob: query.referencableByJob,
+    }
+    if (!containsEndpointLeak(entry)) listed.push(entry)
+  }
+  return listed
+}
+
+function publicIdentity(snapshot: IdentityScopeSnapshot): BoardStatusIdentity {
+  if (snapshot.authorization.kind === 'unrestricted') {
+    return { kind: 'unrestricted', valid: snapshot.valid, resources: [] }
+  }
+  return {
+    kind: 'resources',
+    valid: snapshot.valid,
+    resources: snapshot.authorization.resources.map((resource) => ({
+      type: resource.type,
+      id: resource.id,
+      name: resource.name,
+      permissions: [...resource.permissions],
+    })),
+  }
+}
+
+function authorizationOf(
+  snapshot: IdentityScopeSnapshot | undefined,
+): IdentityAuthorization {
+  return snapshot?.authorization ?? UNRESTRICTED_AUTHORIZATION
 }
 
 export type { BoardId }

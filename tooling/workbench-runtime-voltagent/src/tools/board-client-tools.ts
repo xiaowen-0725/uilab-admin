@@ -28,6 +28,14 @@ export const boardCommitTool = createTool({
     jobId: z.string().optional().describe('可选作业 id'),
     jobDraftId: z.string().optional().describe('作业的 buildId'),
     codeHash: z.string().optional().describe('board_job_finish 返回的 codeHash'),
+    queryName: z
+      .string()
+      .optional()
+      .describe('目录里的指标名；与作业字段互斥'),
+    queryParams: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('指标参数，须符合目录 schema'),
   }),
 })
 

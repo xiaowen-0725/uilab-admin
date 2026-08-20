@@ -2,10 +2,12 @@
  * Widget Data Source helpers — construction, leftover v3 inference, snapshot view.
  */
 
+import type { BoardQueryCatalogEntry } from '../ports/board-query-catalog-port'
 import {
   ANONYMOUS_PRINCIPAL_KEY,
   widgetStatusForRun,
   type BoardWidgetRecord,
+  type DataSourceResourceParameterDecl,
   type WidgetDataJobRecord,
   type WidgetDataSnapshotRecord,
   type WidgetDataSourceRecord,
@@ -76,6 +78,39 @@ export function dataSourceFromJob(
     referencableByJob: false,
     jobId: job.id,
     createdAt: job.createdAt,
+    updatedAt: now,
+  }
+}
+
+export function dataSourceFromQuery(
+  widgetId: string,
+  query: BoardQueryCatalogEntry,
+  params: Record<string, unknown>,
+  now: string,
+): WidgetDataSourceRecord {
+  const parameterSchema: Record<string, DataSourceResourceParameterDecl> = {}
+  for (const [key, decl] of Object.entries(query.parameters)) {
+    if (decl.type === 'resource') {
+      parameterSchema[key] = {
+        type: 'resource',
+        resourceType: decl.resourceType,
+        ...(decl.requiredPermissions?.length
+          ? { requiredPermissions: [...decl.requiredPermissions] }
+          : {}),
+      }
+    }
+  }
+  return {
+    id: dataSourceIdForWidget(widgetId),
+    widgetId,
+    kind: 'query',
+    trigger: { kind: 'onOpen' },
+    parameters: { ...params },
+    parameterSchema,
+    requiredPermissions: [...query.requiredPermissions],
+    referencableByJob: query.referencableByJob,
+    queryName: query.name,
+    createdAt: now,
     updatedAt: now,
   }
 }

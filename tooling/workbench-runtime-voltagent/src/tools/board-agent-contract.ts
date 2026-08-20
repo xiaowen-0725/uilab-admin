@@ -9,7 +9,7 @@ export const BOARD_FEATURE_ID = 'board' as const
 
 export const BOARD_INSTRUCTION_SENTENCES = [
   'Board 是用户长期持有的看板资产：工具面出现 board_* 时先读 board-widget skill，再按配方分片写入。',
-  '小组件不能联网，外部数据一律经取数作业；board_job_finish 会停靠审批，不要把停靠当成失败重试。',
+  '小组件不能联网：公开数据经取数作业（board_job_finish 会停靠审批，不要把停靠当失败）；业务数据先看 board_status 目录，对照 requiredPermissions 与资源 permissions 再 commit 绑定，不要编端点。',
   '工具面没有 board_* 时不得声称能做看板——board-widget 仍可能出现在技能列表里。',
 ] as const
 
@@ -17,11 +17,10 @@ export const BOARD_TOOL_INSTRUCTIONS = BOARD_INSTRUCTION_SENTENCES.join(' ')
 
 export const BOARD_TOOL_DESCRIPTIONS = {
   board_status:
-    '配方第一步：只读查看当前看板权威状态。权威在渲染层 IndexedDB，不要猜测已有哪些板或小组件。' +
-    '可选传入 boardId 确认目标板是否存在。返回 boards（id/标题/数量/剩余额度）、' +
-    'committed（已落库 widgetId/contentHash/可选 jobId）与 staging（未提交草稿）。' +
-    '新建前先调用本工具决定追加还是建新板；被打断后续写时也先问本工具。' +
-    '不得与 board_commit 并行。返回只有 id/计数/hash，不含 HTML。',
+    '配方第一步：只读权威状态与指标目录。权威在渲染层 IndexedDB，不要猜已有板。' +
+    '可选 boardId 确认目标是否存在。返回 boards、committed、staging，以及 queries（含 requiredPermissions）与 identity.resources（含 permissions）。' +
+    '权限不足的指标仍会出现，先对照再选；不要编指标名或端点。' +
+    '新建或续写前先问本工具。不得与 board_commit 并行。返回不含 HTML。',
   board_widget_begin:
     '配方第二步：开始一块看板小组件的分片写入。内容只落在侧车 staging，不进用户工作区，也不进 IndexedDB。' +
     '传入 title；改已有小组件时带上同一 widgetId。必须使用返回的真实 widgetId 与 buildId，禁止编造。' +
@@ -51,11 +50,10 @@ export const BOARD_TOOL_DESCRIPTIONS = {
     '失败只回错误码与 hint；成功返回 jobId 与 codeHash，不含代码。同一草稿最多自修 2 次。' +
     '停靠审批不是失败，不要重试本工具。full-access 预设下可能不出现审批卡。获批后再 board_commit。',
   board_commit:
-    '配方最后一步：把已 finish 的小组件（及可选已获批作业）一次提交进 IndexedDB。' +
-    '前置：board_widget_finish 已成功；若有作业，board_job_finish 必须已获批。' +
-    '传入 widget 的 buildId 作为 draftId，以及 finish 返回的 contentHash。有作业时再传 jobId、jobDraftId 与 codeHash。' +
-    'boardId 缺省时用 newBoardTitle 建新板。一次调用写完，禁止并行、禁止分片提交。' +
-    '返回 boardId/widgetId/mountId/placement，不含 HTML 或作业代码。宿主会打开预览并自动首跑作业。',
+    '配方最后一步：提交已 finish 的小组件。可带已获批作业，或绑定 queryName 与 queryParams，二者互斥。' +
+    '前置：widget finish 已成功；作业须 board_job_finish 已获批；查询须目录里有该指标且资源权限覆盖 requiredPermissions。' +
+    '传入 draftId 与 contentHash。boardId 缺省时用 newBoardTitle 建新板。一次调用写完，禁止并行。' +
+    '返回 id/placement，不含 HTML。宿主会打开预览并自动首跑。',
 } as const satisfies Record<(typeof BOARD_ALL_TOOLS)[number], string>
 
 export function assembleTurnTools<C, B = C>(input: {

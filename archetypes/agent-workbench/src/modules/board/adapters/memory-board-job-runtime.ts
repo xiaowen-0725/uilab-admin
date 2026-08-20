@@ -17,6 +17,9 @@ export class MemoryBoardJobRuntime implements BoardJobRuntimePort {
   }
 
   evaluate(request: WidgetDataSourceEvaluateRequest): Promise<BoardJobRunResult> {
+    if (request.kind === 'query') {
+      return Promise.resolve({ ok: true, payload: this.payload })
+    }
     return defaultEvaluateDataSource(this, request)
   }
 }

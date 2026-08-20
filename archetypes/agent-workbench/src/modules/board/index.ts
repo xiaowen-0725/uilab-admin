@@ -43,8 +43,11 @@ export type {
 export {
   createPresetDataSource,
   dataSourceFromJob,
+  dataSourceFromQuery,
   dataSourceIdForWidget,
 } from './model/data-source'
+export { containsEndpointLeak } from './model/endpoint-leak'
+export { validateQueryBinding } from './model/query-binding'
 
 export type {
   BoardAtomicCommitInput,
@@ -96,6 +99,13 @@ export { createHttpBoardContent } from './adapters/http-board-content'
 export type { HttpBoardContentOptions } from './adapters/http-board-content'
 export { createHttpBoardJobRuntime } from './adapters/http-board-job-runtime'
 export type { HttpBoardJobRuntimeOptions } from './adapters/http-board-job-runtime'
+export { createHttpBoardQueryCatalog } from './adapters/http-board-query-catalog'
+export type { HttpBoardQueryCatalogOptions } from './adapters/http-board-query-catalog'
+export type {
+  BoardQueryCatalogEntry,
+  BoardQueryCatalogPort,
+  BoardQueryParameterDecl,
+} from './ports/board-query-catalog-port'
 export {
   MemoryBoardContent,
   createMemoryBoardContent,

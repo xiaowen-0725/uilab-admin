@@ -87,6 +87,43 @@ describe('authorizeDataSourceParameters', () => {
     ).toEqual({ ok: false, reason: 'resource_not_authorized' })
   })
 
+  it('refuses an empty resource-id list on a query source', () => {
+    expect(
+      authorizeDataSourceParameters(
+        querySource({ parameters: { siteIds: [] } }),
+        {
+          kind: 'resources',
+          resources: [
+            { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+          ],
+        },
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_resource_parameter' })
+  })
+
+  it('unions parameter-level requiredPermissions with the query list', () => {
+    expect(
+      authorizeDataSourceParameters(
+        querySource({
+          requiredPermissions: ['read'],
+          parameterSchema: {
+            siteIds: {
+              type: 'resource',
+              resourceType: 'site',
+              requiredPermissions: ['finance'],
+            },
+          },
+        }),
+        {
+          kind: 'resources',
+          resources: [
+            { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+          ],
+        },
+      ),
+    ).toEqual({ ok: false, reason: 'permission_denied' })
+  })
+
   it('accepts a resource whose permissions cover the query', () => {
     expect(
       authorizeDataSourceParameters(querySource(), {

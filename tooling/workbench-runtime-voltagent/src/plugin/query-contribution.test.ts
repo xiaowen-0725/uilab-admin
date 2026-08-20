@@ -3,15 +3,25 @@
  */
 
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { after, describe, it } from 'node:test'
 import { parsePluginManifestJson } from './discover.js'
 import { createPluginRegistry } from './registry.js'
+import { seedSkillsContribution } from './skills-loader.js'
 import {
   QUERY_FIXTURE_PACKAGE,
   QUERY_FIXTURE_PLUGIN_ID,
   QUERY_SITE_FINANCE,
   QUERY_SITE_SUMMARY,
 } from './query-fixture-package.js'
+
+const tempRoots: string[] = []
+
+after(async () => {
+  await Promise.all(tempRoots.map((dir) => rm(dir, { recursive: true, force: true })))
+})
 
 function pluginJson(queries: unknown) {
   return {
@@ -102,5 +112,22 @@ describe('query fixture package catalog', () => {
     })
     assert.deepEqual(registry.listQueryCatalog(), [])
     assert.deepEqual(registry.listQueryHandlers(), {})
+  })
+
+  it('seeds the board-metrics skill without endpoint URLs', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'query-metrics-skill-'))
+    tempRoots.push(root)
+    const contrib = QUERY_FIXTURE_PACKAGE.manifests[0]?.contributes?.skills
+    assert.ok(contrib)
+    const seeded = await seedSkillsContribution(QUERY_FIXTURE_PLUGIN_ID, contrib, root)
+    assert.equal(seeded.status, 'seeded')
+    assert.ok(seeded.seededSkillIds.includes('board-metrics'))
+    const text = await readFile(
+      path.join(root, 'skills', 'board-metrics', 'SKILL.md'),
+      'utf8',
+    )
+    assert.match(text, /requiredPermissions/)
+    assert.match(text, /permissions/)
+    assert.doesNotMatch(text, /https?:\/\/|query-fixture\.test|\/site-summary/)
   })
 })

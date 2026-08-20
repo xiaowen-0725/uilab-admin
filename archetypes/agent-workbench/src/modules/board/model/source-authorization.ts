@@ -36,11 +36,14 @@ export function authorizeDataSourceParameters(
   for (const [key, decl] of Object.entries(schema)) {
     if (decl.type !== 'resource') continue
     const ids = resourceIdsFromParameter(source.parameters?.[key])
-    if (!ids) return { ok: false, reason: 'invalid_resource_parameter' }
+    if (!ids || (source.kind === 'query' && ids.length === 0)) {
+      return { ok: false, reason: 'invalid_resource_parameter' }
+    }
+    const needed = uniquePermissions(required, decl.requiredPermissions)
     for (const id of ids) {
       const resource = findResource(authorization.resources, decl.resourceType, id)
       if (!resource) return { ok: false, reason: 'resource_not_authorized' }
-      if (!permissionsCover(resource.permissions, required)) {
+      if (!permissionsCover(resource.permissions, needed)) {
         return { ok: false, reason: 'permission_denied' }
       }
     }
@@ -59,6 +62,13 @@ function findResource(
   id: string,
 ): AuthorizedResource | undefined {
   return resources.find((resource) => resource.type === type && resource.id === id)
+}
+
+function uniquePermissions(
+  queryLevel: readonly string[],
+  paramLevel?: readonly string[],
+): string[] {
+  return [...new Set([...queryLevel, ...(paramLevel ?? [])])]
 }
 
 function permissionsCover(

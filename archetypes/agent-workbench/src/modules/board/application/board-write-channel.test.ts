@@ -8,7 +8,10 @@ import {
   createUnavailableBoardJobRuntime,
 } from '../adapters/memory-board-job-runtime'
 import { createMemoryBoardStore } from '../adapters/memory-board-store'
+import { createMemoryIdentityScope } from '@/modules/identity'
 import { hashBoardContent } from '../model/content-hash'
+import { createBoardRefreshController } from './board-refresh'
+import type { BoardQueryCatalogEntry } from '../ports/board-query-catalog-port'
 import { BOARD_WIDGET_LIMIT, type BoardRecord, type BoardWidgetRecord } from '../model/types'
 import {
   commitBoardDraft,
@@ -336,6 +339,27 @@ describe('commitBoardDraft', () => {
   })
 })
 
+const QUERY_CATALOG: BoardQueryCatalogEntry[] = [
+  {
+    name: 'site_summary',
+    title: '站点摘要',
+    parameters: { siteIds: { type: 'resource', resourceType: 'site' } },
+    requiredPermissions: ['read'],
+    referencableByJob: true,
+  },
+  {
+    name: 'site_finance',
+    title: '站点财务',
+    parameters: { siteIds: { type: 'resource', resourceType: 'site' } },
+    requiredPermissions: ['read', 'finance'],
+    referencableByJob: true,
+  },
+]
+
+function queryCatalogPort(entries = QUERY_CATALOG) {
+  return { listQueries: async () => entries }
+}
+
 describe('readBoardStatus', () => {
   it('reports board quota and whether the target exists', async () => {
     const store = createMemoryBoardStore()
@@ -370,6 +394,271 @@ describe('readBoardStatus', () => {
       expect.objectContaining({ draftId: 'open-1', title: '半成品' }),
     ])
     expect(JSON.stringify(result)).not.toContain('partial')
+    expect(result.queries).toEqual([])
+    expect(result.identity).toEqual({
+      kind: 'unrestricted',
+      valid: true,
+      resources: [],
+    })
+  })
+
+  it('returns the query catalog and identity resources without endpoints', async () => {
+    const store = createMemoryBoardStore()
+    const content = createMemoryBoardContent()
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [
+        { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+        {
+          type: 'site',
+          id: 'site-2',
+          name: 'South',
+          permissions: ['read', 'finance'],
+        },
+      ],
+    })
+    const result = await readBoardStatus(
+      store,
+      content,
+      {},
+      { queries: QUERY_CATALOG, identity: scope.getSnapshot() },
+    )
+    expect(result.queries).toEqual(QUERY_CATALOG)
+    expect(result.identity).toEqual({
+      kind: 'resources',
+      valid: true,
+      resources: [
+        { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+        {
+          type: 'site',
+          id: 'site-2',
+          name: 'South',
+          permissions: ['read', 'finance'],
+        },
+      ],
+    })
+    expect(JSON.stringify(result)).not.toMatch(/https?:\/\//)
+    const finance = result.queries.find((query) => query.name === 'site_finance')
+    expect(finance?.requiredPermissions).toEqual(['read', 'finance'])
+  })
+})
+
+describe('commitBoardDraft query binding', () => {
+  const extras = {
+    queries: QUERY_CATALOG,
+    identity: createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [
+        { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+      ],
+    }).getSnapshot(),
+  }
+
+  it('commits a query source and first-runs data onto the widget', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    const content = createMemoryBoardContent()
+    const { contentHash } = await seedReadyDrafts(content)
+    const scope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: extras.identity.authorization.kind === 'resources'
+        ? [...extras.identity.authorization.resources]
+        : [],
+    })
+    const refresh = createBoardRefreshController({
+      store,
+      runtime: createMemoryBoardJobRuntime({ occupancy: 0.42 }),
+      identityScope: scope,
+    })
+    const exec = createBoardClientToolExecutor({
+      store,
+      content,
+      queryCatalog: queryCatalogPort(),
+      identityScope: scope,
+      effects: { refresh },
+    })
+
+    const status = await exec({
+      toolName: 'board_status',
+      args: {},
+      taskId: 'task-query',
+      turnId: 'turn-query',
+    })
+    expect(status).toMatchObject({
+      ok: true,
+      queries: QUERY_CATALOG,
+    })
+
+    const committed = await exec({
+      toolName: 'board_commit',
+      args: {
+        boardId: 'board-1',
+        widgetId: 'w-new',
+        draftId: 'b-widget',
+        contentHash,
+        queryName: 'site_summary',
+        queryParams: { siteIds: ['site-1'] },
+      },
+      taskId: 'task-query',
+      turnId: 'turn-query',
+    })
+    expect(committed).toMatchObject({
+      ok: true,
+      widgetId: 'w-new',
+      queryName: 'site_summary',
+    })
+    expect(await store.getDataSourceByWidgetId('w-new')).toMatchObject({
+      kind: 'query',
+      queryName: 'site_summary',
+      requiredPermissions: ['read'],
+    })
+    expect(await store.getWidget('w-new', { principalKey: 'alice' })).toMatchObject({
+      latestData: { occupancy: 0.42 },
+    })
+  })
+
+  it('rejects unknown metrics, extra params, unauthorized resources, and missing permissions', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    const content = createMemoryBoardContent()
+    const { contentHash } = await seedReadyDrafts(content)
+    const cases = [
+      {
+        queryName: 'made_up',
+        queryParams: { siteIds: ['site-1'] },
+        error: 'unknown_query',
+      },
+      {
+        queryName: 'site_summary',
+        queryParams: { siteIds: ['site-1'], extra: 1 },
+        error: 'validation_failed',
+      },
+      {
+        queryName: 'site_summary',
+        queryParams: { siteIds: ['site-9'] },
+        error: 'resource_not_authorized',
+      },
+      {
+        queryName: 'site_finance',
+        queryParams: { siteIds: ['site-1'] },
+        error: 'permission_denied',
+      },
+    ]
+    for (const item of cases) {
+      await seedReadyDrafts(content)
+      const result = await commitBoardDraft(
+        store,
+        content,
+        {
+          boardId: 'board-1',
+          widgetId: 'w-new',
+          draftId: 'b-widget',
+          contentHash,
+          queryName: item.queryName,
+          queryParams: item.queryParams,
+        },
+        () => NOW,
+        extras,
+      )
+      expect(result).toMatchObject({ ok: false, error: item.error })
+    }
+    expect(await store.getWidget('w-new')).toBeNull()
+  })
+
+  it('rejects mixing a job and a query on the same commit', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    const content = createMemoryBoardContent()
+    const { contentHash, codeHash } = await seedReadyDrafts(content)
+    const result = await commitBoardDraft(
+      store,
+      content,
+      {
+        boardId: 'board-1',
+        widgetId: 'w-new',
+        draftId: 'b-widget',
+        contentHash,
+        jobId: 'j-new',
+        jobDraftId: 'b-job',
+        codeHash,
+        queryName: 'site_summary',
+        queryParams: { siteIds: ['site-1'] },
+      },
+      () => NOW,
+      extras,
+    )
+    expect(result).toMatchObject({ ok: false, error: 'validation_failed' })
+  })
+
+  it('replaces an existing job source so the widget stays 1:1', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    const content = createMemoryBoardContent()
+    const { contentHash, codeHash } = await seedReadyDrafts(content)
+    const jobbed = await commitBoardDraft(
+      store,
+      content,
+      {
+        boardId: 'board-1',
+        widgetId: 'w-new',
+        draftId: 'b-widget',
+        contentHash,
+        jobId: 'j-new',
+        jobDraftId: 'b-job',
+        codeHash,
+      },
+      () => NOW,
+    )
+    expect(jobbed.ok).toBe(true)
+    await seedReadyDrafts(content)
+    const result = await commitBoardDraft(
+      store,
+      content,
+      {
+        boardId: 'board-1',
+        widgetId: 'w-new',
+        draftId: 'b-widget',
+        contentHash,
+        queryName: 'site_summary',
+        queryParams: { siteIds: ['site-1'] },
+      },
+      () => NOW,
+      extras,
+    )
+    expect(result).toMatchObject({ ok: true, queryName: 'site_summary' })
+    expect(await store.getJob('j-new')).toBeNull()
+    expect(await store.getDataSourceByWidgetId('w-new')).toMatchObject({
+      kind: 'query',
+      queryName: 'site_summary',
+    })
+    const status = await readBoardStatus(store, content, { boardId: 'board-1' })
+    expect(status.committed[0]?.jobId).toBeUndefined()
+    expect(status.committed[0]?.queryName).toBe('site_summary')
+  })
+
+  it('leaves the job recipe unchanged when no query is bound', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(board())
+    const content = createMemoryBoardContent()
+    const { contentHash, codeHash } = await seedReadyDrafts(content)
+    const result = await commitBoardDraft(
+      store,
+      content,
+      {
+        boardId: 'board-1',
+        widgetId: 'w-new',
+        draftId: 'b-widget',
+        contentHash,
+        jobId: 'j-new',
+        jobDraftId: 'b-job',
+        codeHash,
+      },
+      () => NOW,
+      extras,
+    )
+    expect(result).toMatchObject({ ok: true, widgetId: 'w-new', jobId: 'j-new' })
+    expect((result as { queryName?: string }).queryName).toBeUndefined()
+    expect(await store.getJob('j-new')).toMatchObject({ widgetId: 'w-new' })
   })
 })
 

@@ -37,6 +37,13 @@ const QUERY_FIXTURE_MANIFEST: PluginManifest = {
   kind: 'builtin',
   enabledByDefault: false,
   contributes: {
+    skills: {
+      virtualRoot: '/skills',
+      workspaceDir: 'skills',
+      skillIds: ['board-metrics'],
+      bundledRelativeDir: 'bundled-skills',
+      seedStrategy: 'missing-only',
+    },
     queries: [
       {
         name: QUERY_SITE_SUMMARY,

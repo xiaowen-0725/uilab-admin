@@ -4,7 +4,12 @@
 
 import type { BoardContentPort } from '../ports/board-content-port'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
+import type {
+  BoardQueryCatalogEntry,
+  BoardQueryCatalogPort,
+} from '../ports/board-query-catalog-port'
 import type { BoardStorePort } from '../ports/board-store-port'
+import type { IdentityScopePort } from '../ports/identity-scope-port'
 import type { BoardPreviewPolicy } from './board-preview-policy'
 import type { BoardRefreshController } from './board-refresh'
 import { grantBoardCapability } from './board-capability'
@@ -55,17 +60,46 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function asParams(value: unknown): Record<string, unknown> | undefined {
+  if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return undefined
+}
+
+async function loadQueryCatalog(
+  catalog?: BoardQueryCatalogPort,
+): Promise<BoardQueryCatalogEntry[]> {
+  if (!catalog) return []
+  try {
+    return [...(await catalog.listQueries())]
+  } catch {
+    return []
+  }
+}
+
 export function createBoardClientToolExecutor(input: {
   store: BoardStorePort
   content: BoardContentPort
   effects?: BoardCommitEffects
+  identityScope?: IdentityScopePort
+  queryCatalog?: BoardQueryCatalogPort
 }): BoardClientToolExecutor {
   return async ({ toolName, args, taskId, turnId }) => {
     const rec = asRecord(args)
+    const extras = {
+      queries: await loadQueryCatalog(input.queryCatalog),
+      identity: input.identityScope?.getSnapshot(),
+    }
     if (toolName === 'board_status') {
-      return readBoardStatus(input.store, input.content, {
-        boardId: asString(rec.boardId),
-      } satisfies BoardStatusInput)
+      return readBoardStatus(
+        input.store,
+        input.content,
+        {
+          boardId: asString(rec.boardId),
+        } satisfies BoardStatusInput,
+        extras,
+      )
     }
     if (toolName !== 'board_commit') {
       return {
@@ -75,17 +109,25 @@ export function createBoardClientToolExecutor(input: {
       }
     }
 
-    const result = await commitBoardDraft(input.store, input.content, {
-      boardId: asString(rec.boardId),
-      newBoardTitle: asString(rec.newBoardTitle),
-      widgetId: asString(rec.widgetId) ?? '',
-      draftId: asString(rec.draftId) ?? asString(rec.widgetDraftId),
-      contentHash: asString(rec.contentHash) ?? '',
-      jobId: asString(rec.jobId),
-      jobDraftId: asString(rec.jobDraftId),
-      codeHash: asString(rec.codeHash),
-      taskId,
-    } satisfies BoardCommitInput)
+    const result = await commitBoardDraft(
+      input.store,
+      input.content,
+      {
+        boardId: asString(rec.boardId),
+        newBoardTitle: asString(rec.newBoardTitle),
+        widgetId: asString(rec.widgetId) ?? '',
+        draftId: asString(rec.draftId) ?? asString(rec.widgetDraftId),
+        contentHash: asString(rec.contentHash) ?? '',
+        jobId: asString(rec.jobId),
+        jobDraftId: asString(rec.jobDraftId),
+        codeHash: asString(rec.codeHash),
+        queryName: asString(rec.queryName),
+        queryParams: asParams(rec.queryParams),
+        taskId,
+      } satisfies BoardCommitInput,
+      undefined,
+      extras,
+    )
 
     if (result.ok) {
       await grantBoardCapability(input.store, taskId)
@@ -103,15 +145,19 @@ async function applyCommitEffects(
   scope: { taskId: string; turnId: string },
   effects?: BoardCommitEffects,
 ): Promise<void> {
-  if (result.jobId && !result.replayed) {
+  if (!result.replayed) {
     try {
-      if (effects?.refresh) {
-        await effects.refresh.refreshJob(result.jobId)
-      } else if (effects?.jobRuntime) {
-        await runCommittedJob(store, effects.jobRuntime, {
-          jobId: result.jobId,
-          widgetId: result.widgetId,
-        })
+      if (result.jobId) {
+        if (effects?.refresh) {
+          await effects.refresh.refreshJob(result.jobId)
+        } else if (effects?.jobRuntime) {
+          await runCommittedJob(store, effects.jobRuntime, {
+            jobId: result.jobId,
+            widgetId: result.widgetId,
+          })
+        }
+      } else if (result.queryName && effects?.refresh) {
+        await effects.refresh.refreshWidget(result.widgetId)
       }
     } catch {
       // First-run is best-effort; commit already succeeded.

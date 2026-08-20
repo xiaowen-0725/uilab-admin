@@ -12,6 +12,7 @@ import {
   createHostScheduleWake,
   createHttpBoardContent,
   createHttpBoardJobRuntime,
+  createHttpBoardQueryCatalog,
   createIdbBoardStore,
   createMemoryBoardContent,
   createMemoryBoardJobRuntime,
@@ -21,6 +22,7 @@ import {
   type BoardClientToolExecutor,
   type BoardContentPort,
   type BoardJobRuntimePort,
+  type BoardQueryCatalogPort,
   type BoardRefreshController,
   type BoardStorePort,
   type IdentityScopePort,
@@ -122,6 +124,16 @@ export function useWorkbenchBoardWiring(
     () => input.boardJobRuntime ?? defaultJobRuntime(),
     [input.boardJobRuntime],
   )
+  const queryCatalog = useMemo<BoardQueryCatalogPort>(
+    () =>
+      INSTANT_DEMO
+        ? { listQueries: async () => [] }
+        : createHttpBoardQueryCatalog({
+            baseUrl: resolveVoltAgentBaseUrl(),
+            token: sidecarToken(),
+          }),
+    [],
+  )
   const identityScope = useMemo(
     () => resolveIdentityScope(input.identityScope),
     [input.identityScope],
@@ -157,6 +169,8 @@ export function useWorkbenchBoardWiring(
   executorRef.current = createBoardClientToolExecutor({
     store,
     content,
+    identityScope,
+    queryCatalog,
     effects: {
       preview: previewPolicy,
       jobRuntime,
