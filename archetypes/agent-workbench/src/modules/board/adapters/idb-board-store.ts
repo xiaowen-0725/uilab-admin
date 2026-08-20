@@ -22,16 +22,16 @@ import {
 } from '../model/board-capability-ledger'
 import {
   IDENTITY_LIVE_EXECUTIONS_KEY,
-  commitFenceRejects,
   identityEpochMetadataKey,
   parseLiveExecutions,
   type LiveExecutionMap,
 } from '../model/identity-barrier'
 import {
   SCHEDULE_LEASES_METADATA_KEY,
+  omitPrincipalLeases,
   parseScheduleLeases,
   resolveScheduleClaim,
-  scheduleCommitFenceRejects,
+  snapshotWriteRejected,
   type ClaimScheduleLeaseInput,
   type ClaimScheduleLeaseResult,
   type ScheduleLeaseRecord,
@@ -262,16 +262,11 @@ export class IdbBoardStore implements BoardStorePort {
           input.principalKey,
         )
         await writeLiveExecutions(tx, live)
-        const leases = parseScheduleLeases(
-          (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+        const remainingLeases = omitPrincipalLeases(
+          await readScheduleLeases(tx),
+          input.principalKey,
         )
-        let leaseChanged = false
-        for (const [id, lease] of Object.entries(leases)) {
-          if (lease.principalKey !== input.principalKey) continue
-          delete leases[id]
-          leaseChanged = true
-        }
-        if (leaseChanged) await writeScheduleLeases(tx, leases)
+        if (remainingLeases) await writeScheduleLeases(tx, remainingLeases)
         if (!input.deleteSnapshots) return
         const rows = await getAllRows<WidgetDataSnapshotRecord>(
           tx,
@@ -395,23 +390,11 @@ export class IdbBoardStore implements BoardStorePort {
       )
       const source = await sourceByWidgetInTx(tx, run.widgetId)
       const lease = source
-        ? parseScheduleLeases(
-            (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
-          )[source.id]
+        ? (await readScheduleLeases(tx))[source.id]
         : undefined
       if (
         snapshot &&
-        !commitFenceRejects(
-          options?.expectedGeneration,
-          epoch,
-          options?.executionKey,
-          live,
-        ) &&
-        !scheduleCommitFenceRejects(
-          options?.expectedClaimGeneration,
-          lease,
-          options?.executionKey,
-        )
+        !snapshotWriteRejected(options, epoch, live, lease)
       ) {
         await putValue(tx, STORE_WIDGET_DATA_SNAPSHOTS, snapshot)
       }
@@ -428,9 +411,7 @@ export class IdbBoardStore implements BoardStorePort {
   ): Promise<ClaimScheduleLeaseResult> {
     return this.afterMigrate(() =>
       this.transact(STORE_METADATA, 'readwrite', async (tx) => {
-        const leases = parseScheduleLeases(
-          (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
-        )
+        const leases = await readScheduleLeases(tx)
         const current = leases[input.sourceId]
         const result = resolveScheduleClaim(current, input)
         if (!result.ok) return result
@@ -450,18 +431,14 @@ export class IdbBoardStore implements BoardStorePort {
 
   getScheduleLease(sourceId: string): Promise<ScheduleLeaseRecord | null> {
     return this.read(STORE_METADATA, async (tx) => {
-      const leases = parseScheduleLeases(
-        (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
-      )
+      const leases = await readScheduleLeases(tx)
       return leases[sourceId] ?? null
     })
   }
 
   releaseScheduleLease(sourceId: string, executionKey: string): Promise<void> {
     return this.write(STORE_METADATA, async (tx) => {
-      const leases = parseScheduleLeases(
-        (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
-      )
+      const leases = await readScheduleLeases(tx)
       if (leases[sourceId]?.executionKey !== executionKey) return
       delete leases[sourceId]
       await writeScheduleLeases(tx, leases)
@@ -884,6 +861,14 @@ async function writeLiveExecutions(
   } satisfies MetadataRecord)
 }
 
+async function readScheduleLeases(
+  tx: IDBTransaction,
+): Promise<Record<string, ScheduleLeaseRecord>> {
+  return parseScheduleLeases(
+    (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
+  )
+}
+
 async function writeScheduleLeases(
   tx: IDBTransaction,
   leases: Record<string, ScheduleLeaseRecord>,
@@ -898,9 +883,7 @@ async function dropScheduleLease(
   tx: IDBTransaction,
   sourceId: string,
 ): Promise<void> {
-  const leases = parseScheduleLeases(
-    (await getMetadataRow(tx, SCHEDULE_LEASES_METADATA_KEY))?.value,
-  )
+  const leases = await readScheduleLeases(tx)
   if (!(sourceId in leases)) return
   delete leases[sourceId]
   await writeScheduleLeases(tx, leases)

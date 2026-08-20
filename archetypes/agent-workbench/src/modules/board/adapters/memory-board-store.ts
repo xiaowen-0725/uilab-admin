@@ -2,10 +2,9 @@
  * In-memory BoardStorePort for tests and Memory boot.
  */
 
-import { commitFenceRejects } from '../model/identity-barrier'
 import {
   resolveScheduleClaim,
-  scheduleCommitFenceRejects,
+  snapshotWriteRejected,
   type ClaimScheduleLeaseInput,
   type ClaimScheduleLeaseResult,
   type ScheduleLeaseRecord,
@@ -236,16 +235,11 @@ export class MemoryBoardStore implements BoardStorePort {
     const lease = source ? this.leases.get(source.id) : undefined
     if (
       snapshot &&
-      !commitFenceRejects(
-        options?.expectedGeneration,
+      !snapshotWriteRejected(
+        options,
         this.identityEpochs.get(principalKey),
-        options?.executionKey,
         Object.fromEntries(this.liveExecutions),
-      ) &&
-      !scheduleCommitFenceRejects(
-        options?.expectedClaimGeneration,
         lease,
-        options?.executionKey,
       )
     ) {
       await this.putSnapshot(snapshot)

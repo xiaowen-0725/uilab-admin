@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   isLeaseHeld,
+  omitPrincipalLeases,
   parseScheduleLeases,
   resolveScheduleClaim,
   scheduleCommitFenceRejects,
+  snapshotWriteRejected,
   type ClaimScheduleLeaseInput,
   type ScheduleLeaseRecord,
 } from './schedule-lease'
@@ -113,5 +115,46 @@ describe('parseScheduleLeases', () => {
     expect(parseScheduleLeases({ bad: 1, ok: lease() })).toEqual({
       ok: lease(),
     })
+  })
+})
+
+describe('omitPrincipalLeases', () => {
+  it('returns null when no lease belongs to the principal', () => {
+    const leases = { a: lease() }
+    expect(omitPrincipalLeases(leases, 'alice')).toBeNull()
+  })
+
+  it('drops only the matching principal', () => {
+    const leases = {
+      a: lease({ principalKey: 'alice' }),
+      b: lease({ sourceId: 'source:w2', principalKey: 'bob' }),
+    }
+    expect(omitPrincipalLeases(leases, 'alice')).toEqual({
+      b: lease({ sourceId: 'source:w2', principalKey: 'bob' }),
+    })
+  })
+})
+
+describe('snapshotWriteRejected', () => {
+  it('rejects when either fence fires', () => {
+    expect(
+      snapshotWriteRejected({ expectedGeneration: 1 }, 2, {}, undefined),
+    ).toBe(true)
+    expect(
+      snapshotWriteRejected(
+        { expectedClaimGeneration: 1, executionKey: 'exec_a' },
+        undefined,
+        { exec_a: 'anonymous' },
+        lease({ claimGeneration: 2 }),
+      ),
+    ).toBe(true)
+    expect(
+      snapshotWriteRejected(
+        { expectedGeneration: 1, expectedClaimGeneration: 1, executionKey: 'exec_a' },
+        1,
+        { exec_a: 'anonymous' },
+        lease(),
+      ),
+    ).toBe(false)
   })
 })

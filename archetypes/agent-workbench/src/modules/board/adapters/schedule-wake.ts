@@ -33,7 +33,11 @@ export function createHostScheduleWake(
 ): ScheduleWakePort {
   return {
     subscribe(listener): ScheduleWakeUnsubscribe {
-      return host?.subscribeBoardRefreshWake?.(listener) ?? (() => {})
+      const subscribeWake = host?.subscribeBoardRefreshWake
+      if (!subscribeWake) {
+        return function unsubscribe() {}
+      }
+      return subscribeWake(listener)
     },
   }
 }

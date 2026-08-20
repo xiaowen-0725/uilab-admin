@@ -3,6 +3,11 @@
  * ADR-0024 §4: no daemon; expired leases are stealable.
  */
 
+import {
+  commitFenceRejects,
+  type LiveExecutionMap,
+} from './identity-barrier'
+
 export const SCHEDULE_LEASES_METADATA_KEY = 'board.schedule.leases'
 
 export interface ScheduleLeaseRecord {
@@ -27,42 +32,75 @@ export type ClaimScheduleLeaseResult =
   | { ok: true; lease: ScheduleLeaseRecord }
   | { ok: false; reason: 'held'; lease: ScheduleLeaseRecord }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function asFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 export function parseScheduleLease(
   value: unknown,
 ): ScheduleLeaseRecord | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const row = value as Record<string, unknown>
+  if (!isPlainObject(value)) return undefined
+  const sourceId = asString(value.sourceId)
+  const instanceId = asString(value.instanceId)
+  const executionKey = asString(value.executionKey)
+  const leasedUntil = asString(value.leasedUntil)
+  const principalKey = asString(value.principalKey)
+  const claimGeneration = asFiniteNumber(value.claimGeneration)
   if (
-    typeof row.sourceId !== 'string' ||
-    typeof row.instanceId !== 'string' ||
-    typeof row.executionKey !== 'string' ||
-    typeof row.leasedUntil !== 'string' ||
-    typeof row.principalKey !== 'string' ||
-    typeof row.claimGeneration !== 'number' ||
-    !Number.isFinite(row.claimGeneration)
+    sourceId === undefined ||
+    instanceId === undefined ||
+    executionKey === undefined ||
+    leasedUntil === undefined ||
+    principalKey === undefined ||
+    claimGeneration === undefined
   ) {
     return undefined
   }
   return {
-    sourceId: row.sourceId,
-    instanceId: row.instanceId,
-    executionKey: row.executionKey,
-    leasedUntil: row.leasedUntil,
-    claimGeneration: row.claimGeneration,
-    principalKey: row.principalKey,
+    sourceId,
+    instanceId,
+    executionKey,
+    leasedUntil,
+    claimGeneration,
+    principalKey,
   }
 }
 
 export function parseScheduleLeases(
   value: unknown,
 ): Record<string, ScheduleLeaseRecord> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  if (!isPlainObject(value)) return {}
   const next: Record<string, ScheduleLeaseRecord> = {}
-  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, raw] of Object.entries(value)) {
     const lease = parseScheduleLease(raw)
     if (lease) next[key] = lease
   }
   return next
+}
+
+/** Drops leases for one principal. Returns null when the map is unchanged. */
+export function omitPrincipalLeases(
+  leases: Record<string, ScheduleLeaseRecord>,
+  principalKey: string,
+): Record<string, ScheduleLeaseRecord> | null {
+  const next: Record<string, ScheduleLeaseRecord> = {}
+  let changed = false
+  for (const [id, lease] of Object.entries(leases)) {
+    if (lease.principalKey === principalKey) {
+      changed = true
+      continue
+    }
+    next[id] = lease
+  }
+  return changed ? next : null
 }
 
 export function isLeaseHeld(
@@ -111,4 +149,31 @@ export function scheduleCommitFenceRejects(
   if (!lease) return true
   if (lease.claimGeneration !== expectedClaimGeneration) return true
   return Boolean(executionKey && lease.executionKey !== executionKey)
+}
+
+interface SnapshotWriteFence {
+  expectedGeneration?: number
+  executionKey?: string
+  expectedClaimGeneration?: number
+}
+
+export function snapshotWriteRejected(
+  options: SnapshotWriteFence | undefined,
+  storedEpoch: number | undefined,
+  liveExecutions: LiveExecutionMap,
+  lease: ScheduleLeaseRecord | undefined,
+): boolean {
+  return (
+    commitFenceRejects(
+      options?.expectedGeneration,
+      storedEpoch,
+      options?.executionKey,
+      liveExecutions,
+    ) ||
+    scheduleCommitFenceRejects(
+      options?.expectedClaimGeneration,
+      lease,
+      options?.executionKey,
+    )
+  )
 }

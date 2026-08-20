@@ -88,6 +88,27 @@ async function seedThreeJobs(store: ReturnType<typeof createMemoryBoardStore>) {
   }
 }
 
+async function seedScheduleJob(
+  store: ReturnType<typeof createMemoryBoardStore>,
+  everyMs = 15 * 60 * 1000,
+) {
+  await store.putBoard(board())
+  await store.putWidget(
+    widget('w1', { latestData: { n: 0 }, latestDataAt: NOW }),
+  )
+  await store.putJob(job('j1', 'w1'))
+  await store.putDataSource({
+    id: 'source:w1',
+    widgetId: 'w1',
+    kind: 'job',
+    jobId: 'j1',
+    trigger: { kind: 'schedule', everyMs },
+    referencableByJob: false,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
+}
+
 describe('parseJobResult', () => {
   it('rejects a non-JSON string and does not treat it as data', () => {
     expect(parseJobResult('not-json')).toMatchObject({
@@ -755,27 +776,6 @@ describe('data-source evaluator identity semantics', () => {
     controller.dispose()
   })
 })
-
-async function seedScheduleJob(
-  store: ReturnType<typeof createMemoryBoardStore>,
-  everyMs = 15 * 60 * 1000,
-) {
-  await store.putBoard(board())
-  await store.putWidget(
-    widget('w1', { latestData: { n: 0 }, latestDataAt: NOW }),
-  )
-  await store.putJob(job('j1', 'w1'))
-  await store.putDataSource({
-    id: 'source:w1',
-    widgetId: 'w1',
-    kind: 'job',
-    jobId: 'j1',
-    trigger: { kind: 'schedule', everyMs },
-    referencableByJob: false,
-    createdAt: NOW,
-    updatedAt: NOW,
-  })
-}
 
 describe('foreground schedule and host wake', () => {
   it('evaluates a due schedule source once', async () => {
