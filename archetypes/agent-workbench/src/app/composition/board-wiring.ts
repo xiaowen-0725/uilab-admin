@@ -98,6 +98,14 @@ function defaultJobRuntime(): BoardJobRuntimePort {
   })
 }
 
+function defaultQueryCatalog(): BoardQueryCatalogPort {
+  if (INSTANT_DEMO) return { listQueries: async () => [] }
+  return createHttpBoardQueryCatalog({
+    baseUrl: resolveVoltAgentBaseUrl(),
+    token: sidecarToken(),
+  })
+}
+
 export function resolveIdentityScope(
   injected?: IdentityScopePort,
 ): IdentityScopePort {
@@ -124,16 +132,7 @@ export function useWorkbenchBoardWiring(
     () => input.boardJobRuntime ?? defaultJobRuntime(),
     [input.boardJobRuntime],
   )
-  const queryCatalog = useMemo<BoardQueryCatalogPort>(
-    () =>
-      INSTANT_DEMO
-        ? { listQueries: async () => [] }
-        : createHttpBoardQueryCatalog({
-            baseUrl: resolveVoltAgentBaseUrl(),
-            token: sidecarToken(),
-          }),
-    [],
-  )
+  const queryCatalog = useMemo(() => defaultQueryCatalog(), [])
   const identityScope = useMemo(
     () => resolveIdentityScope(input.identityScope),
     [input.identityScope],

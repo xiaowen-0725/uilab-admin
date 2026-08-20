@@ -49,11 +49,15 @@ export type BoardClientToolExecutor = (input: {
   turnId: string
 }) => Promise<unknown>
 
-function asRecord(value: unknown): Record<string, unknown> {
+function asObject(value: unknown): Record<string, unknown> | null {
   if (value != null && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>
   }
-  return {}
+  return null
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return asObject(value) ?? {}
 }
 
 function asString(value: unknown): string | undefined {
@@ -61,10 +65,7 @@ function asString(value: unknown): string | undefined {
 }
 
 function asParams(value: unknown): Record<string, unknown> | undefined {
-  if (value != null && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  return undefined
+  return asObject(value) ?? undefined
 }
 
 async function loadQueryCatalog(
@@ -146,22 +147,7 @@ async function applyCommitEffects(
   effects?: BoardCommitEffects,
 ): Promise<void> {
   if (!result.replayed) {
-    try {
-      if (result.jobId) {
-        if (effects?.refresh) {
-          await effects.refresh.refreshJob(result.jobId)
-        } else if (effects?.jobRuntime) {
-          await runCommittedJob(store, effects.jobRuntime, {
-            jobId: result.jobId,
-            widgetId: result.widgetId,
-          })
-        }
-      } else if (result.queryName && effects?.refresh) {
-        await effects.refresh.refreshWidget(result.widgetId)
-      }
-    } catch {
-      // First-run is best-effort; commit already succeeded.
-    }
+    await runFirstCommitRefresh(store, result, effects)
   }
 
   const decision = effects?.preview?.decide(scope.turnId, scope.taskId) ?? 'open'
@@ -173,4 +159,29 @@ async function applyCommitEffects(
     turnId: scope.turnId,
     taskId: scope.taskId,
   })
+}
+
+async function runFirstCommitRefresh(
+  store: BoardStorePort,
+  result: BoardCommitOk,
+  effects?: BoardCommitEffects,
+): Promise<void> {
+  try {
+    if (result.jobId && effects?.refresh) {
+      await effects.refresh.refreshJob(result.jobId)
+      return
+    }
+    if (result.jobId && effects?.jobRuntime) {
+      await runCommittedJob(store, effects.jobRuntime, {
+        jobId: result.jobId,
+        widgetId: result.widgetId,
+      })
+      return
+    }
+    if (result.queryName && effects?.refresh) {
+      await effects.refresh.refreshWidget(result.widgetId)
+    }
+  } catch {
+    // First-run is best-effort; commit already succeeded.
+  }
 }

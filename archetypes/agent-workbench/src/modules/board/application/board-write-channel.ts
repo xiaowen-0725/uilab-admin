@@ -28,10 +28,10 @@ import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type {
   BoardQueryCatalogEntry,
 } from '../ports/board-query-catalog-port'
-import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import {
   UNRESTRICTED_AUTHORIZATION,
   type IdentityAuthorization,
+  type IdentityScopeSnapshot,
 } from '../ports/identity-scope-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 import { anonymousIdentitySnapshot } from '../model/widget-render-state'
@@ -187,7 +187,7 @@ export async function readBoardStatus(
         contentHash: await hashBoardContent(widget.html),
         jobId: job?.id,
         codeHash: job?.approved?.codeHash,
-        queryName: source?.kind === 'query' ? source.queryName : undefined,
+        queryName: queryNameOf(source),
       })
     }
   }
@@ -239,9 +239,8 @@ export async function commitBoardDraft(
   const queryName = input.queryName?.trim()
   const queryParams = input.queryParams ?? {}
   const wantsJob = Boolean(jobId || jobDraftId || codeHash)
-  const wantsQuery = Boolean(queryName)
   const jobReady = Boolean(jobId && jobDraftId && codeHash)
-  if (wantsJob && wantsQuery) {
+  if (wantsJob && queryName) {
     return fail(
       'validation_failed',
       '作业与查询来源不能同时提交；业务数据用 queryName，公开数据用作业',
@@ -256,7 +255,7 @@ export async function commitBoardDraft(
 
   const now = nowIso()
   let querySource: WidgetDataSourceRecord | undefined
-  if (wantsQuery && queryName) {
+  if (queryName) {
     const bound = validateQueryBinding(
       extras.queries ?? [],
       { widgetId, queryName, params: queryParams, now },
@@ -274,12 +273,13 @@ export async function commitBoardDraft(
 
   const existingPlacement = board.placements.find((item) => item.widgetId === widgetId)
   const existingSource = await store.getDataSourceByWidgetId(widgetId)
+  const existingJob = await store.getJobByWidgetId(widgetId)
   if (
     existingWidget &&
     existingPlacement &&
     (await hashBoardContent(existingWidget.html)) === contentHash &&
-    hashesMatch(await store.getJobByWidgetId(widgetId), codeHash) &&
-    (!wantsQuery || queryBindingMatches(existingSource, queryName ?? '', queryParams))
+    hashesMatch(existingJob, codeHash) &&
+    (!queryName || queryBindingMatches(existingSource, queryName, queryParams))
   ) {
     return leakFreeCommit({
       ok: true,
@@ -288,7 +288,7 @@ export async function commitBoardDraft(
       mountId: existingPlacement.mountId,
       placement: pickPlacement(existingPlacement),
       jobId: jobId || undefined,
-      queryName: existingSource?.kind === 'query' ? existingSource.queryName : queryName,
+      queryName: queryNameOf(existingSource) ?? queryName,
       replayed: true,
     })
   }
@@ -309,7 +309,7 @@ export async function commitBoardDraft(
   if (!widgetPull.ok) return widgetPull
 
   let jobPull: BoardContentOk | null = null
-  if (jobReady && jobId && jobDraftId && codeHash) {
+  if (jobId && jobDraftId && codeHash) {
     const pulled = await pullMatchingDraft(
       content,
       jobDraftId,
@@ -328,7 +328,7 @@ export async function commitBoardDraft(
   const widget = nextWidgetRecord(existingWidget, widgetPull, widgetId, input.taskId, now)
   let job: WidgetDataJobRecord | undefined
   if (jobPull && jobId) {
-    const previous = await store.getJob(jobId) ?? await store.getJobByWidgetId(widgetId)
+    const previous = (await store.getJob(jobId)) ?? existingJob
     job = nextJobRecord(previous, jobPull, { jobId, widgetId, taskId: input.taskId }, now)
   }
 
@@ -342,15 +342,8 @@ export async function commitBoardDraft(
   }
 
   if (querySource && existingSource) {
-    querySource = {
-      ...querySource,
-      id: existingSource.id,
-      createdAt: existingSource.createdAt,
-    }
+    querySource = keepSourceIdentity(querySource, existingSource)
   }
-
-  const leftoverJob =
-    querySource ? await store.getJobByWidgetId(widgetId) : null
 
   await store.commitAtomically({
     board: nextBoard,
@@ -360,7 +353,7 @@ export async function commitBoardDraft(
     appendPlacement: !updating && !created ? placement : undefined,
   })
 
-  if (leftoverJob) await store.deleteJob(leftoverJob.id)
+  if (querySource && existingJob) await store.deleteJob(existingJob.id)
 
   return leakFreeCommit({
     ok: true,
@@ -524,18 +517,32 @@ async function resolveBoard(
 function publicQueries(
   queries: readonly BoardQueryCatalogEntry[],
 ): BoardStatusQuery[] {
-  const listed: BoardStatusQuery[] = []
-  for (const query of queries) {
-    const entry: BoardStatusQuery = {
+  return queries
+    .map((query) => ({
       name: query.name,
       title: query.title,
       parameters: query.parameters,
       requiredPermissions: [...query.requiredPermissions],
       referencableByJob: query.referencableByJob,
-    }
-    if (!containsEndpointLeak(entry)) listed.push(entry)
+    }))
+    .filter((entry) => !containsEndpointLeak(entry))
+}
+
+function queryNameOf(
+  source: WidgetDataSourceRecord | null | undefined,
+): string | undefined {
+  return source?.kind === 'query' ? source.queryName : undefined
+}
+
+function keepSourceIdentity(
+  next: WidgetDataSourceRecord,
+  existing: WidgetDataSourceRecord,
+): WidgetDataSourceRecord {
+  return {
+    ...next,
+    id: existing.id,
+    createdAt: existing.createdAt,
   }
-  return listed
 }
 
 function publicIdentity(snapshot: IdentityScopeSnapshot): BoardStatusIdentity {

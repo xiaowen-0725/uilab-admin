@@ -90,15 +90,15 @@ export function dataSourceFromQuery(
 ): WidgetDataSourceRecord {
   const parameterSchema: Record<string, DataSourceResourceParameterDecl> = {}
   for (const [key, decl] of Object.entries(query.parameters)) {
-    if (decl.type === 'resource') {
-      parameterSchema[key] = {
-        type: 'resource',
-        resourceType: decl.resourceType,
-        ...(decl.requiredPermissions?.length
-          ? { requiredPermissions: [...decl.requiredPermissions] }
-          : {}),
-      }
+    if (decl.type !== 'resource') continue
+    const parameter: DataSourceResourceParameterDecl = {
+      type: 'resource',
+      resourceType: decl.resourceType,
     }
+    if (decl.requiredPermissions?.length) {
+      parameter.requiredPermissions = [...decl.requiredPermissions]
+    }
+    parameterSchema[key] = parameter
   }
   return {
     id: dataSourceIdForWidget(widgetId),

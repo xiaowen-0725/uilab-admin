@@ -5,7 +5,10 @@
 
 import type { BoardQueryCatalogEntry } from '../ports/board-query-catalog-port'
 import type { IdentityAuthorization } from '../ports/identity-scope-port'
-import { authorizeDataSourceParameters } from './source-authorization'
+import {
+  authorizeDataSourceParameters,
+  type SourceAuthorizationDenial,
+} from './source-authorization'
 import type { WidgetDataSourceRecord } from './types'
 import { dataSourceFromQuery } from './data-source'
 
@@ -22,12 +25,6 @@ export type QueryBindingOk = {
 }
 
 export type QueryBindingResult = QueryBindingOk | QueryBindingFailure
-
-const BINDING_HINTS: Record<string, string> = {
-  unknown_query: '未知指标。先 board_status 对照目录里的 name，不要编指标名。',
-  missing_required_permissions: '该指标未声明 requiredPermissions，已拒绝绑定',
-  validation_failed: '查询参数不在指标 schema 内，或缺少必填项',
-}
 
 export function validateQueryBinding(
   catalog: readonly BoardQueryCatalogEntry[],
@@ -76,30 +73,7 @@ export function validateQueryBinding(
   const source = dataSourceFromQuery(input.widgetId, query, input.params, input.now)
   const authorized = authorizeDataSourceParameters(source, authorization)
   if (authorized.ok) return { ok: true, query, source }
-
-  if (authorized.reason === 'invalid_resource_parameter') {
-    return fail(
-      'invalid_resource_parameter',
-      '资源引用参数必须是字符串或字符串数组。对照目录 parameters 重填。',
-    )
-  }
-  if (authorized.reason === 'resource_not_authorized') {
-    return fail(
-      'resource_not_authorized',
-      '资源不在当前身份授权集合内。对照 board_status.identity.resources 再填。',
-    )
-  }
-  if (authorized.reason === 'permission_denied') {
-    const needed = source.requiredPermissions?.join('、') ?? ''
-    return fail(
-      'permission_denied',
-      `当前身份缺少权限：${needed}。请改选 requiredPermissions 被资源 permissions 覆盖的指标。`,
-    )
-  }
-  return fail(
-    authorized.reason,
-    BINDING_HINTS[authorized.reason] ?? BINDING_HINTS.validation_failed,
-  )
+  return fail(authorized.reason, hintForAuthorizationDenial(authorized.reason, source))
 }
 
 export function queryBindingMatches(
@@ -110,6 +84,22 @@ export function queryBindingMatches(
   if (source?.kind !== 'query') return false
   if (source.queryName !== queryName) return false
   return stableJson(source.parameters ?? {}) === stableJson(params)
+}
+
+function hintForAuthorizationDenial(
+  reason: SourceAuthorizationDenial,
+  source: WidgetDataSourceRecord,
+): string {
+  switch (reason) {
+    case 'invalid_resource_parameter':
+      return '资源引用参数必须是字符串或字符串数组。对照目录 parameters 重填。'
+    case 'resource_not_authorized':
+      return '资源不在当前身份授权集合内。对照 board_status.identity.resources 再填。'
+    case 'permission_denied':
+      return `当前身份缺少权限：${source.requiredPermissions?.join('、') ?? ''}。请改选 requiredPermissions 被资源 permissions 覆盖的指标。`
+    case 'missing_required_permissions':
+      return '该指标未声明 requiredPermissions，已拒绝绑定'
+  }
 }
 
 function fail(error: string, hint: string): QueryBindingFailure {

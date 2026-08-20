@@ -86,13 +86,7 @@ function resourceIdsFromParameter(value: unknown): string[] | null {
     const id = value.trim()
     return id ? [id] : null
   }
-  if (Array.isArray(value)) {
-    const ids: string[] = []
-    for (const item of value) {
-      if (typeof item !== 'string' || !item.trim()) return null
-      ids.push(item.trim())
-    }
-    return ids
-  }
-  return null
+  if (!Array.isArray(value)) return null
+  if (value.some((item) => typeof item !== 'string' || !item.trim())) return null
+  return value.map((item) => (item as string).trim())
 }
