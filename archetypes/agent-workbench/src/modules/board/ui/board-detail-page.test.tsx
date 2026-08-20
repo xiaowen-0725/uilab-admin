@@ -131,6 +131,54 @@ describe('BoardDetailPage', () => {
     expect(page.getByTestId('board-widget-runtime-missing').elements()).toHaveLength(0)
   })
 
+  it('labels a plugin preset board as 预置 and does not show 示例数据', async () => {
+    const sample = widget()
+    sample.latestData = { occupancy: 0.42 }
+    await render(
+      <BoardDetailPage
+        view={{
+          board: {
+            ...board(),
+            isExample: false,
+            presetId: 'site-watch',
+            title: '站点值班',
+          },
+          widgets: new Map([['w1', sample]]),
+          jobs: new Map(),
+          sources: new Map([
+            [
+              'w1',
+              {
+                id: 'source:w1',
+                widgetId: 'w1',
+                kind: 'query',
+                trigger: { kind: 'onOpen' },
+                referencableByJob: true,
+                queryName: 'site_summary',
+                parameters: {},
+                requiredPermissions: ['read'],
+                createdAt: NOW,
+                updatedAt: NOW,
+              },
+            ],
+          ]),
+          lastRunByJobId: new Map(),
+        }}
+        theme='light'
+        taskExists={() => false}
+        onBack={() => {}}
+        onLayoutChange={() => {}}
+        onCreateByChat={() => {}}
+      />,
+    )
+
+    expect(page.getByTestId('board-preset-badge')).toHaveTextContent('预置')
+    expect(page.getByTestId('board-example-badge').elements()).toHaveLength(0)
+    expect(page.getByTestId('board-widget-example-data').elements()).toHaveLength(0)
+    expect(page.getByTestId('board-refresh-all')).toBeEnabled()
+    expect(page.getByTestId('board-widget-refresh')).toBeEnabled()
+  })
+
   it('opens the job dialog with authorized status and revoke', async () => {
     const onRevokeJob = vi.fn()
     const job: WidgetDataJobRecord = {

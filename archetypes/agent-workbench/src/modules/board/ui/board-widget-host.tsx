@@ -12,7 +12,10 @@ import { cn } from '@/lib/utils'
 import type { BoardWidgetId, BoardWidgetStatus } from '../model/types'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import {
+  IDENTITY_INCOMPLETE_BINDING,
+  IDENTITY_NEEDS_LOGIN,
   IDENTITY_NEEDS_RELOGIN,
+  IDENTITY_PERMISSION_REVOKED,
   type WidgetIdentityChrome,
 } from '../model/widget-render-state'
 import {
@@ -71,12 +74,18 @@ function refreshButtonLabel(
   return '刷新'
 }
 
-type ThumbOverlayKind = 'running' | 'needs_relogin' | 'run_error'
+type ThumbOverlayKind =
+  | 'running'
+  | 'needs_relogin'
+  | 'needs_login'
+  | 'incomplete_binding'
+  | 'permission_revoked'
+  | 'run_error'
 
 function resolveThumbOverlay(input: {
   chrome: WidgetChrome
   running: boolean
-  needsRelogin: boolean
+  identityChrome: WidgetIdentityChrome
   status: BoardWidgetStatus
   runError: string | null
 }): { kind: ThumbOverlayKind; testId: string; title: string } | null {
@@ -88,11 +97,32 @@ function resolveThumbOverlay(input: {
       title: '正在刷新',
     }
   }
-  if (input.needsRelogin) {
+  if (input.identityChrome === 'needs_login') {
+    return {
+      kind: 'needs_login',
+      testId: 'board-widget-needs-login',
+      title: IDENTITY_NEEDS_LOGIN,
+    }
+  }
+  if (input.identityChrome === 'needs_relogin') {
     return {
       kind: 'needs_relogin',
       testId: 'board-widget-needs-relogin',
       title: IDENTITY_NEEDS_RELOGIN,
+    }
+  }
+  if (input.identityChrome === 'incomplete_binding') {
+    return {
+      kind: 'incomplete_binding',
+      testId: 'board-widget-incomplete-binding',
+      title: IDENTITY_INCOMPLETE_BINDING,
+    }
+  }
+  if (input.identityChrome === 'permission_revoked') {
+    return {
+      kind: 'permission_revoked',
+      testId: 'board-widget-permission-revoked',
+      title: IDENTITY_PERMISSION_REVOKED,
     }
   }
   if (input.status === 'error' && input.runError) {
@@ -109,8 +139,11 @@ function ThumbOverlayIcon({ kind }: { kind: ThumbOverlayKind }): ReactNode {
   if (kind === 'running') {
     return <RefreshCw className='size-2.5 animate-spin' aria-hidden />
   }
-  if (kind === 'needs_relogin') {
+  if (kind === 'needs_relogin' || kind === 'needs_login') {
     return <Lock className='size-2.5 text-destructive' aria-hidden />
+  }
+  if (kind === 'incomplete_binding' || kind === 'permission_revoked') {
+    return <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
   }
   return <TriangleAlert className='size-2.5 text-destructive' aria-hidden />
 }
@@ -166,6 +199,8 @@ export interface BoardWidgetHostProps {
   runtimeUnavailable?: boolean
   /** When false, hide the runtime warning and disable refresh. Default true. */
   hasJob?: boolean
+  /** Query sources can refresh without a job. Defaults to hasJob. */
+  canRefresh?: boolean
   onRefresh?: () => void
   onExpand?: () => void
   onOpenJob?: () => void
@@ -204,6 +239,7 @@ export function BoardWidgetHost({
   identityChrome = 'none',
   runtimeUnavailable = false,
   hasJob = true,
+  canRefresh,
   onRefresh,
   onExpand,
   onOpenJob,
@@ -246,14 +282,20 @@ export function BoardWidgetHost({
   const headerClass = chrome === 'full' ? 'h-9' : 'h-7'
   const titleClass = chrome === 'full' ? 'text-[13px]' : 'text-[12px]'
   const running = status === 'running'
-  const refreshLabel = refreshButtonLabel(running, runtimeUnavailable, hasJob)
+  const refreshable = canRefresh ?? hasJob
+  const refreshLabel = refreshButtonLabel(running, runtimeUnavailable, refreshable)
   const needsRelogin = identityChrome === 'needs_relogin'
-  const showRunError = !needsRelogin && status === 'error' && Boolean(runError)
-  const showRuntimeWarn = !needsRelogin && runtimeUnavailable && hasJob
+  const needsLogin = identityChrome === 'needs_login'
+  const incompleteBinding = identityChrome === 'incomplete_binding'
+  const permissionRevoked = identityChrome === 'permission_revoked'
+  const identityLocked =
+    needsRelogin || needsLogin || incompleteBinding || permissionRevoked
+  const showRunError = !identityLocked && status === 'error' && Boolean(runError)
+  const showRuntimeWarn = !identityLocked && runtimeUnavailable && refreshable
   const thumbOverlay = resolveThumbOverlay({
     chrome,
     running,
-    needsRelogin,
+    identityChrome,
     status,
     runError,
   })
@@ -303,6 +345,15 @@ export function BoardWidgetHost({
               {exampleDataHint}
             </span>
           ) : null}
+          {needsLogin ? (
+            <ChromeStatusIcon
+              testId='board-widget-needs-login'
+              label={IDENTITY_NEEDS_LOGIN}
+              tone='destructive'
+            >
+              <Lock className='size-3.5' aria-hidden />
+            </ChromeStatusIcon>
+          ) : null}
           {needsRelogin ? (
             <ChromeStatusIcon
               testId='board-widget-needs-relogin'
@@ -310,6 +361,24 @@ export function BoardWidgetHost({
               tone='destructive'
             >
               <Lock className='size-3.5' aria-hidden />
+            </ChromeStatusIcon>
+          ) : null}
+          {incompleteBinding ? (
+            <ChromeStatusIcon
+              testId='board-widget-incomplete-binding'
+              label={IDENTITY_INCOMPLETE_BINDING}
+              tone='destructive'
+            >
+              <TriangleAlert className='size-3.5' aria-hidden />
+            </ChromeStatusIcon>
+          ) : null}
+          {permissionRevoked ? (
+            <ChromeStatusIcon
+              testId='board-widget-permission-revoked'
+              label={IDENTITY_PERMISSION_REVOKED}
+              tone='destructive'
+            >
+              <TriangleAlert className='size-3.5' aria-hidden />
             </ChromeStatusIcon>
           ) : null}
           {showRunError ? (
@@ -333,7 +402,7 @@ export function BoardWidgetHost({
           <ChromeIconButton
             testId='board-widget-refresh'
             label={refreshLabel}
-            disabled={running || !hasJob}
+            disabled={running || !refreshable}
             onClick={onRefresh}
           >
             <RefreshCw

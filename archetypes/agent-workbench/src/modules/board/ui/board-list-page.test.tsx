@@ -93,6 +93,7 @@ describe('BoardListPage', () => {
     expect(page.getByTestId('board-thumbnail-placeholder').elements()).toHaveLength(3)
     expect(page.getByTestId('board-thumbnail-title')).toHaveTextContent('计数器')
     expect(page.getByTestId('board-example-badge')).toHaveTextContent('示例')
+    expect(page.getByTestId('board-preset-badge').elements()).toHaveLength(0)
 
     const open = page.getByTestId('board-card-open')
     ;(open.element() as HTMLElement).focus()
@@ -125,5 +126,24 @@ describe('BoardListPage', () => {
     expect(page.getByTestId('board-card').element().textContent).not.toContain(
       '缩略图未显示',
     )
+  })
+
+  it('labels a plugin preset board as 预置, not 示例', async () => {
+    await render(
+      <BoardListPage
+        boards={[
+          card(
+            { isExample: false, presetId: 'site-watch', title: '站点值班' },
+            [widget('w1', '满位')],
+          ),
+        ]}
+        theme='light'
+        onOpenBoard={() => {}}
+        onCreateByChat={() => {}}
+      />,
+    )
+
+    expect(page.getByTestId('board-preset-badge')).toHaveTextContent('预置')
+    expect(page.getByTestId('board-example-badge').elements()).toHaveLength(0)
   })
 })

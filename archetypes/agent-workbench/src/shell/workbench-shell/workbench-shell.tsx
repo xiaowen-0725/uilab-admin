@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MutableRefObject, ReactNode, TransitionEvent } from 'react'
 import {
   BoardWorkspace,
+  type BoardPresetCatalogPort,
   type BoardRefreshController,
   type BoardStorePort,
   type IdentityScopePort,
@@ -142,6 +143,7 @@ export interface WorkbenchShellProps {
   boardRefresh?: BoardRefreshController | null
   boardRevision?: number
   boardIdentityScope?: IdentityScopePort | null
+  boardPresetCatalog?: BoardPresetCatalogPort | null
   taskExists?: (taskId: string) => boolean
   boardOpenerRef?: MutableRefObject<((boardId?: string) => void) | null>
 }
@@ -176,6 +178,7 @@ export function WorkbenchShell({
   boardRefresh = null,
   boardRevision = 0,
   boardIdentityScope = null,
+  boardPresetCatalog = null,
   taskExists = () => false,
   boardOpenerRef,
 }: WorkbenchShellProps) {
@@ -481,6 +484,7 @@ export function WorkbenchShell({
               refresh={boardRefresh ?? undefined}
               revision={boardRevision}
               identityScope={boardIdentityScope ?? undefined}
+              presetCatalog={boardPresetCatalog ?? undefined}
               taskExists={taskExists}
               onOpenList={() => openBoard()}
               onOpenBoard={(id) => openBoard(id)}

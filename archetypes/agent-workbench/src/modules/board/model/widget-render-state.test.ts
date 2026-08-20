@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { WidgetDataSourceRecord } from './types'
 import {
+  IDENTITY_INCOMPLETE_BINDING,
+  IDENTITY_NEEDS_LOGIN,
   IDENTITY_NEEDS_RELOGIN,
+  IDENTITY_PERMISSION_REVOKED,
   anonymousIdentitySnapshot,
   resolveWidgetRenderState,
 } from './widget-render-state'
@@ -92,7 +95,80 @@ describe('resolveWidgetRenderState', () => {
           },
         },
       }),
-    ).toEqual({ data: undefined, chrome: 'none', masked: true })
+    ).toEqual({
+      data: undefined,
+      chrome: 'permission_revoked',
+      masked: true,
+    })
+    expect(IDENTITY_PERMISSION_REVOKED).toBe('权限已回收')
+  })
+
+  it('asks a query widget to 待绑定资源 when resource params are empty', async () => {
+    expect(
+      resolveWidgetRenderState({
+        latestData: DATA,
+        source: {
+          id: 'source:w3b',
+          widgetId: 'w3b',
+          kind: 'query',
+          trigger: { kind: 'onOpen' },
+          referencableByJob: true,
+          queryName: 'site_summary',
+          parameters: {},
+          parameterSchema: {
+            siteIds: { type: 'resource', resourceType: 'site' },
+          },
+          requiredPermissions: ['read'],
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+        identity: {
+          principalKey: 'alice',
+          generation: 1,
+          valid: true,
+          authorization: {
+            kind: 'resources',
+            resources: [
+              { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+            ],
+          },
+        },
+      }),
+    ).toEqual({
+      data: undefined,
+      chrome: 'incomplete_binding',
+      masked: true,
+    })
+    expect(IDENTITY_INCOMPLETE_BINDING).toBe('待绑定资源')
+  })
+
+  it('asks a query widget to 需登录 when there is no product identity', () => {
+    expect(
+      resolveWidgetRenderState({
+        latestData: DATA,
+        source: {
+          id: 'source:w4',
+          widgetId: 'w4',
+          kind: 'query',
+          trigger: { kind: 'onOpen' },
+          referencableByJob: true,
+          queryName: 'site_summary',
+          parameters: {},
+          parameterSchema: {
+            siteIds: { type: 'resource', resourceType: 'site' },
+          },
+          requiredPermissions: ['read'],
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+        identity: anonymousIdentitySnapshot(),
+      }),
+    ).toEqual({
+      data: undefined,
+      chrome: 'needs_login',
+      masked: true,
+    })
+    expect(IDENTITY_NEEDS_LOGIN).toBe('需登录')
   })
 
   it('shows the current identity snapshot when valid', () => {

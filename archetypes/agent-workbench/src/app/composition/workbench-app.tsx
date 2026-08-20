@@ -803,6 +803,7 @@ export function WorkbenchApp({
           boardRefresh={board.refresh}
           boardRevision={board.revision}
           boardIdentityScope={board.identityScope}
+          boardPresetCatalog={board.presetCatalog}
           taskExists={(id) => Boolean(catalogController?.getTaskRow(id))}
           boardOpenerRef={boardOpenerRef}
           onOpenFileRef={surface.onOpenFileRef}

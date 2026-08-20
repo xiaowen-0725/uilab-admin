@@ -13,6 +13,11 @@ export const QUERY_FIXTURE_UPSTREAM_ORIGIN = 'https://query-fixture.test'
 export const QUERY_FIXTURE_BEARER_ENV = 'QUERY_FIXTURE_BEARER'
 export const QUERY_SITE_SUMMARY = 'site_summary'
 export const QUERY_SITE_FINANCE = 'site_finance'
+export const SITE_WATCH_PRESET_ID = 'site-watch'
+export const SITE_WATCH_WIDGET_ID = 'occupancy'
+
+const SITE_WATCH_HTML =
+  '<!doctype html><html><body><h1>满位</h1><p id="v"></p><script>widget.onDataChange(function(d){document.getElementById("v").textContent=d&&d.occupancy!=null?String(d.occupancy):"";});widget.ready();</script></body></html>'
 
 /** Restricted snapshot used when the fixture bearer is set (fail-closed live path). */
 export const QUERY_FIXTURE_DEFAULT_RESOURCES = [
@@ -58,6 +63,23 @@ const QUERY_FIXTURE_MANIFEST: PluginManifest = {
         parameters: { siteIds: SITE_IDS_PARAM },
         requiredPermissions: ['read', 'finance'],
         referencableByJob: true,
+      },
+    ],
+    presetBoards: [
+      {
+        presetId: SITE_WATCH_PRESET_ID,
+        version: 1,
+        title: '站点值班',
+        purpose: '用声明查询盯站点摘要；资源参数安装时留空。',
+        widgets: [
+          {
+            id: SITE_WATCH_WIDGET_ID,
+            title: '满位',
+            html: SITE_WATCH_HTML,
+            placement: { x: 0, y: 0, w: 6, h: 4 },
+            source: { kind: 'query', queryName: QUERY_SITE_SUMMARY },
+          },
+        ],
       },
     ],
   },

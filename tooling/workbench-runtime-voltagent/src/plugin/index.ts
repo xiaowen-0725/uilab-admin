@@ -175,6 +175,8 @@ export type {
 
 export type { QueryCatalogEntry } from './query-catalog.js'
 export { collectQueryHandlers, listQueryCatalog } from './query-catalog.js'
+export type { PresetBoardCatalogEntry, PresetBoardCatalogWidget } from './preset-board-catalog.js'
+export { listPresetBoards } from './preset-board-catalog.js'
 
 export {
   QUERY_FIXTURE_BEARER_ENV,
@@ -185,6 +187,8 @@ export {
   QUERY_FIXTURE_UPSTREAM_ORIGIN,
   QUERY_SITE_FINANCE,
   QUERY_SITE_SUMMARY,
+  SITE_WATCH_PRESET_ID,
+  SITE_WATCH_WIDGET_ID,
   createQueryFixtureUpstream,
 } from './query-fixture-package.js'
 

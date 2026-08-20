@@ -298,6 +298,51 @@ export type QueryContribution = {
   referencableByJob: boolean
 }
 
+export type PresetBoardPlacement = {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export type PresetBoardWidgetSpan = {
+  min: { w: number; h: number }
+  default: { w: number; h: number }
+  max: { w: number; h: number }
+}
+
+export type PresetBoardWidgetSource = {
+  kind: 'query'
+  queryName: string
+  /** Resource refs may be omitted; filled before first evaluate. */
+  parameters?: Record<string, unknown>
+  trigger?:
+    | { kind: 'manual' }
+    | { kind: 'onOpen' }
+    | { kind: 'schedule'; everyMs?: number }
+}
+
+export type PresetBoardWidgetContribution = {
+  id: string
+  title: string
+  html: string
+  placement: PresetBoardPlacement
+  span?: PresetBoardWidgetSpan
+  source: PresetBoardWidgetSource
+}
+
+/**
+ * Plugin-contributed board template (ADR-0024 §5). Declaration only —
+ * install + evaluate happen in the renderer against Widget Data Source.
+ */
+export type PresetBoardContribution = {
+  presetId: string
+  version: number
+  title: string
+  purpose?: string
+  widgets: PresetBoardWidgetContribution[]
+}
+
 export type PluginContributes = {
   mcp?: McpContribution[]
   skills?: SkillsContribution
@@ -310,6 +355,11 @@ export type PluginContributes = {
    * live on BuiltinPluginPackage, never in filesystem plugin.json.
    */
   queries?: QueryContribution[]
+  /**
+   * Preset boards (ADR-0024 §5). HTML is content, not a sidecar-executed
+   * module. Filesystem plugin.json cannot declare handler/module/execute.
+   */
+  presetBoards?: PresetBoardContribution[]
   /** Later tickets: tools */
 }
 

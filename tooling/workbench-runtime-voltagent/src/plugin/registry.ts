@@ -28,6 +28,10 @@ import {
   type QueryCatalogEntry,
 } from './query-catalog.js'
 import {
+  listPresetBoards,
+  type PresetBoardCatalogEntry,
+} from './preset-board-catalog.js'
+import {
   projectConnectorDescriptors,
   type ConnectorDescriptor,
 } from './connector-descriptor.js'
@@ -134,6 +138,8 @@ export type PluginRegistry = {
   listQueryCatalog(): QueryCatalogEntry[]
   /** Trusted in-process query handlers from enabled packages. */
   listQueryHandlers(): Record<string, QueryHandler>
+  /** Enabled plugin preset boards joined to same-plugin queries. */
+  listPresetBoards(): PresetBoardCatalogEntry[]
   /** Enabled plugin ids for this env/config */
   resolveEnabledIds(): string[]
   /** Re-probe auth resources without reconnecting MCP or rebuilding tools. */
@@ -297,6 +303,7 @@ export function createPluginRegistry(
     listFakeCatalog: () => [...fakeCatalog],
     listQueryCatalog: () => listQueryCatalog(manifests, enabledIdSet()),
     listQueryHandlers: () => collectQueryHandlers(packages, enabledIdSet()),
+    listPresetBoards: () => listPresetBoards(manifests, enabledIdSet()),
     resolveEnabledIds,
     refreshAuthStatuses: () =>
       resolvePluginAuthStatuses(buildAuthItems(), authOpts),

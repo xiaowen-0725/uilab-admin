@@ -171,10 +171,16 @@ export async function createWorkbenchAgent(
     })
     const manifests = registry.listManifests()
     const plugins = await registry.load({ workspaceRoot })
-    getSharedBoardRuntime({ env }).attachQueries({
+    const boardRuntime = getSharedBoardRuntime({ env })
+    const identity = productIdentityFromEnv(env)
+    boardRuntime.attachQueries({
       catalog: registry.listQueryCatalog(),
       handlers: registry.listQueryHandlers(),
-      identity: productIdentityFromEnv(env),
+      identity,
+    })
+    boardRuntime.attachPresets({
+      boards: registry.listPresetBoards(),
+      identity,
     })
 
     // Soft-fail optional skills plugins; only hard-fail when skills.office itself fails.

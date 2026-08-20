@@ -17,11 +17,15 @@ import {
   parseJobResult,
 } from '../model/refresh-policy'
 import { scheduleCommitFenceRejects } from '../model/schedule-lease'
-import { authorizeDataSourceParameters } from '../model/source-authorization'
+import {
+  authorizeDataSourceParameters,
+  isAuthorizationRevoke,
+} from '../model/source-authorization'
 import {
   anonymousIdentitySnapshot,
 } from '../model/widget-render-state'
 import {
+  ANONYMOUS_PRINCIPAL_KEY,
   isJobRunnable,
   type WidgetDataJobId,
   type WidgetDataJobRecord,
@@ -52,11 +56,12 @@ export type RefreshOutcome =
         | 'no_job'
         | 'no_widget'
         | 'preset'
+        | 'incomplete_binding'
         | 'refresh_stopped'
     }
   | { kind: 'unavailable'; error: string; hint: string }
   | { kind: 'finished'; status: WidgetJobRunStatus; runId: string; hint?: string }
-  | { kind: 'masked'; reason: 'needs_relogin' }
+  | { kind: 'masked'; reason: 'needs_relogin' | 'needs_login' }
   | { kind: 'cleared'; reason: 'permission_revoked' }
   | { kind: 'rejected'; reason: 'stale_commit' }
 
@@ -199,6 +204,10 @@ async function evaluateBoundSource(
     return { kind: 'skipped', reason: 'preset' }
   }
 
+  if (source?.kind === 'query' && principalKey === ANONYMOUS_PRINCIPAL_KEY) {
+    return { kind: 'masked', reason: 'needs_login' }
+  }
+
   if (!identity.valid) {
     return { kind: 'masked', reason: 'needs_relogin' }
   }
@@ -209,6 +218,9 @@ async function evaluateBoundSource(
       identity.authorization,
     )
     if (!authorized.ok) {
+      if (authorized.reason === 'invalid_resource_parameter') {
+        return { kind: 'skipped', reason: 'incomplete_binding' }
+      }
       await input.store.deleteSnapshot(input.widgetId, principalKey)
       stopped.add(halted)
       input.onStatus?.()
@@ -447,9 +459,11 @@ export function createBoardRefreshController(input: {
   ): Promise<void> {
     await forEachWidgetSource(async (source) => {
       if (source.kind === 'preset') return
-      if (authorizeDataSourceParameters(source, snapshot.authorization).ok) {
-        return
-      }
+      const authorized = authorizeDataSourceParameters(
+        source,
+        snapshot.authorization,
+      )
+      if (!isAuthorizationRevoke(authorized)) return
       await input.store.deleteSnapshot(source.widgetId, snapshot.principalKey)
       stoppedRefresh.add(stopKey(source.widgetId, snapshot.principalKey))
     })

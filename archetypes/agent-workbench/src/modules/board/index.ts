@@ -14,6 +14,7 @@ export {
   WIDGET_JOB_RUN_LIMIT,
   isJobRunnable,
 } from './model/types'
+export { isPluginPresetBoard, presetBoardId, presetWidgetId } from './model/preset-board'
 export type {
   BoardId,
   BoardMountId,
@@ -107,6 +108,16 @@ export type {
   BoardQueryParameterDecl,
 } from './ports/board-query-catalog-port'
 export {
+  createHttpBoardPresetCatalog,
+  createMemoryBoardPresetCatalog,
+} from './adapters/http-board-preset-catalog'
+export type { HttpBoardPresetCatalogOptions } from './adapters/http-board-preset-catalog'
+export type {
+  BoardPresetCatalogEntry,
+  BoardPresetCatalogPort,
+  BoardPresetCatalogWidget,
+} from './ports/board-preset-catalog-port'
+export {
   MemoryBoardContent,
   createMemoryBoardContent,
 } from './adapters/memory-board-content'
@@ -134,6 +145,7 @@ export {
   updateBoardLayout,
 } from './application/board-commands'
 export { ensureExampleBoards } from './application/ensure-example-boards'
+export { ensurePresetBoards } from './application/ensure-preset-boards'
 export type { AddWidgetToBoardInput } from './application/board-commands'
 export { loadBoardList, loadBoardView } from './application/load-board-view'
 export {
@@ -151,7 +163,10 @@ export type {
   RefreshOutcome,
 } from './application/board-refresh'
 export {
+  IDENTITY_INCOMPLETE_BINDING,
+  IDENTITY_NEEDS_LOGIN,
   IDENTITY_NEEDS_RELOGIN,
+  IDENTITY_PERMISSION_REVOKED,
 } from './model/widget-render-state'
 export type { WidgetIdentityChrome } from './model/widget-render-state'
 export {

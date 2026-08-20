@@ -18,6 +18,7 @@ import { anonymousIdentitySnapshot } from '../model/widget-render-state'
 import type { IdentityScopeSnapshot } from '../ports/identity-scope-port'
 import { DETAIL_GEOMETRY, type GridItem } from '../model/grid'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
+import { isPluginPresetBoard } from '../model/preset-board'
 import type { BoardPlacement, BoardWidgetId } from '../model/types'
 import type { WidgetTheme } from '../model/widget-document'
 import { BoardCanvas } from './board-canvas'
@@ -83,8 +84,12 @@ export function BoardDetailPage({
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
   const jobCount = view.jobs.size
+  const queryCount = [...view.sources.values()].filter(
+    (source) => source.kind === 'query',
+  ).length
+  const refreshableCount = jobCount + queryCount
   let refreshAllTitle = '全部刷新'
-  if (jobCount === 0) refreshAllTitle = '这个看板没有取数作业'
+  if (refreshableCount === 0) refreshAllTitle = '这个看板没有取数作业'
   else if (runtimeUnavailable) refreshAllTitle = JOB_RUNTIME_UNAVAILABLE
 
   useEffect(() => {
@@ -141,6 +146,14 @@ export function BoardDetailPage({
             >
               示例
             </Badge>
+          ) : isPluginPresetBoard(board) ? (
+            <Badge
+              variant='secondary'
+              className='ml-1 shrink-0'
+              data-testid='board-preset-badge'
+            >
+              预置
+            </Badge>
           ) : null}
         </nav>
 
@@ -173,7 +186,7 @@ export function BoardDetailPage({
           variant='outline'
           data-testid='board-refresh-all'
           title={refreshAllTitle}
-          disabled={jobCount === 0}
+          disabled={refreshableCount === 0}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />
@@ -242,6 +255,10 @@ export function BoardDetailPage({
                   runError={last?.errorMessage}
                   runtimeUnavailable={runtimeUnavailable}
                   hasJob={view.jobs.has(widget.id)}
+                  canRefresh={
+                    view.jobs.has(widget.id) ||
+                    view.sources.get(widget.id)?.kind === 'query'
+                  }
                   exampleDataHint={exampleDataHintFor(view, widget.id)}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
@@ -290,6 +307,10 @@ export function BoardDetailPage({
             runError={expandedRun?.errorMessage}
             runtimeUnavailable={runtimeUnavailable}
             hasJob={view.jobs.has(expanded.id)}
+            canRefresh={
+              view.jobs.has(expanded.id) ||
+              view.sources.get(expanded.id)?.kind === 'query'
+            }
             exampleDataHint={exampleDataHintFor(view, expanded.id)}
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}

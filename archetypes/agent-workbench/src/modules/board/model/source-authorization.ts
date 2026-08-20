@@ -19,6 +19,16 @@ export type SourceAuthorizationResult =
   | { ok: true }
   | { ok: false; reason: SourceAuthorizationDenial }
 
+/** Empty resource params are incomplete, not a revoke. */
+export function isAuthorizationRevoke(
+  result: SourceAuthorizationResult,
+): result is {
+  ok: false
+  reason: Exclude<SourceAuthorizationDenial, 'invalid_resource_parameter'>
+} {
+  return !result.ok && result.reason !== 'invalid_resource_parameter'
+}
+
 export function authorizeDataSourceParameters(
   source: WidgetDataSourceRecord,
   authorization: IdentityAuthorization,

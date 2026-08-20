@@ -12,6 +12,7 @@ import {
   createHostScheduleWake,
   createHttpBoardContent,
   createHttpBoardJobRuntime,
+  createHttpBoardPresetCatalog,
   createHttpBoardQueryCatalog,
   createIdbBoardStore,
   createMemoryBoardContent,
@@ -22,6 +23,7 @@ import {
   type BoardClientToolExecutor,
   type BoardContentPort,
   type BoardJobRuntimePort,
+  type BoardPresetCatalogPort,
   type BoardQueryCatalogPort,
   type BoardRefreshController,
   type BoardStorePort,
@@ -58,6 +60,7 @@ export type BoardCapabilityApi = {
 export interface WorkbenchBoardWiring extends BoardCapabilityApi {
   store: BoardStorePort
   identityScope: IdentityScopePort
+  presetCatalog: BoardPresetCatalogPort
   revision: number
   refresh: BoardRefreshController
   executor: BoardClientToolExecutor
@@ -106,6 +109,14 @@ function defaultQueryCatalog(): BoardQueryCatalogPort {
   })
 }
 
+function defaultPresetCatalog(): BoardPresetCatalogPort {
+  if (INSTANT_DEMO) return { listPresetBoards: async () => [] }
+  return createHttpBoardPresetCatalog({
+    baseUrl: resolveVoltAgentBaseUrl(),
+    token: sidecarToken(),
+  })
+}
+
 export function resolveIdentityScope(
   injected?: IdentityScopePort,
 ): IdentityScopePort {
@@ -133,6 +144,7 @@ export function useWorkbenchBoardWiring(
     [input.boardJobRuntime],
   )
   const queryCatalog = useMemo(() => defaultQueryCatalog(), [])
+  const presetCatalog = useMemo(() => defaultPresetCatalog(), [])
   const identityScope = useMemo(
     () => resolveIdentityScope(input.identityScope),
     [input.identityScope],
@@ -207,6 +219,7 @@ export function useWorkbenchBoardWiring(
   return {
     store,
     identityScope,
+    presetCatalog,
     revision,
     refresh,
     executor: async (args) =>

@@ -9,12 +9,23 @@ import {
   UNRESTRICTED_AUTHORIZATION,
   type IdentityScopeSnapshot,
 } from '../ports/identity-scope-port'
-import { authorizeDataSourceParameters } from './source-authorization'
+import {
+  authorizeDataSourceParameters,
+  isAuthorizationRevoke,
+} from './source-authorization'
 import { ANONYMOUS_PRINCIPAL_KEY, type WidgetDataSourceRecord } from './types'
 
 export const IDENTITY_NEEDS_RELOGIN = '需重新登录'
+export const IDENTITY_NEEDS_LOGIN = '需登录'
+export const IDENTITY_INCOMPLETE_BINDING = '待绑定资源'
+export const IDENTITY_PERMISSION_REVOKED = '权限已回收'
 
-export type WidgetIdentityChrome = 'none' | 'needs_relogin'
+export type WidgetIdentityChrome =
+  | 'none'
+  | 'needs_relogin'
+  | 'needs_login'
+  | 'incomplete_binding'
+  | 'permission_revoked'
 
 export interface WidgetRenderState {
   data: unknown
@@ -39,6 +50,16 @@ export function resolveWidgetRenderState(input: {
   if (input.source?.kind === 'preset') {
     return { data: input.latestData, chrome: 'none', masked: false }
   }
+  if (
+    input.source?.kind === 'query' &&
+    input.identity.principalKey === ANONYMOUS_PRINCIPAL_KEY
+  ) {
+    return {
+      data: undefined,
+      chrome: 'needs_login',
+      masked: true,
+    }
+  }
   if (!input.identity.valid) {
     return {
       data: undefined,
@@ -46,11 +67,20 @@ export function resolveWidgetRenderState(input: {
       masked: true,
     }
   }
-  if (
-    input.source &&
-    !authorizeDataSourceParameters(input.source, input.identity.authorization).ok
-  ) {
-    return { data: undefined, chrome: 'none', masked: true }
+  if (input.source) {
+    const authorized = authorizeDataSourceParameters(
+      input.source,
+      input.identity.authorization,
+    )
+    if (!authorized.ok) {
+      return {
+        data: undefined,
+        chrome: isAuthorizationRevoke(authorized)
+          ? 'permission_revoked'
+          : 'incomplete_binding',
+        masked: true,
+      }
+    }
   }
   return { data: input.latestData, chrome: 'none', masked: false }
 }

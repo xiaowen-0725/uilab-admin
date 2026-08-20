@@ -634,6 +634,65 @@ describe('commitBoardDraft query binding', () => {
     const status = await readBoardStatus(store, content, { boardId: 'board-1' })
     expect(status.committed[0]?.jobId).toBeUndefined()
     expect(status.committed[0]?.queryName).toBe('site_summary')
+    expect(status.committed[0]?.queryParams).toEqual({ siteIds: ['site-1'] })
+  })
+
+  it('updates query params on an installed widget without a new draft', async () => {
+    const store = createMemoryBoardStore()
+    await store.putBoard(
+      board({
+        placements: [{ mountId: 'm-1', widgetId: 'w-1', x: 0, y: 0, w: 6, h: 4 }],
+      }),
+    )
+    await store.putWidget({ ...filledWidget(1), html: WIDGET_HTML })
+    await store.putDataSource({
+      id: 'source:w-1',
+      widgetId: 'w-1',
+      kind: 'query',
+      trigger: { kind: 'onOpen' },
+      referencableByJob: true,
+      queryName: 'site_summary',
+      parameters: {},
+      parameterSchema: {
+        siteIds: { type: 'resource', resourceType: 'site' },
+      },
+      requiredPermissions: ['read'],
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    const content = createMemoryBoardContent()
+    const contentHash = await hashBoardContent(WIDGET_HTML)
+    const status = await readBoardStatus(store, content, { boardId: 'board-1' })
+    expect(status.committed[0]).toMatchObject({
+      widgetId: 'w-1',
+      queryName: 'site_summary',
+      queryParams: {},
+      contentHash,
+    })
+
+    const result = await commitBoardDraft(
+      store,
+      content,
+      {
+        widgetId: 'w-1',
+        contentHash,
+        queryName: 'site_summary',
+        queryParams: { siteIds: ['site-1'] },
+      },
+      () => NOW,
+      extras,
+    )
+    expect(result).toMatchObject({
+      ok: true,
+      widgetId: 'w-1',
+      queryName: 'site_summary',
+    })
+    expect((result as { replayed?: true }).replayed).toBeUndefined()
+    expect(await store.getDataSourceByWidgetId('w-1')).toMatchObject({
+      kind: 'query',
+      queryName: 'site_summary',
+      parameters: { siteIds: ['site-1'] },
+    })
   })
 
   it('leaves the job recipe unchanged when no query is bound', async () => {

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   findUnavailable,
   type BoardRefreshController,
+  type RefreshOutcome,
 } from '../application/board-refresh'
 import { ensureExampleBoards } from '../application/ensure-example-boards'
+import { ensurePresetBoards } from '../application/ensure-preset-boards'
 import { loadBoardList, loadBoardView } from '../application/load-board-view'
 import {
   revokeJobApproval,
@@ -12,7 +14,14 @@ import {
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
 import type { BoardListCard, BoardView } from '../model/board-view'
 import type { BoardId, BoardPlacement, BoardWidgetId } from '../model/types'
-import { IDENTITY_NEEDS_RELOGIN, anonymousIdentitySnapshot } from '../model/widget-render-state'
+import {
+  IDENTITY_INCOMPLETE_BINDING,
+  IDENTITY_NEEDS_LOGIN,
+  IDENTITY_NEEDS_RELOGIN,
+  IDENTITY_PERMISSION_REVOKED,
+  anonymousIdentitySnapshot,
+} from '../model/widget-render-state'
+import type { BoardPresetCatalogPort } from '../ports/board-preset-catalog-port'
 import type { BoardStorePort } from '../ports/board-store-port'
 import type { IdentityScopePort } from '../ports/identity-scope-port'
 import type { WidgetTheme } from '../model/widget-document'
@@ -32,6 +41,7 @@ export interface BoardWorkspaceProps {
   /** Bump when a shared controller writes a run (preview / first-run). */
   revision?: number
   identityScope?: IdentityScopePort
+  presetCatalog?: BoardPresetCatalogPort
 }
 
 export function BoardWorkspace({
@@ -46,6 +56,7 @@ export function BoardWorkspace({
   refresh,
   revision = 0,
   identityScope,
+  presetCatalog,
 }: BoardWorkspaceProps) {
   const [cards, setCards] = useState<BoardListCard[]>([])
   const [detail, setDetail] = useState<BoardView | null | undefined>(undefined)
@@ -96,6 +107,7 @@ export function BoardWorkspace({
       openedBoardRef.current = null
       await refresh?.reconcileOrphans()
       await ensureExampleBoards(store)
+      if (presetCatalog) await ensurePresetBoards(store, presetCatalog)
       const next = await loadBoardList(store, {
         principalKey: identity.principalKey,
       })
@@ -104,7 +116,15 @@ export function BoardWorkspace({
     return () => {
       cancelled = true
     }
-  }, [boardId, identity.principalKey, refresh, store, generation, revision])
+  }, [
+    boardId,
+    identity.principalKey,
+    presetCatalog,
+    refresh,
+    store,
+    generation,
+    revision,
+  ])
 
   const deleteBoard = useCallback(async () => {
     if (!detail) return
@@ -147,15 +167,7 @@ export function BoardWorkspace({
         setRefreshHint(outcome.hint)
         return
       }
-      if (outcome.kind === 'masked') {
-        setRefreshHint(IDENTITY_NEEDS_RELOGIN)
-        return
-      }
-      if (outcome.kind === 'finished' && outcome.status !== 'success') {
-        setRefreshHint(outcome.hint ?? null)
-        return
-      }
-      setRefreshHint(null)
+      setRefreshHint(hintForOutcome(outcome))
     },
     [detail, refresh],
   )
@@ -166,17 +178,24 @@ export function BoardWorkspace({
       setRefreshHint(JOB_RUNTIME_DISCONNECTED)
       return
     }
-    if (detail && detail.jobs.size === 0) {
+    if (
+      detail &&
+      detail.jobs.size === 0 &&
+      [...detail.sources.values()].every((source) => source.kind !== 'query')
+    ) {
       setRefreshHint('这个看板没有取数作业')
       return
     }
-    const unavailable = findUnavailable(await refresh.refreshBoard(boardId))
+    const outcomes = await refresh.refreshBoard(boardId)
+    const unavailable = findUnavailable(outcomes)
     if (unavailable) {
       setRuntimeUnavailable(true)
       setRefreshHint(unavailable.hint)
       return
     }
-    setRefreshHint(null)
+    setRefreshHint(
+      outcomes.map(hintForOutcome).find((hint) => hint != null) ?? null,
+    )
   }, [boardId, detail, refresh])
 
   if (boardId) {
@@ -217,6 +236,22 @@ export function BoardWorkspace({
       onCreateByChat={onCreateByChat}
     />
   )
+}
+
+function hintForOutcome(outcome: RefreshOutcome): string | null {
+  if (outcome.kind === 'masked') {
+    return outcome.reason === 'needs_login'
+      ? IDENTITY_NEEDS_LOGIN
+      : IDENTITY_NEEDS_RELOGIN
+  }
+  if (outcome.kind === 'skipped' && outcome.reason === 'incomplete_binding') {
+    return IDENTITY_INCOMPLETE_BINDING
+  }
+  if (outcome.kind === 'cleared') return IDENTITY_PERMISSION_REVOKED
+  if (outcome.kind === 'finished' && outcome.status !== 'success') {
+    return outcome.hint ?? null
+  }
+  return null
 }
 
 function BoardStatus({

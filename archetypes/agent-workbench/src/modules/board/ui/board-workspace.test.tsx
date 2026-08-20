@@ -9,8 +9,12 @@ import {
 import { createMemoryBoardStore } from '../adapters/memory-board-store'
 import { createBoardRefreshController } from '../application/board-refresh'
 import { DRAG_HANDLE_ATTR } from '../model/drag-handle'
+import type { BoardPresetCatalogPort } from '../ports/board-preset-catalog-port'
 import type { BoardJobRuntimePort } from '../ports/board-job-runtime-port'
 import type { BoardStorePort } from '../ports/board-store-port'
+import { createMemoryBoardPresetCatalog } from '../adapters/http-board-preset-catalog'
+import type { IdentityScopePort } from '../ports/identity-scope-port'
+import { createMemoryIdentityScope } from '@/modules/identity'
 import { BoardWorkspace } from './board-workspace'
 
 const NOW = '2026-08-17T06:00:00.000Z'
@@ -68,11 +72,15 @@ function WorkspaceHarness({
   jobRuntime,
   startOnDetail = true,
   width = 960,
+  presetCatalog,
+  identityScope,
 }: {
   store: BoardStorePort
   jobRuntime: BoardJobRuntimePort
   startOnDetail?: boolean
   width?: number
+  presetCatalog?: BoardPresetCatalogPort
+  identityScope?: IdentityScopePort
 }) {
   const [boardId, setBoardId] = useState<string | undefined>(
     startOnDetail ? 'board-1' : undefined,
@@ -83,9 +91,10 @@ function WorkspaceHarness({
       createBoardRefreshController({
         store,
         runtime: jobRuntime,
+        identityScope,
         onChange: () => setRevision((value) => value + 1),
       }),
-    [jobRuntime, store],
+    [identityScope, jobRuntime, store],
   )
   return (
     <div style={{ width, height: 800 }}>
@@ -99,6 +108,8 @@ function WorkspaceHarness({
         onOpenList={() => setBoardId(undefined)}
         onOpenBoard={(id) => setBoardId(id)}
         onCreateByChat={() => {}}
+        identityScope={identityScope}
+        presetCatalog={presetCatalog}
       />
     </div>
   )
@@ -414,5 +425,112 @@ describe('BoardWorkspace example boards', () => {
         return Boolean(moved && (moved.x !== start?.x || moved.y !== start?.y))
       }, { timeout: 4000 })
       .toBe(true)
+  })
+})
+
+describe('BoardWorkspace preset boards', () => {
+  it('installs a plugin preset beside examples and shows 预置 plus 需登录', async () => {
+    const store = createMemoryBoardStore()
+    const catalog = createMemoryBoardPresetCatalog([
+      {
+        pluginId: 'query.fixture',
+        presetId: 'site-watch',
+        version: 1,
+        title: '站点值班',
+        widgets: [
+          {
+            id: 'occupancy',
+            title: '满位',
+            html: WIDGET_HTML,
+            placement: { x: 0, y: 0, w: 6, h: 4 },
+            queryName: 'site_summary',
+            parameters: {},
+            parameterSchema: {
+              siteIds: { type: 'resource', resourceType: 'site' },
+            },
+            requiredPermissions: ['read'],
+            referencableByJob: true,
+            trigger: { kind: 'onOpen' },
+          },
+        ],
+      },
+    ])
+
+    await render(
+      <WorkspaceHarness
+        store={store}
+        jobRuntime={createUnavailableBoardJobRuntime()}
+        startOnDetail={false}
+        presetCatalog={catalog}
+      />,
+    )
+
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(3)
+    expect(page.getByTestId('board-example-badge').elements()).toHaveLength(2)
+    expect(page.getByTestId('board-preset-badge')).toHaveTextContent('预置')
+
+    const preset = cardById('preset:site-watch')
+    expect(preset).toBeTruthy()
+    await userEvent.click(preset as HTMLElement)
+    await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
+    expect(page.getByTestId('board-preset-badge')).toHaveTextContent('预置')
+    expect(page.getByTestId('board-example-badge').elements()).toHaveLength(0)
+    expect(page.getByTestId('board-widget-example-data').elements()).toHaveLength(0)
+    await expect
+      .element(page.getByTestId('board-widget-needs-login'))
+      .toHaveAccessibleName('需登录')
+  })
+
+  it('shows 待绑定资源 when a signed-in user has not filled resource params', async () => {
+    const store = createMemoryBoardStore()
+    const catalog = createMemoryBoardPresetCatalog([
+      {
+        pluginId: 'query.fixture',
+        presetId: 'site-watch',
+        version: 1,
+        title: '站点值班',
+        widgets: [
+          {
+            id: 'occupancy',
+            title: '满位',
+            html: WIDGET_HTML,
+            placement: { x: 0, y: 0, w: 6, h: 4 },
+            queryName: 'site_summary',
+            parameters: {},
+            parameterSchema: {
+              siteIds: { type: 'resource', resourceType: 'site' },
+            },
+            requiredPermissions: ['read'],
+            referencableByJob: true,
+            trigger: { kind: 'onOpen' },
+          },
+        ],
+      },
+    ])
+    const identityScope = createMemoryIdentityScope({
+      principalKey: 'alice',
+      resources: [
+        { type: 'site', id: 'site-1', name: 'North', permissions: ['read'] },
+      ],
+    })
+
+    await render(
+      <WorkspaceHarness
+        store={store}
+        jobRuntime={createUnavailableBoardJobRuntime()}
+        startOnDetail={false}
+        presetCatalog={catalog}
+        identityScope={identityScope}
+      />,
+    )
+
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(3)
+    const preset = cardById('preset:site-watch')
+    expect(preset).toBeTruthy()
+    await userEvent.click(preset as HTMLElement)
+    await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
+    await expect
+      .element(page.getByTestId('board-widget-incomplete-binding'))
+      .toHaveAccessibleName('待绑定资源')
   })
 })

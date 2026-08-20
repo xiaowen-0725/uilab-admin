@@ -11,6 +11,7 @@ import {
   collectQueryHandlers,
   listQueryCatalog,
 } from '../plugin/query-catalog.js'
+import { listPresetBoards } from '../plugin/preset-board-catalog.js'
 import {
   QUERY_FIXTURE_BEARER_ENV,
   QUERY_FIXTURE_DEFAULT_RESOURCES,
@@ -35,6 +36,10 @@ import {
   mountBoardQueryRoutes,
   type BoardQueryRuntime,
 } from './board-query-http.js'
+import {
+  mountBoardPresetRoutes,
+  type BoardPresetRuntime,
+} from './board-preset-http.js'
 import { mountBoardStagingRoutes } from './board-http.js'
 import { BoardStaging } from './board-staging.js'
 import { boardClientTools } from './board-client-tools.js'
@@ -49,6 +54,7 @@ export type CreateBoardRuntimeInput = {
   resolveDeno?: ResolveDeno
   /** Query catalog + trusted handlers + sidecar identity (ADR-0024 §2). */
   queries?: BoardQueryRuntime
+  presets?: BoardPresetRuntime
 }
 
 export type BoardRuntime = {
@@ -62,6 +68,7 @@ export type BoardRuntime = {
     app: Hono<E, S, BasePath>,
   ) => void
   attachQueries: (next: BoardQueryRuntime) => void
+  attachPresets: (next: BoardPresetRuntime) => void
 }
 
 export function productIdentityFromEnv(
@@ -100,6 +107,22 @@ function defaultQueryRuntime(
   }
 }
 
+function defaultPresetRuntime(
+  env: Record<string, string | undefined>,
+  queries: BoardQueryRuntime,
+): BoardPresetRuntime {
+  const disabled = new Set(parseEnvStringList(env.PLUGINS_DISABLED) ?? [])
+  const forced = parseEnvStringList(env.PLUGINS_ENABLED) ?? []
+  const fixtureOn =
+    !disabled.has(QUERY_FIXTURE_PLUGIN_ID) &&
+    forced.includes(QUERY_FIXTURE_PLUGIN_ID)
+  const enabled = new Set(fixtureOn ? [QUERY_FIXTURE_PLUGIN_ID] : [])
+  return {
+    boards: listPresetBoards(QUERY_FIXTURE_PACKAGE.manifests, enabled),
+    identity: queries.identity,
+  }
+}
+
 export function defaultBoardStagingRoot(
   env: Record<string, string | undefined> = process.env,
 ): string {
@@ -126,6 +149,8 @@ export function createBoardRuntime(input: CreateBoardRuntimeInput = {}): BoardRu
   const token = resolveSidecarHttpToken(env, input.token)
   let queryRuntime: BoardQueryRuntime =
     input.queries ?? defaultQueryRuntime(env)
+  let presetRuntime: BoardPresetRuntime =
+    input.presets ?? defaultPresetRuntime(env, queryRuntime)
   return {
     staging,
     jobs,
@@ -136,10 +161,14 @@ export function createBoardRuntime(input: CreateBoardRuntimeInput = {}): BoardRu
     attachQueries(next) {
       queryRuntime = next
     },
+    attachPresets(next) {
+      presetRuntime = next
+    },
     mountRoutes(app) {
       mountBoardStagingRoutes(app, { staging, token, env })
       mountBoardJobRoutes(app, { jobs, executor, token, env })
       mountBoardQueryRoutes(app, { getQueries: () => queryRuntime, token, env })
+      mountBoardPresetRoutes(app, { getPresets: () => presetRuntime, token, env })
     },
   }
 }

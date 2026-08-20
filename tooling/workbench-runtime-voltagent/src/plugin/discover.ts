@@ -14,6 +14,11 @@ import type {
   McpContribution,
   PluginContributes,
   PluginManifest,
+  PresetBoardContribution,
+  PresetBoardPlacement,
+  PresetBoardWidgetContribution,
+  PresetBoardWidgetSource,
+  PresetBoardWidgetSpan,
   QueryContribution,
   QueryParameterDecl,
   SkillsContribution,
@@ -117,7 +122,7 @@ export function parsePluginManifestJson(
       ok: false,
       id,
       reason:
-        '外部 plugin.json 禁止 contributes.tools（不可加载任意 JS）；仅允许 connectors / mcp / cli / skills / auth / queries',
+        '外部 plugin.json 禁止 contributes.tools（不可加载任意 JS）；仅允许 connectors / mcp / cli / skills / auth / queries / presetBoards',
     }
   }
 
@@ -617,6 +622,12 @@ function parseContributes(
     contributes.queries = queries.value
   }
 
+  if (raw.presetBoards != null) {
+    const boards = parsePresetBoardContributions(raw.presetBoards)
+    if (!boards.ok) return boards
+    contributes.presetBoards = boards.value
+  }
+
   return { ok: true, contributes }
 }
 
@@ -626,6 +637,214 @@ const QUERY_SCALAR_TYPES = new Set([
   'boolean',
   'string_array',
 ])
+
+const PRESET_BOARD_HTML_MAX_CHARS = 512 * 1024
+const IMPLEMENTATION_FIELDS = ['handler', 'module', 'execute'] as const
+
+function parsePresetBoardContributions(
+  raw: unknown,
+): ParseResult<PresetBoardContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'contributes.presetBoards 必须是数组' }
+  }
+  const boards: PresetBoardContribution[] = []
+  const ids = new Set<string>()
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'presetBoard 项必须是对象' }
+    }
+    if (hasImplementationField(item)) {
+      return {
+        ok: false,
+        reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
+      }
+    }
+    const presetId = asString(item.presetId)
+    const title = asString(item.title)
+    if (!presetId) return { ok: false, reason: 'presetBoard.presetId 必填' }
+    if (!title) return { ok: false, reason: 'presetBoard.title 必填' }
+    if (ids.has(presetId)) {
+      return { ok: false, reason: `presetBoard.presetId 重复：${presetId}` }
+    }
+    ids.add(presetId)
+    if (!Number.isInteger(item.version) || (item.version as number) < 1) {
+      return { ok: false, reason: 'presetBoard.version 必须是正整数' }
+    }
+    const widgets = parsePresetBoardWidgets(item.widgets)
+    if (!widgets.ok) return widgets
+    if (widgets.value.length === 0) {
+      return { ok: false, reason: 'presetBoard.widgets 不能为空' }
+    }
+    const board: PresetBoardContribution = {
+      presetId,
+      version: item.version as number,
+      title,
+      widgets: widgets.value,
+    }
+    const purpose = asString(item.purpose)
+    if (purpose) board.purpose = purpose
+    boards.push(board)
+  }
+  return { ok: true, value: boards }
+}
+
+function parsePresetBoardWidgets(
+  raw: unknown,
+): ParseResult<PresetBoardWidgetContribution[]> {
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: 'presetBoard.widgets 必须是数组' }
+  }
+  const widgets: PresetBoardWidgetContribution[] = []
+  const ids = new Set<string>()
+  for (const item of raw) {
+    if (!isRecord(item)) {
+      return { ok: false, reason: 'presetBoard.widget 必须是对象' }
+    }
+    if (hasImplementationField(item)) {
+      return {
+        ok: false,
+        reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
+      }
+    }
+    const id = asString(item.id)
+    const title = asString(item.title)
+    if (!id) return { ok: false, reason: 'presetBoard.widget.id 必填' }
+    if (!title) return { ok: false, reason: 'presetBoard.widget.title 必填' }
+    if (ids.has(id)) {
+      return { ok: false, reason: `presetBoard.widget.id 重复：${id}` }
+    }
+    ids.add(id)
+    if (typeof item.html !== 'string' || !item.html.trim()) {
+      return { ok: false, reason: 'presetBoard.widget.html 必填' }
+    }
+    if (item.html.length > PRESET_BOARD_HTML_MAX_CHARS) {
+      return { ok: false, reason: 'presetBoard.widget.html 超过 512 KiB' }
+    }
+    const placement = parsePlacement(item.placement)
+    if (!placement.ok) return placement
+    const source = parsePresetBoardSource(item.source)
+    if (!source.ok) return source
+    const widget: PresetBoardWidgetContribution = {
+      id,
+      title,
+      html: item.html,
+      placement: placement.value,
+      source: source.value,
+    }
+    if (item.span != null) {
+      const span = parseSpan(item.span)
+      if (!span.ok) return span
+      widget.span = span.value
+    }
+    widgets.push(widget)
+  }
+  return { ok: true, value: widgets }
+}
+
+function parsePresetBoardSource(raw: unknown): ParseResult<PresetBoardWidgetSource> {
+  if (!isRecord(raw)) {
+    return { ok: false, reason: 'presetBoard.widget.source 必须是对象' }
+  }
+  if (hasImplementationField(raw)) {
+    return {
+      ok: false,
+      reason: '外部 plugin.json 禁止预置看板实现字段（handler/module/execute）',
+    }
+  }
+  if (raw.kind !== 'query') {
+    return { ok: false, reason: 'presetBoard.widget.source.kind 必须是 query' }
+  }
+  const queryName = asString(raw.queryName)
+  if (!queryName) {
+    return { ok: false, reason: 'presetBoard.widget.source.queryName 必填' }
+  }
+  let parameters: Record<string, unknown> = {}
+  if (raw.parameters != null) {
+    if (!isRecord(raw.parameters)) {
+      return { ok: false, reason: 'presetBoard.widget.source.parameters 必须是对象' }
+    }
+    parameters = { ...raw.parameters }
+  }
+  const source: PresetBoardWidgetSource = { kind: 'query', queryName, parameters }
+  if (raw.trigger != null) {
+    const trigger = parseTrigger(raw.trigger)
+    if (!trigger.ok) return trigger
+    source.trigger = trigger.value
+  }
+  return { ok: true, value: source }
+}
+
+function parsePlacement(raw: unknown): ParseResult<PresetBoardPlacement> {
+  if (!isRecord(raw)) {
+    return { ok: false, reason: 'presetBoard.widget.placement 必须是对象' }
+  }
+  const keys = ['x', 'y', 'w', 'h'] as const
+  const next: Partial<PresetBoardPlacement> = {}
+  for (const key of keys) {
+    const value = raw[key]
+    if (!Number.isInteger(value) || (value as number) < 0) {
+      return { ok: false, reason: `presetBoard.widget.placement.${key} 必须是非负整数` }
+    }
+    next[key] = value as number
+  }
+  if ((next.w ?? 0) < 1 || (next.h ?? 0) < 1) {
+    return { ok: false, reason: 'presetBoard.widget.placement.w/h 必须 ≥ 1' }
+  }
+  return { ok: true, value: next as PresetBoardPlacement }
+}
+
+function parseSpan(raw: unknown): ParseResult<PresetBoardWidgetSpan> {
+  if (!isRecord(raw)) {
+    return { ok: false, reason: 'presetBoard.widget.span 必须是对象' }
+  }
+  const min = parseSpanSize(raw.min, 'min')
+  if (!min.ok) return min
+  const def = parseSpanSize(raw.default, 'default')
+  if (!def.ok) return def
+  const max = parseSpanSize(raw.max, 'max')
+  if (!max.ok) return max
+  return { ok: true, value: { min: min.value, default: def.value, max: max.value } }
+}
+
+function parseSpanSize(
+  raw: unknown,
+  label: string,
+): ParseResult<{ w: number; h: number }> {
+  if (!isRecord(raw)) {
+    return { ok: false, reason: `presetBoard.widget.span.${label} 必须是对象` }
+  }
+  if (!Number.isInteger(raw.w) || (raw.w as number) < 1) {
+    return { ok: false, reason: `presetBoard.widget.span.${label}.w 必须是正整数` }
+  }
+  if (!Number.isInteger(raw.h) || (raw.h as number) < 1) {
+    return { ok: false, reason: `presetBoard.widget.span.${label}.h 必须是正整数` }
+  }
+  return { ok: true, value: { w: raw.w as number, h: raw.h as number } }
+}
+
+function parseTrigger(
+  raw: unknown,
+): ParseResult<NonNullable<PresetBoardWidgetSource['trigger']>> {
+  if (!isRecord(raw) || typeof raw.kind !== 'string') {
+    return { ok: false, reason: 'presetBoard.widget.source.trigger 必须是对象' }
+  }
+  if (raw.kind === 'manual' || raw.kind === 'onOpen') {
+    return { ok: true, value: { kind: raw.kind } }
+  }
+  if (raw.kind === 'schedule') {
+    if (raw.everyMs != null && (!Number.isInteger(raw.everyMs) || (raw.everyMs as number) < 1)) {
+      return { ok: false, reason: 'presetBoard.widget.source.trigger.everyMs 必须是正整数' }
+    }
+    return raw.everyMs != null
+      ? { ok: true, value: { kind: 'schedule', everyMs: raw.everyMs as number } }
+      : { ok: true, value: { kind: 'schedule' } }
+  }
+  return { ok: false, reason: 'presetBoard.widget.source.trigger.kind 不支持' }
+}
+
+function hasImplementationField(value: Record<string, unknown>): boolean {
+  return IMPLEMENTATION_FIELDS.some((field) => value[field] != null)
+}
 
 function parseQueryContributions(raw: unknown): ParseResult<QueryContribution[]> {
   if (!Array.isArray(raw)) {

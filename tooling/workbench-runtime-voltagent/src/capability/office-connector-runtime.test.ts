@@ -46,6 +46,7 @@ describe('createOfficeConnectorRuntime canonical tool ownership', () => {
       listFakeCatalog: () => [],
       listQueryCatalog: () => [],
       listQueryHandlers: () => ({}),
+      listPresetBoards: () => [],
       resolveEnabledIds: () => [PLUGIN_A, PLUGIN_B],
       refreshAuthStatuses: async () => authStatuses,
       getAuthRuntimeStores: () => ({ bindingStore, secretStore }),

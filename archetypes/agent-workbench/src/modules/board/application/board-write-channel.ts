@@ -57,6 +57,7 @@ export type BoardStatusCommitted = {
   jobId?: string
   codeHash?: string
   queryName?: string
+  queryParams?: Record<string, unknown>
 }
 
 export type BoardStatusQuery = BoardQueryCatalogEntry
@@ -188,6 +189,7 @@ export async function readBoardStatus(
         jobId: job?.id,
         codeHash: job?.approved?.codeHash,
         queryName: queryNameOf(source),
+        queryParams: queryParamsOf(source),
       })
     }
   }
@@ -229,10 +231,6 @@ export async function commitBoardDraft(
   const widgetId = input.widgetId.trim()
   const draftId = pickDraftId(input)
   const contentHash = input.contentHash.trim()
-  if (!widgetId || !draftId || !contentHash) {
-    return fail('validation_failed', 'board_commit 需要 widgetId、draftId 与 contentHash')
-  }
-
   const jobId = input.jobId?.trim()
   const jobDraftId = input.jobDraftId?.trim()
   const codeHash = input.codeHash?.trim()
@@ -240,6 +238,9 @@ export async function commitBoardDraft(
   const queryParams = input.queryParams ?? {}
   const wantsJob = Boolean(jobId || jobDraftId || codeHash)
   const jobReady = Boolean(jobId && jobDraftId && codeHash)
+  if (!widgetId || !contentHash) {
+    return fail('validation_failed', 'board_commit 需要 widgetId、draftId 与 contentHash')
+  }
   if (wantsJob && queryName) {
     return fail(
       'validation_failed',
@@ -274,11 +275,15 @@ export async function commitBoardDraft(
   const existingPlacement = board.placements.find((item) => item.widgetId === widgetId)
   const existingSource = await store.getDataSourceByWidgetId(widgetId)
   const existingJob = await store.getJobByWidgetId(widgetId)
-  if (
+  const hashMatches = Boolean(
     existingWidget &&
+      existingPlacement &&
+      (await hashBoardContent(existingWidget.html)) === contentHash &&
+      hashesMatch(existingJob, codeHash),
+  )
+  if (
+    hashMatches &&
     existingPlacement &&
-    (await hashBoardContent(existingWidget.html)) === contentHash &&
-    hashesMatch(existingJob, codeHash) &&
     (!queryName || queryBindingMatches(existingSource, queryName, queryParams))
   ) {
     return leakFreeCommit({
@@ -291,6 +296,28 @@ export async function commitBoardDraft(
       queryName: queryNameOf(existingSource) ?? queryName,
       replayed: true,
     })
+  }
+
+  if (
+    hashMatches &&
+    existingPlacement &&
+    querySource &&
+    existingSource?.kind === 'query' &&
+    !wantsJob
+  ) {
+    await store.putDataSource(keepSourceIdentity(querySource, existingSource))
+    return leakFreeCommit({
+      ok: true,
+      boardId: board.id,
+      widgetId,
+      mountId: existingPlacement.mountId,
+      placement: pickPlacement(existingPlacement),
+      queryName: querySource.queryName,
+    })
+  }
+
+  if (!draftId) {
+    return fail('validation_failed', 'board_commit 需要 widgetId、draftId 与 contentHash')
   }
 
   if (!existingPlacement && board.placements.length >= BOARD_WIDGET_LIMIT) {
@@ -532,6 +559,12 @@ function queryNameOf(
   source: WidgetDataSourceRecord | null | undefined,
 ): string | undefined {
   return source?.kind === 'query' ? source.queryName : undefined
+}
+
+function queryParamsOf(
+  source: WidgetDataSourceRecord | null | undefined,
+): Record<string, unknown> | undefined {
+  return source?.kind === 'query' ? (source.parameters ?? {}) : undefined
 }
 
 function keepSourceIdentity(
