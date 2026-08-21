@@ -384,9 +384,15 @@ export function BoardWidgetHost({
           </ChromeIconButton>
           {chrome === 'full' ? (
             <>
-              <ChromeIconButton testId='board-widget-expand' label='全屏' onClick={onExpand}>
-                <Expand className='size-3.5' aria-hidden />
-              </ChromeIconButton>
+              {onExpand ? (
+                <ChromeIconButton
+                  testId='board-widget-expand'
+                  label='放大'
+                  onClick={onExpand}
+                >
+                  <Expand className='size-3.5' aria-hidden />
+                </ChromeIconButton>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={

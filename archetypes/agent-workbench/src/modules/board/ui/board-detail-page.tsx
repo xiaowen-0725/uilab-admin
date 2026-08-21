@@ -3,6 +3,14 @@ import { ChevronRight, MessageSquarePlus, RefreshCw, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   EXAMPLE_DATA_HINT,
   EXAMPLE_DATA_NUDGE,
 } from '../fixtures/example-presets'
@@ -26,17 +34,6 @@ import { BoardJobDialog } from './board-job-dialog'
 import { BoardWidgetHost } from './board-widget-host'
 
 export const JOB_RUNTIME_UNAVAILABLE = JOB_RUNTIME_DISCONNECTED
-
-function exampleDataHintFor(
-  view: BoardView,
-  widgetId: BoardWidgetId,
-): string | null {
-  const widget = view.widgets.get(widgetId)
-  if (!view.board.isExample || widget?.latestData == null || view.jobs.get(widgetId)) {
-    return null
-  }
-  return `${EXAMPLE_DATA_HINT} · ${EXAMPLE_DATA_NUDGE}`
-}
 
 export interface BoardDetailPageProps {
   view: BoardView
@@ -75,6 +72,12 @@ export function BoardDetailPage({
   const originBadge = boardOriginBadge(board)
   const [expandedId, setExpandedId] = useState<BoardWidgetId | null>(null)
   const [jobWidgetId, setJobWidgetId] = useState<BoardWidgetId | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const showExampleBanner =
+    board.isExample &&
+    [...view.widgets.values()].some(
+      (widget) => widget.latestData != null && !view.jobs.get(widget.id),
+    )
   const expanded = expandedId ? view.widgets.get(expandedId) : undefined
   const expandedRun = expanded ? lastRunForWidget(view, expanded.id) : undefined
   const expandedPainted = expanded
@@ -95,6 +98,10 @@ export function BoardDetailPage({
 
   useEffect(() => {
     if (!expandedId) return
+    const close = document.querySelector(
+      '[data-testid="board-widget-expanded-close"]',
+    )
+    if (close instanceof HTMLElement) close.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setExpandedId(null)
     }
@@ -111,10 +118,11 @@ export function BoardDetailPage({
 
   return (
     <div
-      className='relative flex h-full min-h-0 flex-col'
+      className='relative flex h-full min-h-0 min-w-0 w-full flex-1 flex-col bg-background'
       data-testid='board-detail-page'
       data-board-id={board.id}
     >
+      <div className='flex min-h-0 min-w-0 flex-1 flex-col' inert={expanded ? true : undefined}>
       <header className='flex shrink-0 items-center gap-2 border-b border-border/60 px-6 py-3'>
         <nav
           className='flex min-w-0 flex-1 items-center gap-1 text-sm'
@@ -167,8 +175,9 @@ export function BoardDetailPage({
             type='button'
             size='sm'
             variant='ghost'
+            className='text-destructive hover:bg-destructive/10 hover:text-destructive'
             data-testid='board-delete'
-            onClick={onDeleteBoard}
+            onClick={() => setConfirmDelete(true)}
           >
             删除
           </Button>
@@ -196,6 +205,15 @@ export function BoardDetailPage({
         </Button>
       </header>
 
+      {showExampleBanner ? (
+        <p
+          className='shrink-0 border-b border-border/60 px-6 py-1.5 text-[12px] text-muted-foreground'
+          data-testid='board-example-data-hint'
+        >
+          {EXAMPLE_DATA_HINT} · {EXAMPLE_DATA_NUDGE}
+        </p>
+      ) : null}
+
       {refreshHint ? (
         <p
           className='shrink-0 border-b border-border/60 px-6 py-1.5 text-[12px] text-muted-foreground'
@@ -220,7 +238,7 @@ export function BoardDetailPage({
           </Button>
         </div>
       ) : (
-        <div className='min-h-0 flex-1 overflow-auto px-6 py-4'>
+        <div className='min-h-0 min-w-0 flex-1 overflow-auto bg-muted/30 px-6 py-5'>
           <BoardCanvas
             items={placementsToGridItems(board.placements)}
             geometry={DETAIL_GEOMETRY}
@@ -249,7 +267,6 @@ export function BoardDetailPage({
                   runtimeUnavailable={runtimeUnavailable}
                   hasJob={view.jobs.has(widget.id)}
                   canRefresh={widgetCanRefresh(view, widget.id)}
-                  exampleDataHint={exampleDataHintFor(view, widget.id)}
                   onRefresh={() => onRefreshWidget?.(widget.id)}
                   onExpand={() => setExpandedId(widget.id)}
                   onOpenJob={() => setJobWidgetId(widget.id)}
@@ -260,10 +277,11 @@ export function BoardDetailPage({
           />
         </div>
       )}
+      </div>
 
       {expanded ? (
         <div
-          className='absolute inset-0 z-30 flex flex-col bg-background/95 p-6'
+          className='absolute inset-0 z-30 flex flex-col bg-background p-6 animate-in fade-in duration-200 motion-reduce:animate-none'
           role='dialog'
           aria-modal='true'
           aria-label={`${expanded.title} 放大`}
@@ -298,7 +316,6 @@ export function BoardDetailPage({
             runtimeUnavailable={runtimeUnavailable}
             hasJob={view.jobs.has(expanded.id)}
             canRefresh={widgetCanRefresh(view, expanded.id)}
-            exampleDataHint={exampleDataHintFor(view, expanded.id)}
             onRefresh={() => onRefreshWidget?.(expanded.id)}
             onOpenJob={() => setJobWidgetId(expanded.id)}
             className='min-h-0 flex-1'
@@ -306,12 +323,53 @@ export function BoardDetailPage({
         </div>
       ) : null}
 
+      <Dialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+      >
+        <DialogContent
+          className='sm:max-w-sm'
+          data-testid='board-delete-dialog'
+        >
+          <DialogHeader>
+            <DialogTitle>删除这块看板？</DialogTitle>
+            <DialogDescription>
+              看板和上面的小组件会一起删掉，不能恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              data-testid='board-delete-cancel'
+              onClick={() => setConfirmDelete(false)}
+            >
+              取消
+            </Button>
+            <Button
+              type='button'
+              variant='destructive'
+              size='sm'
+              data-testid='board-delete-confirm'
+              onClick={() => {
+                setConfirmDelete(false)
+                onDeleteBoard?.()
+              }}
+            >
+              删除看板
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <BoardJobDialog
         open={jobWidgetId != null}
         job={job}
         lastRun={lastRun}
         onClose={() => setJobWidgetId(null)}
         onRevoke={onRevokeJob}
+        onBindByChat={onCreateByChat}
       />
     </div>
   )

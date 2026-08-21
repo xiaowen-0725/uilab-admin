@@ -46,6 +46,31 @@ function view(createdByTaskId?: string, job?: WidgetDataJobRecord): BoardView {
 }
 
 describe('BoardDetailPage', () => {
+  it('fills a flex parent instead of shrinking to the preview width', async () => {
+    await render(
+      <div
+        className='relative flex min-h-0 min-w-0 overflow-hidden'
+        style={{ width: 1000, height: 720 }}
+      >
+        <BoardDetailPage
+          view={view()}
+          theme='light'
+          taskExists={() => false}
+          onBack={() => {}}
+          onLayoutChange={() => {}}
+          onCreateByChat={() => {}}
+        />
+      </div>,
+    )
+
+    expect(
+      page.getByTestId('board-detail-page').element().getBoundingClientRect().width,
+    ).toBeGreaterThan(900)
+    expect(
+      page.getByTestId('board-canvas').element().getBoundingClientRect().width,
+    ).toBeGreaterThan(800)
+  })
+
   it('hides the source-task link when the task is gone', async () => {
     await render(
       <BoardDetailPage
@@ -96,6 +121,9 @@ describe('BoardDetailPage', () => {
     )
 
     await userEvent.click(page.getByTestId('board-delete'))
+    expect(onDeleteBoard).not.toHaveBeenCalled()
+    await expect.element(page.getByTestId('board-delete-dialog')).toBeInTheDocument()
+    await userEvent.click(page.getByTestId('board-delete-confirm'))
     expect(onDeleteBoard).toHaveBeenCalledTimes(1)
   })
 
@@ -120,12 +148,13 @@ describe('BoardDetailPage', () => {
     )
 
     expect(page.getByTestId('board-example-badge')).toHaveTextContent('示例')
-    expect(page.getByTestId('board-widget-example-data')).toHaveTextContent(
+    expect(page.getByTestId('board-example-data-hint')).toHaveTextContent(
       '示例数据 · 未绑定取数作业',
     )
-    expect(page.getByTestId('board-widget-example-data')).toHaveTextContent(
+    expect(page.getByTestId('board-example-data-hint')).toHaveTextContent(
       '想让它每天自动更新？在对话里说一声',
     )
+    expect(page.getByTestId('board-widget-example-data').elements()).toHaveLength(0)
     expect(page.getByTestId('board-refresh-all')).toBeDisabled()
     expect(page.getByTestId('board-widget-refresh')).toBeDisabled()
     expect(page.getByTestId('board-widget-runtime-missing').elements()).toHaveLength(0)
@@ -174,6 +203,7 @@ describe('BoardDetailPage', () => {
 
     expect(page.getByTestId('board-preset-badge')).toHaveTextContent('预置')
     expect(page.getByTestId('board-example-badge').elements()).toHaveLength(0)
+    expect(page.getByTestId('board-example-data-hint').elements()).toHaveLength(0)
     expect(page.getByTestId('board-widget-example-data').elements()).toHaveLength(0)
     expect(page.getByTestId('board-refresh-all')).toBeEnabled()
     expect(page.getByTestId('board-widget-refresh')).toBeEnabled()

@@ -187,6 +187,17 @@ describe('Workbench Shell integration (visible behavior)', () => {
 
     await userEvent.click(page.getByTestId('navigator-menu-board'))
     await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
+    const stageBox = page
+      .getByTestId('workbench-stage')
+      .element()
+      .getBoundingClientRect()
+    const listBox = page
+      .getByTestId('board-list-page')
+      .element()
+      .getBoundingClientRect()
+    expect(Math.abs(listBox.width - stageBox.width)).toBeLessThanOrEqual(
+      GEOMETRY_TOLERANCE,
+    )
     expect(page.getByTestId('workbench-shell').element()).toHaveAttribute(
       'data-destination',
       'board',

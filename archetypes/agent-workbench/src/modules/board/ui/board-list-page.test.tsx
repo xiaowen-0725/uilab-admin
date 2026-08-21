@@ -47,6 +47,40 @@ function card(overrides: Partial<BoardRecord> = {}, widgets: BoardWidgetRecord[]
 }
 
 describe('BoardListPage', () => {
+  it('fills a flex parent and lays two cards side by side', async () => {
+    await render(
+      <div
+        className='relative flex min-h-0 min-w-0 overflow-hidden'
+        style={{ width: 960, height: 720 }}
+      >
+        <BoardListPage
+          boards={[
+            card({ id: 'board-1', title: '每日速递' }, [widget('w1', '计数器')]),
+            card({ id: 'board-2', title: '上手指引', isExample: true }, [
+              widget('w2', '待办'),
+            ]),
+          ]}
+          theme='light'
+          onOpenBoard={() => {}}
+          onCreateByChat={() => {}}
+        />
+      </div>,
+    )
+
+    const pageBox = page.getByTestId('board-list-page').element().getBoundingClientRect()
+    expect(pageBox.width).toBeGreaterThan(900)
+    expect(page.getByTestId('board-list-page')).toHaveTextContent(
+      '用对话生成小组件，搭一块长期盯着的看板',
+    )
+
+    const cards = page.getByTestId('board-card').elements()
+    expect(cards).toHaveLength(2)
+    const first = cards[0]?.getBoundingClientRect()
+    const second = cards[1]?.getBoundingClientRect()
+    expect(Math.abs((first?.top ?? 0) - (second?.top ?? 0))).toBeLessThan(24)
+    expect((second?.left ?? 0) - (first?.right ?? 0)).toBeGreaterThan(8)
+  })
+
   it('scales live thumbnails instead of clipping them', async () => {
     await render(
       <BoardListPage
@@ -95,7 +129,7 @@ describe('BoardListPage', () => {
     expect(page.getByTestId('board-example-badge')).toHaveTextContent('示例')
     expect(page.getByTestId('board-preset-badge').elements()).toHaveLength(0)
 
-    const open = page.getByTestId('board-card-open')
+    const open = page.getByTestId('board-card')
     ;(open.element() as HTMLElement).focus()
     await userEvent.keyboard('{Enter}')
     expect(onOpenBoard).toHaveBeenCalledWith('board-1')

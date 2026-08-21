@@ -97,7 +97,10 @@ function WorkspaceHarness({
     [identityScope, jobRuntime, store],
   )
   return (
-    <div style={{ width, height: 800 }}>
+    <div
+      className='relative flex min-h-0 min-w-0 overflow-hidden'
+      style={{ width, height: 800 }}
+    >
       <BoardWorkspace
         store={store}
         boardId={boardId}
@@ -245,6 +248,53 @@ describe('BoardWorkspace refresh', () => {
 })
 
 describe('BoardWorkspace example boards', () => {
+  it('fills a flex stage so list cards and detail widgets can use the width', async () => {
+    const store = createMemoryBoardStore()
+    await render(
+      <WorkspaceHarness
+        store={store}
+        jobRuntime={createUnavailableBoardJobRuntime()}
+        startOnDetail={false}
+        width={1200}
+      />,
+    )
+
+    await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(2)
+    expect(
+      page.getByTestId('board-list-page').element().getBoundingClientRect().width,
+    ).toBeGreaterThan(1000)
+
+    const cards = page.getByTestId('board-card').elements()
+    const first = cards[0]?.getBoundingClientRect()
+    const second = cards[1]?.getBoundingClientRect()
+    expect(first && second).toBeTruthy()
+    expect(Math.abs((first?.top ?? 0) - (second?.top ?? 0))).toBeLessThan(24)
+    expect((second?.left ?? 0) - (first?.right ?? 0)).toBeGreaterThan(8)
+
+    const brief = cardById('example:daily-brief')
+    expect(brief).toBeTruthy()
+    await userEvent.click(brief as HTMLElement)
+    await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
+    expect(
+      page.getByTestId('board-detail-page').element().getBoundingClientRect().width,
+    ).toBeGreaterThan(1000)
+
+    await expect.poll(() => page.getByTestId('board-canvas-item').elements().length).toBe(3)
+    const chart = page
+      .getByTestId('board-canvas-item')
+      .elements()
+      .find((node) => node.getAttribute('data-item-id') === 'mount:example:daily-brief:chart')
+    const stat = page
+      .getByTestId('board-canvas-item')
+      .elements()
+      .find((node) => node.getAttribute('data-item-id') === 'mount:example:daily-brief:stat')
+    const chartBox = chart?.getBoundingClientRect()
+    const statBox = stat?.getBoundingClientRect()
+    expect(chartBox && statBox).toBeTruthy()
+    expect((statBox?.left ?? 0) - (chartBox?.right ?? 0)).toBeGreaterThan(4)
+    expect(Math.abs((chartBox?.top ?? 0) - (statBox?.top ?? 0))).toBeLessThan(8)
+  })
+
   it('installs two example boards on a fresh list without CSP violations', async () => {
     const store = createMemoryBoardStore()
     const violations: string[] = []
@@ -361,6 +411,7 @@ describe('BoardWorkspace example boards', () => {
     await userEvent.click(guide as HTMLElement)
     await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
     await userEvent.click(page.getByTestId('board-delete'))
+    await userEvent.click(page.getByTestId('board-delete-confirm'))
 
     await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
     await expect.poll(() => page.getByTestId('board-card').elements().length).toBe(1)
@@ -479,6 +530,7 @@ describe('BoardWorkspace preset boards', () => {
     await expect.element(page.getByTestId('board-detail-page')).toBeInTheDocument()
     expect(page.getByTestId('board-preset-badge')).toHaveTextContent('预置')
     expect(page.getByTestId('board-example-badge').elements()).toHaveLength(0)
+    expect(page.getByTestId('board-example-data-hint').elements()).toHaveLength(0)
     expect(page.getByTestId('board-widget-example-data').elements()).toHaveLength(0)
     await expect
       .element(page.getByTestId('board-widget-needs-login'))

@@ -260,7 +260,7 @@ function BoardStatus({
 }) {
   return (
     <div
-      className='flex h-full items-center justify-center text-sm text-muted-foreground'
+      className='flex h-full min-h-0 min-w-0 w-full flex-1 items-center justify-center bg-background text-sm text-muted-foreground'
       data-testid={testId}
     >
       {children}

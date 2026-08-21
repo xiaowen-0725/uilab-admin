@@ -17,6 +17,7 @@ export interface BoardJobDialogProps {
   lastRun: WidgetJobRunRecord | null
   onClose: () => void
   onRevoke?: (jobId: string) => void
+  onBindByChat?: () => void
 }
 
 function runOutcome(run: WidgetJobRunRecord): string {
@@ -32,6 +33,7 @@ export function BoardJobDialog({
   lastRun,
   onClose,
   onRevoke,
+  onBindByChat,
 }: BoardJobDialogProps) {
   const authorized = job ? isJobRunnable(job) : false
   const lastAt = lastRun?.finishedAt ?? lastRun?.startedAt
@@ -50,7 +52,8 @@ export function BoardJobDialog({
         <DialogHeader>
           <DialogTitle>{job?.title ?? '取数作业'}</DialogTitle>
           <DialogDescription>
-            {job?.description || '这个小组件还没有取数作业。'}
+            {job?.description ||
+              '这个小组件还没有取数作业。想让它每天自动更新？在对话里说一声。'}
           </DialogDescription>
         </DialogHeader>
 
@@ -78,9 +81,21 @@ export function BoardJobDialog({
               撤销授权
             </Button>
           ) : null}
-          <Button type='button' onClick={onClose}>
+          <Button type='button' variant={!job && onBindByChat ? 'ghost' : 'default'} onClick={onClose}>
             关闭
           </Button>
+          {!job && onBindByChat ? (
+            <Button
+              type='button'
+              data-testid='board-job-bind-by-chat'
+              onClick={() => {
+                onClose()
+                onBindByChat()
+              }}
+            >
+              去对话里说
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -50,15 +50,23 @@ export function BoardListPage({
 }: BoardListPageProps) {
   return (
     <div
-      className='flex h-full min-h-0 flex-col'
+      className='flex h-full min-h-0 min-w-0 w-full flex-1 flex-col bg-background'
       data-testid='board-list-page'
       data-thumbnail-mode={thumbnailMode}
     >
-      <header className='flex shrink-0 items-center gap-3 border-b border-border/60 px-6 py-4'>
-        <h1 className='flex-1 text-base font-semibold text-foreground'>看板</h1>
+      <header className='flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4'>
+        <div className='min-w-0'>
+          <h1 className='text-2xl font-semibold tracking-tight text-foreground'>
+            看板
+          </h1>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            用对话生成小组件，搭一块长期盯着的看板
+          </p>
+        </div>
         <Button
           type='button'
           size='sm'
+          className='mt-0.5 shrink-0 self-center'
           data-testid='board-create-by-chat'
           onClick={onCreateByChat}
         >
@@ -83,10 +91,10 @@ export function BoardListPage({
           </Button>
         </div>
       ) : (
-        <div className='min-h-0 flex-1 overflow-auto px-6 py-5'>
-          <ul className='grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4'>
+        <div className='min-h-0 min-w-0 flex-1 overflow-auto px-6 py-5'>
+          <ul className='grid w-full grid-cols-1 gap-5 min-[720px]:grid-cols-2'>
             {boards.map((card) => (
-              <li key={card.board.id}>
+              <li key={card.board.id} className='min-w-0'>
                 <BoardCard
                   card={card}
                   theme={theme}
@@ -129,14 +137,15 @@ function BoardCard({
   const originBadge = boardOriginBadge(board)
 
   return (
-    <div
-      className='group flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-card p-3 text-left transition-colors hover:border-border has-focus-visible:border-ring'
+    <button
+      type='button'
+      className='group flex h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-card text-left shadow-none transition-[border-color,box-shadow,background-color,transform] duration-150 ease-out hover:border-foreground/20 hover:bg-muted/20 hover:shadow-sm active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
       data-testid='board-card'
       data-board-id={board.id}
       onClick={() => onOpen(board.id)}
     >
       <div
-        className='pointer-events-none overflow-hidden rounded-lg bg-muted/40 p-2'
+        className='pointer-events-none bg-muted/40 p-2.5'
         data-testid='board-card-thumbnail'
         aria-hidden
       >
@@ -158,29 +167,26 @@ function BoardCard({
         />
       </div>
 
-      <div className='flex min-w-0 items-center gap-2'>
-        <button
-          type='button'
-          className='min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
-          data-testid='board-card-open'
-          onClick={(event) => {
-            event.stopPropagation()
-            onOpen(board.id)
-          }}
-        >
-          {board.title}
-        </button>
-        {originBadge ? (
-          <Badge variant='secondary' data-testid={originBadge.testId}>
-            {originBadge.label}
-          </Badge>
-        ) : null}
+      <div className='flex min-w-0 flex-col gap-1 px-4 py-3'>
+        <div className='flex min-w-0 items-center gap-2'>
+          <span
+            className='min-w-0 flex-1 truncate text-sm font-medium text-foreground'
+            data-testid='board-card-open'
+          >
+            {board.title}
+          </span>
+          {originBadge ? (
+            <Badge variant='secondary' data-testid={originBadge.testId}>
+              {originBadge.label}
+            </Badge>
+          ) : null}
+        </div>
+        <p className='text-xs text-muted-foreground'>
+          {widgets.length} 个组件 · {formatRelative(board.updatedAt)}更新
+          {hiddenCount > 0 ? ` · 另有 ${hiddenCount} 个未放入预览` : ''}
+        </p>
       </div>
-      <p className='text-xs text-muted-foreground'>
-        {widgets.length} 个小组件 · {formatRelative(board.updatedAt)}更新
-        {hiddenCount > 0 ? ` · 另有 ${hiddenCount} 个未放入预览` : ''}
-      </p>
-    </div>
+    </button>
   )
 }
 
@@ -202,7 +208,7 @@ function ThumbnailCell({
   if (!widget) {
     return (
       <div
-        className='h-full w-full rounded-md bg-muted-foreground/10'
+        className='h-full w-full rounded-md bg-muted/20'
         data-testid='board-thumbnail-placeholder'
       />
     )
@@ -250,7 +256,7 @@ function ThumbnailCell({
         />
       </div>
       <span
-        className='absolute inset-x-0 bottom-0 truncate bg-background/80 px-1 py-0.5 text-[9px] leading-tight text-foreground'
+        className='absolute inset-x-0 bottom-0 truncate bg-background/90 px-1.5 py-1 text-[11px] leading-tight text-foreground'
         data-testid='board-thumbnail-title'
       >
         {widget.title}

@@ -52,8 +52,8 @@ export const PREVIEW_GEOMETRY: GridGeometry = {
 
 export const THUMBNAIL_GEOMETRY: GridGeometry = {
   columns: GRID_COLUMNS,
-  rowHeight: 18,
-  gap: 4,
+  rowHeight: 24,
+  gap: 6,
 }
 
 export function overlaps(a: GridPlacement, b: GridPlacement): boolean {
