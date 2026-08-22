@@ -13,6 +13,7 @@
  * - src/ runtime import graph has no cycles
  * - Desktop Host only imports host-wire + local-root-path from src/
  * - renderer must not import desktop/
+ * - macOS Desktop window chrome stays hiddenInset (no system title bar)
  */
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
@@ -617,8 +618,46 @@ async function checkSources() {
   }
 
   await checkDesktopHostImports()
+  await checkDesktopMacChrome()
   await checkBoardCspAndSandbox()
   await checkBoardToolReturnTypes()
+}
+
+async function checkDesktopMacChrome() {
+  const mainPath = path.join(workbenchRoot, 'desktop', 'electron', 'main.ts')
+  const preloadPath = path.join(workbenchRoot, 'desktop', 'electron', 'preload.ts')
+  const pkgPath = path.join(workbenchRoot, 'package.json')
+  if (!(await exists(mainPath)) || !(await exists(preloadPath))) {
+    errors.push('Desktop Host main.ts / preload.ts missing')
+    return
+  }
+  const main = await readFile(mainPath, 'utf8')
+  const preload = await readFile(preloadPath, 'utf8')
+  if (!/titleBarStyle:\s*['"]hiddenInset['"]/.test(main)) {
+    errors.push(
+      'Desktop Host must set titleBarStyle: hiddenInset (macOS has no system title bar)',
+    )
+  }
+  if (!preload.includes('wb-electron')) {
+    errors.push(
+      'Desktop preload must mark html.wb-electron so Mac chrome CSS can attach',
+    )
+  }
+  if (!preload.includes('onBoardRefreshWake')) {
+    errors.push(
+      'Desktop preload must expose onBoardRefreshWake; do not launch a stale dist/',
+    )
+  }
+  if (await exists(pkgPath)) {
+    const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
+    const hasEsbuild =
+      pkg.devDependencies?.esbuild != null || pkg.dependencies?.esbuild != null
+    if (!hasEsbuild) {
+      errors.push(
+        '@uilab/agent-workbench must declare esbuild so dev:desktop rebuilds from source',
+      )
+    }
+  }
 }
 
 async function checkDesktopHostImports() {
@@ -880,6 +919,7 @@ async function main() {
   console.log('  Leaf layer: no React / UI')
   console.log('  Runtime imports: no cycles')
   console.log('  Host wire: desktop ↔ renderer shared leaf')
+  console.log('  Desktop chrome: macOS hiddenInset + preload markers')
   console.log('  Board CSP: host meta + widget sandbox/csp pair')
   console.log('  Board tools: return types omit html/code/data')
   process.exit(0)

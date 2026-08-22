@@ -15,6 +15,7 @@ export interface WorkbenchShortcutCallbacks {
   onToggleWorkKeyboard: () => void
   /** Escape exits maximize instantly (no View Transition). */
   onExitMaximizeKeyboard: () => void
+  onNewChatKeyboard: () => void
 }
 
 /**
@@ -31,6 +32,7 @@ export function useWorkbenchShortcuts(
     onToggleContextKeyboard,
     onToggleWorkKeyboard,
     onExitMaximizeKeyboard,
+    onNewChatKeyboard,
   } = callbacks
 
   useEffect(() => {
@@ -47,6 +49,12 @@ export function useWorkbenchShortcuts(
       if (!mod) return
 
       const key = event.key.toLowerCase()
+
+      if (key === 'k' && !event.shiftKey) {
+        event.preventDefault()
+        onNewChatKeyboard()
+        return
+      }
 
       if (key === 'b' && !event.shiftKey) {
         event.preventDefault()
@@ -76,6 +84,7 @@ export function useWorkbenchShortcuts(
     onToggleContextKeyboard,
     onToggleWorkKeyboard,
     onExitMaximizeKeyboard,
+    onNewChatKeyboard,
     view.layout.workSurfaceMaximized,
   ])
 }

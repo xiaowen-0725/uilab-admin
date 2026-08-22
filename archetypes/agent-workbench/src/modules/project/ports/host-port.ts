@@ -15,13 +15,14 @@ import type {
 export type {
   HostCreateProjectDirectoryInput,
   HostIpcChannel,
+  HostNativeTheme,
   HostProjectsHomePayload,
   HostRuntimeStatus,
   HostStartRuntimeResult,
   PickDirectoryResult,
   WorkbenchHostBridge,
 } from './host-wire'
-export { HOST_IPC } from './host-wire'
+export { HOST_IPC, isHostNativeTheme } from './host-wire'
 
 export interface HostPort {
   /** Host 是否可用（Electron 桥存在）。false = Web/测试降级 */

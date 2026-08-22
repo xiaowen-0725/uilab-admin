@@ -49,3 +49,11 @@ export function applyDocumentTheme(isDark: boolean): void {
   document.documentElement.classList.toggle('dark', isDark)
   document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
 }
+
+/** Ask Desktop Host to retarget macOS vibrancy. No-op in Web / tests. */
+export function syncHostNativeTheme(preference: ThemePreference): void {
+  if (typeof window === 'undefined') return
+  const host = window.__workbenchHost
+  if (!host || typeof host.setNativeTheme !== 'function') return
+  void host.setNativeTheme(preference)
+}

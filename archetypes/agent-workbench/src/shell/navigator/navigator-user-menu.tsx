@@ -75,9 +75,9 @@ export function NavigatorUserMenu({
               type='button'
               data-testid='navigator-user-trigger'
               className={cn(
-                'flex w-full items-center gap-2 rounded-xl bg-sidebar-accent/50 px-2 py-2 text-left',
-                'hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50',
-                'data-[popup-open]:bg-sidebar-accent data-[open]:bg-sidebar-accent'
+                'flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left',
+                'hover:bg-black/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-white/[0.05]',
+                'data-[popup-open]:bg-black/[0.05] data-[open]:bg-black/[0.05] dark:data-[popup-open]:bg-white/[0.10] dark:data-[open]:bg-white/[0.10]'
               )}
               aria-label={`账户：${user.name}`}
               title='账户菜单'
@@ -87,10 +87,10 @@ export function NavigatorUserMenu({
         >
           <UserAvatar user={user} />
           <div className='min-w-0 flex-1'>
-            <span className='block truncate text-sm font-medium leading-tight'>
+            <span className='block truncate text-[14px] font-normal leading-5 text-black/90 dark:text-white/84'>
               {user.name}
             </span>
-            <span className='block truncate text-xs text-muted-foreground'>
+            <span className='block truncate text-[12px] leading-[18px] text-black/45 dark:text-white/42'>
               {user.email}
             </span>
           </div>

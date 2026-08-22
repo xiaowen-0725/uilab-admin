@@ -23,6 +23,13 @@ export type HostStartRuntimeResult = {
   baseUrl: string
 }
 
+/** Electron `nativeTheme.themeSource` — window vibrancy follows this on macOS. */
+export type HostNativeTheme = 'system' | 'light' | 'dark'
+
+export function isHostNativeTheme(value: unknown): value is HostNativeTheme {
+  return value === 'system' || value === 'light' || value === 'dark'
+}
+
 export const HOST_IPC = {
   pickDirectory: 'host:pickDirectory',
   ensureProjectsHome: 'host:ensureProjectsHome',
@@ -30,6 +37,7 @@ export const HOST_IPC = {
   startRuntime: 'host:startRuntime',
   stopRuntime: 'host:stopRuntime',
   getRuntimeStatus: 'host:getRuntimeStatus',
+  setNativeTheme: 'host:setNativeTheme',
   boardRefreshWake: 'host:boardRefreshWake',
 } as const
 
@@ -44,6 +52,8 @@ export interface WorkbenchHostBridge {
   startRuntime(workspaceRoot: string): Promise<HostStartRuntimeResult>
   stopRuntime(): Promise<void>
   getRuntimeStatus(): Promise<HostRuntimeStatus>
+  /** Sync macOS vibrancy with the renderer theme preference. No-op off darwin. */
+  setNativeTheme(theme: HostNativeTheme): Promise<boolean>
   /** Main → renderer poke. Host never fetches or writes IDB. */
   onBoardRefreshWake(listener: () => void): () => void
 }

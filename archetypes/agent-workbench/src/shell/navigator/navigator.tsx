@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { NavigatorProjectGroup, TaskSummary } from '@/modules/project'
 import {
+  AlarmClock,
   ChevronDown,
   Filter,
   Folder,
@@ -9,10 +10,9 @@ import {
   MessageSquarePlus,
   MoreHorizontal,
   PanelLeft,
-  Puzzle,
   Search,
+  Sparkles,
   Trash2,
-  Workflow,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -80,22 +80,38 @@ function isNavItemCurrent(
   return item.action != null && NAV_ACTION_KIND[item.action] === destination.kind
 }
 
-const NAV_ITEMS: readonly NavItem[] = [
-  {
-    id: 'new-chat',
-    label: '新对话',
-    icon: MessageSquarePlus,
-    action: 'new-chat',
+function runNavItemAction(
+  item: NavItem,
+  handlers: {
+    onNewChat?: () => void
+    onOpenCapabilities?: () => void
+    onOpenBoard?: () => void
   },
+): void {
+  if (item.action === 'new-chat') handlers.onNewChat?.()
+  if (item.action === 'open-capabilities') handlers.onOpenCapabilities?.()
+  if (item.action === 'open-board') handlers.onOpenBoard?.()
+}
+
+const NEW_CHAT_ITEM: NavItem = {
+  id: 'new-chat',
+  label: '新对话',
+  icon: MessageSquarePlus,
+  action: 'new-chat',
+}
+
+const NAV_DEST_ITEMS: readonly NavItem[] = [
   { id: 'board', label: '看板', icon: Kanban, action: 'open-board' },
   {
     id: 'skills-connectors',
     label: '专家·技能·连接器',
-    icon: Puzzle,
+    icon: Sparkles,
     action: 'open-capabilities',
   },
-  { id: 'automation', label: '自动化', icon: Workflow },
+  { id: 'automation', label: '自动化', icon: AlarmClock },
 ]
+
+const NAV_ITEMS: readonly NavItem[] = [NEW_CHAT_ITEM, ...NAV_DEST_ITEMS]
 
 const STATUS_FILTERS = [
   { value: 'all', label: '全部状态' },
@@ -119,9 +135,20 @@ type TimeFilter = (typeof TIME_FILTERS)[number]['value']
 const DISPLAY_VERSION = 'V1.0.0'
 
 const iconBtnClass =
-  'inline-flex size-7 items-center justify-center rounded-md text-foreground/70 outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40'
+  'inline-flex size-7 items-center justify-center rounded-lg text-black/60 outline-none transition-colors duration-200 ease-in-out hover:bg-black/[0.03] hover:text-black/90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 dark:text-white/56 dark:hover:bg-white/[0.05] dark:hover:text-white/84'
 
-/** Left rail: toolbar → brand → IA menu → task list. */
+const navRowClass =
+  'flex h-10 w-full min-w-0 items-center gap-1.5 rounded-xl px-2 text-[14px] leading-5 outline-none transition-colors duration-200 ease-in-out focus-visible:ring-3 focus-visible:ring-ring/50'
+
+const navIdleClass =
+  'font-normal text-black/90 hover:bg-black/[0.03] dark:text-white/84 dark:hover:bg-white/[0.05]'
+
+const navSelectedClass = 'bg-black/[0.05] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
+
+const sectionHeaderClass =
+  'mb-1 flex min-h-[18px] w-full items-center gap-1 rounded-md px-2 text-[12px] font-normal leading-[18px] text-black/45 outline-none hover:text-black/60 focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/42 dark:hover:text-white/56'
+
+/** Left rail: toolbar → primary action → destinations → catalog. */
 export function Navigator({
   looseTasks,
   projectGroups,
@@ -182,9 +209,7 @@ export function Navigator({
   }
 
   const handleNavClick = (item: NavItem) => {
-    if (item.action === 'new-chat') onNewChat?.()
-    if (item.action === 'open-capabilities') onOpenCapabilities?.()
-    if (item.action === 'open-board') onOpenBoard?.()
+    runNavItemAction(item, { onNewChat, onOpenCapabilities, onOpenBoard })
   }
 
   const resetFilters = () => {
@@ -204,7 +229,7 @@ export function Navigator({
       inert={!open}
     >
       <div
-        className='flex h-11 shrink-0 items-center justify-end gap-0.5 border-b border-border/40 px-2.5'
+        className='flex h-9 shrink-0 items-center justify-end gap-0.5 px-2'
         data-testid='navigator-toolbar'
       >
         <RailIconButton
@@ -238,7 +263,7 @@ export function Navigator({
                 type='button'
                 className={cn(
                   iconBtnClass,
-                  filterActive && 'bg-sidebar-accent text-foreground'
+                  filterActive && 'bg-black/[0.05] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
                 )}
                 tabIndex={tabIndex}
                 aria-label='筛选'
@@ -286,7 +311,7 @@ export function Navigator({
         {mode === 'overlay' && onClose ? (
           <button
             type='button'
-            className='ms-1 h-7 rounded-md px-2 text-xs text-foreground/70 hover:bg-sidebar-accent hover:text-foreground'
+            className='ms-1 h-7 rounded-lg px-2 text-xs text-black/60 hover:bg-black/[0.03] hover:text-black/90 dark:text-white/56 dark:hover:bg-white/[0.05] dark:hover:text-white/84'
             aria-label='关闭导航'
             tabIndex={tabIndex}
             onClick={onClose}
@@ -296,15 +321,17 @@ export function Navigator({
         ) : null}
       </div>
 
-      <div className='shrink-0 px-3.5 pt-1 pb-2'>
-        <p className='truncate text-[13px] leading-5 tracking-tight text-foreground'>
+      <div className='shrink-0 px-4 pt-1 pb-2'>
+        <p className='truncate text-[14px] leading-5 tracking-tight text-black/90 dark:text-white/84'>
           Workbench
-          <span className='ms-1.5 text-foreground/60'>{DISPLAY_VERSION}</span>
+          <span className='ms-1.5 text-[12px] font-normal leading-[18px] text-black/45 dark:text-white/42'>
+            {DISPLAY_VERSION}
+          </span>
         </p>
       </div>
 
       {searchOpen ? (
-        <div className='px-2.5 pb-2'>
+        <div className='px-2 pb-2'>
           <label className='sr-only' htmlFor='navigator-task-search'>
             搜索任务
           </label>
@@ -314,7 +341,7 @@ export function Navigator({
             placeholder='搜索任务…'
             value={query}
             tabIndex={tabIndex}
-            className='h-8 bg-sidebar-accent/40 text-xs shadow-none'
+            className='h-8 rounded-xl bg-black/[0.03] text-[13px] shadow-none dark:bg-white/[0.05]'
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
@@ -322,8 +349,25 @@ export function Navigator({
       ) : null}
 
       <div className='shrink-0 px-2 pb-1' data-testid='navigator-menu'>
-        <ul className='flex flex-col gap-0.5'>
-          {NAV_ITEMS.map((item) => {
+        <button
+          type='button'
+          data-testid='navigator-new-chat'
+          tabIndex={tabIndex}
+          title='新对话'
+          className={cn(
+            navRowClass,
+            'mb-1.5 bg-black/[0.05] font-medium text-black/90 hover:bg-black/[0.06] dark:bg-white/[0.10] dark:text-white/84 dark:hover:bg-white/[0.12]',
+          )}
+          onClick={() => handleNavClick(NEW_CHAT_ITEM)}
+        >
+          <MessageSquarePlus className='size-[18px] shrink-0' aria-hidden />
+          <span className='min-w-0 flex-1 truncate text-left'>
+            {NEW_CHAT_ITEM.label}
+          </span>
+          <NewChatShortcutHint />
+        </button>
+        <ul className='flex flex-col gap-1.5'>
+          {NAV_DEST_ITEMS.map((item) => {
             const Icon = item.icon
             const selected = isNavItemCurrent(item, activeDestination)
             const wired = item.action != null
@@ -331,26 +375,19 @@ export function Navigator({
               <li key={item.id}>
                 <button
                   type='button'
-                  data-testid={
-                    item.action === 'new-chat'
-                      ? 'navigator-new-chat'
-                      : `navigator-menu-${item.id}`
-                  }
+                  data-testid={`navigator-menu-${item.id}`}
                   tabIndex={tabIndex}
                   aria-current={selected ? 'page' : undefined}
                   title={
                     wired ? item.label : `${item.label}（菜单占位，功能未接入）`
                   }
                   className={cn(
-                    'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2.5 text-[13px] leading-5 outline-none',
-                    'hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/50',
-                    selected
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-foreground'
+                    navRowClass,
+                    selected ? navSelectedClass : navIdleClass,
                   )}
                   onClick={() => handleNavClick(item)}
                 >
-                  <Icon className='size-4 shrink-0 opacity-90' aria-hidden />
+                  <Icon className='size-[18px] shrink-0' aria-hidden />
                   <span className='min-w-0 flex-1 truncate text-left'>
                     {item.label}
                   </span>
@@ -371,10 +408,10 @@ export function Navigator({
       ) : null}
 
       <ScrollArea className='min-h-0 flex-1 px-2 pb-2'>
-        <section data-testid='navigator-tasks' className='pt-2'>
+        <section data-testid='navigator-tasks' className='pt-4'>
           <button
             type='button'
-            className='mb-0.5 flex h-7 w-full items-center gap-1 rounded-md px-2 text-[12px] leading-4 text-foreground/70 outline-none hover:bg-sidebar-accent/50 hover:text-foreground'
+            className={sectionHeaderClass}
             tabIndex={tabIndex}
             aria-expanded={tasksExpanded}
             data-testid='navigator-tasks-toggle'
@@ -382,13 +419,13 @@ export function Navigator({
           >
             <span>
               任务
-              <span className='ms-0.5 text-foreground/50 tabular-nums'>
+              <span className='ms-0.5 tabular-nums'>
                 ({filteredLooseTasks.length})
               </span>
             </span>
             <ChevronDown
               className={cn(
-                'size-3.5 shrink-0 text-foreground/55 transition-transform',
+                'size-3 shrink-0 transition-transform',
                 !tasksExpanded && '-rotate-90'
               )}
               aria-hidden
@@ -399,7 +436,7 @@ export function Navigator({
             <>
               {filterActive ? (
                 <p
-                  className='px-2 pb-1 text-[12px] leading-4 text-foreground/55'
+                  className='px-2 pb-1 text-[12px] leading-[18px] text-black/45 dark:text-white/42'
                   data-testid='navigator-filter-shell-note'
                 >
                   筛选仅 UI 占位
@@ -407,13 +444,13 @@ export function Navigator({
               ) : null}
               {filteredLooseTasks.length === 0 ? (
                 <p
-                  className='px-2.5 py-2 text-[13px] leading-5 text-foreground/60'
+                  className='px-3 py-2 text-[14px] leading-5 text-black/45 dark:text-white/42'
                   data-testid='navigator-tasks-empty'
                 >
                   还没有任务
                 </p>
               ) : (
-                <ul className='flex flex-col gap-px'>
+                <ul className='flex flex-col ps-3'>
                   {filteredLooseTasks.map((task) => (
                     <TaskRow
                       key={task.id}
@@ -432,10 +469,10 @@ export function Navigator({
         </section>
 
         {filteredProjectGroups.length > 0 ? (
-          <section data-testid='navigator-projects' className='pt-3'>
+          <section data-testid='navigator-projects' className='pt-5'>
             <button
               type='button'
-              className='mb-0.5 flex h-7 w-full items-center gap-1 rounded-md px-2 text-[12px] leading-4 text-foreground/70 outline-none hover:bg-sidebar-accent/50 hover:text-foreground'
+              className={sectionHeaderClass}
               tabIndex={tabIndex}
               aria-expanded={projectsExpanded}
               data-testid='navigator-projects-toggle'
@@ -443,13 +480,13 @@ export function Navigator({
             >
               <span>
                 项目
-                <span className='ms-0.5 text-foreground/50 tabular-nums'>
+                <span className='ms-0.5 tabular-nums'>
                   ({filteredProjectGroups.length})
                 </span>
               </span>
               <ChevronDown
                 className={cn(
-                  'size-3.5 shrink-0 text-foreground/55 transition-transform',
+                  'size-3 shrink-0 transition-transform',
                   !projectsExpanded && '-rotate-90'
                 )}
                 aria-hidden
@@ -464,10 +501,10 @@ export function Navigator({
                       key={group.project.id}
                       data-testid={`navigator-project-group-${group.project.id}`}
                     >
-                      <div className='group/project flex h-8 items-center rounded-md hover:bg-sidebar-accent/70'>
+                      <div className='group/project flex h-10 items-center rounded-xl hover:bg-black/[0.03] dark:hover:bg-white/[0.05]'>
                         <button
                           type='button'
-                          className='flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] leading-5 text-foreground/90 outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
+                          className='flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-2 text-left text-[14px] leading-5 font-normal text-black/90 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/84'
                           tabIndex={tabIndex}
                           aria-expanded={expanded}
                           data-testid={`navigator-project-group-toggle-${group.project.id}`}
@@ -479,7 +516,7 @@ export function Navigator({
                           }
                         >
                           <Folder
-                            className='size-3.5 shrink-0 text-foreground/55'
+                            className='size-[18px] shrink-0 text-black/45 dark:text-white/42'
                             aria-hidden
                           />
                           <span className='min-w-0 flex-1 truncate'>
@@ -487,7 +524,7 @@ export function Navigator({
                           </span>
                           <ChevronDown
                             className={cn(
-                              'size-3.5 shrink-0 text-foreground/55 transition-transform',
+                              'size-3 shrink-0 text-black/45 transition-transform dark:text-white/42',
                               !expanded && '-rotate-90'
                             )}
                             aria-hidden
@@ -561,7 +598,7 @@ export function Navigator({
                         ) : null}
                       </div>
                       {expanded ? (
-                        <ul className='flex flex-col gap-px ps-3'>
+                        <ul className='flex flex-col ps-3'>
                           {group.tasks.map((task) => (
                             <TaskRow
                               key={task.id}
@@ -624,9 +661,7 @@ export function NavigatorCollapsedRail({
   onToggleNavigator?: () => void
 }) {
   const handleNavClick = (item: NavItem) => {
-    if (item.action === 'new-chat') onNewChat?.()
-    if (item.action === 'open-capabilities') onOpenCapabilities?.()
-    if (item.action === 'open-board') onOpenBoard?.()
+    runNavItemAction(item, { onNewChat, onOpenCapabilities, onOpenBoard })
   }
 
   return (
@@ -667,6 +702,20 @@ export function NavigatorCollapsedRail({
         )
       })}
     </nav>
+  )
+}
+
+function NewChatShortcutHint() {
+  const isApple =
+    typeof navigator !== 'undefined' &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
+  const keycap =
+    'inline-flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-black/[0.05] px-0.5 text-[10px] leading-none font-normal text-black/45 dark:bg-white/[0.08] dark:text-white/42'
+  return (
+    <span className='ms-auto flex shrink-0 items-center gap-0.5' aria-hidden>
+      <kbd className={keycap}>{isApple ? '⌘' : 'Ctrl'}</kbd>
+      <kbd className={keycap}>K</kbd>
+    </span>
   )
 }
 
@@ -764,17 +813,17 @@ function TaskRow({
         aria-label={busy ? `${task.title}，进行中` : task.title}
         tabIndex={tabIndex}
         className={cn(
-          'flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] leading-5 outline-none',
-          'hover:bg-sidebar-accent/70 focus-visible:ring-3 focus-visible:ring-ring/50',
+          'flex h-10 w-full items-center gap-1.5 rounded-xl px-2 text-left text-[14px] leading-5 font-normal outline-none',
+          'transition-colors duration-200 ease-in-out hover:bg-black/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-white/[0.05]',
           selected
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-            : 'text-foreground/90'
+            ? 'bg-black/[0.05] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
+            : 'text-black/90 dark:text-white/84'
         )}
         onClick={() => onSelect(task.id)}
       >
         {busy ? (
           <Loader2
-            className='size-3 shrink-0 animate-spin text-foreground/55'
+            className='size-3 shrink-0 animate-spin text-black/45 dark:text-white/42'
             aria-hidden
             data-testid={`task-busy-${task.id}`}
           />

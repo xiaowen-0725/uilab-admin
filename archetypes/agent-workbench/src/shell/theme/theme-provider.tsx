@@ -11,6 +11,7 @@ import {
   applyDocumentTheme,
   readStoredThemePreference,
   resolveIsDark,
+  syncHostNativeTheme,
   writeStoredThemePreference,
   type ThemePreference,
 } from './theme-preference'
@@ -52,6 +53,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyDocumentTheme(resolvedDark)
   }, [resolvedDark])
+
+  useEffect(() => {
+    syncHostNativeTheme(preference)
+  }, [preference])
 
   const setPreference = useCallback((next: ThemePreference) => {
     setPreferenceState(next)

@@ -18,6 +18,7 @@ describe('HostPort adapters (renderer)', () => {
       startRuntime: 'host:startRuntime',
       stopRuntime: 'host:stopRuntime',
       getRuntimeStatus: 'host:getRuntimeStatus',
+      setNativeTheme: 'host:setNativeTheme',
       boardRefreshWake: 'host:boardRefreshWake',
     })
   })

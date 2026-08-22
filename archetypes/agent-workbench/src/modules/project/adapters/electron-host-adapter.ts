@@ -6,32 +6,42 @@
 import type { WorkbenchProductProfile } from '@/config/workbench-product-profile'
 import { DEFAULT_WORKBENCH_PRODUCT_PROFILE } from '@/config/workbench-product-profile'
 import type { HostPort } from '../ports/host-port'
+import type { HostProjectsHomePayload, WorkbenchHostBridge } from '../ports/host-wire'
 import { createUnavailableHostPort } from './unavailable-host-port'
 
+function readLiveBridge(): WorkbenchHostBridge | undefined {
+  if (typeof window === 'undefined') return undefined
+  const bridge = window.__workbenchHost
+  if (!bridge || typeof bridge.isAvailable !== 'function') return undefined
+  if (!bridge.isAvailable()) return undefined
+  return bridge
+}
+
 export function isElectronHostBridgePresent(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.__workbenchHost != null &&
-    typeof window.__workbenchHost.isAvailable === 'function' &&
-    window.__workbenchHost.isAvailable()
-  )
+  return readLiveBridge() != null
+}
+
+function toProfilePayload(
+  profile: WorkbenchProductProfile,
+): HostProjectsHomePayload {
+  const payload: HostProjectsHomePayload = {
+    projectsHomeDirName: profile.projectsHomeDirName,
+  }
+  if (profile.projectsHomeOverride) {
+    payload.projectsHomeOverride = profile.projectsHomeOverride
+  }
+  return payload
 }
 
 export function createElectronHostAdapter(
   profile: WorkbenchProductProfile = DEFAULT_WORKBENCH_PRODUCT_PROFILE,
 ): HostPort {
-  const bridge =
-    typeof window === 'undefined' ? undefined : window.__workbenchHost
-  if (!bridge || typeof bridge.isAvailable !== 'function' || !bridge.isAvailable()) {
+  const bridge = readLiveBridge()
+  if (!bridge) {
     return createUnavailableHostPort()
   }
 
-  const profilePayload = {
-    projectsHomeDirName: profile.projectsHomeDirName,
-    ...(profile.projectsHomeOverride
-      ? { projectsHomeOverride: profile.projectsHomeOverride }
-      : {}),
-  }
+  const profilePayload = toProfilePayload(profile)
 
   return {
     isAvailable() {
@@ -59,6 +69,9 @@ export function createElectronHostAdapter(
       return bridge.getRuntimeStatus()
     },
     subscribeBoardRefreshWake(listener) {
+      if (typeof bridge.onBoardRefreshWake !== 'function') {
+        return () => {}
+      }
       return bridge.onBoardRefreshWake(listener)
     },
   }
@@ -67,8 +80,5 @@ export function createElectronHostAdapter(
 export function createWorkbenchHostPort(
   profile: WorkbenchProductProfile = DEFAULT_WORKBENCH_PRODUCT_PROFILE,
 ): HostPort {
-  if (isElectronHostBridgePresent()) {
-    return createElectronHostAdapter(profile)
-  }
-  return createUnavailableHostPort()
+  return createElectronHostAdapter(profile)
 }

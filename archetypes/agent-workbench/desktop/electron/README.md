@@ -18,9 +18,11 @@ pnpm --filter @uilab/agent-workbench dev:desktop
 
 脚本会：
 
-1. 编译 `main.ts` / `preload.ts` 到 `desktop/electron/dist/`
+1. **先从源码**编译 `main.ts` / `preload.ts` 到 `desktop/electron/dist/`（`dist/` 不入库，禁止当真源）
 2. 启动 Vite（`http://localhost:5174`），除非设置 `WORKBENCH_ELECTRON_SPAWN_VITE=0`
 3. 打开 Electron 窗口并经 `window.__workbenchHost` 暴露 HostPort
+
+不要直接 `electron desktop/electron/dist/main.js`。旧 `dist/` 会和当前 preload / 窗口 chrome 脱节（系统标题栏、`onBoardRefreshWake` 白屏都是这条路）。编译失败要修 `dev:desktop`，不要绕开。
 
 侧车由 Host 在选中带根 Project 后 spawn（`WORKSPACE_ROOT=<root> PORT=3141`），健康检查 `GET /workspace/info`。需要侧车 `.env` 中的模型密钥。
 

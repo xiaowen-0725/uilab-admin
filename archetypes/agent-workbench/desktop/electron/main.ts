@@ -8,7 +8,14 @@ import { mkdir, readdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  type BrowserWindowConstructorOptions,
+} from 'electron'
 import {
   expandHome,
   normalizeLocalRoot,
@@ -22,7 +29,9 @@ import {
 } from '../../src/modules/project/application/sidecar-workspace-ready'
 import {
   HOST_IPC,
+  isHostNativeTheme,
   type HostCreateProjectDirectoryInput,
+  type HostNativeTheme,
   type HostProjectsHomePayload,
   type HostRuntimeStatus,
 } from '../../src/modules/project/ports/host-wire'
@@ -35,21 +44,17 @@ let mainWindow: BrowserWindow | null = null
 let sidecar: ChildProcess | null = null
 let runtimeStatus: HostRuntimeStatus = 'stopped'
 
-function hereDir(): string {
-  return path.dirname(fileURLToPath(import.meta.url))
-}
+const HERE_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 function resolveSidecarDir(): string {
   if (process.env.WORKBENCH_SIDECAR_DIR) {
     return path.resolve(process.env.WORKBENCH_SIDECAR_DIR)
   }
-  const here = hereDir()
-  return path.resolve(here, '../../../../../tooling/workbench-runtime-voltagent')
+  return path.resolve(HERE_DIR, '../../../../../tooling/workbench-runtime-voltagent')
 }
 
 function resolvePreload(): string {
-  const here = hereDir()
-  return path.join(here, 'preload.cjs')
+  return path.join(HERE_DIR, 'preload.cjs')
 }
 
 function resolveHome(payload: HostProjectsHomePayload): string {
@@ -81,16 +86,54 @@ async function stopSidecar(): Promise<void> {
   runtimeStatus = 'stopped'
 }
 
+/** Light uses the system sidebar material; dark punches through to the desktop. */
+function macosVibrancyForCurrentTheme(): 'under-window' | 'sidebar' {
+  return nativeTheme.shouldUseDarkColors ? 'under-window' : 'sidebar'
+}
+
+function applyMacWindowAppearance(win: BrowserWindow): void {
+  if (process.platform !== 'darwin') return
+  win.setVibrancy(macosVibrancyForCurrentTheme())
+  win.setBackgroundColor('#00000001')
+}
+
+function refreshMacWindowAppearance(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  applyMacWindowAppearance(mainWindow)
+}
+
+function applyNativeTheme(theme: HostNativeTheme): boolean {
+  nativeTheme.themeSource = theme
+  refreshMacWindowAppearance()
+  return true
+}
+
+function macWindowOptions(): BrowserWindowConstructorOptions {
+  if (process.platform !== 'darwin') return {}
+  return {
+    backgroundColor: '#00000001',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 16, y: 12 },
+    vibrancy: macosVibrancyForCurrentTheme(),
+    visualEffectState: 'active',
+  }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
+    show: false,
+    ...macWindowOptions(),
     webPreferences: {
       preload: resolvePreload(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
+  })
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show()
   })
   void mainWindow.loadURL(DEV_URL)
   mainWindow.on('closed', () => {
@@ -178,12 +221,19 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(HOST_IPC.getRuntimeStatus, async () => runtimeStatus)
+  ipcMain.handle(HOST_IPC.setNativeTheme, async (_event, theme: unknown) => {
+    if (!isHostNativeTheme(theme)) return false
+    return applyNativeTheme(theme)
+  })
   // Board schedule wake: send HOST_IPC.boardRefreshWake to the renderer.
   // Host must not fetch widget data or write IDB.
 }
 
 app.whenReady().then(() => {
   registerIpc()
+  nativeTheme.on('updated', () => {
+    refreshMacWindowAppearance()
+  })
   createWindow()
 })
 

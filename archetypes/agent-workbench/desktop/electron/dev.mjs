@@ -17,9 +17,18 @@ const electronBinary = require('electron')
 async function loadEsbuild() {
   try {
     return await import('esbuild')
-  } catch {
-    const resolved = require.resolve('esbuild', { paths: [workbenchRoot] })
-    return await import(resolved)
+  } catch (directImportError) {
+    try {
+      const resolved = require.resolve('esbuild', {
+        paths: [workbenchRoot, here],
+      })
+      return await import(resolved)
+    } catch {
+      throw new Error(
+        'dev:desktop 需要 esbuild 才能从源码重编 Electron。请在 @uilab/agent-workbench 安装该 devDependency，不要直接运行 desktop/electron/dist/main.js。',
+        { cause: directImportError },
+      )
+    }
   }
 }
 

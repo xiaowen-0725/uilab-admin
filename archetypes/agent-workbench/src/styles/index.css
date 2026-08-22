@@ -12,6 +12,16 @@
 @source '../../node_modules/@streamdown/cjk/dist/*.js';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant electron {
+  html.wb-electron & {
+    @slot;
+  }
+}
+@custom-variant mac {
+  html.wb-electron.wb-platform-mac & {
+    @slot;
+  }
+}
 
 /* Phase 3A/3B Shell geometry + motion tokens (Shell-owned, not Session). */
 :root {
@@ -131,6 +141,95 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * macOS Desktop Host: hiddenInset title bar + native vibrancy.
+ * Web / tests / Windows / Linux keep the solid planes. Stage stays flush.
+ */
+html.wb-electron.wb-platform-mac,
+html.wb-electron.wb-platform-mac.dark {
+  --wb-app-bg: transparent;
+  --wb-navigator-surface: transparent;
+}
+
+html.wb-electron.wb-platform-mac {
+  --sidebar-accent: rgb(0 0 0 / 0.06);
+}
+
+html.wb-electron.wb-platform-mac.dark {
+  --sidebar-accent: rgb(255 255 255 / 0.1);
+}
+
+html.wb-electron.wb-platform-mac,
+html.wb-electron.wb-platform-mac body,
+html.wb-electron.wb-platform-mac #root,
+html.wb-electron.wb-platform-mac [data-slot='workbench-shell'],
+html.wb-electron.wb-platform-mac [data-slot='navigator'] {
+  background: transparent;
+  background-color: transparent;
+}
+
+html.wb-electron.wb-platform-mac .workbench-workspace {
+  background: color-mix(in oklab, var(--background) 86%, transparent);
+}
+
+html.wb-electron.wb-platform-mac [data-slot='navigator'][data-mode='overlay'] {
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  -webkit-backdrop-filter: blur(32px) saturate(1.4);
+  backdrop-filter: blur(32px) saturate(1.4);
+}
+
+html.wb-electron.wb-platform-mac
+  [data-slot='workbench-shell'][data-nav-open='true']
+  [data-testid='navigator-toolbar'] {
+  padding-left: 4.75rem;
+}
+
+html.wb-electron.wb-platform-mac
+  [data-slot='workbench-shell'][data-nav-open='false']
+  :is(
+    [data-testid='workspace-top-bar'],
+    [data-slot='capability-toolbar'],
+    [data-slot='work-surface-host'][data-full-stage='true']
+      [data-slot='work-surface-toolbar']
+  ) {
+  padding-left: 4.75rem;
+}
+
+html.wb-electron.wb-platform-mac
+  :is(
+    [data-testid='navigator-toolbar'],
+    [data-testid='workspace-top-bar'],
+    [data-slot='work-surface-toolbar'],
+    [data-slot='capability-toolbar']
+  ) {
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+}
+
+html.wb-electron.wb-platform-mac
+  :is(
+    [data-testid='navigator-toolbar'],
+    [data-testid='workspace-top-bar'],
+    [data-slot='work-surface-toolbar'],
+    [data-slot='capability-toolbar']
+  )
+  :is(button, a, input, [role='button']) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+html.wb-electron.wb-platform-mac [data-slot='dialog-overlay'] {
+  background: rgb(0 0 0 / 0.28);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
+  --tw-enter-scale: 1;
+  --tw-exit-scale: 1;
 }
 
 /* --- Workbench Shell inset geometry (Phase 3A) --- */

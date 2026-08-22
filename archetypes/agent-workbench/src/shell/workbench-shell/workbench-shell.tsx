@@ -343,6 +343,7 @@ export function WorkbenchShell({
     onToggleContextKeyboard: toggleContextFromKeyboard,
     onToggleWorkKeyboard: toggleWorkFromKeyboard,
     onExitMaximizeKeyboard: exitMaximizeFromKeyboard,
+    onNewChatKeyboard: startNewChatFromShell,
   })
 
   const stageRef = useRef<HTMLElement>(null)

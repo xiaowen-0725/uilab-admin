@@ -39,6 +39,7 @@ export { ProjectCatalogPortError } from './ports/project-catalog-port'
 
 export {
   HOST_IPC,
+  isHostNativeTheme,
   HOST_UNAVAILABLE_MESSAGE,
   HostUnavailableError,
   isHostUnavailableError,
@@ -47,6 +48,7 @@ export type {
   HostPort,
   HostCreateProjectDirectoryInput,
   HostIpcChannel,
+  HostNativeTheme,
   HostProjectsHomePayload,
   HostRuntimeStatus,
   HostStartRuntimeResult,
