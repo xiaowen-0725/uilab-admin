@@ -871,7 +871,7 @@ function parseQueryContributions(raw: unknown): ParseResult<QueryContribution[]>
     if (!isRecord(item)) {
       return { ok: false, reason: 'query 项必须是对象' }
     }
-    if (item.handler != null || item.module != null || item.execute != null) {
+    if (hasImplementationField(item)) {
       return {
         ok: false,
         reason: '外部 plugin.json 禁止查询实现字段（handler/module/execute）',

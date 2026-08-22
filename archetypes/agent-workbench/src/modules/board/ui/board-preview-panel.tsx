@@ -1,6 +1,7 @@
 import { Expand, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
+  boardHasRefreshableSource,
   lastRunForWidget,
   placementsToGridItems,
   widgetOnMount,
@@ -16,10 +17,10 @@ import { BoardCanvas } from './board-canvas'
 import { BoardWidgetHost } from './board-widget-host'
 
 function previewRefreshTitle(
-  jobCount: number,
+  canRefreshBoard: boolean,
   runtimeUnavailable: boolean,
 ): string {
-  if (jobCount === 0) return '这个看板没有取数作业'
+  if (!canRefreshBoard) return '这个看板没有取数作业'
   if (runtimeUnavailable) return JOB_RUNTIME_DISCONNECTED
   return '刷新'
 }
@@ -49,8 +50,8 @@ export function BoardPreviewPanel({
   identity = anonymousIdentitySnapshot(),
 }: BoardPreviewPanelProps) {
   const { board } = view
-  const jobCount = view.jobs.size
-  const refreshTitle = previewRefreshTitle(jobCount, runtimeUnavailable)
+  const canRefreshBoard = boardHasRefreshableSource(view)
+  const refreshTitle = previewRefreshTitle(canRefreshBoard, runtimeUnavailable)
 
   return (
     <aside
@@ -72,7 +73,7 @@ export function BoardPreviewPanel({
           data-testid='board-preview-refresh'
           aria-label={refreshTitle}
           title={refreshTitle}
-          disabled={jobCount === 0}
+          disabled={!canRefreshBoard}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />

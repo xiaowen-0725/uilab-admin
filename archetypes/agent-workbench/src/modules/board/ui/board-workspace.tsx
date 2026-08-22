@@ -12,7 +12,12 @@ import {
   updateBoardLayout,
 } from '../application/board-commands'
 import { JOB_RUNTIME_DISCONNECTED } from '../model/refresh-policy'
-import type { BoardListCard, BoardView } from '../model/board-view'
+import {
+  boardHasRefreshableSource,
+  widgetCanRefresh,
+  type BoardListCard,
+  type BoardView,
+} from '../model/board-view'
 import type { BoardId, BoardPlacement, BoardWidgetId } from '../model/types'
 import {
   IDENTITY_INCOMPLETE_BINDING,
@@ -155,8 +160,7 @@ export function BoardWorkspace({
         setRefreshHint(JOB_RUNTIME_DISCONNECTED)
         return
       }
-      const source = detail.sources.get(widgetId)
-      if (!detail.jobs.get(widgetId) && source?.kind !== 'query') {
+      if (!widgetCanRefresh(detail, widgetId)) {
         setRefreshHint('这个小组件没有取数作业')
         return
       }
@@ -177,11 +181,7 @@ export function BoardWorkspace({
       setRefreshHint(JOB_RUNTIME_DISCONNECTED)
       return
     }
-    if (
-      detail &&
-      detail.jobs.size === 0 &&
-      [...detail.sources.values()].every((source) => source.kind !== 'query')
-    ) {
+    if (detail && !boardHasRefreshableSource(detail)) {
       setRefreshHint('这个看板没有取数作业')
       return
     }

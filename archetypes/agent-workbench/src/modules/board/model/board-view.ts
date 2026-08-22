@@ -92,3 +92,20 @@ export function widgetRenderState(
     identity,
   })
 }
+
+/** Job row or query source — the two kinds the chrome can refresh. */
+export function widgetCanRefresh(
+  view: BoardView,
+  widgetId: BoardWidgetId,
+): boolean {
+  return view.jobs.has(widgetId) || view.sources.get(widgetId)?.kind === 'query'
+}
+
+/** Matches the old jobs.size + queryCount > 0 gate, including orphan job rows. */
+export function boardHasRefreshableSource(view: BoardView): boolean {
+  if (view.jobs.size > 0) return true
+  for (const source of view.sources.values()) {
+    if (source.kind === 'query') return true
+  }
+  return false
+}

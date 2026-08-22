@@ -15,9 +15,11 @@ import {
   EXAMPLE_DATA_NUDGE,
 } from '../fixtures/example-presets'
 import {
+  boardHasRefreshableSource,
   gridItemsToPlacements,
   lastRunForWidget,
   placementsToGridItems,
+  widgetCanRefresh,
   widgetOnMount,
   widgetRenderState,
   type BoardView,
@@ -32,8 +34,6 @@ import type { WidgetTheme } from '../model/widget-document'
 import { BoardCanvas } from './board-canvas'
 import { BoardJobDialog } from './board-job-dialog'
 import { BoardWidgetHost } from './board-widget-host'
-
-export const JOB_RUNTIME_UNAVAILABLE = JOB_RUNTIME_DISCONNECTED
 
 export interface BoardDetailPageProps {
   view: BoardView
@@ -87,14 +87,10 @@ export function BoardDetailPage({
   const lastRun = job ? (lastRunForWidget(view, job.widgetId) ?? null) : null
   const sourceTaskId = board.createdByTaskId
   const showSourceLink = Boolean(sourceTaskId && taskExists(sourceTaskId))
-  const jobCount = view.jobs.size
-  const queryCount = [...view.sources.values()].filter(
-    (source) => source.kind === 'query',
-  ).length
-  const refreshableCount = jobCount + queryCount
+  const canRefreshBoard = boardHasRefreshableSource(view)
   let refreshAllTitle = '全部刷新'
-  if (refreshableCount === 0) refreshAllTitle = '这个看板没有取数作业'
-  else if (runtimeUnavailable) refreshAllTitle = JOB_RUNTIME_UNAVAILABLE
+  if (!canRefreshBoard) refreshAllTitle = '这个看板没有取数作业'
+  else if (runtimeUnavailable) refreshAllTitle = JOB_RUNTIME_DISCONNECTED
 
   useEffect(() => {
     if (!expandedId) return
@@ -188,7 +184,7 @@ export function BoardDetailPage({
           variant='outline'
           data-testid='board-refresh-all'
           title={refreshAllTitle}
-          disabled={refreshableCount === 0}
+          disabled={!canRefreshBoard}
           onClick={onRefreshAll}
         >
           <RefreshCw className='size-3.5' aria-hidden />
@@ -375,6 +371,3 @@ export function BoardDetailPage({
   )
 }
 
-function widgetCanRefresh(view: BoardView, widgetId: BoardWidgetId): boolean {
-  return view.jobs.has(widgetId) || view.sources.get(widgetId)?.kind === 'query'
-}

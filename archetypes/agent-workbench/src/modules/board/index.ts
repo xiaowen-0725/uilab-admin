@@ -287,7 +287,7 @@ export {
   resolveThumbnailMode,
 } from './ui/board-list-page'
 export type { ThumbnailMode } from './ui/board-list-page'
-export { BoardDetailPage, JOB_RUNTIME_UNAVAILABLE } from './ui/board-detail-page'
+export { BoardDetailPage } from './ui/board-detail-page'
 export { BoardPreviewPanel } from './ui/board-preview-panel'
 export { BoardPreviewLoader } from './ui/board-preview-loader'
 export { BoardWorkspace } from './ui/board-workspace'

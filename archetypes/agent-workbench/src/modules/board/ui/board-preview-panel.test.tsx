@@ -52,5 +52,44 @@ describe('BoardPreviewPanel', () => {
       'read-only',
     )
     expect(page.getByTestId('board-canvas-resize-handle').elements()).toHaveLength(0)
+    expect(page.getByTestId('board-preview-refresh')).toBeDisabled()
+    expect(page.getByTestId('board-preview-refresh')).toHaveAccessibleName(
+      '这个看板没有取数作业',
+    )
+  })
+
+  it('enables refresh when the board has a query source and no job', async () => {
+    await render(
+      <div style={{ width: 480, height: 640 }}>
+        <BoardPreviewPanel
+          view={{
+            ...view,
+            sources: new Map([
+              [
+                'w1',
+                {
+                  id: 'source:w1',
+                  widgetId: 'w1',
+                  kind: 'query',
+                  trigger: { kind: 'onOpen' },
+                  referencableByJob: true,
+                  queryName: 'site_summary',
+                  parameters: {},
+                  requiredPermissions: ['read'],
+                  createdAt: NOW,
+                  updatedAt: NOW,
+                },
+              ],
+            ]),
+          }}
+          theme='light'
+          onOpenFull={() => {}}
+          onClose={() => {}}
+        />
+      </div>,
+    )
+
+    expect(page.getByTestId('board-preview-refresh')).toBeEnabled()
+    expect(page.getByTestId('board-preview-refresh')).toHaveAccessibleName('刷新')
   })
 })

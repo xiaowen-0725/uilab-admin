@@ -116,6 +116,10 @@ describe('board grid', () => {
       x: 0,
       y: 0,
     })
+    expect(deltaToCells({ x: -80, y: -56 }, 1200, geometry)).toEqual({
+      x: -1,
+      y: -1,
+    })
   })
 
   it('always fills four thumbnail slots regardless of widget count', () => {

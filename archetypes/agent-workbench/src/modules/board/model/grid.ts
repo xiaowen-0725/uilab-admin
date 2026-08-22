@@ -168,14 +168,9 @@ export function deltaToCells(
   const unitX = columnWidth(containerWidth, geometry) + geometry.gap
   const unitY = geometry.rowHeight + geometry.gap
   return {
-    x: roundCells(delta.x / unitX),
-    y: roundCells(delta.y / unitY),
+    x: Math.round(delta.x / unitX) || 0,
+    y: Math.round(delta.y / unitY) || 0,
   }
-}
-
-function roundCells(value: number): number {
-  const rounded = Math.round(value)
-  return rounded === 0 ? 0 : rounded
 }
 
 export interface ThumbnailSlot {
