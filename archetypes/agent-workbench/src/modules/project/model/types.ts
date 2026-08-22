@@ -90,6 +90,7 @@ export interface TaskSummary {
   id: TaskId
   projectId: ProjectId
   title: string
+  updatedAt: string
 }
 
 export function toProjectSummary(project: ProjectRecord): ProjectSummary {
@@ -106,6 +107,7 @@ export function toTaskSummary(row: TaskCatalogRow): TaskSummary {
     id: row.id,
     projectId: row.projectId,
     title: row.title,
+    updatedAt: row.updatedAt,
   }
 }
 

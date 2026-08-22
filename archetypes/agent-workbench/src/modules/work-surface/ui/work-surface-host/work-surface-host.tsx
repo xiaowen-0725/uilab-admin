@@ -5,7 +5,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react'
-import { Maximize2, Minimize2, X } from 'lucide-react'
+import { ArrowsPointingOutIcon as Maximize2, ArrowsPointingInIcon as Minimize2, XMarkIcon as X } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
 import { cn } from '@/lib/utils'

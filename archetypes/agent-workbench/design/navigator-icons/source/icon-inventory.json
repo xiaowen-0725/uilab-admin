@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "icons": [
+    {
+      "name": "sidebar-toggle",
+      "semantic": "toggle-navigator",
+      "role": "navigation",
+      "intent": "meaningful",
+      "visible_text": "打开导航",
+      "aliases": ["panel-left", "sidebar"]
+    },
+    {
+      "name": "new-task",
+      "semantic": "create-task",
+      "role": "action",
+      "intent": "meaningful",
+      "visible_text": "新建任务",
+      "aliases": ["new-chat", "compose"]
+    },
+    {
+      "name": "search",
+      "semantic": "search-tasks",
+      "role": "action",
+      "intent": "meaningful",
+      "visible_text": "搜索任务",
+      "aliases": ["magnify", "find"]
+    },
+    {
+      "name": "filter",
+      "semantic": "filter-tasks",
+      "role": "action",
+      "intent": "meaningful",
+      "visible_text": "筛选",
+      "aliases": ["funnel"]
+    }
+  ]
+}

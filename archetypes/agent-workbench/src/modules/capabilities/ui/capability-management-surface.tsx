@@ -1,14 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  ArrowLeft,
-  BookOpen,
-  CircleCheck,
-  CircleX,
-  LoaderCircle,
-  Puzzle,
-  RefreshCw,
-  UserRound,
-} from 'lucide-react'
+import { ArrowLeftIcon as ArrowLeft, BookOpenIcon as BookOpen, CheckCircleIcon as CircleCheck, XCircleIcon as CircleX, ArrowPathIcon as LoaderCircle, PuzzlePieceIcon as Puzzle, ArrowPathIcon as RefreshCw, UserCircleIcon as UserRound } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {

@@ -1,0 +1,15 @@
+{
+  "schema_version": 4,
+  "status": "selected",
+  "profile_ids": ["rounded-outline", "solid-glyph", "compact-controls"],
+  "selected_profile_id": "rounded-outline",
+  "preset": "rounded-outline",
+  "usage_tier": "core-ui",
+  "review_background": "#f2f2f2",
+  "selected_artifact": "assets/catalog/style-profiles.json",
+  "selected_artifact_sha256": "c5359db629bc80b5ab559a99d7e68250d8d76e8e0066e46b26b298571396f781",
+  "reviewer": "product",
+  "rationale": "B desktop-chrome: outline tools on a 16 grid, solid currentColor only for the primary new-task action. Catalog profile is rounded-outline; new-task is a documented solid exception.",
+  "selected_at": "2026-08-22T13:27:00+08:00",
+  "notes": "WorkBuddy is reference-only. Do not copy paths. Render at 16px in 32px titlebar buttons."
+}

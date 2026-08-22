@@ -1,20 +1,18 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import type { NavigatorProjectGroup, TaskSummary } from '@/modules/project'
+import { useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from 'react'
 import {
-  AlarmClock,
-  ChevronDown,
-  Filter,
-  Folder,
-  Kanban,
-  Loader2,
-  MessageSquarePlus,
-  MoreHorizontal,
-  PanelLeft,
-  Search,
-  Sparkles,
-  Trash2,
-  type LucideIcon,
-} from 'lucide-react'
+  formatRelativeTimeZh,
+  type NavigatorProjectGroup,
+  type TaskSummary,
+} from '@/modules/project'
+import {
+  ArrowPathIcon as Loader2,
+  ChevronDownIcon as ChevronDown,
+  ClockIcon as AlarmClock,
+  EllipsisHorizontalIcon as MoreHorizontal,
+  SparklesIcon as Sparkles,
+  TrashIcon as Trash2,
+  ViewColumnsIcon as Kanban,
+} from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,6 +28,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { NavigatorUserMenu } from './navigator-user-menu'
+import {
+  FilterIcon,
+  FolderIcon,
+  NewTaskIcon,
+  SearchIcon,
+  SidebarToggleIcon,
+} from './navigator-icons'
 import type { ShellDestination } from '../destination'
 
 export interface NavigatorProps {
@@ -60,7 +65,7 @@ type NavItemId = 'new-chat' | 'board' | 'skills-connectors' | 'automation'
 type NavItem = {
   id: NavItemId
   label: string
-  icon: LucideIcon
+  icon: ComponentType<SVGProps<SVGSVGElement>>
   action?: 'new-chat' | 'open-capabilities' | 'open-board'
 }
 
@@ -95,8 +100,8 @@ function runNavItemAction(
 
 const NEW_CHAT_ITEM: NavItem = {
   id: 'new-chat',
-  label: '新对话',
-  icon: MessageSquarePlus,
+  label: '新建任务',
+  icon: NewTaskIcon,
   action: 'new-chat',
 }
 
@@ -110,8 +115,6 @@ const NAV_DEST_ITEMS: readonly NavItem[] = [
   },
   { id: 'automation', label: '自动化', icon: AlarmClock },
 ]
-
-const NAV_ITEMS: readonly NavItem[] = [NEW_CHAT_ITEM, ...NAV_DEST_ITEMS]
 
 const STATUS_FILTERS = [
   { value: 'all', label: '全部状态' },
@@ -137,16 +140,32 @@ const DISPLAY_VERSION = 'V1.0.0'
 const iconBtnClass =
   'inline-flex size-7 items-center justify-center rounded-lg text-black/60 outline-none transition-colors duration-200 ease-in-out hover:bg-black/[0.03] hover:text-black/90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 dark:text-white/56 dark:hover:bg-white/[0.05] dark:hover:text-white/84'
 
+const toolbarIconBtnClass =
+  'inline-flex size-8 items-center justify-center rounded-lg text-black/70 outline-none transition-colors duration-200 ease-in-out hover:bg-black/[0.03] hover:text-black/90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 dark:text-white/56 dark:hover:bg-white/[0.05] dark:hover:text-white/84'
+
+const navIconClass = 'size-4 shrink-0'
+
+const newChatRowClass =
+  'flex h-[31px] w-full min-w-0 items-center gap-2 rounded-[8px] px-3 text-[14px] leading-[22px] font-semibold outline-none transition-colors duration-200 ease-in-out focus-visible:ring-3 focus-visible:ring-ring/50'
+
 const navRowClass =
-  'flex h-10 w-full min-w-0 items-center gap-1.5 rounded-xl px-2 text-[14px] leading-5 outline-none transition-colors duration-200 ease-in-out focus-visible:ring-3 focus-visible:ring-ring/50'
+  'flex h-[31px] w-full min-w-0 items-center gap-2 rounded-[8px] px-3 text-[14px] leading-[22px] outline-none transition-colors duration-200 ease-in-out focus-visible:ring-3 focus-visible:ring-ring/50'
 
 const navIdleClass =
   'font-normal text-black/90 hover:bg-black/[0.03] dark:text-white/84 dark:hover:bg-white/[0.05]'
 
-const navSelectedClass = 'bg-black/[0.05] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
+const navSelectedClass = 'bg-[#ebebeb] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
 
 const sectionHeaderClass =
-  'mb-1 flex min-h-[18px] w-full items-center gap-1 rounded-md px-2 text-[12px] font-normal leading-[18px] text-black/45 outline-none hover:text-black/60 focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/42 dark:hover:text-white/56'
+  'mb-0.5 flex h-[30px] w-full items-center gap-1 rounded-[8px] px-3 text-[12px] leading-5 font-semibold text-black/50 outline-none hover:bg-black/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/50 dark:hover:bg-white/[0.05]'
+
+const catalogListClass = 'flex flex-col gap-0.5'
+
+const collapseRowClass =
+  'flex h-[31px] w-full items-center justify-center rounded-[8px] bg-black/[0.04] text-[13px] leading-[21px] text-black/55 outline-none transition-colors duration-200 ease-in-out hover:bg-black/[0.06] focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-white/[0.06] dark:text-white/50 dark:hover:bg-white/[0.08]'
+
+/** Show a bottom 收起 once the loose-task list is long enough to scroll away from the header. */
+const TASK_COLLAPSE_HINT = 5
 
 /** Left rail: toolbar → primary action → destinations → catalog. */
 export function Navigator({
@@ -229,7 +248,7 @@ export function Navigator({
       inert={!open}
     >
       <div
-        className='flex h-9 shrink-0 items-center justify-end gap-0.5 px-2'
+        className='flex h-14 shrink-0 items-center justify-end gap-0 px-3'
         data-testid='navigator-toolbar'
       >
         <RailIconButton
@@ -238,12 +257,13 @@ export function Navigator({
           ariaLabel='切换导航'
           testId='toggle-navigator'
           title='切换导航'
+          className={toolbarIconBtnClass}
           onClick={() => {
             if (onToggleNavigator) onToggleNavigator()
             else onClose?.()
           }}
         >
-          <PanelLeft className='size-3.5' aria-hidden />
+          <SidebarToggleIcon className={navIconClass} aria-hidden />
         </RailIconButton>
 
         <RailIconButton
@@ -251,9 +271,10 @@ export function Navigator({
           pressed={searchOpen}
           ariaLabel={searchOpen ? '关闭搜索' : '搜索任务'}
           testId='navigator-search-toggle'
+          className={toolbarIconBtnClass}
           onClick={() => setSearchOpen((v) => !v)}
         >
-          <Search className='size-3.5' aria-hidden />
+          <SearchIcon className={navIconClass} aria-hidden />
         </RailIconButton>
 
         <DropdownMenu>
@@ -262,7 +283,7 @@ export function Navigator({
               <button
                 type='button'
                 className={cn(
-                  iconBtnClass,
+                  toolbarIconBtnClass,
                   filterActive && 'bg-black/[0.05] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
                 )}
                 tabIndex={tabIndex}
@@ -272,7 +293,7 @@ export function Navigator({
               />
             }
           >
-            <Filter className='size-3.5' aria-hidden />
+            <FilterIcon className={navIconClass} aria-hidden />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align='end'
@@ -321,10 +342,12 @@ export function Navigator({
         ) : null}
       </div>
 
-      <div className='shrink-0 px-4 pt-1 pb-2'>
-        <p className='truncate text-[14px] leading-5 tracking-tight text-black/90 dark:text-white/84'>
-          Workbench
-          <span className='ms-1.5 text-[12px] font-normal leading-[18px] text-black/45 dark:text-white/42'>
+      <div className='mb-2.5 shrink-0 px-3'>
+        <p className='flex h-5 items-center truncate'>
+          <span className='pl-3 text-[12px] leading-5 font-bold text-black/50 dark:text-white/50'>
+            Workbench
+          </span>
+          <span className='ms-1 text-[10px] leading-none font-normal tracking-[0.2px] text-black/50 dark:text-white/50'>
             {DISPLAY_VERSION}
           </span>
         </p>
@@ -348,25 +371,25 @@ export function Navigator({
         </div>
       ) : null}
 
-      <div className='shrink-0 px-2 pb-1' data-testid='navigator-menu'>
+      <div className='shrink-0 px-3 pb-1' data-testid='navigator-menu'>
         <button
           type='button'
           data-testid='navigator-new-chat'
           tabIndex={tabIndex}
-          title='新对话'
+          title='新建任务'
           className={cn(
-            navRowClass,
-            'mb-1.5 bg-black/[0.05] font-medium text-black/90 hover:bg-black/[0.06] dark:bg-white/[0.10] dark:text-white/84 dark:hover:bg-white/[0.12]',
+            newChatRowClass,
+            'mb-0.5 bg-[#e6e6e6] text-black/90 hover:bg-[#dedede] dark:bg-white/[0.10] dark:text-white/84 dark:hover:bg-white/[0.12]',
           )}
           onClick={() => handleNavClick(NEW_CHAT_ITEM)}
         >
-          <MessageSquarePlus className='size-[18px] shrink-0' aria-hidden />
+          <NewTaskIcon className={navIconClass} aria-hidden />
           <span className='min-w-0 flex-1 truncate text-left'>
             {NEW_CHAT_ITEM.label}
           </span>
           <NewChatShortcutHint />
         </button>
-        <ul className='flex flex-col gap-1.5'>
+        <ul className='flex flex-col gap-0.5'>
           {NAV_DEST_ITEMS.map((item) => {
             const Icon = item.icon
             const selected = isNavItemCurrent(item, activeDestination)
@@ -387,7 +410,7 @@ export function Navigator({
                   )}
                   onClick={() => handleNavClick(item)}
                 >
-                  <Icon className='size-[18px] shrink-0' aria-hidden />
+                  <Icon className={navIconClass} strokeWidth={1.5} aria-hidden />
                   <span className='min-w-0 flex-1 truncate text-left'>
                     {item.label}
                   </span>
@@ -407,8 +430,8 @@ export function Navigator({
         </p>
       ) : null}
 
-      <ScrollArea className='min-h-0 flex-1 px-2 pb-2'>
-        <section data-testid='navigator-tasks' className='pt-4'>
+      <ScrollArea className='min-h-0 flex-1 px-3 pb-2'>
+        <section data-testid='navigator-tasks' className='pt-2'>
           <button
             type='button'
             className={sectionHeaderClass}
@@ -425,9 +448,10 @@ export function Navigator({
             </span>
             <ChevronDown
               className={cn(
-                'size-3 shrink-0 transition-transform',
+                'size-3.5 shrink-0 text-black/30 transition-transform dark:text-white/30',
                 !tasksExpanded && '-rotate-90'
               )}
+              strokeWidth={1.5}
               aria-hidden
             />
           </button>
@@ -444,32 +468,45 @@ export function Navigator({
               ) : null}
               {filteredLooseTasks.length === 0 ? (
                 <p
-                  className='px-3 py-2 text-[14px] leading-5 text-black/45 dark:text-white/42'
+                  className='px-3 py-2 text-[13px] leading-5 text-black/45 dark:text-white/42'
                   data-testid='navigator-tasks-empty'
                 >
                   还没有任务
                 </p>
               ) : (
-                <ul className='flex flex-col ps-3'>
-                  {filteredLooseTasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      selected={task.id === selectedTaskId}
-                      busy={busyTaskIds?.has(task.id) ?? false}
+                <>
+                  <ul className={catalogListClass}>
+                    {filteredLooseTasks.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        selected={task.id === selectedTaskId}
+                        busy={busyTaskIds?.has(task.id) ?? false}
+                        tabIndex={tabIndex}
+                        onSelect={onSelectTask}
+                        onDelete={onDeleteTask}
+                      />
+                    ))}
+                  </ul>
+                  {filteredLooseTasks.length >= TASK_COLLAPSE_HINT ? (
+                    <button
+                      type='button'
+                      className={cn(collapseRowClass, 'mt-0.5')}
                       tabIndex={tabIndex}
-                      onSelect={onSelectTask}
-                      onDelete={onDeleteTask}
-                    />
-                  ))}
-                </ul>
+                      data-testid='navigator-tasks-collapse'
+                      onClick={() => setTasksExpanded(false)}
+                    >
+                      收起
+                    </button>
+                  ) : null}
+                </>
               )}
             </>
           ) : null}
         </section>
 
         {filteredProjectGroups.length > 0 ? (
-          <section data-testid='navigator-projects' className='pt-5'>
+          <section data-testid='navigator-projects' className='pt-2'>
             <button
               type='button'
               className={sectionHeaderClass}
@@ -484,11 +521,12 @@ export function Navigator({
                   ({filteredProjectGroups.length})
                 </span>
               </span>
-              <ChevronDown
-                className={cn(
-                  'size-3 shrink-0 transition-transform',
-                  !projectsExpanded && '-rotate-90'
-                )}
+            <ChevronDown
+              className={cn(
+                'size-3.5 shrink-0 text-black/30 transition-transform dark:text-white/30',
+                !projectsExpanded && '-rotate-90'
+              )}
+                strokeWidth={1.5}
                 aria-hidden
               />
             </button>
@@ -501,10 +539,10 @@ export function Navigator({
                       key={group.project.id}
                       data-testid={`navigator-project-group-${group.project.id}`}
                     >
-                      <div className='group/project flex h-10 items-center rounded-xl hover:bg-black/[0.03] dark:hover:bg-white/[0.05]'>
+                      <div className='group/project flex h-[31px] items-center rounded-[8px] hover:bg-black/[0.03] dark:hover:bg-white/[0.05]'>
                         <button
                           type='button'
-                          className='flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-2 text-left text-[14px] leading-5 font-normal text-black/90 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/84'
+                          className='flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-3 text-left text-[14px] leading-[21px] font-normal text-black/90 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/84'
                           tabIndex={tabIndex}
                           aria-expanded={expanded}
                           data-testid={`navigator-project-group-toggle-${group.project.id}`}
@@ -515,11 +553,10 @@ export function Navigator({
                             }))
                           }
                         >
-                          <Folder
-                            className='size-[18px] shrink-0 text-black/45 dark:text-white/42'
-                            aria-hidden
+                          <FolderIcon
+                            className={cn(navIconClass, 'text-black/45 dark:text-white/42')}
                           />
-                          <span className='min-w-0 flex-1 truncate'>
+                          <span className='min-w-0 truncate'>
                             {group.project.name}
                           </span>
                           <ChevronDown
@@ -527,6 +564,7 @@ export function Navigator({
                               'size-3 shrink-0 text-black/45 transition-transform dark:text-white/42',
                               !expanded && '-rotate-90'
                             )}
+                            strokeWidth={1.5}
                             aria-hidden
                           />
                         </button>
@@ -549,6 +587,7 @@ export function Navigator({
                             >
                               <MoreHorizontal
                                 className='size-3.5'
+                                strokeWidth={1.5}
                                 aria-hidden
                               />
                             </DropdownMenuTrigger>
@@ -590,19 +629,17 @@ export function Navigator({
                               onNewProjectChat(group.project.id)
                             }}
                           >
-                            <MessageSquarePlus
-                              className='size-3.5'
-                              aria-hidden
-                            />
+                            <NewTaskIcon className='size-3.5' aria-hidden />
                           </button>
                         ) : null}
                       </div>
                       {expanded ? (
-                        <ul className='flex flex-col ps-3'>
+                        <ul className={catalogListClass}>
                           {group.tasks.map((task) => (
                             <TaskRow
                               key={task.id}
                               task={task}
+                              inset
                               selected={task.id === selectedTaskId}
                               busy={busyTaskIds?.has(task.id) ?? false}
                               tabIndex={tabIndex}
@@ -647,28 +684,18 @@ export function Navigator({
   return panel
 }
 
-export function NavigatorCollapsedRail({
-  activeDestination,
+/** WorkBuddy collapsed chrome: titlebar cluster, not a vertical icon rail. */
+export function CollapsedNavButtons({
   onNewChat,
-  onOpenBoard,
-  onOpenCapabilities,
   onToggleNavigator,
 }: {
-  activeDestination: ShellDestination
   onNewChat?: () => void
-  onOpenBoard?: () => void
-  onOpenCapabilities?: () => void
   onToggleNavigator?: () => void
 }) {
-  const handleNavClick = (item: NavItem) => {
-    runNavItemAction(item, { onNewChat, onOpenCapabilities, onOpenBoard })
-  }
-
   return (
-    <nav
-      className='nav-collapsed-rail bg-sidebar text-sidebar-foreground'
+    <div
+      className='flex shrink-0 items-center gap-0'
       data-testid='navigator-collapsed-rail'
-      aria-label='收起的工作台导航'
     >
       <RailIconButton
         tabIndex={0}
@@ -676,32 +703,46 @@ export function NavigatorCollapsedRail({
         ariaLabel='打开导航'
         testId='toggle-navigator'
         title='打开导航'
+        className={toolbarIconBtnClass}
         onClick={() => onToggleNavigator?.()}
       >
-        <PanelLeft className='size-3.5' aria-hidden />
+        <SidebarToggleIcon className={navIconClass} aria-hidden />
       </RailIconButton>
-      {NAV_ITEMS.filter((item) => item.action != null).map((item) => {
-        const Icon = item.icon
-        const selected = isNavItemCurrent(item, activeDestination)
-        return (
-          <RailIconButton
-            key={item.id}
-            tabIndex={0}
-            pressed={selected}
-            ariaLabel={item.label}
-            testId={
-              item.action === 'new-chat'
-                ? 'navigator-rail-new-chat'
-                : `navigator-rail-${item.id}`
-            }
-            title={item.label}
-            onClick={() => handleNavClick(item)}
-          >
-            <Icon className='size-3.5' aria-hidden />
-          </RailIconButton>
-        )
-      })}
-    </nav>
+      <RailIconButton
+        tabIndex={0}
+        pressed={false}
+        ariaLabel='新建任务'
+        testId='navigator-rail-new-chat'
+        title='新建任务'
+        className={toolbarIconBtnClass}
+        onClick={() => onNewChat?.()}
+      >
+        <NewTaskIcon className={navIconClass} aria-hidden />
+      </RailIconButton>
+    </div>
+  )
+}
+
+export function CollapsedWindowChrome({
+  onNewChat,
+  onToggleNavigator,
+  children,
+}: {
+  onNewChat?: () => void
+  onToggleNavigator?: () => void
+  children?: ReactNode
+}) {
+  return (
+    <header
+      className='collapsed-window-chrome'
+      data-slot='collapsed-window-chrome'
+    >
+      <CollapsedNavButtons
+        onNewChat={onNewChat}
+        onToggleNavigator={onToggleNavigator}
+      />
+      {children}
+    </header>
   )
 }
 
@@ -725,6 +766,7 @@ function RailIconButton({
   ariaLabel,
   testId,
   title,
+  className,
   onClick,
   children,
 }: {
@@ -733,6 +775,7 @@ function RailIconButton({
   ariaLabel: string
   testId: string
   title?: string
+  className?: string
   onClick: () => void
   children: ReactNode
 }) {
@@ -740,7 +783,7 @@ function RailIconButton({
     <button
       type='button'
       className={cn(
-        iconBtnClass,
+        className ?? iconBtnClass,
         pressed && 'bg-sidebar-accent text-foreground'
       )}
       tabIndex={tabIndex}
@@ -792,6 +835,7 @@ function TaskRow({
   task,
   selected,
   busy,
+  inset = false,
   tabIndex,
   onSelect,
   onDelete,
@@ -799,10 +843,13 @@ function TaskRow({
   task: TaskSummary
   selected: boolean
   busy: boolean
+  inset?: boolean
   tabIndex: number
   onSelect: (id: string) => void
   onDelete?: (id: string) => void
 }) {
+  const relativeTime = formatRelativeTimeZh(task.updatedAt)
+  const label = busy ? `${task.title}，进行中` : task.title
   return (
     <li className='group relative'>
       <button
@@ -810,25 +857,35 @@ function TaskRow({
         data-testid={`task-${task.id}`}
         aria-current={selected ? 'true' : undefined}
         aria-busy={busy || undefined}
-        aria-label={busy ? `${task.title}，进行中` : task.title}
+        aria-label={relativeTime ? `${label}，${relativeTime}` : label}
         tabIndex={tabIndex}
         className={cn(
-          'flex h-10 w-full items-center gap-1.5 rounded-xl px-2 text-left text-[14px] leading-5 font-normal outline-none',
-          'transition-colors duration-200 ease-in-out hover:bg-black/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-white/[0.05]',
+          'flex h-[31px] w-full items-center gap-2 rounded-[8px] pe-3 text-left text-[14px] leading-[21px] font-normal outline-none',
+          inset ? 'ps-9' : 'ps-3',
+          'transition-colors duration-200 ease-in-out focus-visible:ring-3 focus-visible:ring-ring/50',
           selected
-            ? 'bg-black/[0.05] text-black/90 dark:bg-white/[0.10] dark:text-white/84'
-            : 'text-black/90 dark:text-white/84'
+            ? 'bg-[#e6e6e6] text-black/90 dark:bg-white/[0.12] dark:text-white/90'
+            : 'text-black/90 hover:bg-black/[0.03] dark:text-white/84 dark:hover:bg-white/[0.05]',
         )}
         onClick={() => onSelect(task.id)}
       >
         {busy ? (
           <Loader2
             className='size-3 shrink-0 animate-spin text-black/45 dark:text-white/42'
+            strokeWidth={1.5}
             aria-hidden
             data-testid={`task-busy-${task.id}`}
           />
         ) : null}
         <span className='min-w-0 flex-1 truncate'>{task.title}</span>
+        {relativeTime ? (
+          <span
+            className='shrink-0 text-[11px] leading-5 font-normal text-black/50 group-hover:opacity-0 dark:text-white/40'
+            data-testid={`task-time-${task.id}`}
+          >
+            {relativeTime}
+          </span>
+        ) : null}
       </button>
       {onDelete ? (
         <Button
@@ -836,7 +893,7 @@ function TaskRow({
           variant='ghost'
           size='sm'
           data-testid={`task-delete-${task.id}`}
-          className='absolute end-0.5 top-1/2 size-7 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+          className='absolute end-1 top-1/2 size-6 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
           tabIndex={tabIndex}
           aria-label={`删除 ${task.title}`}
           onClick={(e) => {
@@ -844,7 +901,7 @@ function TaskRow({
             onDelete(task.id)
           }}
         >
-          <Trash2 className='size-3.5' aria-hidden />
+          <Trash2 className='size-3.5' strokeWidth={1.5} aria-hidden />
         </Button>
       ) : null}
     </li>

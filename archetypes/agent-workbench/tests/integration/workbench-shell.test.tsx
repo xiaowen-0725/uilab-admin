@@ -6,8 +6,7 @@ import { page, userEvent } from 'vitest/browser'
 
 /** Workspace is full-bleed on every viewport: no outer margin. */
 const INSET = 0
-const NAV_WIDTH = 306
-const NAV_RAIL_WIDTH = 48
+const NAV_WIDTH = 264
 const TOOLBAR_HEIGHT = 44
 const GEOMETRY_TOLERANCE = 2
 
@@ -106,7 +105,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // A — left rail: real catalog only (no mock utilities / no project picker)
     await expect
       .element(page.getByTestId('navigator-new-chat'))
-      .toHaveTextContent('新对话')
+      .toHaveTextContent('新建任务')
     await expect
       .element(page.getByTestId('navigator-tasks'))
       .toBeInTheDocument()
@@ -219,7 +218,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
-  it('collapsed icon rail still opens Board', async () => {
+  it('collapsed titlebar reopens Navigator so Board stays in the menu', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
 
@@ -228,7 +227,19 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('workbench-shell'))
       .toHaveAttribute('data-nav-open', 'false')
 
-    await userEvent.click(page.getByTestId('navigator-rail-board'))
+    await expect
+      .element(page.getByTestId('navigator-collapsed-rail'))
+      .toBeInTheDocument()
+    expect(visibleByTestId('navigator-rail-new-chat')).toHaveLength(1)
+    expect(visibleByTestId('navigator-rail-board')).toHaveLength(0)
+
+    await userEvent.click(
+      page.getByTestId('navigator-collapsed-rail').getByTestId('toggle-navigator'),
+    )
+    await expect
+      .element(page.getByTestId('workbench-shell'))
+      .toHaveAttribute('data-nav-open', 'true')
+    await userEvent.click(page.getByTestId('navigator-menu-board'))
     await expect.element(page.getByTestId('board-list-page')).toBeInTheDocument()
     expect(page.getByTestId('workbench-shell').element()).toHaveAttribute(
       'data-destination',
@@ -317,11 +328,9 @@ describe('Workbench Shell integration (visible behavior)', () => {
     // Icon-only: no visible text labels on the controls.
     expect(contextBtn.textContent?.trim()).toBe('')
     expect(workBtn.textContent?.trim()).toBe('')
-    // Semantic icons: Context = SlidersHorizontal, Work = PanelBottom.
-    expect(
-      contextBtn.querySelector('svg.lucide-sliders-horizontal')
-    ).toBeTruthy()
-    expect(workBtn.querySelector('svg.lucide-panel-bottom')).toBeTruthy()
+    // Semantic icons stay icon-only (Heroicons outline, not Lucide class names).
+    expect(contextBtn.querySelector('svg')).toBeTruthy()
+    expect(workBtn.querySelector('svg')).toBeTruthy()
     // 32×32 hit area.
     const contextBox = contextBtn.getBoundingClientRect()
     const workBox = workBtn.getBoundingClientRect()
@@ -337,7 +346,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     )
   })
 
-  it('1440 collapsed by pointer: Navigator inert, icon rail stays, animated motion', async () => {
+  it('1440 collapsed by pointer: Navigator inert, titlebar chrome stays, animated motion', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
 
@@ -370,7 +379,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
           .getByTestId('workbench-workspace')
           .element()
           .getBoundingClientRect()
-        return Math.abs(wsBox.left - NAV_RAIL_WIDTH) <= GEOMETRY_TOLERANCE
+        return Math.abs(wsBox.left - INSET) <= GEOMETRY_TOLERANCE
       })
       .toBe(true)
 
@@ -378,17 +387,17 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .getByTestId('workbench-workspace')
       .element()
       .getBoundingClientRect()
-    // Collapsed: 48px icon rail stays; destinations remain clickable.
-    expect(Math.abs(wsBox.left - NAV_RAIL_WIDTH)).toBeLessThanOrEqual(
-      GEOMETRY_TOLERANCE,
-    )
+    // Collapsed: no icon rail; workspace is flush and titlebar chrome reopens nav.
+    expect(Math.abs(wsBox.left - INSET)).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
     expect(wsBox.width).toBeGreaterThan(
-      1400 - NAV_RAIL_WIDTH - INSET * 2 - GEOMETRY_TOLERANCE,
+      1400 - INSET * 2 - GEOMETRY_TOLERANCE,
     )
     await expect
       .element(page.getByTestId('navigator-collapsed-rail'))
       .toBeInTheDocument()
-    expect(visibleByTestId('navigator-rail-board')).toHaveLength(1)
+    expect(visibleByTestId('toggle-navigator')).toHaveLength(1)
+    expect(visibleByTestId('navigator-rail-new-chat')).toHaveLength(1)
+    expect(visibleByTestId('navigator-rail-board')).toHaveLength(0)
   })
 
   it('Navigator account menu opens upward with settings and sign-out fixtures', async () => {
@@ -402,8 +411,8 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('navigator-user-menu'))
       .toHaveTextContent('演示用户')
     await expect
-      .element(page.getByTestId('navigator-user-menu'))
-      .toHaveTextContent('demo@uilab.dev')
+      .element(page.getByTestId('navigator-user-notifications'))
+      .toBeInTheDocument()
 
     // Closed: Base UI may keep portal with data-closed after first open; before open it's absent.
     const closedPanel = document.querySelector(
@@ -426,8 +435,30 @@ describe('Workbench Shell integration (visible behavior)', () => {
       .element(page.getByTestId('navigator-user-settings'))
       .toHaveTextContent('设置')
     await expect
+      .element(page.getByTestId('navigator-user-appearance'))
+      .toHaveTextContent('外观')
+    await expect
+      .element(page.getByTestId('navigator-user-help'))
+      .toHaveTextContent('帮助与反馈')
+    await expect
+      .element(page.getByTestId('navigator-user-updates'))
+      .toHaveTextContent('检查更新')
+    await expect
       .element(page.getByTestId('navigator-user-sign-out'))
       .toHaveTextContent('退出登录')
+
+    await userEvent.click(page.getByTestId('navigator-user-theme-dark'))
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    await expect
+      .element(page.getByTestId('navigator-user-theme-dark'))
+      .toHaveAttribute('data-selected', 'true')
+    await expect
+      .poll(() =>
+        panel.element().hasAttribute('data-closed') ? 'closed' : 'open'
+      )
+      .toBe('open')
+    await userEvent.click(page.getByTestId('navigator-user-theme-light'))
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
 
     // Menu sits above the account chip.
     const triggerBox = trigger.element().getBoundingClientRect()
@@ -478,12 +509,29 @@ describe('Workbench Shell integration (visible behavior)', () => {
       })
       .toBe('closed')
 
-    // Sign-out is fixture-only honesty.
+    // Sign-out / help / updates stay fixture-honest.
+    await userEvent.click(trigger)
+    await userEvent.click(page.getByTestId('navigator-user-help'))
+    await expect
+      .element(page.getByTestId('navigator-user-notice'))
+      .toHaveTextContent('帮助与反馈尚未接入')
+
+    await userEvent.click(trigger)
+    await userEvent.click(page.getByTestId('navigator-user-updates'))
+    await expect
+      .element(page.getByTestId('navigator-user-notice'))
+      .toHaveTextContent('检查更新尚未接入')
+
     await userEvent.click(trigger)
     await userEvent.click(page.getByTestId('navigator-user-sign-out'))
     await expect
       .element(page.getByTestId('navigator-user-notice'))
       .toHaveTextContent('退出登录（静态 fixture）')
+
+    await userEvent.click(page.getByTestId('navigator-user-notifications'))
+    await expect
+      .element(page.getByTestId('navigator-user-notice'))
+      .toHaveTextContent('通知尚未接入')
   })
 
   it('keyboard Ctrl+B toggles navigator with instant motion', async () => {
@@ -910,11 +958,15 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect.element(shell).toHaveAttribute('data-nav-open', 'false')
     await expect.element(shell).toHaveAttribute('data-nav-motion', 'animated')
 
-    // After collapse, re-open control stays on the icon rail (not Work toolbar).
+    // After collapse, re-open control stays on the window chrome (not Work toolbar).
     navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
-    const collapsedRail = page.getByTestId('navigator-collapsed-rail').element()
-    expect(collapsedRail.contains(navToggles[0]!)).toBe(true)
+    const collapsedChrome = page.getByTestId('navigator-collapsed-rail').element()
+    expect(collapsedChrome.contains(navToggles[0]!)).toBe(true)
+    const workToolbar = document.querySelector(
+      '[data-slot="work-surface-toolbar"]',
+    ) as HTMLElement
+    expect(workToolbar.contains(navToggles[0]!)).toBe(false)
   })
 
   it('760 serial Work: unique toggle-navigator lives in Work toolbar and is clickable', async () => {

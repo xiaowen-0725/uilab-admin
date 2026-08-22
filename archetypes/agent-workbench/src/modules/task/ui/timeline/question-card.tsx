@@ -1,4 +1,4 @@
-import { Check, Pencil } from 'lucide-react'
+import { CheckIcon as Check, PencilIcon as Pencil } from '@heroicons/react/24/outline'
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

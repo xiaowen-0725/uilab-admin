@@ -25,9 +25,8 @@
 
 /* Phase 3A/3B Shell geometry + motion tokens (Shell-owned, not Session). */
 :root {
-  /* Codex Desktop left rail CDP: 306 CSS px */
-  --navigator-width: 306px;
-  --navigator-rail-width: 48px;
+  /* WorkBuddy desktop sidebar CDP: 264 CSS px */
+  --navigator-width: 264px;
   /* Codex content column ~736 */
   --content-max-width: 736px;
   /* Timeline chat rhythm — grok-app comfortable/md */
@@ -183,24 +182,26 @@ html.wb-electron.wb-platform-mac [data-slot='navigator'][data-mode='overlay'] {
 html.wb-electron.wb-platform-mac
   [data-slot='workbench-shell'][data-nav-open='true']
   [data-testid='navigator-toolbar'] {
-  padding-left: 4.75rem;
+  padding-left: 80px;
 }
 
 html.wb-electron.wb-platform-mac
   [data-slot='workbench-shell'][data-nav-open='false']
   :is(
     [data-testid='workspace-top-bar'],
+    [data-slot='collapsed-window-chrome'],
     [data-slot='capability-toolbar'],
     [data-slot='work-surface-host'][data-full-stage='true']
       [data-slot='work-surface-toolbar']
   ) {
-  padding-left: 4.75rem;
+  padding-left: 80px;
 }
 
 html.wb-electron.wb-platform-mac
   :is(
     [data-testid='navigator-toolbar'],
     [data-testid='workspace-top-bar'],
+    [data-slot='collapsed-window-chrome'],
     [data-slot='work-surface-toolbar'],
     [data-slot='capability-toolbar']
   ) {
@@ -213,6 +214,7 @@ html.wb-electron.wb-platform-mac
   :is(
     [data-testid='navigator-toolbar'],
     [data-testid='workspace-top-bar'],
+    [data-slot='collapsed-window-chrome'],
     [data-slot='work-surface-toolbar'],
     [data-slot='capability-toolbar']
   )
@@ -248,7 +250,7 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   flex-shrink: 0;
   /* min-width:0 so flex does not lock to Navigator content width when collapsed. */
   min-width: 0;
-  width: var(--navigator-rail-width);
+  width: 0;
   overflow: hidden;
   transition: width var(--nav-motion-duration) var(--ease-drawer);
 }
@@ -276,21 +278,13 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   pointer-events: auto;
 }
 
-.nav-collapsed-rail {
-  position: absolute;
-  inset: 0 auto 0 0;
-  z-index: 1;
+.collapsed-window-chrome {
   display: flex;
-  width: var(--navigator-rail-width);
-  flex-direction: column;
+  height: 3.5rem;
+  flex-shrink: 0;
   align-items: center;
-  gap: 4px;
-  padding-top: 8px;
-  pointer-events: auto;
-}
-
-[data-slot='workbench-shell'][data-nav-open='true'] .nav-collapsed-rail {
-  display: none;
+  gap: 0.5rem;
+  padding-inline: 0.75rem;
 }
 
 /* Workspace — flush foreground plane (no inset / radius / border / shadow). */

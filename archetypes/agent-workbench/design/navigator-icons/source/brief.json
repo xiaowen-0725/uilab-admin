@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "mode": "ui-system",
+  "product": "Agent Workbench",
+  "placement": "Navigator titlebar and menu rows: 32×32 ghost buttons and 31px rows, 16px glyphs",
+  "audience": "desktop-first Workbench users",
+  "brand_tokens": {
+    "color": "currentColor",
+    "sidebar": "#f2f2f2",
+    "icon_size": "16px",
+    "button": "32px"
+  },
+  "target_sizes": [16, 20, 24, 32],
+  "intent_mode": "guided",
+  "color_mode": "monochrome",
+  "motion": "none",
+  "rights_verified": true,
+  "rights_note": "WorkBuddy is reference-only. Measure system (16 / 1.5 / round / currentColor). Do not copy or trace their SVG paths.",
+  "directions": [
+    "a-clear-outline",
+    "b-desktop-chrome",
+    "c-solid-glyph"
+  ],
+  "delivery_forms": ["svg", "react"],
+  "must_preserve": [
+    "original geometry",
+    "currentColor",
+    "16px default render",
+    "Chinese accessible names"
+  ]
+}

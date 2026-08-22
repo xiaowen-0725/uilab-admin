@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Navigator icon directions</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #f2f2f2;
+        color: #111;
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+      }
+      main {
+        width: 1100px;
+        padding: 28px 32px 40px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      .sub {
+        margin: 0 0 28px;
+        color: #666;
+        font-size: 13px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 24px;
+      }
+      h2 {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+      .hint {
+        margin: 0 0 14px;
+        color: #777;
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 16px;
+      }
+      figure {
+        margin: 0;
+        text-align: center;
+      }
+      figcaption {
+        margin-top: 6px;
+        color: #888;
+        font-size: 11px;
+      }
+      img {
+        display: block;
+        color: #222;
+      }
+      .note {
+        margin-top: 28px;
+        color: #555;
+        font-size: 13px;
+      }
+      .boards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 20px;
+      }
+      .board {
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .board.light {
+        background: #fff;
+      }
+      .board.dark {
+        background: #1a1a1a;
+        color: #eee;
+      }
+      .board img {
+        filter: none;
+      }
+      .board.dark img {
+        filter: invert(1);
+      }
+      .mini {
+        display: flex;
+        gap: 12px;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Workbench 侧栏图标 · 三种原创画法</h1>
+      <p class="sub">16px 真尺寸 + 32px 放大。几何全部原创，没有描 WorkBuddy 的 path。</p>
+      <div class="cols">
+        <section>
+          <h2>A 清透线框</h2>
+          <p class="hint">16 格 / 1.5 圆角描边</p>
+          <div class="row">
+            <figure>
+              <img src="../concepts/a-clear/sidebar-toggle.svg" width="16" height="16" alt="" />
+              <img src="../concepts/a-clear/sidebar-toggle.svg" width="32" height="32" alt="" />
+              <figcaption>收起</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/a-clear/new-task.svg" width="16" height="16" alt="" />
+              <img src="../concepts/a-clear/new-task.svg" width="32" height="32" alt="" />
+              <figcaption>新建</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/a-clear/search.svg" width="16" height="16" alt="" />
+              <img src="../concepts/a-clear/search.svg" width="32" height="32" alt="" />
+              <figcaption>搜索</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/a-clear/filter.svg" width="16" height="16" alt="" />
+              <img src="../concepts/a-clear/filter.svg" width="32" height="32" alt="" />
+              <figcaption>筛选</figcaption>
+            </figure>
+          </div>
+        </section>
+        <section>
+          <h2>B 桌面壳混合</h2>
+          <p class="hint">线框工具 + 实心「新建」</p>
+          <div class="row">
+            <figure>
+              <img src="../concepts/b-desktop-chrome/sidebar-toggle.svg" width="16" height="16" alt="" />
+              <img src="../concepts/b-desktop-chrome/sidebar-toggle.svg" width="32" height="32" alt="" />
+              <figcaption>收起</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/b-desktop-chrome/new-task.svg" width="16" height="16" alt="" />
+              <img src="../concepts/b-desktop-chrome/new-task.svg" width="32" height="32" alt="" />
+              <figcaption>新建</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/b-desktop-chrome/search.svg" width="16" height="16" alt="" />
+              <img src="../concepts/b-desktop-chrome/search.svg" width="32" height="32" alt="" />
+              <figcaption>搜索</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/b-desktop-chrome/filter.svg" width="16" height="16" alt="" />
+              <img src="../concepts/b-desktop-chrome/filter.svg" width="32" height="32" alt="" />
+              <figcaption>筛选</figcaption>
+            </figure>
+          </div>
+        </section>
+        <section>
+          <h2>C 全实体</h2>
+          <p class="hint">全部实心剪影</p>
+          <div class="row">
+            <figure>
+              <img src="../concepts/c-solid/sidebar-toggle.svg" width="16" height="16" alt="" />
+              <img src="../concepts/c-solid/sidebar-toggle.svg" width="32" height="32" alt="" />
+              <figcaption>收起</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/c-solid/new-task.svg" width="16" height="16" alt="" />
+              <img src="../concepts/c-solid/new-task.svg" width="32" height="32" alt="" />
+              <figcaption>新建</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/c-solid/search.svg" width="16" height="16" alt="" />
+              <img src="../concepts/c-solid/search.svg" width="32" height="32" alt="" />
+              <figcaption>搜索</figcaption>
+            </figure>
+            <figure>
+              <img src="../concepts/c-solid/filter.svg" width="16" height="16" alt="" />
+              <img src="../concepts/c-solid/filter.svg" width="32" height="32" alt="" />
+              <figcaption>筛选</figcaption>
+            </figure>
+          </div>
+        </section>
+      </div>
+      <div class="boards">
+        <div class="board light">
+          白底 16px
+          <div class="mini">
+            <img src="../concepts/b-desktop-chrome/sidebar-toggle.svg" width="16" height="16" alt="" />
+            <img src="../concepts/b-desktop-chrome/new-task.svg" width="16" height="16" alt="" />
+            <img src="../concepts/b-desktop-chrome/search.svg" width="16" height="16" alt="" />
+            <img src="../concepts/b-desktop-chrome/filter.svg" width="16" height="16" alt="" />
+          </div>
+        </div>
+        <div class="board dark">
+          深底 16px（B）
+          <div class="mini">
+            <img src="../concepts/b-desktop-chrome/sidebar-toggle.svg" width="16" height="16" alt="" />
+            <img src="../concepts/b-desktop-chrome/new-task.svg" width="16" height="16" alt="" />
+            <img src="../concepts/b-desktop-chrome/search.svg" width="16" height="16" alt="" />
+            <img src="../concepts/b-desktop-chrome/filter.svg" width="16" height="16" alt="" />
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        A 最稳，和现在 Heroicons 一家。B 最接近 WorkBuddy 壳：工具线框，主行动实心。C 更重，31px 行里会偏闷。选一档后才定稿并接到 Navigator 顶栏。
+      </p>
+    </main>
+  </body>
+</html>

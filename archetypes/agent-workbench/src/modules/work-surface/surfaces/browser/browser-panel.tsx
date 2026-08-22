@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ExternalLink, RefreshCw } from 'lucide-react'
+import { ArrowTopRightOnSquareIcon as ExternalLink, ArrowPathIcon as RefreshCw } from '@heroicons/react/24/outline'
 import type { BrowserHostPort } from '../../ports/browser-host-port'
 import {
   normalizeBrowserUrl,

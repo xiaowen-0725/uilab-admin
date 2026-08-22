@@ -1,6 +1,6 @@
 import { useMemo, useRef, type ReactNode } from 'react'
 import { DRAG_HANDLE_ATTR } from '../model/drag-handle'
-import { Ellipsis, Expand, Lock, RefreshCw, TriangleAlert } from 'lucide-react'
+import { EllipsisHorizontalIcon as Ellipsis, ArrowsPointingOutIcon as Expand, LockClosedIcon as Lock, ArrowPathIcon as RefreshCw, ExclamationTriangleIcon as TriangleAlert } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,

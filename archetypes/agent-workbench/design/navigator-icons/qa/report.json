@@ -1,0 +1,53 @@
+{
+  "errors": [
+    "new-task.svg: outline-grammar: <path> effective fill must equal 'none'",
+    "new-task.svg: outline-grammar: <path> effective stroke must equal 'currentColor'",
+    "new-task.svg: outline-grammar: <path> effective stroke-linecap must equal 'round'",
+    "new-task.svg: outline-grammar: <path> effective stroke-linejoin must equal 'round'",
+    "new-task.svg: outline-grammar: <path> effective stroke-width must equal '1.5'"
+  ],
+  "files": [
+    {
+      "file": "filter.svg",
+      "issues": []
+    },
+    {
+      "file": "new-task.svg",
+      "issues": [
+        {
+          "code": "outline-grammar",
+          "message": "<path> effective fill must equal 'none'"
+        },
+        {
+          "code": "outline-grammar",
+          "message": "<path> effective stroke must equal 'currentColor'"
+        },
+        {
+          "code": "outline-grammar",
+          "message": "<path> effective stroke-linecap must equal 'round'"
+        },
+        {
+          "code": "outline-grammar",
+          "message": "<path> effective stroke-linejoin must equal 'round'"
+        },
+        {
+          "code": "outline-grammar",
+          "message": "<path> effective stroke-width must equal '1.5'"
+        }
+      ]
+    },
+    {
+      "file": "search.svg",
+      "issues": []
+    },
+    {
+      "file": "sidebar-toggle.svg",
+      "issues": []
+    }
+  ],
+  "passed": false,
+  "qa_engine": "builtin-fallback",
+  "schema_version": 1,
+  "strict": true,
+  "warnings": []
+}

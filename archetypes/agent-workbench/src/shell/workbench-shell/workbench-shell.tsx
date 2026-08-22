@@ -24,14 +24,15 @@ import type {
   WorkbenchSessionCommands,
   WorkbenchSessionView,
 } from '@/modules/workbench-session'
-import {
-  FolderIcon,
-  PanelBottom,
-  PanelLeftIcon,
-  SlidersHorizontal,
-} from 'lucide-react'
+import { ChatBubbleOvalLeftIcon, FolderIcon, Bars3BottomLeftIcon as PanelBottom, AdjustmentsHorizontalIcon as SlidersHorizontal } from '@heroicons/react/24/outline'
+import { Button } from '@/components/ui/button'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
-import { Navigator, NavigatorCollapsedRail } from '../navigator/navigator'
+import {
+  CollapsedNavButtons,
+  CollapsedWindowChrome,
+  Navigator,
+} from '../navigator/navigator'
+import { SidebarToggleIcon } from '../navigator/sidebar-toggle-icon'
 import {
   TASK_SURFACE_MIN_WIDTH,
   WORK_SURFACE_MIN_WIDTH,
@@ -387,6 +388,13 @@ export function WorkbenchShell({
   )
 
   const showingTask = isTaskDestination(activeDestination)
+  const reservedCollapsed = navigatorMode === 'reserved' && !view.navigatorOpen
+  const chromeInTaskToolbar = reservedCollapsed && showingTask && !workFullStage
+  const showWorkspaceChrome = reservedCollapsed && !chromeInTaskToolbar
+  const boardListCollapsed =
+    reservedCollapsed &&
+    activeDestination.kind === 'board' &&
+    activeDestination.boardId == null
   const drawerWidth = showingTask
     ? workDrawerWidth(
         view.layout.workSurfaceVisible,
@@ -440,15 +448,6 @@ export function WorkbenchShell({
       {/* Wide: reserved Navigator stays mounted for interruptible collapse. */}
       {navigatorMode === 'reserved' ? (
         <div className='nav-reserved-gap'>
-          {!view.navigatorOpen ? (
-            <NavigatorCollapsedRail
-              activeDestination={activeDestination}
-              onNewChat={startNewChatFromShell}
-              onOpenBoard={() => openBoard()}
-              onOpenCapabilities={openCapabilities}
-              onToggleNavigator={toggleNavigatorFromPointer}
-            />
-          ) : null}
           <div className='nav-reserved-inner' aria-hidden={!view.navigatorOpen}>
             <Navigator
               {...navigatorShared}
@@ -465,6 +464,30 @@ export function WorkbenchShell({
         data-testid='workbench-workspace'
         data-slot='workbench-workspace'
       >
+        {showWorkspaceChrome ? (
+          <CollapsedWindowChrome
+            onNewChat={startNewChatFromShell}
+            onToggleNavigator={toggleNavigatorFromPointer}
+          >
+            {boardListCollapsed ? (
+              <>
+                <h1 className='min-w-0 truncate text-2xl font-semibold leading-none tracking-tight text-foreground'>
+                  看板
+                </h1>
+                <Button
+                  type='button'
+                  size='sm'
+                  className='ms-auto shrink-0'
+                  data-testid='board-create-by-chat'
+                  onClick={startBoardChatFromShell}
+                >
+                  <ChatBubbleOvalLeftIcon className='size-4' aria-hidden />
+                  对话创建
+                </Button>
+              </>
+            ) : null}
+          </CollapsedWindowChrome>
+        ) : null}
         <main
           ref={stageRef}
           id='workbench-main'
@@ -491,6 +514,7 @@ export function WorkbenchShell({
               onOpenBoard={(id) => openBoard(id)}
               onCreateByChat={startBoardChatFromShell}
               onOpenSourceTask={selectTaskFromShell}
+              hideListHeader={boardListCollapsed}
             />
           ) : (
             /* Task pane: full-stage Work shrinks it via the drawer width. */
@@ -503,14 +527,20 @@ export function WorkbenchShell({
             >
               {/* Task pane toolbar (44px) — was Workspace-wide header. */}
               <header
-                className='flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
+                className={
+                  chromeInTaskToolbar
+                    ? 'flex h-14 shrink-0 items-center gap-2 border-b border-border px-3'
+                    : 'flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
+                }
                 data-testid='workspace-top-bar'
                 data-slot='task-pane-toolbar'
               >
-                {/*
-                Nav toggle lives on the left rail (WorkBuddy-style) when open.
-                Only re-open here when the rail is collapsed (reserved gap is 0).
-              */}
+                {chromeInTaskToolbar ? (
+                  <CollapsedNavButtons
+                    onNewChat={startNewChatFromShell}
+                    onToggleNavigator={toggleNavigatorFromPointer}
+                  />
+                ) : null}
                 {!view.navigatorOpen &&
                 !workFullStage &&
                 navigatorMode === 'overlay' ? (
@@ -520,7 +550,7 @@ export function WorkbenchShell({
                     label='打开导航'
                     onClick={toggleNavigatorFromPointer}
                   >
-                    <PanelLeftIcon className='size-4' aria-hidden />
+                    <SidebarToggleIcon className='size-4' aria-hidden />
                   </ToolbarIconButton>
                 ) : null}
 
@@ -643,7 +673,7 @@ export function WorkbenchShell({
                     label='打开导航'
                     onClick={toggleNavigatorFromPointer}
                   >
-                    <PanelLeftIcon className='size-4' aria-hidden />
+                    <SidebarToggleIcon className='size-4' aria-hidden />
                   </ToolbarIconButton>
                 ) : undefined
               }

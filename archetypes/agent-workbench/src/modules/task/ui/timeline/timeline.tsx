@@ -15,10 +15,7 @@ import {
   useState,
 } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import {
-  ChevronDown,
-  Info,
-} from 'lucide-react'
+import { ChevronDownIcon as ChevronDown, InformationCircleIcon as Info } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,

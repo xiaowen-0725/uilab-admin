@@ -1,12 +1,5 @@
 import type { ReactNode } from 'react'
-import {
-  Monitor,
-  Moon,
-  Settings as SettingsIcon,
-  Sun,
-  UserRound,
-  X,
-} from 'lucide-react'
+import { ComputerDesktopIcon as Monitor, MoonIcon as Moon, Cog6ToothIcon as SettingsIcon, SunIcon as Sun, UserCircleIcon as UserRound, XMarkIcon as X } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

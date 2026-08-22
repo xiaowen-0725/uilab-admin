@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { ArrowUturnLeftIcon as RotateCcw } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { FileChangeKind } from '../../projection/types'

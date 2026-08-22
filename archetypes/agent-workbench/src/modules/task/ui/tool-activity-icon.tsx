@@ -1,13 +1,14 @@
-import type { ReactElement } from 'react'
+import type { ComponentType, ReactElement, SVGProps } from 'react'
 import {
-  Boxes,
-  FilePenLine,
-  FileSearch2,
-  Globe,
-  ListTree,
-  SquareTerminal,
-  type LucideIcon,
-} from 'lucide-react'
+  Bars4Icon as ListTree,
+  CommandLineIcon as SquareTerminal,
+  CubeTransparentIcon as Boxes,
+  DocumentMagnifyingGlassIcon as FileSearch2,
+  GlobeAltIcon as Globe,
+  PencilSquareIcon as FilePenLine,
+} from '@heroicons/react/24/outline'
+
+type ActivityIcon = ComponentType<SVGProps<SVGSVGElement>>
 
 type ActivityIconKind =
   | 'search'
@@ -18,7 +19,7 @@ type ActivityIconKind =
   | 'other'
 
 interface ActivityIconDefinition {
-  Icon: LucideIcon
+  Icon: ActivityIcon
   kind: ActivityIconKind
 }
 

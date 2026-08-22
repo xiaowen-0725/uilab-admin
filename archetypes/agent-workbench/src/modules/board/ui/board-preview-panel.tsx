@@ -1,4 +1,4 @@
-import { Expand, RefreshCw, X } from 'lucide-react'
+import { ArrowsPointingOutIcon as Expand, ArrowPathIcon as RefreshCw, XMarkIcon as X } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import {
   boardHasRefreshableSource,

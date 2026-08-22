@@ -3,7 +3,7 @@
  * - Connectors: WorkBuddy-style brand badges for toolbar (use CapabilityToolbarConnectors)
  * - Expert / skills: text chips above input when needed
  */
-import { BookOpen, UserRound } from 'lucide-react'
+import { BookOpenIcon as BookOpen, UserCircleIcon as UserRound } from '@heroicons/react/24/outline'
 import { ComposerSkillChip } from '@/components/motion/agent-composer'
 import type { CapabilitySnapshot } from '../ports/capability-snapshot-port'
 import { ConnectorBrandBadge } from './brand-icons'

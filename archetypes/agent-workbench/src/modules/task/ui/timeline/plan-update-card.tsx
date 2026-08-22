@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { CheckIcon as Check } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import type { PlanStepStatus } from '../../projection/plan-snapshot'
 import type { TimelineItem } from '../../projection/types'

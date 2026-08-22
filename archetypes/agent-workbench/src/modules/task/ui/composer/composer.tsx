@@ -19,24 +19,7 @@ import {
   type CapabilityController,
   type WaitForConnectorAuthOutcome,
 } from '@/modules/capabilities'
-import {
-  Check,
-  FileText,
-  Folder,
-  FolderOpen,
-  FolderX,
-  GitBranch,
-  HardDrive,
-  Image as ImageIcon,
-  Lightbulb,
-  ListTodo,
-  Mic,
-  Plus,
-  Search,
-  Sparkles,
-  Target,
-  Zap,
-} from 'lucide-react'
+import { CheckIcon as Check, DocumentTextIcon as FileText, FolderIcon as Folder, FolderOpenIcon as FolderOpen, FolderMinusIcon as FolderX, ShareIcon as GitBranch, CircleStackIcon as HardDrive, PhotoIcon as ImageIcon, LightBulbIcon as Lightbulb, ClipboardDocumentCheckIcon as ListTodo, MicrophoneIcon as Mic, PlusIcon as Plus, MagnifyingGlassIcon as Search, SparklesIcon as Sparkles, ViewfinderCircleIcon as Target, BoltIcon as Zap } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

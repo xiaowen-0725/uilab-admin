@@ -2,7 +2,7 @@
  * Composer chrome: two-tier「默认权限」dropdown.
  * Visual trigger reuses motion `ComposerAccessChip`; Base UI `render={...}`.
  */
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheckIcon as ShieldCheck } from '@heroicons/react/24/outline'
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -104,7 +104,7 @@ Button / Input / tokens 经兼容层消费（实现仍在 `@uilab/foundation`）
 - `@/components/ui/input` → `@uilab/foundation/ui/input`
 - `src/styles/tokens.css` → `@uilab/foundation/styles/tokens.css`
 
-图标：Workbench 包自有 `lucide-react`（不扩 Foundation）。
+图标：Workbench 包自有 `@heroicons/react/24/outline`（不扩 Foundation）。
 Composer 使用 `@/components/ui/textarea`（shadcn）；Foundation 仍仅公开 Button / Input / tokens。
 
 ## 相关文档

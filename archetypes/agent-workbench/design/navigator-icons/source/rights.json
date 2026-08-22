@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "name": "sidebar-toggle",
+      "source": "original",
+      "provenance_note": "Original rounded-rect plus rail. WorkBuddy SidebarToggle used as reference-only metaphor, not traced."
+    },
+    {
+      "name": "new-task",
+      "source": "original",
+      "provenance_note": "Original solid speech bubble with plus counter. WorkBuddy NewTask used as reference-only metaphor, not traced."
+    },
+    {
+      "name": "search",
+      "source": "original",
+      "provenance_note": "Original 16-grid magnifying glass. Generic search metaphor, not copied from any vendor path."
+    },
+    {
+      "name": "filter",
+      "source": "original",
+      "provenance_note": "Original 16-grid funnel. Generic filter metaphor, not copied from any vendor path."
+    }
+  ]
+}

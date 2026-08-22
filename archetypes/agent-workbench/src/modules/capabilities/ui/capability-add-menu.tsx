@@ -3,20 +3,7 @@
  * compact root + lateral submenu (DropdownMenu Sub), not a full-width panel.
  */
 import { useMemo, useRef, useState, type RefObject } from 'react'
-import {
-  ArrowRight,
-  BookOpen,
-  CircleAlert,
-  CircleDashed,
-  CircleHelp,
-  Lightbulb,
-  Link2,
-  Paperclip,
-  Search,
-  Sparkles,
-  Target,
-  UserRound,
-} from 'lucide-react'
+import { ArrowRightIcon as ArrowRight, BookOpenIcon as BookOpen, ExclamationCircleIcon as CircleAlert, NoSymbolIcon as CircleDashed, QuestionMarkCircleIcon as CircleHelp, LightBulbIcon as Lightbulb, LinkIcon as Link2, PaperClipIcon as Paperclip, MagnifyingGlassIcon as Search, SparklesIcon as Sparkles, ViewfinderCircleIcon as Target, UserCircleIcon as UserRound } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,

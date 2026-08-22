@@ -3,7 +3,7 @@
  * Visual surface: UI Lab `tool-approval`.
  */
 import { useEffect } from 'react'
-import { Terminal } from 'lucide-react'
+import { CommandLineIcon as Terminal } from '@heroicons/react/24/outline'
 import {
   ToolApproval,
   ToolApprovalCode,

@@ -1,7 +1,7 @@
 "use client";
 // ui-lab-ten.vercel.app/components/blocks/agent-composer
 
-import { ArrowUp, ChevronDown, X } from "lucide-react";
+import { ArrowUpIcon as ArrowUp, ChevronDownIcon as ChevronDown, XMarkIcon as X } from "@heroicons/react/24/outline";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   type ButtonHTMLAttributes,

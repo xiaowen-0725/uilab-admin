@@ -1,4 +1,4 @@
-import { Circle, CircleCheck, Loader2 } from 'lucide-react'
+import { CheckCircleIcon as CircleCheck, ArrowPathIcon as Loader2 } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import type { PlanSnapshot, PlanStepStatus } from '../../projection/plan-snapshot'
 import { planStepStatusLabel, planStepTextClass } from '../plan-step-style'
@@ -25,10 +25,16 @@ function StepIcon({ status }: { status: PlanStepStatus }) {
     )
   }
   return (
-    <Circle
+    <svg
       className='mt-0.5 size-4 shrink-0 text-muted-foreground/50'
+      viewBox='0 0 24 24'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth={1.5}
       aria-hidden
-    />
+    >
+      <circle cx='12' cy='12' r='9' />
+    </svg>
   )
 }
 

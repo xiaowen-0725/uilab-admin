@@ -20,6 +20,7 @@ export {
   toProjectSummary,
   toTaskSummary,
 } from './model/types'
+export { formatRelativeTimeZh } from './model/relative-time'
 export type {
   ProjectId,
   TaskId,

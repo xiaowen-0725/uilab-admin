@@ -1,4 +1,4 @@
-import { LayoutGrid, MessageSquarePlus } from 'lucide-react'
+import { Squares2X2Icon as LayoutGrid, ChatBubbleOvalLeftIcon as MessageSquarePlus } from '@heroicons/react/24/outline'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BoardListCard } from '../model/board-view'
@@ -37,6 +37,7 @@ export interface BoardListPageProps {
   onCreateByChat: () => void
   onWidgetReady?: (widgetId: string, elapsedMs: number) => void
   identity?: IdentityScopeSnapshot
+  hideHeader?: boolean
 }
 
 export function BoardListPage({
@@ -47,6 +48,7 @@ export function BoardListPage({
   onCreateByChat,
   onWidgetReady,
   identity = anonymousIdentitySnapshot(),
+  hideHeader = false,
 }: BoardListPageProps) {
   return (
     <div
@@ -54,26 +56,32 @@ export function BoardListPage({
       data-testid='board-list-page'
       data-thumbnail-mode={thumbnailMode}
     >
-      <header className='flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4'>
-        <div className='min-w-0'>
-          <h1 className='text-2xl font-semibold tracking-tight text-foreground'>
-            看板
-          </h1>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            用对话生成小组件，搭一块长期盯着的看板
-          </p>
-        </div>
-        <Button
-          type='button'
-          size='sm'
-          className='mt-0.5 shrink-0 self-center'
-          data-testid='board-create-by-chat'
-          onClick={onCreateByChat}
-        >
-          <MessageSquarePlus className='size-4' aria-hidden />
-          对话创建
-        </Button>
-      </header>
+      {hideHeader ? (
+        <p className='shrink-0 px-6 pt-1 pb-4 text-sm text-muted-foreground'>
+          用对话生成小组件，搭一块长期盯着的看板
+        </p>
+      ) : (
+        <header className='flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4'>
+          <div className='min-w-0'>
+            <h1 className='text-2xl font-semibold tracking-tight text-foreground'>
+              看板
+            </h1>
+            <p className='mt-1 text-sm text-muted-foreground'>
+              用对话生成小组件，搭一块长期盯着的看板
+            </p>
+          </div>
+          <Button
+            type='button'
+            size='sm'
+            className='mt-0.5 shrink-0 self-center'
+            data-testid='board-create-by-chat'
+            onClick={onCreateByChat}
+          >
+            <MessageSquarePlus className='size-4' aria-hidden />
+            对话创建
+          </Button>
+        </header>
+      )}
 
       {boards.length === 0 ? (
         <div

@@ -46,6 +46,8 @@ export interface BoardWorkspaceProps {
   revision?: number
   identityScope?: IdentityScopePort
   presetCatalog?: BoardPresetCatalogPort
+  /** Shell owns the list titlebar when the navigator is collapsed. */
+  hideListHeader?: boolean
 }
 
 export function BoardWorkspace({
@@ -61,6 +63,7 @@ export function BoardWorkspace({
   revision = 0,
   identityScope,
   presetCatalog,
+  hideListHeader = false,
 }: BoardWorkspaceProps) {
   const [cards, setCards] = useState<BoardListCard[]>([])
   const [detail, setDetail] = useState<BoardView | null | undefined>(undefined)
@@ -231,6 +234,7 @@ export function BoardWorkspace({
       boards={cards}
       theme={theme}
       identity={identity}
+      hideHeader={hideListHeader}
       onOpenBoard={onOpenBoard}
       onCreateByChat={onCreateByChat}
     />

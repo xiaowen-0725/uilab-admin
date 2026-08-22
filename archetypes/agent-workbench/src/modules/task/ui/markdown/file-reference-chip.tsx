@@ -4,7 +4,7 @@
  * color color(srgb 0.511 0.712 0.900) ≈ #82b5e6, icon 21×21, role=button.
  */
 
-import { FileText } from 'lucide-react'
+import { DocumentTextIcon as FileText } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 
 export type FileReferenceChipProps = {

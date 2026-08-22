@@ -1,0 +1,25 @@
+{
+  "color": "currentColor",
+  "corner": "round",
+  "grid": 16,
+  "linecap": "round",
+  "linejoin": "round",
+  "max_bytes": 12000,
+  "max_colors": 2,
+  "max_elements": 64,
+  "max_paths": 16,
+  "mode": "ui-system",
+  "preset": "rounded-outline",
+  "profile_id": "rounded-outline",
+  "rendering": "outline",
+  "schema_version": 2,
+  "sizes": [
+    16,
+    20,
+    24,
+    32
+  ],
+  "stroke_width": 1.5,
+  "viewBox": "0 0 16 16",
+  "notes": "Product override from rounded-outline: 16 grid / 1.5 stroke to match desktop chrome. new-task is a solid currentColor exception for the primary action."
+}

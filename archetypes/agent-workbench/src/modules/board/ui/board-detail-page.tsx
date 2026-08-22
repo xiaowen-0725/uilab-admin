@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronRight, MessageSquarePlus, RefreshCw, X } from 'lucide-react'
+import { ChevronRightIcon as ChevronRight, ChatBubbleOvalLeftIcon as MessageSquarePlus, ArrowPathIcon as RefreshCw, XMarkIcon as X } from '@heroicons/react/24/outline'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {

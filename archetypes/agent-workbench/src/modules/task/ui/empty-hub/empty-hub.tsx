@@ -1,10 +1,4 @@
-import {
-  Bug,
-  Hammer,
-  Radar,
-  RefreshCw,
-  Terminal,
-} from 'lucide-react'
+import { BugAntIcon as Bug, WrenchScrewdriverIcon as Hammer, SignalIcon as Radar, ArrowPathIcon as RefreshCw, CommandLineIcon as Terminal } from '@heroicons/react/24/outline'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { LaunchAction } from '../../model/types'
