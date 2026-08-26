@@ -88,8 +88,9 @@ export interface ComposerProps {
   showEnvironmentChip?: boolean
   showBranchChip?: boolean
   /**
-   * `local-sim` (default): local timer feedback; notice contains「不会调用 Agent Runtime」.
-   * `runtime`: Application Command → VoltAgent RuntimePort; no local timer as domain authority.
+   * `runtime` (default): Application Command → VoltAgent RuntimePort.
+   * `local-sim`: opt-in capture/test timer path; notice contains「不会调用 Agent Runtime」.
+   * Not Fake Runtime (ADR-0018).
    */
   mode?: 'local-sim' | 'runtime'
   /** Active run status from TaskReadModel (runtime mode). */
@@ -353,7 +354,7 @@ export function TaskComposer({
   showProjectChip = true,
   showEnvironmentChip = false,
   showBranchChip = false,
-  mode = 'local-sim',
+  mode = 'runtime',
   turnStatus = null,
   onSubmitText,
   onCancelRun,
@@ -571,7 +572,7 @@ export function TaskComposer({
       return
     }
 
-    // Local-sim path (default / capture): timer-only feedback; no RuntimePort.
+    // Local-sim path (opt-in / capture): timer-only feedback; no RuntimePort.
     if (running) {
       if (runTimerRef.current) clearTimeout(runTimerRef.current)
       runTimerRef.current = null
@@ -1202,7 +1203,7 @@ export function TaskComposer({
           <ComposerTextarea
             id='workbench-composer-input'
             data-testid='composer-input'
-            className='min-h-[70px] text-[15px] leading-[26.25px] placeholder:text-foreground/50'
+            className='min-h-[70px] placeholder:text-foreground/50'
             value={text}
             onChange={(next) => {
               setText(next)
@@ -1356,7 +1357,7 @@ export function TaskComposer({
           >
             {showProjectChip ? (
               <ComposerMenuButton
-                className='h-8 gap-1 rounded-lg px-2 text-[14px] leading-5 text-foreground/50'
+                className='tl-chrome h-8 gap-1 rounded-lg px-2 text-foreground/50'
                 label={
                   <span className='flex items-center gap-1'>
                     <Folder className='size-4' />

@@ -115,7 +115,16 @@ type TaskStreamState = {
   pendingClientTools: Map<string, PendingClientTool>
   /** In-flight `update_plan` call ids for mapper tool-result suppression. */
   updatePlanCallIds: Set<string>
+  /**
+   * Resume to start after the current SSE finishes or the drain window ends.
+   * Auto-approve used to abort immediately and drop sibling tool-results.
+   */
+  queuedResume: (() => void) | null
+  resumeDrainTimer: ReturnType<typeof setTimeout> | null
 }
+
+/** Wait this long for in-flight sibling tool-results before aborting to resume. */
+const RESUME_DRAIN_MS = 150
 
 type Listener = (event: RuntimeSubscriptionEvent) => void
 
@@ -460,6 +469,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         pendingQuestions: new Map(),
         pendingClientTools: new Map(),
         updatePlanCallIds: new Set(),
+        queuedResume: null,
+        resumeDrainTimer: null,
       }
       this.taskState.set(taskId, state)
     }
@@ -544,8 +555,42 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       ...args,
       signal: abort.signal,
     }).finally(() => {
-      if (state.activeAbort === abort) state.activeAbort = null
+      this.clearResumeDrain(state)
+      const queued = state.activeAbort === abort ? state.queuedResume : null
+      if (state.activeAbort === abort) {
+        state.activeAbort = null
+        state.queuedResume = null
+      }
+      queued?.()
     })
+  }
+
+  private clearResumeDrain(state: TaskStreamState): void {
+    if (state.resumeDrainTimer == null) return
+    clearTimeout(state.resumeDrainTimer)
+    state.resumeDrainTimer = null
+  }
+
+  /**
+   * Start resume now if the first stream already ended. Otherwise keep reading
+   * sibling tool-results, then abort a hanging SSE after {@link RESUME_DRAIN_MS}.
+   */
+  private requestResumeAfterDrain(
+    state: TaskStreamState,
+    start: () => void,
+  ): void {
+    if (!state.activeAbort) {
+      start()
+      return
+    }
+    state.queuedResume = start
+    this.clearResumeDrain(state)
+    state.resumeDrainTimer = setTimeout(() => {
+      state.resumeDrainTimer = null
+      if (state.activeAbort && state.queuedResume) {
+        state.activeAbort.abort('approval_resume')
+      }
+    }, RESUME_DRAIN_MS)
   }
 
   private async handleSubmitTurn(
@@ -585,6 +630,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     state.pendingApprovals.clear()
     state.pendingQuestions.clear()
     state.pendingClientTools.clear()
+    state.queuedResume = null
+    this.clearResumeDrain(state)
 
     this.pushBookkeeping(taskId, turnId, command.inputText)
     this.launchStream({
@@ -616,6 +663,8 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       return rejected(commandId, 'no_active_run', '没有可取消的轮次')
     }
     const turnId = state.lastTurnId ?? undefined
+    state.queuedResume = null
+    this.clearResumeDrain(state)
     if (state.activeAbort) {
       state.activeAbort.abort('user_cancel')
       state.activeAbort = null
@@ -658,17 +707,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         '未找到待审批请求，或已过期（请重新提交写操作）'
       )
     }
-    // A pending approval arrives while the SSE is still draining (finish/done).
-    // Abort the paused stream so resume can start immediately — required for
-    // renderer-side auto-approve (humans are slow enough that this rarely races).
-    // Known limitation: aborting here may cut off a previous resume stream if
-    // multiple approvals are pending in parallel (VoltAgent usually suspends
-    // on the first approval, so this is rare).
-    if (state.activeAbort) {
-      state.activeAbort.abort('approval_resume')
-      state.activeAbort = null
-    }
-
     state.pendingApprovals.delete(approvalId)
 
     this.pushTaskEnvelope(
@@ -683,24 +721,28 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
     )
 
-    // Resume: UIMessage tool part with state=approval-responded (proven against VoltAgent).
-    this.resumeWithToolPart(
-      taskId,
-      turnId,
-      pending.userText || state.lastUserText || '',
-      {
-        type: `tool-${pending.toolName}`,
-        toolCallId: pending.toolCallId,
-        toolName: pending.toolName,
-        state: 'approval-responded',
-        input: pending.input,
-        approval: {
-          id: pending.approvalId,
-          approved,
-          reason: command.payload.reason,
-        },
-      }
-    )
+    // Keep the first SSE open briefly so a parallel tool-result (ls + write)
+    // is not cut off by renderer auto-approve. Hanging streams still abort
+    // after RESUME_DRAIN_MS and resume.
+    this.requestResumeAfterDrain(state, () => {
+      this.resumeWithToolPart(
+        taskId,
+        turnId,
+        pending.userText || state.lastUserText || '',
+        {
+          type: `tool-${pending.toolName}`,
+          toolCallId: pending.toolCallId,
+          toolName: pending.toolName,
+          state: 'approval-responded',
+          input: pending.input,
+          approval: {
+            id: pending.approvalId,
+            approved,
+            reason: command.payload.reason,
+          },
+        }
+      )
+    })
 
     return accepted(command.commandId, this.nowIso())
   }
@@ -736,11 +778,6 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       parseQuestionOptionsFromInput(pending.input)
     )
 
-    if (state.activeAbort) {
-      state.activeAbort.abort('question_resume')
-      state.activeAbort = null
-    }
-
     state.pendingQuestions.delete(requestId)
 
     this.pushTaskEnvelope(
@@ -755,19 +792,21 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       }
     )
 
-    this.resumeWithToolPart(
-      taskId,
-      turnId,
-      pending.userText || state.lastUserText || '',
-      {
-        type: 'tool-ask_user_question',
-        toolCallId: pending.toolCallId,
-        toolName: 'ask_user_question',
-        state: 'output-available',
-        input: pending.input,
-        output,
-      }
-    )
+    this.requestResumeAfterDrain(state, () => {
+      this.resumeWithToolPart(
+        taskId,
+        turnId,
+        pending.userText || state.lastUserText || '',
+        {
+          type: 'tool-ask_user_question',
+          toolCallId: pending.toolCallId,
+          toolName: 'ask_user_question',
+          state: 'output-available',
+          input: pending.input,
+          output,
+        }
+      )
+    })
 
     return accepted(command.commandId, this.nowIso())
   }
@@ -991,6 +1030,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         if (
           sawTerminalEvent ||
           signal.aborted ||
+          state.queuedResume != null ||
           state.pendingApprovals.size > 0 ||
           state.pendingQuestions.size > 0 ||
           state.pendingClientTools.size > 0
@@ -1021,6 +1061,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         this.rememberQuestionFromChunk(taskId, turnId, chunk)
         this.rememberClientToolFromChunk(taskId, turnId, chunk)
         const pausedForHitl =
+          state.queuedResume != null ||
           state.pendingApprovals.size > 0 ||
           state.pendingQuestions.size > 0 ||
           state.pendingClientTools.size > 0

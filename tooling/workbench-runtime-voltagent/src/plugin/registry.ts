@@ -52,6 +52,7 @@ import {
 import type {
   AuthResourceContribution,
   CliContribution,
+  McpContribution,
   PluginManifest,
   SkillsContribution,
 } from './manifest.js'
@@ -185,6 +186,20 @@ export type CreatePluginRegistryOptions = {
   persistAuthBindings?: boolean
 }
 
+const UNMATCHED_MCP_AUTH_MATERIAL: CredentialMaterial = {
+  status: 'missing',
+  envValues: {},
+  controlledEnvNames: [],
+  hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
+}
+
+type McpServerResolvePolicy = {
+  /** Cold load skips only oauth2; hot load skips any auth-enforced gap. */
+  skipWhenDisconnected: 'oauth2' | 'any-enforced'
+  /** Cold load fail-closes unmatched resources; hot load omits the server. */
+  unmatchedResource: 'fail-closed' | 'omit'
+}
+
 /** Deduplicate by id — first wins (builtins before local). */
 function mergeManifests(
   builtins: PluginManifest[],
@@ -259,34 +274,75 @@ export function createPluginRegistry(
   // resolveToolIdentity works for tools added after initial load.
   const sharedIdentityRegistry = createToolIdentityRegistry()
 
+  async function resolveMcpServerContribution(
+    pluginId: string,
+    contribution: McpContribution,
+    authResources: AuthResourceContribution[],
+    policy: McpServerResolvePolicy,
+  ): Promise<ResolvedMcpServer | undefined> {
+    const authEnforced = authResources.length > 0
+    const resource = authEnforced
+      ? pickAuthResourceForMcp(authResources, contribution.serverId)
+      : undefined
+
+    let material: CredentialMaterial | undefined
+    if (resource) {
+      material = await resolveAuthResourceMaterial(
+        pluginId,
+        resource,
+        true,
+        authOpts,
+      )
+    } else if (authEnforced && policy.unmatchedResource === 'fail-closed') {
+      material = { ...UNMATCHED_MCP_AUTH_MATERIAL }
+    } else if (authEnforced) {
+      return undefined
+    }
+
+    if (policy.skipWhenDisconnected === 'oauth2') {
+      if (resource?.kind === 'oauth2' && material?.status !== 'connected') {
+        return undefined
+      }
+    } else if (authEnforced && material?.status !== 'connected') {
+      return undefined
+    }
+
+    const server = resolveMcpContribution(pluginId, contribution, env, {
+      authEnforced,
+      authMaterial: material,
+    })
+    if (!server) return undefined
+    if (resource) {
+      server.resolveAuthMaterial = () =>
+        resolveAuthResourceMaterial(pluginId, resource, true, authOpts)
+    } else if (authEnforced && policy.unmatchedResource === 'fail-closed') {
+      server.resolveAuthMaterial = async () => ({
+        ...UNMATCHED_MCP_AUTH_MATERIAL,
+      })
+    }
+    return server
+  }
+
   async function loadMcpPlugin(pluginId: string): Promise<McpLoadAggregate> {
     const manifest = byId.get(pluginId)
     if (!manifest || !resolveEnabledIds().includes(pluginId)) {
       throw new Error(`MCP plugin 未启用：${pluginId}`)
     }
     const resources = manifest.contributes?.auth ?? []
-    const authEnforced = resources.length > 0
     const resolved: ResolvedMcpServer[] = []
     const expected: Array<{ pluginId: string; serverId: string }> = []
     for (const contribution of manifest.contributes?.mcp ?? []) {
       expected.push({ pluginId, serverId: contribution.serverId })
-      const resource = authEnforced
-        ? pickAuthResourceForMcp(resources, contribution.serverId)
-        : undefined
-      const material = resource
-        ? await resolveAuthResourceMaterial(pluginId, resource, true, authOpts)
-        : undefined
-      if (authEnforced && material?.status !== 'connected') continue
-      const server = resolveMcpContribution(pluginId, contribution, env, {
-        authEnforced,
-        authMaterial: material,
-      })
-      if (!server) continue
-      if (resource) {
-        server.resolveAuthMaterial = () =>
-          resolveAuthResourceMaterial(pluginId, resource, true, authOpts)
-      }
-      resolved.push(server)
+      const server = await resolveMcpServerContribution(
+        pluginId,
+        contribution,
+        resources,
+        {
+          skipWhenDisconnected: 'any-enforced',
+          unmatchedResource: 'omit',
+        },
+      )
+      if (server) resolved.push(server)
     }
     return loadResolvedMcpServers(resolved, {
       env,
@@ -369,52 +425,16 @@ export function createPluginRegistry(
         for (const c of mcpContribs) {
           expected.push({ pluginId: manifest.id, serverId: c.serverId })
           try {
-            let material: CredentialMaterial | undefined
-            const resource = authEnforced
-              ? pickAuthResourceForMcp(authResources, c.serverId)
-              : undefined
-            if (resource) {
-              material = await resolveAuthResourceMaterial(
-                manifest.id,
-                resource,
-                true,
-                authOpts,
-              )
-            } else if (authEnforced) {
-              // Match CLI fail-closed: no matched auth resource → always missing
-              material = {
-                status: 'missing',
-                envValues: {},
-                controlledEnvNames: [],
-                hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
-              }
-            }
-            if (resource?.kind === 'oauth2' && material?.status !== 'connected') {
-              continue
-            }
-            const resolved = resolveMcpContribution(manifest.id, c, env, {
-              authEnforced,
-              authMaterial: material,
-            })
-            if (resolved) {
-              if (resource) {
-                resolved.resolveAuthMaterial = () =>
-                  resolveAuthResourceMaterial(
-                    manifest.id,
-                    resource,
-                    true,
-                    authOpts,
-                  )
-              } else if (authEnforced) {
-                resolved.resolveAuthMaterial = async () => ({
-                  status: 'missing' as const,
-                  envValues: {},
-                  controlledEnvNames: [],
-                  hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
-                })
-              }
-              resolvedServers.push(resolved)
-            }
+            const resolved = await resolveMcpServerContribution(
+              manifest.id,
+              c,
+              authResources,
+              {
+                skipWhenDisconnected: 'oauth2',
+                unmatchedResource: 'fail-closed',
+              },
+            )
+            if (resolved) resolvedServers.push(resolved)
           } catch (err) {
             plugins.push({
               id: manifest.id,

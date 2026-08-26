@@ -7,6 +7,7 @@ import {
   formatSafeStatusLine,
   isAllowedAuthEnvName,
   isModelProviderSecretKey,
+  overlayCredentialMaterialOnChildEnv,
   redactSecretValues,
   stripModelProviderSecrets,
 } from './security-policy.js'
@@ -127,6 +128,55 @@ describe('isModelProviderSecretKey + filterChildEnv', () => {
     assert.equal(stripped.FEISHU_APP_SECRET, 'ok')
     assert.equal(stripped.OPENAI_API_KEY, undefined)
     assert.equal(stripped.GITHUB_PAT, undefined)
+  })
+
+  it('overlay connected material without re-injecting model keys', () => {
+    const out = overlayCredentialMaterialOnChildEnv(
+      {
+        PATH: '/bin',
+        FEISHU_APP_SECRET: 'env-leftover',
+        OPENAI_API_KEY: 'sk-env',
+      },
+      {
+        allowedKeys: ['FEISHU_APP_SECRET', 'OPENAI_API_KEY'],
+        extraControlledNames: ['MCP_DOCS_TOKEN'],
+        material: {
+          status: 'connected',
+          envValues: {
+            FEISHU_APP_SECRET: 'from-material',
+            OPENAI_API_KEY: 'sk-material',
+            MCP_DOCS_TOKEN: 'tok',
+          },
+          controlledEnvNames: ['FEISHU_APP_SECRET', 'OPENAI_API_KEY'],
+        },
+      },
+    )
+    assert.equal(out.PATH, '/bin')
+    assert.equal(out.FEISHU_APP_SECRET, 'from-material')
+    assert.equal(out.MCP_DOCS_TOKEN, 'tok')
+    assert.equal(out.OPENAI_API_KEY, undefined)
+  })
+
+  it('overlay missing material strips controlled leftovers including extra names', () => {
+    const out = overlayCredentialMaterialOnChildEnv(
+      {
+        FEISHU_APP_SECRET: 'leftover',
+        FEISHU_APP_ID: 'id',
+        MCP_DOCS_TOKEN: 'tok',
+      },
+      {
+        allowedKeys: ['FEISHU_APP_SECRET', 'FEISHU_APP_ID'],
+        extraControlledNames: ['MCP_DOCS_TOKEN'],
+        material: {
+          status: 'missing',
+          envValues: {},
+          controlledEnvNames: ['FEISHU_APP_SECRET'],
+        },
+      },
+    )
+    assert.equal(out.FEISHU_APP_SECRET, undefined)
+    assert.equal(out.MCP_DOCS_TOKEN, undefined)
+    assert.equal(out.FEISHU_APP_ID, 'id')
   })
 
   it('isAllowedAuthEnvName blocks LLM keys but allows connector tokens', () => {

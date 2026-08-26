@@ -134,6 +134,37 @@ describe('Composer project picker', () => {
     ).toBeNull()
   })
 
+  it('defaults to runtime and does not use the local-sim timer copy', async () => {
+    render(
+      <div className='flex min-h-[100vh] items-end p-8'>
+        <TaskComposer />
+      </div>,
+    )
+
+    await userEvent.fill(page.getByTestId('composer-input'), '默认路径探测')
+    await userEvent.click(page.getByTestId('composer-submit'))
+    const notice =
+      page.getByTestId('composer-notice').element().textContent ?? ''
+    expect(notice).toContain('本机 VoltAgent Runtime')
+    expect(notice).not.toContain('不会调用 Agent Runtime')
+    expect(notice).not.toContain('本地模拟已接收')
+  })
+
+  it('keeps the local-sim timer path when mode is passed explicitly', async () => {
+    render(
+      <div className='flex min-h-[100vh] items-end p-8'>
+        <TaskComposer mode='local-sim' />
+      </div>,
+    )
+
+    await userEvent.fill(page.getByTestId('composer-input'), '显式本地模拟')
+    await userEvent.click(page.getByTestId('composer-submit'))
+    const notice =
+      page.getByTestId('composer-notice').element().textContent ?? ''
+    expect(notice).toContain('本地模拟已接收')
+    expect(notice).toContain('不会调用 Agent Runtime')
+  })
+
   it('shows 不使用项目 in the menu only after a specified project is selected', async () => {
     render(
       <div className='flex min-h-[100vh] items-end p-8'>

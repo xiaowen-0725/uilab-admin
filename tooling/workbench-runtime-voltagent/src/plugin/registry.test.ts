@@ -15,7 +15,7 @@ import type { BuiltinPluginPackage } from './plugin-package.js'
 import { oauthAccessAccount } from './oauth.js'
 import { createPluginRegistry } from './registry.js'
 import { createKeychainSecretStore } from './secret-store.js'
-import type { PluginManifest } from './manifest.js'
+import type { AuthResourceContribution, PluginManifest } from './manifest.js'
 
 describe('createPluginRegistry', () => {
   it('lists connector projections from provider manifests without a core enum', () => {
@@ -352,6 +352,178 @@ describe('createPluginRegistry', () => {
     })
     const result = await reg.load()
     assert.ok(result.toolNames.includes('custom_tool'))
+    await result.disconnect()
+  })
+})
+
+function extraMcpPlugin(overrides: {
+  id: string
+  serverId: string
+  urlEnv: string
+  auth: AuthResourceContribution[]
+}): PluginManifest {
+  return {
+    schemaVersion: 1,
+    id: overrides.id,
+    name: overrides.id,
+    version: '0.0.1',
+    kind: 'local',
+    enabledByDefault: true,
+    contributes: {
+      mcp: [
+        {
+          serverId: overrides.serverId,
+          urlFromEnv: [overrides.urlEnv],
+        },
+      ],
+      auth: overrides.auth,
+    },
+  }
+}
+
+function countingHost(hostCalls: { n: number }) {
+  return {
+    getTools: async () => {
+      hostCalls.n += 1
+      return {
+        tools: [
+          createTool({
+            name: 'probe_tool',
+            description: 'p',
+            parameters: z.object({}),
+            execute: async () => ({ ok: true }),
+          }),
+        ] as any[],
+        disconnect: async () => {},
+      }
+    },
+  }
+}
+
+describe('createPluginRegistry — MCP cold-load unique branches', () => {
+  it('skips unauthorized oauth2 MCP on cold load without calling the host', async () => {
+    const hostCalls = { n: 0 }
+    const extra = extraMcpPlugin({
+      id: 'mcp.oauth-skip',
+      serverId: 'svc',
+      urlEnv: 'MCP_OAUTH_SKIP_URL',
+      auth: [
+        {
+          resourceId: 'mcp:svc',
+          kind: 'oauth2',
+          loginHint: '请先完成 OAuth',
+        },
+      ],
+    })
+    const reg = createPluginRegistry({
+      env: { MCP_OAUTH_SKIP_URL: 'https://oauth-skip.test/mcp' },
+      builtins: [],
+      extra: [extra],
+      enabledIds: ['mcp.oauth-skip'],
+      host: countingHost(hostCalls),
+    })
+
+    const result = await reg.load()
+    assert.equal(hostCalls.n, 0)
+    assert.equal(
+      result.mcpStatuses.find((status) => status.serverId === 'svc')?.status,
+      'disabled',
+    )
+    await result.disconnect()
+  })
+
+  it('fail-closes unmatched auth on cold load but still resolves; hot load skips', async () => {
+    const hostCalls = { n: 0 }
+    const extra = extraMcpPlugin({
+      id: 'mcp.unmatched',
+      serverId: 'orphan',
+      urlEnv: 'MCP_ORPHAN_URL',
+      auth: [
+        {
+          resourceId: 'cli:session',
+          kind: 'cli_session',
+          loginHint: '请先登录领域 CLI',
+        },
+      ],
+    })
+    const reg = createPluginRegistry({
+      env: { MCP_ORPHAN_URL: 'https://orphan.test/mcp' },
+      builtins: [],
+      extra: [extra],
+      enabledIds: ['mcp.unmatched'],
+      host: countingHost(hostCalls),
+    })
+
+    const result = await reg.load()
+    assert.equal(hostCalls.n, 1)
+    assert.equal(
+      result.mcpStatuses.find((status) => status.serverId === 'orphan')
+        ?.status,
+      'connected',
+    )
+    const tool = result.tools.find((item) => item.name === 'probe_tool')
+    assert.ok(tool)
+    const blocked = await tool.execute?.({}, {} as any)
+    assert.deepEqual(blocked, {
+      ok: false,
+      error: 'auth_revoked',
+      hint: '未匹配 auth 资源；auth-enforced MCP 不可用',
+    })
+
+    hostCalls.n = 0
+    const hot = await reg.loadMcpPlugin('mcp.unmatched')
+    assert.equal(hostCalls.n, 0)
+    assert.equal(hot.tools.length, 0)
+    assert.equal(hot.statuses[0]?.status, 'disabled')
+    await hot.disconnect()
+    await result.disconnect()
+  })
+
+  it('isolates an MCP resolve throw on cold load; hot load propagates', async () => {
+    const hostCalls = { n: 0 }
+    const extra: PluginManifest = {
+      schemaVersion: 1,
+      id: 'mcp.parse-fail',
+      name: 'mcp.parse-fail',
+      version: '0.0.1',
+      kind: 'local',
+      enabledByDefault: true,
+      contributes: {
+        mcp: [
+          {
+            serverId: 'docs',
+            commandFromEnv: ['MCP_PARSE_FAIL_CMD'],
+          },
+        ],
+      },
+    }
+    const env = new Proxy<Record<string, string | undefined>>(
+      {},
+      {
+        get(_target, prop) {
+          if (prop === 'MCP_PARSE_FAIL_CMD') {
+            throw new Error('MCP 配置解析失败 probe')
+          }
+          return undefined
+        },
+      },
+    )
+    const reg = createPluginRegistry({
+      env,
+      builtins: [],
+      extra: [extra],
+      enabledIds: ['mcp.parse-fail'],
+      host: countingHost(hostCalls),
+    })
+
+    const result = await reg.load()
+    assert.equal(hostCalls.n, 0)
+    const plugin = result.plugins.find((item) => item.id === 'mcp.parse-fail')
+    assert.equal(plugin?.reason, 'MCP 配置解析失败 probe')
+    await assert.rejects(
+      () => reg.loadMcpPlugin('mcp.parse-fail'),
+      /MCP 配置解析失败 probe/,
+    )
     await result.disconnect()
   })
 })

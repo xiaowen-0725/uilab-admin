@@ -52,11 +52,6 @@ export const VOLTAGENT_RUNTIME_HONESTY_COPY = {
   reconcileAccepted: '已对账中断 Run（本机 Runtime）',
 } as const satisfies RuntimeHonestyCopy
 
-/** Compatibility accessor for controller and timeline consumers. */
-export function runtimeHonestyCopy(): RuntimeHonestyCopy {
-  return VOLTAGENT_RUNTIME_HONESTY_COPY
-}
-
 export function previewText(text: string, max = 40): string {
   const t = text.trim()
   return t.length > max ? `${t.slice(0, max)}…` : t

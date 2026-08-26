@@ -9,6 +9,44 @@ function encodeSse(chunks: object[]): Uint8Array {
   )
 }
 
+function delayedThenHangSse(
+  first: object[],
+  later: object[],
+  delayMs: number,
+  signal?: AbortSignal | null,
+): ReadableStream<Uint8Array> {
+  const firstBytes = encodeSse(first)
+  const laterBytes = encodeSse(later)
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(firstBytes)
+      const timer = setTimeout(() => {
+        if (signal?.aborted) return
+        try {
+          controller.enqueue(laterBytes)
+        } catch {
+          // already aborted
+        }
+      }, delayMs)
+      function abort(): void {
+        clearTimeout(timer)
+        try {
+          controller.error(
+            Object.assign(new Error('aborted'), { name: 'AbortError' }),
+          )
+        } catch {
+          // already closed / errored
+        }
+      }
+      if (signal?.aborted) {
+        abort()
+        return
+      }
+      signal?.addEventListener('abort', abort, { once: true })
+    },
+  })
+}
+
 function hangingSse(
   chunks: object[],
   signal?: AbortSignal | null,
@@ -609,7 +647,7 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(missing.status).toBe('rejected')
   })
 
-  it('respondToApproval aborts a draining stream and resumes immediately', async () => {
+  it('respondToApproval aborts a hanging stream and resumes after the drain window', async () => {
     let call = 0
     let resumeBody = ''
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -702,6 +740,129 @@ describe('VoltAgentRuntimeAdapter', () => {
       .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
     expect(types).not.toContain('turn.failed')
     expect(types).not.toContain('turn.cancelled')
+  })
+
+  it('keeps a sibling ls tool-result that arrives after auto-approve', async () => {
+    let call = 0
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        return new Response(
+          delayedThenHangSse(
+            [
+              {
+                type: 'tool-call',
+                toolCallId: 'call_ls',
+                toolName: 'ls',
+                args: { path: '/' },
+              },
+              {
+                type: 'tool-call',
+                toolCallId: 'call_w',
+                toolName: 'write_file',
+                args: { file_path: '/out.md', content: 'hi' },
+              },
+              {
+                type: 'tool-approval-request',
+                approvalId: 'apr-par',
+                toolCall: {
+                  type: 'tool-call',
+                  toolCallId: 'call_w',
+                  toolName: 'write_file',
+                  input: { file_path: '/out.md', content: 'hi' },
+                },
+              },
+            ],
+            [
+              {
+                type: 'tool-result',
+                toolCallId: 'call_ls',
+                toolName: 'ls',
+                args: { path: '/' },
+                output: '/out.md (file)',
+              },
+            ],
+            40,
+            init?.signal,
+          ),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      return new Response(
+        sseBody([
+          {
+            type: 'tool-result',
+            toolCallId: 'call_w',
+            toolName: 'write_file',
+            args: { file_path: '/out.md' },
+            output: { path: '/out.md', additions: 1 },
+          },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-par')
+
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-par-s',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-par-s',
+      schemaVersion: 1,
+      taskId: 'task-par',
+      inputText: '列出并写入',
+      proposedTurnId: 'turn-par',
+    })
+
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('approval.requested')
+    })
+
+    await adapter.sendCommand({
+      type: 'respondToApproval',
+      commandId: 'cmd-par-a',
+      issuedAt: '2026-08-05T12:00:00.050Z',
+      actor: 'user',
+      idempotencyKey: 'idem-par-a',
+      schemaVersion: 1,
+      taskId: 'task-par',
+      turnId: 'turn-par',
+      payload: { requestId: 'apr-par', decision: 'approved' },
+    })
+
+    await vi.waitFor(() => {
+      const envelopes = events.flatMap((e) =>
+        e.kind === 'event' ? [e.envelope] : [],
+      )
+      const lsDone = envelopes.find(
+        (env) =>
+          env.eventType === 'tool.completed' &&
+          (env.payload as { toolId?: string }).toolId === 'call_ls',
+      )
+      const writeDone = envelopes.find(
+        (env) =>
+          env.eventType === 'tool.completed' &&
+          (env.payload as { toolId?: string }).toolId === 'call_w',
+      )
+      expect(lsDone).toBeDefined()
+      expect(writeDone).toBeDefined()
+      expect(
+        envelopes.some((env) => env.eventType === 'turn.completed'),
+      ).toBe(true)
+    })
   })
 
   it('getCapabilities loads tools from sidecar agent metadata', async () => {

@@ -134,6 +134,45 @@ export function stripModelProviderSecrets(
   return out
 }
 
+/** Auth material fields used when overlaying secrets onto a filtered child env. */
+export type ChildEnvCredentialMaterial = {
+  status?: string
+  envValues?: Record<string, string>
+  controlledEnvNames?: readonly string[]
+}
+
+/**
+ * After filterChildEnv: strip controlled leftovers, overlay connected
+ * material, then hard-deny model-provider keys (P0).
+ */
+export function overlayCredentialMaterialOnChildEnv(
+  childEnv: Record<string, string>,
+  options: {
+    material?: ChildEnvCredentialMaterial
+    allowedKeys: readonly string[]
+    extraControlledNames?: readonly string[]
+  },
+): Record<string, string> {
+  const next: Record<string, string> = { ...childEnv }
+  const material = options.material
+  const controlled = new Set<string>([
+    ...(material?.controlledEnvNames ?? []),
+    ...(options.extraControlledNames ?? []),
+  ])
+  for (const name of controlled) {
+    delete next[name]
+  }
+  if (material?.status === 'connected') {
+    for (const [key, value] of Object.entries(material.envValues ?? {})) {
+      if (isModelProviderSecretKey(key) || !isAllowedAuthEnvName(key)) continue
+      if (options.allowedKeys.includes(key) || controlled.has(key)) {
+        next[key] = value
+      }
+    }
+  }
+  return stripModelProviderSecrets(next)
+}
+
 /**
  * Auth envNames / SecretRef.env allowlist.
  * Blocks LLM / inference-provider keys (P0) so plugins cannot declare

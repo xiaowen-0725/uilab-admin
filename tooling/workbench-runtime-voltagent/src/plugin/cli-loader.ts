@@ -22,9 +22,7 @@ import { firstEnv } from './parse-util.js'
 import {
   decideCliCommandNeedsApproval,
   filterChildEnv,
-  isAllowedAuthEnvName,
-  isModelProviderSecretKey,
-  stripModelProviderSecrets,
+  overlayCredentialMaterialOnChildEnv,
 } from './security-policy.js'
 import { defaultRuntimeConfigDir } from './auth-binding-persist.js'
 import type { CredentialMaterial, ProfileEnv } from './types.js'
@@ -529,20 +527,10 @@ export function buildCliChildEnv(
     }
   }
   if (!auth?.authEnforced) return filtered
-
-  const material = auth.authMaterial
-  const controlled = new Set(material?.controlledEnvNames ?? [])
-  for (const name of controlled) {
-    delete filtered[name]
-  }
-  if (material?.status === 'connected') {
-    for (const [k, v] of Object.entries(material.envValues)) {
-      // Never re-inject model provider secrets after filterChildEnv (P0)
-      if (isModelProviderSecretKey(k) || !isAllowedAuthEnvName(k)) continue
-      if (keys.includes(k) || controlled.has(k)) filtered[k] = v
-    }
-  }
-  return stripModelProviderSecrets(filtered)
+  return overlayCredentialMaterialOnChildEnv(filtered, {
+    material: auth.authMaterial,
+    allowedKeys: keys,
+  })
 }
 
 /**

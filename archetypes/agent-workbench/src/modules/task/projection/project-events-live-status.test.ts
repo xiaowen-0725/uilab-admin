@@ -185,6 +185,52 @@ describe('projectEvents liveStatus + file meta', () => {
     expect(tool?.body ?? '').not.toMatch(/Runtime|adapter/i)
   })
 
+  it('settles a running list tool when turn.completed arrives without tool.completed', () => {
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'turn.started', {}),
+        mk(2, 'tool.started', {
+          toolId: 'call_ls',
+          name: 'ls',
+          args: { path: '/' },
+        }),
+        mk(3, 'tool.started', {
+          toolId: 'call_write',
+          name: 'write_file',
+          args: { path: '/pipeline-polish.md' },
+        }),
+        mk(4, 'approval.requested', {
+          requestId: 'ap1',
+          toolName: 'write_file',
+          args: { path: '/pipeline-polish.md' },
+        }),
+        mk(5, 'approval.resolved', {
+          requestId: 'ap1',
+          decision: 'approved',
+        }),
+        mk(6, 'tool.completed', {
+          toolId: 'call_write',
+          name: 'write_file',
+          args: { path: '/pipeline-polish.md' },
+        }),
+        mk(7, 'turn.completed', {}),
+      ],
+    )
+    const tools = state.readModel.timeline.filter(
+      (item) => item.category === 'tool-group',
+    )
+    expect(tools).toHaveLength(2)
+    expect(tools[0]).toMatchObject({
+      status: 'completed',
+      title: '已列出 /',
+    })
+    expect(tools[1]).toMatchObject({
+      status: 'completed',
+      title: '已写入 /pipeline-polish.md',
+    })
+  })
+
   it('ls tool output projects to expandable tool-group children', () => {
     const envelopes: AgentRuntimeEventEnvelope[] = [
       mk(1, 'turn.started', {}),

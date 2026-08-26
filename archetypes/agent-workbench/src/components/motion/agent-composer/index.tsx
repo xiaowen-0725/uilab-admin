@@ -112,7 +112,7 @@ export interface ComposerChipProps {
   "data-testid"?: string;
 }
 
-const CHIP_BASE = "flex h-7 items-center gap-1.5 rounded-full px-2 text-[13px] text-muted-foreground";
+const CHIP_BASE = "tl-chrome flex h-7 items-center gap-1.5 rounded-full px-2 text-muted-foreground";
 
 /**
  * A single label inside `ComposerContextBar` — an optional 16px icon plus
@@ -262,7 +262,7 @@ export function ComposerTextarea({
           placeholder={hasLeading && !value ? undefined : placeholder}
           aria-label={ariaLabel}
           className={cn(
-            "flex-1 resize-none border-none bg-transparent text-[15px] leading-[26.25px]",
+            "flex-1 resize-none border-none bg-transparent text-[length:var(--tl-prose-size)] leading-[var(--tl-prose-leading)]",
             "shadow-none outline-none ring-0 focus:shadow-none focus:outline-none focus:ring-0",
             "focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0",
             "placeholder:text-foreground/50",
@@ -608,7 +608,7 @@ export const ComposerAccessChip = forwardRef<
       ref={ref}
       type={type}
       className={cn(
-        "flex h-7 items-center gap-1 rounded-full px-2 text-[13px] transition-colors",
+        "tl-chrome flex h-7 items-center gap-1 rounded-full px-2 transition-colors",
         tone === "warning"
           ? "text-[var(--wb-warning-text)] hover:bg-[var(--wb-warning-hover)]/10"
           : "text-muted-foreground hover:bg-[var(--wb-hover)]",
@@ -791,7 +791,7 @@ export function ComposerModelPicker({
         data-testid={dataTestId}
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex h-7 items-center gap-1 rounded-full px-2 text-[13px] text-muted-foreground",
+          "tl-chrome flex h-7 items-center gap-1 rounded-full px-2 text-muted-foreground",
           "hover:bg-[var(--wb-hover)]",
           className,
         )}
@@ -856,7 +856,7 @@ export function ComposerMenuButton({
         onClick={() => setOpen(!open)}
         className={cn(
           label
-            ? "flex h-7 items-center gap-1 rounded-full px-2 text-[13px] text-muted-foreground hover:bg-[var(--wb-hover)]"
+            ? "tl-chrome flex h-7 items-center gap-1 rounded-full px-2 text-muted-foreground hover:bg-[var(--wb-hover)]"
             : "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground",
           className,
         )}

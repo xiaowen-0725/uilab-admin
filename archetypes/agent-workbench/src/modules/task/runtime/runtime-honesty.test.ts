@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  previewText,
-  runtimeHonestyCopy,
-  VOLTAGENT_RUNTIME_HONESTY_COPY,
-} from './runtime-honesty'
+import { previewText, VOLTAGENT_RUNTIME_HONESTY_COPY } from './runtime-honesty'
 
 describe('VOLTAGENT_RUNTIME_HONESTY_COPY', () => {
   it('discloses local sidecar Runtime and never claims Fake', () => {
@@ -34,10 +30,6 @@ describe('VOLTAGENT_RUNTIME_HONESTY_COPY', () => {
       expect(c[key]).not.toMatch(/Fake/i)
       expect(c[key]).toMatch(/本机|VoltAgent/)
     }
-  })
-
-  it('keeps the compatibility accessor on the same readonly copy', () => {
-    expect(runtimeHonestyCopy()).toBe(VOLTAGENT_RUNTIME_HONESTY_COPY)
   })
 
   it('previewText truncates with ellipsis', () => {

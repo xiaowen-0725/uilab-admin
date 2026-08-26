@@ -33,11 +33,7 @@ import type { HostPort } from '@/modules/project'
 import { createAnonymousIdentityScope } from '@/modules/identity'
 import type { WorkbenchSessionCommands } from '@/modules/workbench-session'
 import type { BoardSurfaceWiring } from './surface-assembly'
-
-const INSTANT_DEMO =
-  import.meta.env.MODE === 'test' ||
-  import.meta.env.VITEST === true ||
-  import.meta.env.VITEST === 'true'
+import { isInstantDemo } from './test-env'
 
 export type BoardOpener = (boardId?: string) => void
 
@@ -94,7 +90,7 @@ function sidecarToken(): string | null {
 }
 
 function defaultJobRuntime(): BoardJobRuntimePort {
-  if (INSTANT_DEMO) return createMemoryBoardJobRuntime()
+  if (isInstantDemo()) return createMemoryBoardJobRuntime()
   return createHttpBoardJobRuntime({
     baseUrl: resolveVoltAgentBaseUrl(),
     token: sidecarToken(),
@@ -102,7 +98,7 @@ function defaultJobRuntime(): BoardJobRuntimePort {
 }
 
 function defaultQueryCatalog(): BoardQueryCatalogPort {
-  if (INSTANT_DEMO) return { listQueries: async () => [] }
+  if (isInstantDemo()) return { listQueries: async () => [] }
   return createHttpBoardQueryCatalog({
     baseUrl: resolveVoltAgentBaseUrl(),
     token: sidecarToken(),
@@ -110,7 +106,7 @@ function defaultQueryCatalog(): BoardQueryCatalogPort {
 }
 
 function defaultPresetCatalog(): BoardPresetCatalogPort {
-  if (INSTANT_DEMO) return { listPresetBoards: async () => [] }
+  if (isInstantDemo()) return { listPresetBoards: async () => [] }
   return createHttpBoardPresetCatalog({
     baseUrl: resolveVoltAgentBaseUrl(),
     token: sidecarToken(),
@@ -133,7 +129,7 @@ export function useWorkbenchBoardWiring(
   }, [input.boardStore, input.db])
   const content = useMemo(() => {
     if (input.boardContent) return input.boardContent
-    if (INSTANT_DEMO) return createMemoryBoardContent()
+    if (isInstantDemo()) return createMemoryBoardContent()
     return createHttpBoardContent({
       baseUrl: resolveVoltAgentBaseUrl(),
       token: sidecarToken(),
@@ -165,7 +161,7 @@ export function useWorkbenchBoardWiring(
         onChange: bumpRevision,
         wake,
         instanceId: crypto.randomUUID(),
-        foregroundTickMs: INSTANT_DEMO ? undefined : BOARD_SCHEDULE_TICK_MS,
+        foregroundTickMs: isInstantDemo() ? undefined : BOARD_SCHEDULE_TICK_MS,
       }),
     [identityScope, jobRuntime, store, wake],
   )

@@ -7,7 +7,7 @@ import { useRef, type MutableRefObject } from 'react'
 import { Button } from '@/components/ui/button'
 import type { TurnStatus } from '../../model/lifecycle'
 import type { TaskReadModel, TimelineItem } from '../../projection/types'
-import { runtimeHonestyCopy } from '../../runtime/runtime-honesty'
+import { VOLTAGENT_RUNTIME_HONESTY_COPY } from '../../runtime/runtime-honesty'
 import {
   applyStreamGate,
   streamItemsHitlPending,
@@ -97,7 +97,7 @@ export function Timeline({
       })
     : undefined
   if (lastFollow) lastGatesRef.current = lastFollow.gated.gates
-  const honesty = runtimeHonestyCopy()
+  const honesty = VOLTAGENT_RUNTIME_HONESTY_COPY
 
   return (
     <MessageScroller

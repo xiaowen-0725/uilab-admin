@@ -153,7 +153,7 @@ export { EventStorePortError } from './ports/event-store-port'
 // --- runtime utilities (UI honesty copy + projection helpers) ---
 export {
   previewText,
-  runtimeHonestyCopy,
+  VOLTAGENT_RUNTIME_HONESTY_COPY,
 } from './runtime/runtime-honesty'
 export type { RuntimeHonestyCopy } from './runtime/runtime-honesty'
 

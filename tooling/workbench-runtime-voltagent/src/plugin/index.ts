@@ -41,6 +41,7 @@ export {
   filterChildEnv,
   formatSafeStatusLine,
   isModelProviderSecretKey,
+  overlayCredentialMaterialOnChildEnv,
   normalizeToolName,
   redactSecretValues,
   type CliApprovalInput,
@@ -52,12 +53,13 @@ export {
   createDefaultSecretStore,
   createEnvSecretStore,
   createKeychainSecretStore,
-  createKeychainSecretStoreStub,
   createMemorySecretStore,
   migrateEnvSecretsToKeychain,
   resolveKeychainCapability,
+  resolveKeychainModeFromEnv,
   type CreateKeychainSecretStoreOptions,
   type KeychainCapability,
+  type KeychainStoreMode,
   type SecretStore,
 } from './secret-store.js'
 

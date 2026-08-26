@@ -17,7 +17,7 @@ import {
   filterChildEnv,
   isAllowedAuthEnvName,
   isModelProviderSecretKey,
-  stripModelProviderSecrets,
+  overlayCredentialMaterialOnChildEnv,
 } from './security-policy.js'
 import type { McpContribution, McpServerConfigShape } from './manifest.js'
 import { firstEnv, parseEnvStringList } from './parse-util.js'
@@ -103,27 +103,11 @@ export function buildMcpChildEnv(
     includeBaseKeys: true,
   })
   if (!auth?.authEnforced) return filtered
-
-  const material = auth.authMaterial
-  const controlled = new Set([
-    ...(material?.controlledEnvNames ?? []),
-    ...(contrib.bearerTokenFromEnv ?? []),
-  ])
-
-  // Strip controlled secrets when not connected; overlay material values when connected
-  for (const name of controlled) {
-    delete filtered[name]
-  }
-  if (material?.status === 'connected') {
-    for (const [k, v] of Object.entries(material.envValues)) {
-      // Never re-inject model provider secrets after filterChildEnv (P0)
-      if (isModelProviderSecretKey(k) || !isAllowedAuthEnvName(k)) continue
-      if (keys.includes(k) || controlled.has(k)) {
-        filtered[k] = v
-      }
-    }
-  }
-  return stripModelProviderSecrets(filtered)
+  return overlayCredentialMaterialOnChildEnv(filtered, {
+    material: auth.authMaterial,
+    allowedKeys: keys,
+    extraControlledNames: contrib.bearerTokenFromEnv,
+  })
 }
 
 /**
@@ -274,50 +258,66 @@ function reconstructExecutableTool(
   }) as Tool<any, any>
 }
 
+type ExecuteGateBlock = {
+  ok: false
+  error: string
+  hint?: string
+}
+
+/**
+ * Prefer in-place execute wrap so needsApproval functions / hooks stay intact.
+ * Reconstruct only when `execute` is non-writable.
+ */
+function wrapToolExecute(
+  tool: Tool<any, any>,
+  beforeExecute: (...args: any[]) => Promise<ExecuteGateBlock | undefined>,
+): Tool<any, any> {
+  const inspected = inspectExecutableTool(tool)
+  if (!inspected) return tool
+  const gated = async (...args: any[]) => {
+    const blocked = await beforeExecute(...args)
+    if (blocked) return blocked
+    return inspected.boundExecute(...args)
+  }
+  if (
+    tryReplaceWritableToolProperty(tool, 'execute', gated, {
+      allowSetter: true,
+    })
+  ) {
+    return tool
+  }
+  return (
+    reconstructExecutableTool(inspected, {
+      name: tool.name,
+      description: inspected.source.description ?? tool.name,
+      needsApproval: inspected.source.needsApproval,
+      hooks: inspected.source.hooks,
+      execute: gated,
+    }) ?? tool
+  )
+}
+
 /**
  * Gate MCP tool execute on live auth status so revoke/logout blocks further
  * calls even when HTTP Authorization was snapshotted at load (adversarial).
- * Prefer in-place execute wrap so needsApproval functions / hooks stay intact.
  */
 export function wrapMcpToolsWithLiveAuthGate(
   tools: Tool<any, any>[],
   resolveMaterial: () => Promise<CredentialMaterial | undefined>,
 ): Tool<any, any>[] {
-  return tools.map((tool) => {
-    const inspected = inspectExecutableTool(tool)
-    if (!inspected) return tool
-    const gated = async (...args: any[]) => {
+  return tools.map((tool) =>
+    wrapToolExecute(tool, async () => {
       const material = await resolveMaterial()
-      if (!material || material.status !== 'connected') {
-        return {
-          ok: false,
-          error: 'auth_revoked',
-          hint:
-            material?.hint ??
-            '授权已撤销或未连接；请 auth login 后重启 sidecar（MCP 会话）',
-        }
+      if (material?.status === 'connected') return undefined
+      return {
+        ok: false,
+        error: 'auth_revoked',
+        hint:
+          material?.hint ??
+          '授权已撤销或未连接；请 auth login 后重启 sidecar（MCP 会话）',
       }
-      return inspected.boundExecute(...args)
-    }
-
-    // Prefer mutating execute in place — preserves dynamic needsApproval / hooks
-    if (
-      tryReplaceWritableToolProperty(tool, 'execute', gated, {
-        allowSetter: true,
-      })
-    ) {
-      return tool
-    }
-
-    return reconstructExecutableTool(inspected, {
-      name: tool.name,
-      description: inspected.source.description ?? tool.name,
-      // Preserve boolean OR function approval policy (do not collapse to === true)
-      needsApproval: inspected.source.needsApproval,
-      hooks: inspected.source.hooks,
-      execute: gated,
-    }) ?? tool
-  })
+    }),
+  )
 }
 
 /** Gate public MCP tools with the immutable connector selection for this Turn. */
@@ -334,13 +334,7 @@ export function wrapMcpToolsWithTaskSelectionGate(
       ),
     )
     if (!connector) return tool
-
-    const inspected = inspectExecutableTool(tool)
-    if (!inspected) return tool
-    const gated = async (
-      rawArgs: unknown,
-      executeOptions?: ToolExecuteOptions,
-    ) => {
+    return wrapToolExecute(tool, async (_rawArgs, executeOptions) => {
       const turnContext = readCapabilityTurnContext(executeOptions)
       const decision = gateConnectorToolInvoke(tool.name, {
         taskId: turnContext.taskId,
@@ -351,31 +345,13 @@ export function wrapMcpToolsWithTaskSelectionGate(
           authStatus: 'connected',
         }),
       })
-      if (!decision.allowed) {
-        return {
-          ok: false,
-          error: decision.reason,
-          hint: decision.hint,
-        }
+      if (decision.allowed) return undefined
+      return {
+        ok: false,
+        error: decision.reason,
+        hint: decision.hint,
       }
-      return inspected.boundExecute(rawArgs, executeOptions)
-    }
-
-    if (
-      tryReplaceWritableToolProperty(tool, 'execute', gated, {
-        allowSetter: true,
-      })
-    ) {
-      return tool
-    }
-
-    return reconstructExecutableTool(inspected, {
-      name: tool.name,
-      description: inspected.source.description ?? tool.name,
-      needsApproval: inspected.source.needsApproval,
-      hooks: inspected.source.hooks,
-      execute: gated,
-    }) ?? tool
+    })
   })
 }
 

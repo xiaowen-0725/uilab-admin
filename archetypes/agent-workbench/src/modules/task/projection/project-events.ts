@@ -778,6 +778,55 @@ function completeAssistantsOnTurnComplete(
   })
 }
 
+const OPEN_PROCESS_CATEGORIES = new Set<TimelineItemCategory>([
+  'tool-group',
+  'command-execution',
+  'reasoning-section',
+])
+
+function isOpenProcessStatus(status: string | undefined): boolean {
+  return status === 'running' || status === 'streaming'
+}
+
+function sameTurnItem(
+  item: TimelineItem,
+  turnId: TurnId | undefined,
+): boolean {
+  if (!turnId || !item.turnId) return true
+  return item.turnId === turnId
+}
+
+/**
+ * Approval-resume can drop a parallel tool-result (ls started, write approved,
+ * ls never completed). A terminal turn must not leave those rows live.
+ */
+function settleOpenProcessItems(
+  state: MutableState,
+  envelope: AgentRuntimeEventEnvelope,
+): void {
+  const turnId = envelope.turnId as TurnId | undefined
+  const endedAt = envelopeTime(envelope)
+  state.readModel.timeline.forEach((item, index) => {
+    if (!OPEN_PROCESS_CATEGORIES.has(item.category)) return
+    if (!sameTurnItem(item, turnId)) return
+    if (!isOpenProcessStatus(item.status)) return
+    const title =
+      item.category === 'reasoning-section'
+        ? item.title
+        : formatToolActivityCopy({
+            label: item.title,
+            items: item.meta?.children,
+            status: 'completed',
+          })
+    replaceItem(state, index, {
+      ...item,
+      status: 'completed',
+      title,
+      meta: mergeMeta(item.meta, { endedAt }),
+    })
+  })
+}
+
 function lastReasoningIndex(state: MutableState, turnId: TurnId | undefined): number {
   return findIndex(
     state.readModel.timeline,
@@ -1215,6 +1264,7 @@ export function applyRuntimeEvent(
     }
     case 'turn.completed': {
       completeAssistantsOnTurnComplete(next, envelope)
+      settleOpenProcessItems(next, envelope)
       setTurnStatus(next, 'completed', envelope)
       const durationMs = computeTurnDurationMs(next, envelope)
       const usage = parseUsage(envelope.payload)
@@ -1233,6 +1283,7 @@ export function applyRuntimeEvent(
       break
     }
     case 'turn.cancelled': {
+      settleOpenProcessItems(next, envelope)
       setTurnStatus(next, 'cancelled', envelope)
       const durationMs = computeTurnDurationMs(next, envelope)
       ensureTurnTerminal(next, envelope, 'cancelled', '已取消', {
@@ -1241,6 +1292,7 @@ export function applyRuntimeEvent(
       break
     }
     case 'turn.failed': {
+      settleOpenProcessItems(next, envelope)
       setTurnStatus(next, 'failed', envelope)
       const durationMs = computeTurnDurationMs(next, envelope)
       ensureTurnTerminal(next, envelope, 'failed', '失败', {

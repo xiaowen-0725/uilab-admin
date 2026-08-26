@@ -31,7 +31,7 @@ import type {
 } from '../protocol/commands'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'
 import { questionAnswerToInputText } from '../protocol/question-answer'
-import { runtimeHonestyCopy } from '../runtime/runtime-honesty'
+import { VOLTAGENT_RUNTIME_HONESTY_COPY } from '../runtime/runtime-honesty'
 import { CommandFactory, type CommandClock } from './command-factory'
 import { dispatchCommand } from './dispatch'
 
@@ -103,7 +103,7 @@ export class TaskRuntimeController {
   private readonly runtime: RuntimePort
   private projectId: string
   private readonly eventStore: EventStorePort | null
-  private readonly honesty: ReturnType<typeof runtimeHonestyCopy>
+  private readonly honesty = VOLTAGENT_RUNTIME_HONESTY_COPY
   private readonly eventStoreKind: EventStoreHonestyKind
   private readonly commands: CommandFactory
   private readonly listeners = new Set<TaskRuntimeListener>()
@@ -141,7 +141,6 @@ export class TaskRuntimeController {
     this.runtime = options.runtime
     this.projectId = options.projectId
     this.eventStore = options.eventStore ?? null
-    this.honesty = runtimeHonestyCopy()
     this.eventStoreKind = options.eventStoreKind ?? 'memory'
     const clock: CommandClock =
       options.clock ?? { nowIso: () => new Date().toISOString() }

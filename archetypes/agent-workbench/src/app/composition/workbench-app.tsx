@@ -54,12 +54,8 @@ import {
   hardDeleteTask,
   removeProjectFromList,
 } from './task-lifecycle-commands'
+import { isInstantDemo } from './test-env'
 import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
-
-const INSTANT_DEMO =
-  import.meta.env.MODE === 'test' ||
-  import.meta.env.VITEST === true ||
-  import.meta.env.VITEST === 'true'
 
 export type { WorkbenchPersistence }
 
@@ -89,13 +85,8 @@ const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
 }
 
 function resolveDefaultPersistence(): WorkbenchPersistence {
-  if (INSTANT_DEMO) return 'memory'
+  if (isInstantDemo()) return 'memory'
   return 'idb'
-}
-
-/** Runtime context chips are empty in product chrome (data-honesty-mode / a11y only). */
-function runtimeContext(): [] {
-  return []
 }
 
 function actionErrorMessage(err: unknown, fallback: string): string {
@@ -302,7 +293,7 @@ export function WorkbenchApp({
       mode,
       readModel: isRuntimePath ? runtime.readModel : null,
       launchActions,
-      contextSections: runtimeContext(),
+      contextSections: [],
       contextPanelOpen: session.view.layout.contextPanelOpen,
     }
   }, [
@@ -654,19 +645,12 @@ export function WorkbenchApp({
         catalogController.setFocusedProject(row.projectId)
         selectedProjectIdRef.current = row.projectId
         session.commands.selectProject(row.projectId, nextTaskId)
-        void localRootCommands
-          ?.ensureRuntimeForSelectedProject()
-          .then(() => setProjectActionError(null))
-          .catch((err: unknown) => {
-            setProjectActionError(
-              actionErrorMessage(err, '无法切换项目运行时'),
-            )
-          })
+        startRuntimeForSelected()
         return
       }
       session.commands.selectTask(nextTaskId)
     },
-    [catalogController, localRootCommands, session.commands],
+    [catalogController, session.commands, startRuntimeForSelected],
   )
 
   const performRemoveProject = useCallback(
@@ -703,22 +687,15 @@ export function WorkbenchApp({
       setRemoveConfirmProjectId(null)
 
       if (result.selectionChanged && result.nextSelectedProjectId) {
-        void localRootCommands
-          ?.ensureRuntimeForSelectedProject()
-          .then(() => setProjectActionError(null))
-          .catch((err: unknown) => {
-            setProjectActionError(
-              actionErrorMessage(err, '无法切换项目运行时'),
-            )
-          })
+        startRuntimeForSelected()
       }
     },
     [
       catalogController,
       capabilityController,
       eventStore,
-      localRootCommands,
       runStatusIndex,
+      startRuntimeForSelected,
       runtime.turnStatus,
       runtimeController,
       session.commands,

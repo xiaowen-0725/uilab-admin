@@ -5,8 +5,8 @@ import { resolveAuthStatus } from './credential-resolver.js'
 import {
   createCompositeSecretStore,
   createEnvSecretStore,
-  createKeychainSecretStoreStub,
   createMemorySecretStore,
+  resolveKeychainModeFromEnv,
 } from './secret-store.js'
 import type { AuthBinding, SecretRef } from './types.js'
 
@@ -45,16 +45,19 @@ describe('createEnvSecretStore', () => {
   })
 })
 
-describe('createKeychainSecretStoreStub', () => {
-  it('resolve returns null; set explains not implemented', async () => {
-    const store = createKeychainSecretStoreStub()
+describe('resolveKeychainModeFromEnv', () => {
+  it('maps known UILAB_KEYCHAIN_MODE values and defaults to auto', () => {
+    assert.equal(resolveKeychainModeFromEnv({ UILAB_KEYCHAIN_MODE: 'fake' }), 'fake')
     assert.equal(
-      await store.resolve({ backend: 'keychain', account: 'gh' }),
-      null,
+      resolveKeychainModeFromEnv({ UILAB_KEYCHAIN_MODE: 'unsupported' }),
+      'unsupported',
     )
-    await assert.rejects(
-      () => store.set!({ backend: 'keychain', account: 'gh' }, 'x'),
-      /尚未实现|Keychain|不支持/,
+    assert.equal(resolveKeychainModeFromEnv({ UILAB_KEYCHAIN_MODE: 'os' }), 'os')
+    assert.equal(resolveKeychainModeFromEnv({}), 'auto')
+    assert.equal(resolveKeychainModeFromEnv({ UILAB_KEYCHAIN_MODE: '' }), 'auto')
+    assert.equal(
+      resolveKeychainModeFromEnv({ UILAB_KEYCHAIN_MODE: 'other' }),
+      'auto',
     )
   })
 })

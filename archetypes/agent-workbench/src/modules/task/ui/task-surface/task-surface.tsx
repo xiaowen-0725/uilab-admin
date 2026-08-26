@@ -28,7 +28,6 @@ import { Timeline, type TimelineOpenFileRef } from '../timeline/timeline'
 export interface TaskSurfaceView {
   taskId: string
   title: string
-  subtitle?: string
   projectName: string
   mode: TaskContentMode
   /** Present for Runtime and capture-projected replay. */
@@ -80,7 +79,7 @@ export interface TaskSurfaceProps {
   onCloseContextPanel?: () => void
   /** Fixture-honest: parent may switch to stream capture. */
   onLaunchAction?: (action: LaunchAction) => void
-  /** Composer path: default local-sim; runtime for the VoltAgent lifecycle. */
+  /** Composer path: default runtime; pass `local-sim` only for capture/test. */
   composerRuntime?: TaskSurfaceComposerRuntime
   /**
    * Open a path/file from Timeline chips/cards into Work Surface.
@@ -125,7 +124,7 @@ export function TaskSurface({
     onLaunchAction?.(action)
   }
 
-  const composerMode = composerRuntime?.mode ?? 'local-sim'
+  const composerMode = composerRuntime?.mode ?? 'runtime'
   const isTimeline =
     (view.mode === 'runtime' || view.mode === 'stream') && Boolean(view.readModel)
 

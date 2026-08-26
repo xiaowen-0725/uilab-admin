@@ -125,6 +125,8 @@ describe('Timeline conversation layout', () => {
     await userEvent.click(page.getByTestId('timeline-turn-toggle'))
     const reasoning = document.querySelector('[data-category="reasoning-section"]')
     expect(reasoning?.textContent ?? '').toContain('The user asked who I am.')
+    expect(reasoning?.textContent ?? '').toContain('深度思考')
     expect(reasoning?.textContent ?? '').not.toContain('思考过程')
+    expect(reasoning?.textContent ?? '').not.toContain('思考中')
   })
 })

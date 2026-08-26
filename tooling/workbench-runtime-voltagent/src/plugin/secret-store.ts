@@ -10,7 +10,7 @@ import type { ProfileEnv, SecretRef } from './types.js'
 export type SecretStore = {
   /** Resolve secret value; never logs the value. */
   resolve(ref: SecretRef, env?: ProfileEnv): Promise<string | null>
-  /** Optional write — memory/tests; keychain stub may reject. */
+  /** Optional write — memory/tests; unsupported keychain may reject. */
   set?(ref: SecretRef, value: string): Promise<void>
   clear?(ref: SecretRef): Promise<void>
 }
@@ -54,14 +54,6 @@ export function createEnvSecretStore(
   }
 }
 
-/**
- * @deprecated Prefer createKeychainSecretStore({ mode: 'unsupported' }) (#30).
- * Kept for call-site compatibility — resolve null; set throws Chinese error.
- */
-export function createKeychainSecretStoreStub(): SecretStore {
-  return createKeychainSecretStore({ mode: 'unsupported' })
-}
-
 /** Keychain backend capability for doctor / status hints (#30). */
 export type KeychainCapability = 'available' | 'unsupported' | 'fake'
 
@@ -87,6 +79,19 @@ export type CreateKeychainSecretStoreOptions = {
     args: string[],
     options?: { stdin?: string },
   ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
+}
+
+export type KeychainStoreMode = NonNullable<
+  CreateKeychainSecretStoreOptions['mode']
+>
+
+/** Map `UILAB_KEYCHAIN_MODE` to a store mode; unknown/empty → `auto`. */
+export function resolveKeychainModeFromEnv(env: ProfileEnv): KeychainStoreMode {
+  const raw = env.UILAB_KEYCHAIN_MODE
+  if (raw === 'fake') return 'fake'
+  if (raw === 'unsupported') return 'unsupported'
+  if (raw === 'os') return 'os'
+  return 'auto'
 }
 
 /** Quote a token for `security -i` command language. */
@@ -334,15 +339,7 @@ export function createDefaultSecretStore(
     keychain?: SecretStore
   },
 ): SecretStore {
-  const mode =
-    options?.keychainMode ??
-    (env.UILAB_KEYCHAIN_MODE === 'fake'
-      ? 'fake'
-      : env.UILAB_KEYCHAIN_MODE === 'unsupported'
-        ? 'unsupported'
-        : env.UILAB_KEYCHAIN_MODE === 'os'
-          ? 'os'
-          : 'auto')
+  const mode = options?.keychainMode ?? resolveKeychainModeFromEnv(env)
   const keychain =
     options?.keychain ?? createKeychainSecretStore({ mode })
   return createCompositeSecretStore([

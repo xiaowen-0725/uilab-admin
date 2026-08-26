@@ -43,7 +43,7 @@ export function ComposerPermissionPreset({
             icon={<ShieldCheck className='size-4' />}
             tone={preset === 'full-access' ? 'warning' : 'default'}
             className={cn(
-              'h-8 gap-1 rounded-lg px-2 text-[14px] leading-5',
+              'tl-chrome h-8 gap-1 rounded-lg px-2',
               preset === 'full-access' ? undefined : 'text-foreground/50',
               className,
             )}

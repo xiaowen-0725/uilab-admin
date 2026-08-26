@@ -34,6 +34,7 @@ import {
 import {
   createDefaultSecretStore,
   resolveKeychainCapability,
+  resolveKeychainModeFromEnv,
   type SecretStore,
 } from './secret-store.js'
 import { isAllowedAuthEnvName } from './security-policy.js'
@@ -503,14 +504,7 @@ export async function runAuthLogin(
     }
 
     const cap = resolveKeychainCapability({
-      mode:
-        ctx.env.UILAB_KEYCHAIN_MODE === 'fake'
-          ? 'fake'
-          : ctx.env.UILAB_KEYCHAIN_MODE === 'unsupported'
-            ? 'unsupported'
-            : ctx.env.UILAB_KEYCHAIN_MODE === 'os'
-              ? 'os'
-              : 'auto',
+      mode: resolveKeychainModeFromEnv(ctx.env),
     })
     const declaredCount = (resource.envNames ?? []).length
     const wantKeychain =
