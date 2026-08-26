@@ -46,7 +46,7 @@ export function DeleteTaskConfirmDialog({
           >
             取消
           </Button>
-          {/* Soft destructive — light fill + danger text (Codex/WorkBuddy style) */}
+          {/* Soft destructive — light fill + danger text */}
           <Button
             type='button'
             variant='destructive'

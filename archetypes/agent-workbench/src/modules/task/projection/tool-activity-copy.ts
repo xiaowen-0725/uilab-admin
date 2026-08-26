@@ -1,5 +1,5 @@
 /**
- * Chinese natural-language copy for tool rows + live status (Kun/Codex-aligned).
+ * Chinese natural-language copy for tool rows + live status.
  * Pure: no React, no projection state.
  */
 
@@ -136,10 +136,16 @@ export function toolKindHint(kind: ToolActivityKind): string {
     case 'read':
     case 'skill':
       return 'read'
+    case 'write':
+      return 'write'
+    case 'list':
+      return 'list'
     case 'command':
       return 'command'
     case 'search':
       return 'web_search'
+    case 'plan':
+      return 'plan'
     default:
       return 'generic'
   }
@@ -237,6 +243,42 @@ export function formatToolActivityCopy(input: ToolActivityInput): string {
 /** Live-status line while a tool is in flight (alias of running copy). */
 export function liveStatusForToolActivity(input: Omit<ToolActivityInput, 'status'>): string {
   return formatToolActivityCopy({ ...input, status: 'running' })
+}
+
+const ACTIVITY_KIND_COPY: Record<string, string> = {
+  list: '列出目录',
+  read: '读取文件',
+  write: '写入文件',
+  search: '搜索文件',
+  command: '运行了命令',
+  skill: '加载了工具',
+  plan: '更新了计划',
+}
+
+const ACTIVITY_KIND_RUNNING: Record<string, string> = {
+  list: '正在列出目录',
+  read: '正在读取文件',
+  write: '正在写入文件',
+  search: '正在搜索文件',
+  command: '正在运行命令',
+  skill: '正在加载工具',
+  plan: '正在更新计划',
+}
+
+/** Programmatic activity-group header. Kind change does not start a new group. */
+export function formatActivityGroupCopy(kinds: readonly string[]): string {
+  const seen: string[] = []
+  for (const kind of kinds) {
+    const key = kind.trim() || 'other'
+    if (!seen.includes(key)) seen.push(key)
+  }
+  if (seen.length === 0) return '调用了工具'
+  return seen.map((kind) => ACTIVITY_KIND_COPY[kind] ?? '调用了工具').join(' ')
+}
+
+export function formatActivityGroupRunningCopy(kinds: readonly string[]): string {
+  const last = [...kinds].reverse().find((kind) => kind.trim()) ?? 'other'
+  return ACTIVITY_KIND_RUNNING[last] ?? '正在调用工具'
 }
 
 /**

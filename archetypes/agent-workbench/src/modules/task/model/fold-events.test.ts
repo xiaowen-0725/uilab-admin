@@ -3,13 +3,20 @@ import { getEventStreamCapture } from '@/config/captures'
 import {
   foldCaptureToView,
   formatDurationMs,
+  formatDurationZh,
 } from './stream-events'
 
 describe('formatDurationMs', () => {
-  it('formats seconds and minutes like Codex chips', () => {
+  it('formats seconds and minutes as compact chips', () => {
     expect(formatDurationMs(45_000)).toBe('45s')
     expect(formatDurationMs(78_000)).toBe('1m 18s')
     expect(formatDurationMs(120_000)).toBe('2m')
+  })
+
+  it('formats process-header duration in Chinese minutes and seconds', () => {
+    expect(formatDurationZh(16_000)).toBe('16秒')
+    expect(formatDurationZh(76_000)).toBe('1分钟 16秒')
+    expect(formatDurationZh(120_000)).toBe('2分钟')
   })
 })
 
@@ -53,7 +60,7 @@ describe('foldCaptureToView (golden-weixin-audio)', () => {
   it('tool rows merge by id so completed overwrites running', () => {
     const view = foldCaptureToView(capture)
     const search1 = view.turn.toolRows.find((r) => r.id === 'tool-search-1')
-    // completed tools must default to collapsed (Codex S-done-collapsed)
+    // completed tools must default to collapsed
     expect(search1?.status).toBe('completed')
     expect(search1?.defaultExpanded).toBe(false)
     expect(search1?.items.length).toBeGreaterThan(0)

@@ -1,4 +1,4 @@
-import { CheckIcon as Check } from '@heroicons/react/24/outline'
+import { ConversationIcon } from '@/components/icons/conversation-icon'
 import { cn } from '@/lib/utils'
 import type { PlanStepStatus } from '../../projection/plan-snapshot'
 import type { TimelineItem } from '../../projection/types'
@@ -57,10 +57,7 @@ export function PlanUpdateCard({ item }: PlanUpdateCardProps) {
 function PlanUpdateStepMark({ status }: { status: PlanStepStatus }) {
   if (status === 'completed') {
     return (
-      <Check
-        className='mt-0.5 size-3.5 shrink-0 text-primary'
-        aria-hidden
-      />
+      <ConversationIcon name='check' className='mt-0.5 text-primary' />
     )
   }
   return (

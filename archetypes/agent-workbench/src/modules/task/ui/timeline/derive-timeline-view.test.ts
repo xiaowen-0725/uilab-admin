@@ -18,8 +18,8 @@ function kinds(blocks: ReturnType<typeof deriveTimelineView>): string[] {
     if (block.kind === 'working') {
       const inner = block.items
         .map((entry) =>
-          entry.kind === 'tool-cluster'
-            ? `cluster:${entry.toolKind}:${entry.items.length}`
+          entry.kind === 'activity-group'
+            ? `group:${entry.kinds.join('+')}:${entry.items.length}`
             : `single:${entry.item.id}`,
         )
         .join(',')
@@ -48,7 +48,7 @@ describe('deriveTimelineView', () => {
     ])
   })
 
-  it('clusters three completed reads and keeps a running write as single', () => {
+  it('keeps mixed completed reads and a running write in one activity group', () => {
     const blocks = deriveTimelineView([
       item({
         id: 'r1',
@@ -80,22 +80,19 @@ describe('deriveTimelineView', () => {
     expect(blocks[0]?.kind).toBe('working')
     if (blocks[0]?.kind !== 'working') return
     expect(blocks[0].status).toBe('running')
-    expect(blocks[0].items).toHaveLength(2)
+    expect(blocks[0].items).toHaveLength(1)
     expect(blocks[0].items[0]).toMatchObject({
-      kind: 'tool-cluster',
-      toolKind: 'read',
+      kind: 'activity-group',
+      kinds: ['read', 'write'],
     })
-    if (blocks[0].items[0]?.kind === 'tool-cluster') {
+    if (blocks[0].items[0]?.kind === 'activity-group') {
       expect(blocks[0].items[0].items.map((row) => row.id)).toEqual([
         'r1',
         'r2',
         'r3',
+        'w1',
       ])
     }
-    expect(blocks[0].items[1]).toMatchObject({
-      kind: 'single',
-      item: { id: 'w1' },
-    })
     expect(blocks[0].summary).toEqual({
       stepCount: 4,
       counts: { read: 3, write: 1 },
@@ -143,7 +140,7 @@ describe('deriveTimelineView', () => {
       }),
     ])
 
-    expect(kinds(blocks)).toEqual(['working[cluster:read:3]'])
+    expect(kinds(blocks)).toEqual(['working[group:read:3]'])
   })
 
   it('closes a working block when prose interrupts, then opens a new one', () => {
@@ -202,6 +199,48 @@ describe('deriveTimelineView', () => {
       'working[single:reasoning:run-1:2]',
     ])
     expect(blocks[3]?.kind === 'working' && blocks[3].status).toBe('running')
+  })
+
+  it('omits a resolved approval and keeps a waiting one inline', () => {
+    const blocks = deriveTimelineView([
+      item({
+        id: 'r1',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'write' },
+      }),
+      item({
+        id: 'ap1',
+        category: 'approval-request',
+        status: 'approved',
+        title: '已批准',
+      }),
+      item({
+        id: 'ap2',
+        category: 'approval-request',
+        status: 'waiting',
+        title: '需要审批',
+      }),
+    ])
+    expect(kinds(blocks)).toEqual(['working[single:r1]', 'inline:ap2'])
+  })
+
+  it('omits a rejected approval from the process fold', () => {
+    const blocks = deriveTimelineView([
+      item({
+        id: 'r1',
+        category: 'tool-group',
+        status: 'completed',
+        meta: { processKind: 'write' },
+      }),
+      item({
+        id: 'ap1',
+        category: 'approval-request',
+        status: 'rejected',
+        title: '已拒绝',
+      }),
+    ])
+    expect(kinds(blocks)).toEqual(['working[single:r1]'])
   })
 
   it('does not cluster a single completed tool', () => {

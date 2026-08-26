@@ -25,22 +25,46 @@
 
 /* Phase 3A/3B Shell geometry + motion tokens (Shell-owned, not Session). */
 :root {
-  /* WorkBuddy desktop sidebar CDP: 264 CSS px */
+  /* Desktop sidebar width */
   --navigator-width: 264px;
-  /* Codex content column ~736 */
-  --content-max-width: 736px;
-  /* Timeline chat rhythm — grok-app comfortable/md */
-  --tl-prose-size: 14px;
-  --tl-prose-leading: 1.65;
-  --tl-chrome-size: 13px;
-  --tl-chrome-leading: 1.4;
-  --tl-thought-size: 12.5px;
-  --tl-thought-leading: 1.5;
+  /* Composer column; timeline reading column is wider */
+  --content-max-width: 772px;
+  --tl-column-width: 811px;
+  /* Conversation column type, not shell 13/14 wrappers */
+  --tl-prose-size: 15px;
+  --tl-prose-leading: 1.78;
+  --tl-prose-color: #000000;
+  --tl-chrome-size: 15px;
+  --tl-chrome-leading: 1.75;
+  --tl-thought-size: 15px;
+  --tl-thought-leading: 1.786;
+  --tl-icon-size: 16px;
+  --tl-link: #1470b4;
+  --tl-success: #0cbf5b;
+  --tl-user-bg: #f2f2f2;
+  --tl-rule: rgb(0 0 0 / 0.08);
+  --tl-wait-border: #f5a623;
+  --tl-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --tl-ease-emphasis: cubic-bezier(0.2, 0, 0, 1);
+  --tl-motion-fast: 120ms;
+  --tl-motion-sm: 150ms;
+  --tl-motion-base: 200ms;
+  --tl-space: 4px;
+  --tl-prose-after: 12px;
+  --tl-list-item: 4px;
+  --tl-list-after: 16px;
+  --tl-list-indent: 34px;
+  --tl-run-gap: 6px;
+  --tl-speaker-gap: 12px;
+  --tl-turn-gap: 16px;
   --wb-app-bg: var(--sidebar);
   --wb-font-weight: 400;
+  /* Input shadow — well already frames the card */
   --wb-composer-shell-shadow:
-    0 0 0 0.5px var(--wb-hairline-soft), 0 3px 7.5px rgba(0, 0, 0, 0.04),
-    0 0 20px rgba(0, 0, 0, 0.05);
+    0 12px 24px -8px rgb(0 0 0 / 0.02), 0 2px 4px -4px rgb(0 0 0 / 0.02);
+  /* Dialog shadow */
+  --wb-shadow-dialog:
+    0 8px 48px rgb(0 0 0 / 0.08), 0 6px 12px rgb(0 0 0 / 0.04);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-drawer-close: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-pane-expand: cubic-bezier(0.77, 0, 0.175, 1);
@@ -74,7 +98,10 @@
   --wb-surface-raised: rgb(255 255 255 / 0.95);
   /* Composer dock: rail (chip strip) vs elevated shell — must differ from canvas. */
   --wb-composer-rail: #e8e8e8;
-  --wb-surface-composer: rgb(255 255 255 / 0.94);
+  /* Composer input well */
+  --wb-composer-well: #f2f2f2;
+  /* Composer card on the well */
+  --wb-surface-composer: #fafafa;
   --wb-card: rgb(0 0 0 / 0.04);
   --wb-inverse: oklch(20.5% 0 0);
   --wb-inverse-fg: rgb(255 255 255);
@@ -126,7 +153,7 @@
   }
 
   :focus-visible {
-    @apply ring-3 ring-ring/50 outline-none;
+    outline: none;
   }
 }
 
@@ -493,6 +520,11 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
 }
 
 .dark {
+  --tl-prose-color: #e8e8e8;
+  --tl-link: #60a5fa;
+  --tl-success: #40c977;
+  --tl-user-bg: rgb(255 255 255 / 0.08);
+  --tl-rule: rgb(255 255 255 / 0.12);
   --wb-hover: rgb(255 255 255 / 0.1);
   --wb-hover-subtle: rgb(255 255 255 / 0.05);
   --wb-hover-strong: rgb(255 255 255 / 0.1);
@@ -519,15 +551,16 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --wb-overlay-scrim: rgb(0 0 0 / 0.24);
   --wb-surface-raised: oklch(26.9% 0 0 / 0.95);
   /*
-   * Codex CDP (2026-08-04 CFV gate):
+   * Dark composer stack:
    *   app bg   #0e0e0e
    *   main     #111111 (--background)
    *   rail     slightly above canvas for context chips
-   *   shell    #262626 (rgb 38,38,38) — match processFile/composer probe
+   *   shell    #262626
    */
   --wb-app-bg: #0e0e0e;
   --wb-font-weight: 445;
   --wb-composer-rail: #222222;
+  --wb-composer-well: #222222;
   --wb-surface-composer: #262626;
   --wb-composer-shell-shadow: none;
   --wb-card: oklch(26.9% 0 0 / 0.5);
@@ -576,6 +609,7 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --color-wb-overlay-scrim: var(--wb-overlay-scrim);
   --color-wb-surface-raised: var(--wb-surface-raised);
   --color-wb-composer-rail: var(--wb-composer-rail);
+  --color-wb-composer-well: var(--wb-composer-well);
   --color-wb-surface-composer: var(--wb-surface-composer);
   --color-wb-card: var(--wb-card);
   --color-wb-inverse: var(--wb-inverse);
@@ -596,7 +630,7 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --color-wb-warning-surface: var(--wb-warning-surface);
 }
 
-/* Codex-like live status shimmer (Task Pane intermediate chrome) */
+/* Live status shimmer */
 @keyframes wb-shimmer {
   0% {
     background-position: 100% 0;
@@ -616,17 +650,92 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   }
 }
 
-/* Timeline type scale. Shimmer inherits these so chrome can stay 13px. */
+/* Timeline type scale. Shimmer inherits chrome so process rows stay 15. */
 .tl-prose {
   font-size: var(--tl-prose-size);
   line-height: var(--tl-prose-leading);
-  font-weight: 445;
+  font-weight: 400;
+  color: var(--tl-prose-color);
+}
+
+/* Answer column: one reading face. Paragraphs 12, lists 4/16. */
+.stream-markdown p {
+  margin: 0 0 var(--tl-prose-after);
+  white-space: pre-wrap;
+}
+
+.stream-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.stream-markdown p:has(+ :is(ul, ol)) {
+  margin-bottom: var(--tl-list-item);
+}
+
+.stream-markdown :is(ul, ol) {
+  margin: 0 0 var(--tl-list-after);
+  padding-inline-start: var(--tl-list-indent);
+}
+
+.stream-markdown :is(ul, ol):last-child {
+  margin-bottom: 0;
+}
+
+.stream-markdown li {
+  margin: 0 0 var(--tl-list-item);
+}
+
+.stream-markdown li:last-child {
+  margin-bottom: 0;
+}
+
+.stream-markdown :is(h1, h2, h3) {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.stream-markdown h1 {
+  font-size: 1.25em;
+}
+
+.stream-markdown h2 {
+  font-size: 1.12em;
+}
+
+.stream-markdown h3 {
+  font-size: 1.05em;
+}
+
+.stream-markdown :is(h1, h2, h3):first-child {
+  margin-top: 0;
+}
+
+.stream-markdown p:has(+ :is(h1, h2, h3)) {
+  margin-bottom: 0;
+}
+
+.stream-markdown :is(h1, h2, h3):has(+ :is(ul, ol)) {
+  margin-bottom: var(--tl-list-item);
+}
+
+.stream-markdown :is(strong, b) {
+  font-weight: 600;
+}
+
+[data-slot='task-timeline'] ::selection {
+  background: rgb(0 0 0 / 0.12);
+}
+
+.dark [data-slot='task-timeline'] ::selection {
+  background: rgb(255 255 255 / 0.18);
 }
 
 .tl-chrome {
   font-size: var(--tl-chrome-size);
   line-height: var(--tl-chrome-leading);
-  font-weight: 445;
+  font-weight: 400;
 }
 
 .tl-thought {
@@ -637,7 +746,7 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
 .wb-live-status-shimmer {
   display: inline-block;
   font-weight: var(--wb-font-weight, 445);
-  /* Cadenced sweep closer to Codex _cadencedLoadingShimmer* (~1.2s) */
+  /* Cadenced sweep (~1.25s) */
   background-image: linear-gradient(
     90deg,
     var(--wb-shimmer-dim) 0%,
@@ -662,4 +771,16 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
     -webkit-text-fill-color: var(--muted-foreground);
     background-image: none;
   }
+}
+
+/* No primary-blue focus halo. Caret is enough. */
+:focus-visible {
+  --tw-ring-shadow: 0 0 #0000;
+  outline: none;
+}
+
+[data-slot='input']:focus-visible,
+textarea:focus-visible {
+  --tw-ring-shadow: 0 0 #0000;
+  box-shadow: none;
 }

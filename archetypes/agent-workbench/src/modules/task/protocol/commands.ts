@@ -52,8 +52,8 @@ export interface SubmitTurnCommand extends CommandEnvelope {
  *
  * These are task-owned command DTOs — NOT imported from the capabilities
  * module. The task command protocol must not depend on the capabilities
- * read-model module (Codex review: "the stable execution protocol should
- * not depend on the volatile UI/read-model module").
+ * read-model module (the stable execution protocol should
+ * not depend on the volatile UI/read-model module).
  *
  * The composition layer (composer.tsx) imports both modules and projects
  * CapabilitySnapshot → these refs at the seam, including the name→label

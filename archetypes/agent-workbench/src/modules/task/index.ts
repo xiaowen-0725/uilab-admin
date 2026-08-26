@@ -46,6 +46,7 @@ export {
   captureMaxTs,
   foldCaptureToView,
   formatDurationMs,
+  formatDurationZh,
 } from './model/stream-events'
 export { captureToEnvelopes } from './model/capture-to-envelopes'
 export type { CaptureToEnvelopesOptions } from './model/capture-to-envelopes'

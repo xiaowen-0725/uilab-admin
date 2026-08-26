@@ -1,14 +1,8 @@
-import type { ComponentType, ReactElement, SVGProps } from 'react'
+import type { ReactElement } from 'react'
 import {
-  Bars4Icon as ListTree,
-  CommandLineIcon as SquareTerminal,
-  CubeTransparentIcon as Boxes,
-  DocumentMagnifyingGlassIcon as FileSearch2,
-  GlobeAltIcon as Globe,
-  PencilSquareIcon as FilePenLine,
-} from '@heroicons/react/24/outline'
-
-type ActivityIcon = ComponentType<SVGProps<SVGSVGElement>>
+  ConversationIcon,
+  type ConversationIconName,
+} from '@/components/icons/conversation-icon'
 
 type ActivityIconKind =
   | 'search'
@@ -19,7 +13,7 @@ type ActivityIconKind =
   | 'other'
 
 interface ActivityIconDefinition {
-  Icon: ActivityIcon
+  name: ConversationIconName
   kind: ActivityIconKind
 }
 
@@ -32,34 +26,34 @@ function resolveActivityIcon(kind?: string): ActivityIconDefinition {
   const normalizedKind = (kind ?? '').toLowerCase()
 
   if (/search|web|搜索/.test(normalizedKind)) {
-    return { Icon: Globe, kind: 'search' }
+    return { name: 'search', kind: 'search' }
   }
   if (/write|edit|patch|写入|编辑/.test(normalizedKind)) {
-    return { Icon: FilePenLine, kind: 'write' }
+    return { name: 'edit', kind: 'write' }
   }
   if (/read|file|读取/.test(normalizedKind)) {
-    return { Icon: FileSearch2, kind: 'read' }
+    return { name: 'library', kind: 'read' }
   }
-  if (/list|tree|目录|列出/.test(normalizedKind)) {
-    return { Icon: ListTree, kind: 'list' }
+  if (/list|tree|\bls\b|目录|列出/.test(normalizedKind)) {
+    return { name: 'folder', kind: 'list' }
   }
   if (/command|shell|cmd|命令/.test(normalizedKind)) {
-    return { Icon: SquareTerminal, kind: 'command' }
+    return { name: 'terminal', kind: 'command' }
   }
-  return { Icon: Boxes, kind: 'other' }
+  return { name: 'project', kind: 'other' }
 }
 
 export function ToolActivityIcon({
   kind,
-  className = 'size-3.5 shrink-0 opacity-80',
+  className = 'size-4 shrink-0 opacity-80',
 }: ToolActivityIconProps): ReactElement {
-  const { Icon, kind: activityKind } = resolveActivityIcon(kind)
+  const { name, kind: activityKind } = resolveActivityIcon(kind)
 
   return (
-    <Icon
+    <ConversationIcon
+      name={name}
       className={className}
       data-activity-icon={activityKind}
-      aria-hidden
     />
   )
 }

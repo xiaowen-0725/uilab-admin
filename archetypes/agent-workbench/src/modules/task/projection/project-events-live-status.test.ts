@@ -1,5 +1,5 @@
 /**
- * liveStatus + file-change meta projection (Codex Task Pane gold).
+ * liveStatus + file-change meta projection.
  */
 import { describe, expect, it } from 'vitest'
 import type { AgentRuntimeEventEnvelope } from '../protocol/events'

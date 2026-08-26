@@ -88,6 +88,31 @@ _Avoid_: 新代码、新事件、新读模型字段
 投影到时间线的一条可读条目，由一轮内的事件折叠而成。跨产品语义 ≡ Codex ThreadItem。
 _Avoid_: Runtime Event（原始信封）, Chat Message
 
+**过程行 process row**:
+一条单行台账，表示一次工具、命令或思考摘要（「已运行 ssd status」「已列出 /」）。跨产品语义接近 Codex `commandExecution` / tool call 行、Cursor tool row。
+_Avoid_: 步骤, Plan Step, 把工具输出正文摊在主列
+
+**直播行 live status**:
+进行中只露当前那一条过程行（「正在运行 ssd status」）。没有输出、默认不展开。结束后变成过去式过程行，或并入工具组 / 活动组。
+_Avoid_: 进度条, 骨架屏当主状态, 把直播行叫步骤
+
+**ToolCluster / 工具组**:
+同一类已完成工具按种类计数收组（「读取了 2 个文件」）。产品过程区默认用活动组，不再按种类切开。
+_Avoid_: 把每条工具调用永久平铺, 把组头叫「步骤」, 与活动组混称, 按种类切开活动组
+
+**活动组 activity group**:
+一波混种类过程行收在同一个组头下。组头有两种来源，不要混：**(1) 程序**按并行批次或工具种类套模板（「Planning parallel file reads」「Explored 3 tools」「列出目录 读取文件」）；**(2) 模型**只在走 Plan / Task / subagent 描述时才写意图句。下面台账仍是过程行。不是同类合并（那是工具组），也不是 Plan 清单本身。
+断点不是换工具种类。同一波里 list + read + command 可以共一组。**会断**：思考再起、旁白再起、HITL 提问、答案/正文落地、提问之后新一轮写入、下一轮用户提交。**不断**：同波混种类工具。
+_Avoid_: 把组头默认当成模型摘要, 把组头叫步骤, 与 Plan Step 混用, 与工具组混称, 按工具种类切开活动组
+
+**旁白 quiet / process aside**:
+未过正文晋升门的流式字。进过程头或折里，不成助手气泡。新一轮用户提交另开过程折，上一轮的旁白留在上一轮折里。
+_Avoid_: 旁白先占气泡, 把旁白叫思考, 把旁白和最终答案画在同一条气泡里
+
+**过程收折 collapse**:
+最终答案出门后，旁白、过程行、工具组、活动组等整段中间态折进过程头（「已完成 16秒」或「已完成 1分钟 16秒」）。进行中摊开看，过程头只报「正在处理」加已过时间；完成后默认折上，点过程头回看。用户手点开后不要自动再折回去。跨产品语义接近 ChatGPT 过程头、Cursor `Worked for Ns`、Codex Working section。
+_Avoid_: 把过程头叫步骤, 终态仍把旁白和过程行摊在答案上
+
 **Artifact**:
 由 Task 或具体 Turn 产生、可在 Work Surface 中查看或操作的持久结果。
 _Avoid_: Tool Surface, Runtime Event

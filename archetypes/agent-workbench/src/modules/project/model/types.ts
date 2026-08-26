@@ -144,7 +144,7 @@ export function createTaskCatalogRow(input: {
 }
 
 /**
- * Unused blank draft (Codex / WorkBuddy “new chat once”):
+ * Unused blank draft (新对话只开一次):
  * catalog title is still the default「新对话」until the first user turn renames it.
  * titleSource may be `local` or `runtime` after bind — only the title matters here.
  */

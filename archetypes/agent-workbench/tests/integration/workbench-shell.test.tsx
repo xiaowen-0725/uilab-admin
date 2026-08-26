@@ -93,6 +93,14 @@ async function renderWorkbenchWithTask() {
   await expect.element(page.getByTestId('empty-hub')).toBeInTheDocument()
 }
 
+/** First turn leaves empty hub so the conversation title bar exists. */
+async function leaveEmptyHub(prompt = 'seed turn') {
+  await userEvent.fill(page.getByTestId('composer-input'), prompt)
+  await userEvent.click(page.getByTestId('composer-submit'))
+  await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
+  await expect.element(page.getByTestId('workspace-top-bar')).toBeInTheDocument()
+}
+
 describe('Workbench Shell integration (visible behavior)', () => {
   it('renders project, left-rail chrome, and Composer-first empty hub', async () => {
     await renderWorkbench()
@@ -133,6 +141,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(page.getByTestId('composer-chip-project'))
       .toHaveTextContent('选择项目')
+    expect(document.querySelector('[data-testid="workspace-top-bar"]')).toBeNull()
 
     // C — Work drawer closed by default
     expect(
@@ -282,6 +291,8 @@ describe('Workbench Shell integration (visible behavior)', () => {
     expect(wsStyle.borderBottomWidth).toBe('0px')
     expect(wsStyle.borderLeftWidth).toBe('0px')
 
+    await leaveEmptyHub()
+
     // Exactly one Task pane toolbar (compat testid + slot).
     const topBar = page.getByTestId('workspace-top-bar').element()
     await expect
@@ -293,8 +304,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       '[data-testid="workspace-top-bar"] h1'
     )
     expect(titles.length).toBe(1)
-    // New conversation title (product path).
-    expect(titles[0]?.textContent).toMatch(/新对话|还没有对话/)
+    expect(titles[0]?.textContent?.trim()).toBeTruthy()
 
     // Subtitle must not appear in Task toolbar chrome.
     expect(
@@ -557,6 +567,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
 
   it('pointer Context open is animated; keyboard Context is instant', async () => {
     await renderWorkbenchWithTask()
+    await leaveEmptyHub()
     const shell = page.getByTestId('workbench-shell')
     const panel = page.getByTestId('context-panel')
     await expect.element(panel).toHaveAttribute('data-open', 'false')
@@ -590,6 +601,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('pointer Work open/close/maximize uses drawer actions and timings', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
+    await leaveEmptyHub()
     const shell = page.getByTestId('workbench-shell')
     const stage = page.getByTestId('workbench-stage').element()
     const slot = workDrawerSlot()
@@ -784,6 +796,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('rapid Work toggles retarget drawer width and settle to last command', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
+    await leaveEmptyHub()
     const shell = page.getByTestId('workbench-shell')
     const toggle = page.getByTestId('toggle-work-surface-chrome')
 
@@ -817,6 +830,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('split: Task and Work toolbars are 44px and pane-aligned without overlap', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
+    await leaveEmptyHub()
 
     await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
     await expect
@@ -903,7 +917,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       taskToolbarBox.bottom > workToolbarBox.top
     expect(headersOverlap).toBe(false)
 
-    // Split + nav open: toggle lives on the left rail toolbar (WorkBuddy-style), not Task chrome.
+    // Split + nav open: toggle lives on the left rail toolbar, not Task chrome.
     const navToggles = visibleByTestId('toggle-navigator')
     expect(navToggles.length).toBe(1)
     const navToolbar = document.querySelector(
@@ -920,6 +934,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
   it('wide maximized Work: unique toggle-navigator lives in Work toolbar and is clickable', async () => {
     await page.viewport(1440, 900)
     await renderWorkbenchWithTask()
+    await leaveEmptyHub()
     const shell = page.getByTestId('workbench-shell')
 
     await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
@@ -973,6 +988,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
     try {
       await page.viewport(760, 800)
       await renderWorkbenchWithTask()
+      await leaveEmptyHub()
       const shell = page.getByTestId('workbench-shell')
       await expect.element(shell).toHaveAttribute('data-viewport', 'narrow')
 
@@ -1144,13 +1160,33 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(page.getByTestId('composer'))
       .toHaveAttribute('data-composer-mode', 'runtime')
-    // New-task empty hub: two-layer rail + project chip for workspace selection.
     await expect
-      .element(page.getByTestId('composer-context-bar'))
-      .toBeInTheDocument()
+      .element(page.getByTestId('composer'))
+      .toHaveAttribute('data-composer-placement', 'center')
+    const emptyInputStyle = getComputedStyle(
+      page.getByTestId('composer-input').element(),
+    )
+    expect(emptyInputStyle.fontSize).toBe('15px')
+    expect(emptyInputStyle.lineHeight).toBe('26.25px')
+    expect(Number.parseFloat(emptyInputStyle.minHeight)).toBeGreaterThanOrEqual(
+      70,
+    )
+    // New-task empty hub: workspace + permission sit in the well under the shell.
+    const emptyBar = page.getByTestId('composer-context-bar').element()
+    const emptyShell = page.getByTestId('composer-shell').element()
+    const emptyProjectChip = page.getByTestId('composer-chip-project').element()
+    const emptyPermission = page
+      .getByTestId('composer-permission-preset')
+      .element()
     await expect
       .element(page.getByTestId('composer-chip-project'))
       .toHaveTextContent('选择项目')
+    await expect
+      .element(page.getByTestId('composer-permission-preset'))
+      .toBeInTheDocument()
+    expect(emptyShell.contains(emptyPermission)).toBe(false)
+    expect(emptyBar.contains(emptyProjectChip)).toBe(true)
+    expect(emptyBar.contains(emptyPermission)).toBe(true)
     await expect
       .element(page.getByTestId('composer-model'))
       .toHaveTextContent('本地侧车模型')
@@ -1158,16 +1194,19 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await userEvent.fill(input, 'hello composer')
     await userEvent.click(submit)
     await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
-    // Conversation: rail stays for depth hierarchy; project chip hides.
+    await expect
+      .element(page.getByTestId('composer'))
+      .toHaveAttribute('data-composer-placement', 'dock')
+    // Conversation: well footer keeps permission; project chip hides.
     await expect
       .element(page.getByTestId('composer-context-bar'))
       .toBeInTheDocument()
     expect(
-      page.getByTestId('composer-context-bar').element().childElementCount
-    ).toBe(0)
-    expect(
       document.querySelector('[data-testid="composer-chip-project"]')
     ).toBeNull()
+    await expect
+      .element(page.getByTestId('composer-permission-preset'))
+      .toBeInTheDocument()
     // Notice is sr-only (no visible honesty chrome under Composer)
     expect(
       page
@@ -1208,6 +1247,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
       expect(closedOverlayNav.hasAttribute('inert')).toBe(true)
       expect(page.getByTestId('navigator-filter').element().tabIndex).toBe(-1)
 
+      await leaveEmptyHub()
       await userEvent.click(page.getByTestId('toggle-work-surface-chrome'))
       await expect
         .element(page.getByTestId('work-surface-host'))
@@ -1340,6 +1380,7 @@ describe('Workbench Shell integration (visible behavior)', () => {
         GEOMETRY_TOLERANCE
       )
 
+      await leaveEmptyHub()
       await userEvent.click(page.getByTestId('toggle-context'))
       await expect
         .element(page.getByTestId('context-panel'))

@@ -103,14 +103,16 @@ describe('Timeline deliverables', () => {
       .element(page.getByTestId('timeline-deliverables'))
       .toHaveTextContent('本次产出 · 3 个文件')
 
-    const chips = document.querySelectorAll(
-      '[data-testid="timeline-deliverables"] [data-testid="file-reference-chip"]',
+    const cards = document.querySelectorAll(
+      '[data-testid="timeline-deliverables"] [data-testid="timeline-deliverable"]',
     )
-    expect(chips).toHaveLength(3)
-    expect(chips[0]?.textContent).toContain('result.md')
-    expect(chips[1]?.textContent).toContain('已删除')
-    expect(chips[1]?.textContent).toContain('old.md')
-    expect(chips[2]?.textContent).toContain('对比图')
+    expect(cards).toHaveLength(3)
+    expect(cards[0]?.textContent).toContain('result.md')
+    expect(cards[0]?.textContent).toContain('文档 · MD')
+    expect(cards[1]?.textContent).toContain('已删除')
+    expect(cards[1]?.textContent).toContain('old.md')
+    expect(cards[2]?.textContent).toContain('对比图')
+    expect(cards[2]?.textContent).toContain('图片 · PNG')
 
     await userEvent.click(page.getByTestId('file-reference-chip').nth(0))
     expect(onOpenFileRef).toHaveBeenCalledWith({
@@ -169,7 +171,7 @@ describe('Timeline deliverables', () => {
     })
   })
 
-  it('does not show +N on a deleted file-change card', async () => {
+  it('does not show +N on a deleted file-change card while the run is live', async () => {
     renderTimeline([
       envelope('turn.started', 1),
       envelope('file.changed', 2, {
@@ -178,11 +180,45 @@ describe('Timeline deliverables', () => {
         additions: 4,
         deletions: 4,
       }),
-      envelope('turn.completed', 3),
     ])
 
     const card = page.getByTestId('timeline-item-file-change:e2')
     await expect.element(card).toHaveTextContent('已删除')
     expect(card.element().textContent ?? '').not.toMatch(/\+\d+/)
+  })
+
+  it('keeps settled files only in the deliverable zone', async () => {
+    renderTimeline([
+      envelope('turn.started', 1, { inputText: '写结果', text: '写结果' }),
+      envelope('tool.started', 2, {
+        toolId: 'write-1',
+        name: 'write_file',
+        args: { path: 'notes/result.md' },
+      }),
+      envelope('tool.completed', 3, {
+        toolId: 'write-1',
+        name: 'write_file',
+      }),
+      envelope('file.changed', 4, {
+        path: 'notes/result.md',
+        additions: 10,
+        changeKind: 'created',
+      }),
+      envelope('message.delta', 5, { text: '写好了。' }),
+      envelope('message.completed', 6, { text: '写好了。' }),
+      envelope('turn.completed', 7),
+    ])
+
+    await expect
+      .element(page.getByTestId('timeline-deliverables'))
+      .toHaveTextContent('本次产出 · 1 个文件')
+    expect(document.querySelectorAll('[data-testid="timeline-deliverables"]')).toHaveLength(
+      1,
+    )
+    expect(document.querySelector('[data-testid="timeline-item-file-change:e4"]')).toBeNull()
+
+    await userEvent.click(page.getByTestId('timeline-turn-toggle'))
+    expect(document.querySelector('[data-kind="file-change-summary"]')).toBeNull()
+    expect(document.querySelector('[data-kind="file-change"]')).toBeNull()
   })
 })

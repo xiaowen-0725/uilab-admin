@@ -1,9 +1,9 @@
 /**
- * Group a Task timeline into chronological turn segments.
+ * Group a Task timeline into chronological Run segments.
  *
- * A new turn starts when a `user-message` appears after non-user content
- * (assistant / tools / terminal). This preserves multi-turn order for retry
- * and follow-up instead of flattening all users then one body block.
+ * Protocol fields still say `turnId` / turn-terminal; those mark a Run
+ * (one user submit → done), not one model+tool cycle. A new segment
+ * starts when a `user-message` appears after non-user content.
  */
 
 import type { TimelineItem } from '../../projection/types'

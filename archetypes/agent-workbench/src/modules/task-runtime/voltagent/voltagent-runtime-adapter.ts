@@ -650,7 +650,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       command.turnId ?? pending?.turnId ?? state.lastTurnId ?? `turn-${taskId}`
     const approved = command.payload.decision === 'approved'
 
-    // Validate resumability *before* mutating approval state (Codex P2).
+    // Validate resumability *before* mutating approval state.
     if (!pending) {
       return rejected(
         command.commandId,

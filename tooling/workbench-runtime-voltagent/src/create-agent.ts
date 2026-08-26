@@ -34,23 +34,15 @@ import {
   resolveWorkspaceRoot,
   toolsForProfile,
 } from './profile.js'
-import {
-  ASK_TOOL_INSTRUCTIONS,
-  askUserQuestionTool,
-} from './ask-user-question-tool.js'
-import {
-  assembleTurnTools,
-  BOARD_TOOL_INSTRUCTIONS,
-} from './tools/board-agent-contract.js'
+import { askUserQuestionTool } from './ask-user-question-tool.js'
+import { assembleTurnTools } from './tools/board-agent-contract.js'
+import { buildWorkbenchSystemPrompt } from './system-prompt.js'
 import {
   getSharedBoardRuntime,
   productIdentityFromEnv,
 } from './tools/board-runtime.js'
 import { workbenchTools } from './tools.js'
-import {
-  PLAN_TOOL_INSTRUCTIONS,
-  updatePlanTool,
-} from './update-plan-tool.js'
+import { updatePlanTool } from './update-plan-tool.js'
 import { ensureOfficeWorkspace } from './workspace-root.js'
 import { readCapabilityTurnContext } from './capability/turn-context.js'
 import type { CliAuthProcessRunner } from './capability/connector-cli-auth.js'
@@ -276,23 +268,13 @@ export async function createWorkbenchAgent(
       name: 'workbench',
       purpose:
         '本机办公 Agent Runtime（Workspace FS + Skills + 可选 MCP · 非远程生产集群）',
-      instructions: [
-        'You are the local Office Agent Runtime for UI Lab Agent Workbench.',
-        'Respond in Chinese unless the user writes in another language.',
-        'Use Workspace filesystem tools (ls, read_file, write_file, edit_file, …) inside the authorized root.',
+      instructions: buildWorkbenchSystemPrompt({
+        profile,
+        workspaceRoot,
+        env,
         skillInstruction,
         mcpInstruction,
-        'A generic Workspace Shell is available as execute_command. Every invocation requires Host approval; prefer command plus an exact args array and never put credentials in command, args, or model-supplied env.',
-        'For a Provider CLI request, first discover and read the matching installed Skill and its required references, then invoke the manifest-scoped native executable with execute_command. There are no Provider-specific Runtime wrapper tools.',
-        'A Provider executable is available only when its plugin is enabled, its declared auth resource is connected, and the active Task selected that Connector.',
-        'All file paths must be virtual workspace paths starting with / (e.g. /notes/a.md, /output/meeting-notes/notes.md).',
-        'Never use host absolute paths (/Users/..., /home/..., drive letters). Never paste operator host paths into tools.',
-        'Prefer planning briefly, then read before write. Writes and deletes require user approval.',
-        'Do not claim to be a remote multi-tenant production cluster — this is a local office sidecar.',
-        PLAN_TOOL_INSTRUCTIONS,
-        ASK_TOOL_INSTRUCTIONS,
-        BOARD_TOOL_INSTRUCTIONS,
-      ].join(' '),
+      }),
       model: options.model,
       toolkits: [planToolkit, askToolkit],
       workspace,
@@ -370,16 +352,11 @@ export async function createWorkbenchAgent(
     id: 'workbench',
     name: 'workbench',
     purpose: '本机最小 Agent Runtime（DIY 工具 · 非远程生产集群）',
-    instructions: [
-      'You are the local Agent Runtime for UI Lab Agent Workbench.',
-      'Respond in Chinese unless the user writes in another language.',
-      'You may use read_file, write_file (requires approval), run_command, update_plan, and ask_user_question tools when helpful.',
-      'Prefer concise answers. Stay within the workspace tools for file access.',
-      'This is a local demo sidecar, not a remote production cluster.',
-      PLAN_TOOL_INSTRUCTIONS,
-      ASK_TOOL_INSTRUCTIONS,
-      BOARD_TOOL_INSTRUCTIONS,
-    ].join(' '),
+    instructions: buildWorkbenchSystemPrompt({
+      profile,
+      workspaceRoot,
+      env,
+    }),
     model: options.model,
     toolkits: [planToolkit],
     tools: ({ context }) => {

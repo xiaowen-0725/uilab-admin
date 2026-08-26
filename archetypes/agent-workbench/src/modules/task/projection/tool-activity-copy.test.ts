@@ -3,6 +3,9 @@ import {
   classifyToolActivity,
   extractToolObject,
   formatToolActivityCopy,
+  toolKindHint,
+  formatActivityGroupCopy,
+  formatActivityGroupRunningCopy,
   formatToolClusterCopy,
   liveStatusForToolActivity,
 } from './tool-activity-copy'
@@ -75,9 +78,26 @@ describe('tool-activity-copy', () => {
     expect(classifyToolActivity('run_command', null)).toBe('command')
   })
 
+  it('keeps write and list icon hints distinct from generic', () => {
+    expect(toolKindHint('write')).toBe('write')
+    expect(toolKindHint('list')).toBe('list')
+    expect(toolKindHint('read')).toBe('read')
+    expect(toolKindHint('search')).toBe('web_search')
+  })
+
   it('formats plural cluster titles by kind', () => {
     expect(formatToolClusterCopy('read', 3)).toBe('读取了 3 个文件')
     expect(formatToolClusterCopy('command', 2)).toBe('执行了 2 条命令')
     expect(formatToolClusterCopy('other', 4)).toBe('调用了 4 个工具')
+  })
+
+  it('joins mixed activity-group kinds in first-seen order', () => {
+    expect(formatActivityGroupCopy(['list', 'read', 'read'])).toBe(
+      '列出目录 读取文件',
+    )
+    expect(formatActivityGroupCopy(['write'])).toBe('写入文件')
+    expect(formatActivityGroupRunningCopy(['list', 'read'])).toBe(
+      '正在读取文件',
+    )
   })
 })

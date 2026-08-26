@@ -12,7 +12,7 @@ import type {
 } from '../../projection/types'
 
 export type WorkingEntry =
-  | { kind: 'tool-cluster'; toolKind: string; items: TimelineItem[] }
+  | { kind: 'activity-group'; kinds: string[]; items: TimelineItem[] }
   | { kind: 'single'; item: TimelineItem }
 
 export type TimelineViewBlock =
@@ -33,6 +33,11 @@ const WORKING_CATEGORIES = new Set<TimelineItemCategory>([
   'command-execution',
   'plan-update',
 ])
+
+/** Auto-approved / rejected receipts stay in the model; the process fold does not paint them. */
+function isResolvedApproval(item: TimelineItem): boolean {
+  return item.category === 'approval-request' && item.status !== 'waiting'
+}
 
 function isWorkingItem(item: TimelineItem): boolean {
   return WORKING_CATEGORIES.has(item.category)
@@ -84,46 +89,59 @@ function workingTimes(items: readonly TimelineItem[]): {
   return { startedAt, durationMs: end - start }
 }
 
+function uniqueProcessKinds(items: readonly TimelineItem[]): string[] {
+  const kinds: string[] = []
+  for (const item of items) {
+    const kind = processKindOf(item)
+    if (!kinds.includes(kind)) kinds.push(kind)
+  }
+  return kinds
+}
+
 function clusterWorkingItems(items: readonly TimelineItem[]): WorkingEntry[] {
   const entries: WorkingEntry[] = []
-  let cluster: TimelineItem[] = []
-  let clusterKind: string | null = null
+  let tools: TimelineItem[] = []
 
-  const flush = (): void => {
-    if (cluster.length === 0) return
-    if (cluster.length === 1) {
-      entries.push({ kind: 'single', item: cluster[0]! })
+  const flushTools = (): void => {
+    if (tools.length === 0) return
+    if (tools.length === 1) {
+      entries.push({ kind: 'single', item: tools[0]! })
     } else {
       entries.push({
-        kind: 'tool-cluster',
-        toolKind: clusterKind ?? 'other',
-        items: cluster,
+        kind: 'activity-group',
+        kinds: uniqueProcessKinds(tools),
+        items: tools,
       })
     }
-    cluster = []
-    clusterKind = null
+    tools = []
   }
 
   for (const item of items) {
-    if (!isToolish(item) || isRunningItem(item)) {
-      flush()
-      entries.push({ kind: 'single', item })
+    if (isToolish(item)) {
+      tools.push(item)
       continue
     }
-    const kind = processKindOf(item)
-    if (cluster.length > 0 && clusterKind === kind) {
-      cluster.push(item)
-      continue
-    }
-    flush()
-    cluster = [item]
-    clusterKind = kind
+    flushTools()
+    entries.push({ kind: 'single', item })
   }
-  flush()
+  flushTools()
   return entries
 }
 
-function toWorkingBlock(items: TimelineItem[]): TimelineViewBlock {
+export function flattenWorkingEntries(
+  entries: readonly WorkingEntry[],
+): TimelineItem[] {
+  const items: TimelineItem[] = []
+  for (const entry of entries) {
+    if (entry.kind === 'activity-group') items.push(...entry.items)
+    else items.push(entry.item)
+  }
+  return items
+}
+
+export function workingBlockFromItems(
+  items: readonly TimelineItem[],
+): Extract<TimelineViewBlock, { kind: 'working' }> {
   const running = items.some(isRunningItem)
   return {
     kind: 'working',
@@ -185,11 +203,12 @@ export function deriveTimelineView(
 
   const flushWorking = (): void => {
     if (working.length === 0) return
-    blocks.push(toWorkingBlock(working))
+    blocks.push(workingBlockFromItems(working))
     working = []
   }
 
   for (const item of bodyItems) {
+    if (isResolvedApproval(item)) continue
     if (isWorkingItem(item)) {
       const prevStep = working[working.length - 1]?.meta?.stepId
       const nextStep = item.meta?.stepId

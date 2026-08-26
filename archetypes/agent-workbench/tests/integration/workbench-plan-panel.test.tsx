@@ -123,7 +123,7 @@ describe('Workbench plan panel + Timeline card', () => {
     ).toBeNull()
   })
 
-  it('renders panel progress and a Codex-style Timeline plan card from scripted events', async () => {
+  it('renders panel progress and a Timeline plan card from scripted events', async () => {
     renderPlanSurface('task-plan-mid', planEvents('task-plan-mid'))
 
     await expect
@@ -154,7 +154,7 @@ describe('Workbench plan panel + Timeline card', () => {
 
     await expect
       .element(page.getByTestId('timeline-turn-status-label'))
-      .toHaveTextContent(/已处理|读取|列出|命令|思考/)
+      .toHaveTextContent(/已处理|过程|读取|列出|命令|思考/)
     expect(
       page.getByTestId('timeline-turn-status-label').element().textContent ?? '',
     ).not.toMatch(/步/)

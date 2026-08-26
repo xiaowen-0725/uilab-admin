@@ -1,10 +1,10 @@
 /**
- * Codex-style post-turn file change summary card (not full diff editor).
+ * Post-turn file change summary (not a full diff editor).
  * Dense bar: icon + "已编辑 path" + +N -M · actions 撤销/审核 (fixture stubs).
  */
 
 import { useState } from 'react'
-import { ArrowUturnLeftIcon as RotateCcw } from '@heroicons/react/24/outline'
+import { ConversationIcon } from '@/components/icons/conversation-icon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { FileChangeKind } from '../../projection/types'
@@ -96,7 +96,7 @@ export function FileChangeSummaryCard({
             data-testid={`${testId}-undo`}
             onClick={(e) => e.stopPropagation()}
           >
-            <RotateCcw className='size-3.5' aria-hidden />
+            <ConversationIcon name='refresh' className='size-3.5 -scale-x-100' />
             撤销
           </Button>
           <Button

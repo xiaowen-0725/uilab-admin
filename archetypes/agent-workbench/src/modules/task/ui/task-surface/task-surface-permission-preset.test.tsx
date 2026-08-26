@@ -23,6 +23,18 @@ interface ApprovalHarnessProps {
   events?: AgentRuntimeEventEnvelope[]
 }
 
+function autoApprovedWithoutReceipt(requestId: string): boolean {
+  if (document.querySelector('[data-testid="timeline-empty"]')) return false
+  if (
+    document.querySelector(
+      `[data-testid="timeline-item-approval-request:${requestId}"]`,
+    )
+  ) {
+    return false
+  }
+  return document.querySelector('[data-testid="approval-dock"]') === null
+}
+
 function ApprovalHarness({
   taskId,
   toolName,
@@ -90,7 +102,7 @@ describe('TaskSurface permission-preset auto-respond', () => {
     resetPermissionPresetStoreForTests()
   })
 
-  it('auto-approves write_file under 帮我批准 and shows the reason on Timeline', async () => {
+  it('auto-approves write_file under 帮我批准 without a Timeline receipt', async () => {
     const taskId = 'task-write-auto'
     render(
       <ApprovalHarness
@@ -100,16 +112,13 @@ describe('TaskSurface permission-preset auto-respond', () => {
       />,
     )
 
+    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
     await expect
-      .element(page.getByTestId('timeline-item-approval-request:req-write-auto'))
-      .toHaveTextContent('已按「帮我批准」预设自动批准')
-    expect(document.querySelector('[data-testid="approval-dock"]')).toBeNull()
-    expect(
-      document.querySelector('[data-approval-dock="open"]'),
-    ).toBeNull()
+      .poll(() => autoApprovedWithoutReceipt('req-write-auto'))
+      .toBe(true)
   })
 
-  it('auto-approves write_file under 完全访问 with the matching reason', async () => {
+  it('auto-approves write_file under 完全访问 without a Timeline receipt', async () => {
     const taskId = 'task-write-full'
     setPermissionPreset(taskId, 'full-access')
     render(
@@ -120,10 +129,10 @@ describe('TaskSurface permission-preset auto-respond', () => {
       />,
     )
 
+    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
     await expect
-      .element(page.getByTestId('timeline-item-approval-request:req-write-full'))
-      .toHaveTextContent('已按「完全访问」预设自动批准')
-    expect(document.querySelector('[data-testid="approval-dock"]')).toBeNull()
+      .poll(() => autoApprovedWithoutReceipt('req-write-full'))
+      .toBe(true)
   })
 
   it('opens Approval Dock for execute_command under auto-approve', async () => {
@@ -154,10 +163,10 @@ describe('TaskSurface permission-preset auto-respond', () => {
       />,
     )
 
+    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
     await expect
-      .element(page.getByTestId('timeline-item-approval-request:req-cmd-full'))
-      .toHaveTextContent('已按「完全访问」预设自动批准')
-    expect(document.querySelector('[data-testid="approval-dock"]')).toBeNull()
+      .poll(() => autoApprovedWithoutReceipt('req-cmd-full'))
+      .toBe(true)
   })
 
   it('fail-closes unknown tools under auto-approve to the Dock', async () => {

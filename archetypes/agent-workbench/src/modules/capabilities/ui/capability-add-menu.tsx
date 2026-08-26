@@ -1,5 +1,5 @@
 /**
- * WorkBuddy-style Composer「+」menu:
+ * Composer「+」menu:
  * compact root + lateral submenu (DropdownMenu Sub), not a full-width panel.
  */
 import { useMemo, useRef, useState, type RefObject } from 'react'
@@ -196,7 +196,7 @@ export function CapabilityAddMenu({
         side='top'
         sideOffset={8}
         className={cn(
-          // Compact root — NOT full composer width (WorkBuddy)
+          // Compact root — not full composer width
           'w-52 max-w-56 min-w-52 p-1',
           'rounded-xl shadow-lg'
         )}

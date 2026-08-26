@@ -93,7 +93,8 @@ describe('Workbench Plan live sidecar', () => {
       await render(<WorkbenchApp persistence='memory' />)
       await waitBooted()
       await openNewChat()
-      await userEvent.click(page.getByTestId('toggle-context'))
+      await page.getByTestId('workbench-shell').element().focus()
+      await userEvent.keyboard('{Control>}i{/Control}')
 
       await expect
         .element(page.getByTestId('context-panel-plan-empty'))
@@ -143,7 +144,7 @@ describe('Workbench Plan live sidecar', () => {
       expect(toolText).not.toMatch(PLAN_TOOL_ROW_COPY)
 
       const runStatus = page.getByTestId('timeline-turn-status-label')
-      await expect.element(runStatus).toHaveTextContent(/已处理|读取|列出|命令|思考/)
+      await expect.element(runStatus).toHaveTextContent(/已处理|过程|读取|列出|命令|思考/)
       expect(runStatus.element().textContent ?? '').not.toMatch(/步/)
     },
   )

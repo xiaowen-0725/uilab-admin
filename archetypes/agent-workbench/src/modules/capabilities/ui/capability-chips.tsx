@@ -1,6 +1,6 @@
 /**
  * Composer chips:
- * - Connectors: WorkBuddy-style brand badges for toolbar (use CapabilityToolbarConnectors)
+ * - Connectors: brand badges for toolbar (use CapabilityToolbarConnectors)
  * - Expert / skills: text chips above input when needed
  */
 import { BookOpenIcon as BookOpen, UserCircleIcon as UserRound } from '@heroicons/react/24/outline'
@@ -16,7 +16,7 @@ export type CapabilityChipsProps = {
   /**
    * `toolbar` — only connector brand buttons (place next to +).
    * `stack` — expert + skills text chips (above input).
-   * `all` — legacy combined row (avoid for WorkBuddy layout).
+   * `all` — legacy combined row (prefer toolbar + stack).
    */
   variant?: 'toolbar' | 'stack' | 'all'
   onOpenConnector?: (connectorId: string) => void

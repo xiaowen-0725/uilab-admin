@@ -83,7 +83,7 @@ uilab-templates/
 - Composition Root + Deep Modules：`workbench-session` / `task` / `work-surface`
 - Shell：Navigator、Task Surface、Composer、Adaptive Context Panel、placeholder Work Surface Host
 - **Task Lifecycle**：empty/新对话走本机 VoltAgent 侧车 → projection → Timeline；无侧车时报错条（不伪装本地流，ADR-0018）
-- Runtime 投影含 reasoning/tool/approval、EventStore、queue/steer、长文折叠/滚动；VoltAgent 侧车 ≠ 远程生产集群
+- Runtime 投影含 reasoning/tool/approval、EventStore、queue/steer、长文折叠/滚动；VoltAgent 侧车 ≠ 远程生产集群。做法教程：[docs/architecture/agent-event-stream-and-projection.md](docs/architecture/agent-event-stream-and-projection.md)
 - **无** production Agent Runtime、**无** Surface Registry、**无** Document/Browser/Review、**无** IndexedDB 持久化
 - 门禁：`pnpm check:workbench`
 

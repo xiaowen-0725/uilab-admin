@@ -24,7 +24,7 @@
   - Navigator：**仅**真目录。未指定工作根的对话在扁平「任务」；用户打开/新建的路径项目在「项目」文件夹下分组。侧栏文件夹只展开/收起，不切工作根；文件夹上的会话按钮在该项目下开新对话并切工作根；文件夹菜单可「从列表中移除」（不删本地文件夹）
   - 项目选择 / 打开本地文件夹 / 新建项目 / 不使用项目：只在 Composer 空态 chip，接到 Host 命令面。未指定工作根时 chip 显示「选择项目」，菜单不出现「不使用项目」（自动/默认项目仍挂对话，不出现在菜单列表）。已选指定项目后 chip 显示项目名，菜单才出现「不使用项目」。选项目只切工作根并回到该项目已有对话，不强制新开；文件夹上的会话按钮才新开对话
   - 统一 IndexedDB `uilab-agent-workbench`（目录 + EventStore 一 open）；测试默认 Memory
-- **Runtime path（产品默认）**：本机 VoltAgent 侧车 → projection → Timeline（ADR-0018 移除了 Deterministic Fake Runtime）
+- **Runtime path（产品默认）**：本机 VoltAgent 侧车 → projection → Timeline（ADR-0018 移除了 Deterministic Fake Runtime）。事件流分层与前端投影做法见仓库 [`docs/architecture/agent-event-stream-and-projection.md`](../../docs/architecture/agent-event-stream-and-projection.md)
 - **Phase 4B–4F Kernel**：Commands/Events、RuntimePort、VirtualClock、reasoning/tool/approval、queue/steer、长文折叠/滚动
 - **Question Request**：侧车 `ask_user_question`（client-side tool，无 execute / 无 needsApproval）→ `input.requested` → Timeline 内联卡片；用户点选项 / Other / 跳过 / Composer 直接回复后走 `provideRunInput`（`runInput: true`）恢复 Turn。任何 Permission Preset 都不得自动作答。steer 仍未交付。
 - **VoltAgent 侧车 ≠ 远程生产集群** — 本机执行；批准后可能写入工作区文件。无 Desktop Host（Web/测试降级）时，写盘范围由侧车自身 `WORKSPACE_ROOT` 环境决定，不受项目选择约束；桌面产品路径才有项目根写盘约束。
@@ -84,7 +84,7 @@ components.json        # shadcn 配置（base-nova）
 4. **Task model 禁止 Project 实体** — 仅可有 `ProjectId`；目录权威在 `modules/project`。
 5. **Shell 禁止**直写 IDB / Runtime / 业务级联删除；只绑定公开 commands/views。
 6. **turnStatus 不进 catalog/IDB** — 仅内存 TurnStatusIndex。
-7. **UI 复用顺序** — Module / Shell 已有 → UI Lab 复合块 → `@/components/ui/*` → 才允许 bespoke。
+7. **UI 复用顺序** — Module / Shell 已有 → UI Lab 复合块 → shadcn `@/components/ui/*`（先变体和语义色）→ 才允许 bespoke。shadcn 没有的能力才自研。
 8. **UI Lab 回流** — 改 UI Lab 能力时先/同步改 `ui-components` 真源。
 9. **Foundation** — Button/Input 只经 `@/components/ui/*` re-export；不扩 Foundation exports。
 10. **Base UI 约束** — `render={...}`；禁止 `asChild` 与 `@radix-ui/*`；禁止 Desktop/Node built-in 进入 renderer 源码。

@@ -83,7 +83,7 @@ export function renderBrandIcon(
   )
 }
 
-/** WorkBuddy-style brand tile beside Composer「+」. */
+/** Brand tile beside Composer「+」. */
 export function ConnectorBrandBadge({
   brandIconKey,
   connectorId,

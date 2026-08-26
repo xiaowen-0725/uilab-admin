@@ -1,5 +1,5 @@
 /**
- * Progressive capture fold tests (Codex intermediate vs final state discipline).
+ * Progressive capture fold tests (intermediate vs final state discipline).
  * Fixture: case-technical-audit-replay — multi-tool timed events from 4A observation.
  */
 

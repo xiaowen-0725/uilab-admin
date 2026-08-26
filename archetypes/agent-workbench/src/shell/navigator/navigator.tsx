@@ -684,7 +684,7 @@ export function Navigator({
   return panel
 }
 
-/** WorkBuddy collapsed chrome: titlebar cluster, not a vertical icon rail. */
+/** Collapsed chrome: titlebar cluster, not a vertical icon rail. */
 export function CollapsedNavButtons({
   onNewChat,
   onToggleNavigator,

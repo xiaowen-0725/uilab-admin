@@ -31,12 +31,12 @@ function isUsableBlankDraft(
 }
 
 /**
- * Blank unused draft → re-select only (Codex / WorkBuddy: 新对话只开一次).
+ * Blank unused draft → re-select only (新对话只开一次).
  */
 export function decideNewChat(input: {
   selectedProjectId: string
   selectedTask: TaskCatalogRow | null
-  /** Unused 新对话 already in this project (WorkBuddy: open once). */
+  /** Unused 新对话 already in this project (open once). */
   blankDraftInProject?: TaskCatalogRow | null
 }): NewChatDecision {
   const { selectedProjectId, selectedTask, blankDraftInProject } = input

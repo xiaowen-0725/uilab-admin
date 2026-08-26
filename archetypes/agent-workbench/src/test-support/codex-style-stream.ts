@@ -1,5 +1,5 @@
 /**
- * Codex-inspired stream test helpers (sdk/typescript runStreamed + core suite style).
+ * Stream test helpers (runStreamed + core suite style).
  *
  * Patterns borrowed (not copied code):
  * - collect events from a subscription / generator

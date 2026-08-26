@@ -15,7 +15,7 @@ export interface ContextSection {
   items: string[]
 }
 
-/** Empty-hub action card (fixture-honest; not Runtime). */
+/** Empty-hub launch capsule (fixture-honest; not Runtime). */
 export interface LaunchAction {
   id: string
   label: string

@@ -14,7 +14,7 @@ export const eventStreamCaptures: Record<string, EventStreamCapture> = {
   'golden-weixin-audio': goldenWeixinAudio as EventStreamCapture,
 }
 
-/** Default product demo: V2 gold timed workflow (~40s, Codex density). */
+/** Default product demo: V2 gold timed workflow (~40s). */
 export const DEFAULT_GOLDEN_CAPTURE_ID = 'case-fixture-workflow-replay'
 
 export function getEventStreamCapture(id: string): EventStreamCapture {

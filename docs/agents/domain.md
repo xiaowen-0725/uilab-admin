@@ -4,6 +4,7 @@
 
 - 领域词汇、边界与跨 Archetype 约定：根目录 `CONTEXT.md`
 - 稳定架构决策：`docs/adr/`
+- 结构说明与做法：`docs/architecture/`（含 [事件流与前端投影](../architecture/agent-event-stream-and-projection.md)，该文自含原则与术语，不要求先读 ADR）
 - 阶段性实施方案：`docs/plans/`
 - 验收与调研证据：`docs/evidence/`、`docs/research/`
 

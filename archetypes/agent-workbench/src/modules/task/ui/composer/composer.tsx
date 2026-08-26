@@ -19,8 +19,9 @@ import {
   type CapabilityController,
   type WaitForConnectorAuthOutcome,
 } from '@/modules/capabilities'
-import { CheckIcon as Check, DocumentTextIcon as FileText, FolderIcon as Folder, FolderOpenIcon as FolderOpen, FolderMinusIcon as FolderX, ShareIcon as GitBranch, CircleStackIcon as HardDrive, PhotoIcon as ImageIcon, LightBulbIcon as Lightbulb, ClipboardDocumentCheckIcon as ListTodo, MicrophoneIcon as Mic, PlusIcon as Plus, MagnifyingGlassIcon as Search, SparklesIcon as Sparkles, ViewfinderCircleIcon as Target, BoltIcon as Zap } from '@heroicons/react/24/outline'
+import { CheckIcon as Check, ChevronDownIcon as ChevronDown, DocumentTextIcon as FileText, FolderIcon as Folder, FolderOpenIcon as FolderOpen, FolderMinusIcon as FolderX, ShareIcon as GitBranch, CircleStackIcon as HardDrive, PhotoIcon as ImageIcon, LightBulbIcon as Lightbulb, ClipboardDocumentCheckIcon as ListTodo, MicrophoneIcon as Mic, PlusIcon as Plus, MagnifyingGlassIcon as Search, SparklesIcon as Sparkles, ViewfinderCircleIcon as Target, XMarkIcon as XMark, BoltIcon as Zap } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -34,7 +35,6 @@ import {
   Composer,
   ComposerAttachmentChip,
   ComposerAttachments,
-  ComposerContextBar,
   ComposerContextGauge,
   ComposerDictation,
   ComposerEffortSlider,
@@ -73,12 +73,12 @@ export interface ComposerProps {
   /** Model display name (local fixture). */
   modelLabel?: string
   /**
-   * Show token-budget gauge (48K/200K style). Off by default to match Codex density;
+   * Show token-budget gauge (48K/200K style). Off by default for a quieter composer;
    * host can enable per scenario.
    */
   showContextGauge?: boolean
   /**
-   * Scenario toggles for the context rail.
+   * Gray well under the white composer card (workspace + permission).
    * Product: project chip defaults on; env/branch chips default **off** until a
    * real environment / Git port is wired (no fake 「本地」「main」 without backend).
    * Even when flags are true, env/branch stay hidden if no project is selected.
@@ -114,6 +114,8 @@ export interface ComposerProps {
    * When set, create/open/select do not use the local-sim fixture catalog.
    */
   projectPicker?: ComposerProjectPicker | null
+  /** Empty hub floats the dock; timeline keeps it stuck to the bottom. */
+  placement?: 'dock' | 'center'
 }
 
 export interface ComposerProjectOption {
@@ -219,7 +221,7 @@ const SLASH_SKILLS: SlashItem[] = [
 
 const RUN_DURATION_MS = 2200
 
-/** Last `/query` token at end of draft (Codex-style slash palette). */
+/** Last `/query` token at end of draft (slash palette). */
 function getTrailingSlashQuery(
   text: string
 ): { start: number; query: string } | null {
@@ -360,6 +362,7 @@ export function TaskComposer({
   capabilityTaskId = null,
   onManageCapabilities,
   projectPicker = null,
+  placement = 'dock',
 }: ComposerProps) {
   const honesty = VOLTAGENT_RUNTIME_HONESTY_COPY
   const noticeId = useId()
@@ -615,7 +618,7 @@ export function TaskComposer({
 
   const model = MODELS.find((m) => m.id === modelId) ?? MODELS[0]
   const modelTriggerLabel = (
-    <span className='text-violet-500 dark:text-violet-400'>
+    <span className='text-muted-foreground'>
       {model.label} · {EFFORT_LABELS[effort]}
     </span>
   )
@@ -1015,7 +1018,7 @@ export function TaskComposer({
     }
   }
 
-  // WorkBuddy-style compact + menu with lateral submenus (not full-width panel).
+  // Compact + menu with lateral submenus (not a full-width panel).
   const addMenu = (
     <CapabilityAddMenu
       open={addOpen}
@@ -1085,9 +1088,7 @@ export function TaskComposer({
   // Env/branch only make sense when a workspace is selected.
   const showEnv = showEnvironmentChip && project !== null
   const showBranch = showBranchChip && project !== null
-  // Keep the rail after the first Turn even when no chips remain; the project
-  // chip is empty-hub-only, but the two-layer Composer depth is persistent.
-  const renderContextBar = showContextBar
+  // Well footer always holds permission; project chip is empty-hub only.
 
   const renderSlashSection = (
     title: string,
@@ -1115,28 +1116,252 @@ export function TaskComposer({
 
   return (
     <div
-      className='sticky bottom-0 z-30 shrink-0 px-4 pt-2 pb-4'
+      className={cn(
+        'z-30 w-full shrink-0',
+        placement === 'center'
+          ? 'relative px-0'
+          : 'sticky bottom-0 px-4 pt-2 pb-4',
+      )}
       data-slot='composer'
       data-testid='composer'
       data-composer-mode={mode}
+      data-composer-placement={placement}
     >
       {/*
-        Do not wrap the dock in pointer-events-none: upward popovers (project /
-        model menus) extend over EmptyHub and must remain hit-testable.
-        Sticky only covers the dock band, so stream clicks above still work.
+        Do not wrap the dock in pointer-events-none: project / model menus
+        must remain hit-testable. Dock sticky only covers the bottom band.
       */}
       <div className='relative mx-auto w-full max-w-[var(--content-max-width)]'>
-        {renderContextBar ? (
-          <ComposerContextBar
+        <div className='rounded-[18px] bg-[var(--wb-composer-well)] p-[2px] pb-1'>
+        <Composer
+          data-testid='composer-shell'
+          className='rounded-2xl bg-[var(--wb-surface-composer)] px-3 py-3 backdrop-blur-none'
+        >
+          <ComposerFloatingPanel
+            open={slashOpen}
+            data-testid='composer-slash-panel'
+          >
+            {flatSlashItems.length === 0 ? (
+              <p className='px-2 py-3 text-[13px] text-muted-foreground'>
+                无匹配命令或技能
+              </p>
+            ) : (
+              <>
+                {renderSlashSection('命令', slashPalette.commands)}
+                {renderSlashSection('技能', slashPalette.skills)}
+              </>
+            )}
+          </ComposerFloatingPanel>
+
+          {attachments.length > 0 ? (
+            <ComposerAttachments data-testid='composer-tokens'>
+              {attachments.map((file) => (
+                <ComposerAttachmentChip
+                  key={file.id}
+                  icon={
+                    file.icon === 'file' ? (
+                      <FileText className='size-3.5' />
+                    ) : (
+                      <ImageIcon className='size-3.5' />
+                    )
+                  }
+                  name={file.name}
+                  meta={file.meta}
+                  onRemove={() =>
+                    setAttachments((prev) =>
+                      prev.filter((f) => f.id !== file.id)
+                    )
+                  }
+                />
+              ))}
+            </ComposerAttachments>
+          ) : null}
+
+          {/* Expert / skill text chips above input; connectors live next to +. */}
+          {capabilityController && capabilityTaskId ? (
+            <CapabilityChips
+              variant='stack'
+              snapshot={capabilitySnapshot}
+              onRemoveConnector={(connectorId) => {
+                handleToggleConnector(connectorId, false)
+              }}
+              onRemoveExpert={() => {
+                void capabilityController.setSelection(capabilityTaskId, {
+                  expertId: null,
+                })
+              }}
+              onRemoveSkill={(skillId) => {
+                const prev = capabilitySnapshot?.selection.skillIds ?? []
+                void capabilityController.setSelection(capabilityTaskId, {
+                  skillIds: prev.filter((id) => id !== skillId),
+                })
+              }}
+            />
+          ) : null}
+
+          <ComposerTextarea
+            id='workbench-composer-input'
+            data-testid='composer-input'
+            className='min-h-[70px] text-[15px] leading-[26.25px] placeholder:text-foreground/50'
+            value={text}
+            onChange={(next) => {
+              setText(next)
+              if (addOpen) setAddOpen(false)
+              if (notice) setNotice(null)
+            }}
+            onKeyDown={onComposerKeyDown}
+            onSubmit={handleSend}
+            placeholder={
+              turnStatus === 'waiting_for_input'
+                ? '或直接回复…'
+                : '随心输入，输入 / 调用命令与技能'
+            }
+            aria-label='编写消息'
+            leading={
+              skillTokens.length > 0
+                ? skillTokens.map((skill) => (
+                    <ComposerSkillChip
+                      key={skill.id}
+                      icon={<Sparkles className='size-3.5' />}
+                      label={skill.label}
+                      data-testid={`composer-skill-${skill.id}`}
+                      onRemove={() =>
+                        setSkillTokens((prev) =>
+                          prev.filter((s) => s.id !== skill.id)
+                        )
+                      }
+                    />
+                  ))
+                : undefined
+            }
+          />
+
+          <ComposerToolbar className='px-0 pb-1.5'>
+            {recording ? (
+              <>
+                {addMenu}
+                <ComposerDictation
+                  seconds={seconds}
+                  onStop={stopRecording}
+                  className='min-w-0 flex-1 px-1'
+                  aria-label='停止听写'
+                />
+                {sendButton}
+              </>
+            ) : (
+              <>
+                {addMenu}
+                {/* Selected connector brand icons sit beside + */}
+                {capabilityController && capabilityTaskId ? (
+                  <CapabilityToolbarConnectors
+                    snapshot={capabilitySnapshot}
+                    onRemoveConnector={(connectorId) => {
+                      handleToggleConnector(connectorId, false)
+                    }}
+                    onOpenConnector={() => {
+                      setAddOpen(true)
+                    }}
+                  />
+                ) : null}
+                {goalMode ? (
+                  <ComposerModeBadge
+                    data-testid='composer-mode-goal'
+                    onClear={() => {
+                      setGoalMode(false)
+                      setNotice('已关闭目标模式（本地）')
+                    }}
+                  >
+                    目标
+                  </ComposerModeBadge>
+                ) : null}
+                {planMode ? (
+                  <ComposerModeBadge
+                    data-testid='composer-mode-plan'
+                    onClear={() => {
+                      setPlanMode(false)
+                      setNotice('已关闭计划模式（本地）')
+                    }}
+                  >
+                    计划模式
+                  </ComposerModeBadge>
+                ) : null}
+                <div className='ms-auto' />
+                {showContextGauge ? (
+                  <ComposerContextGauge used={48_000} limit={200_000} />
+                ) : null}
+                {isRuntimeMode ? (
+                  <span
+                    className='inline-flex min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-muted-foreground'
+                    data-testid='composer-model'
+                    title='模型由当前 Runtime 决定'
+                  >
+                    {modelLabel}
+                  </span>
+                ) : (
+                  <ComposerModelPicker
+                    label={modelTriggerLabel}
+                    open={pickerOpen}
+                    onOpenChange={setPickerOpen}
+                    data-testid='composer-model'
+                    title='模型与推理设置（本地）'
+                  >
+                    <div className='flex items-center justify-between px-2 pt-1 text-xs text-muted-foreground'>
+                      <span>模型</span>
+                    </div>
+                    <ComposerMenuSection>
+                      {MODELS.map((m) => (
+                        <ComposerMenuItem
+                          key={m.id}
+                          onSelect={() => {
+                            setModelId(m.id)
+                            setNotice(`模型已切换为 ${m.label}（本地）`)
+                          }}
+                        >
+                          {m.label}
+                          {m.id === modelId ? ' · 当前' : ''}
+                        </ComposerMenuItem>
+                      ))}
+                    </ComposerMenuSection>
+                    <div className='mt-1 flex items-center justify-between border-t border-border/60 px-2 pt-2 text-xs text-muted-foreground'>
+                      <span>推理力度</span>
+                      <Zap className='size-3.5' />
+                    </div>
+                    <div className='px-2 pt-1 pb-2'>
+                      <ComposerEffortSlider
+                        value={effort}
+                        onChange={setEffort}
+                        labels={[...EFFORT_LABELS]}
+                        aria-label='推理力度'
+                      />
+                    </div>
+                  </ComposerModelPicker>
+                )}
+                <ComposerIconButton
+                  aria-label='语音输入'
+                  data-testid='composer-mic'
+                  onClick={startRecording}
+                >
+                  <Mic className='size-4' />
+                </ComposerIconButton>
+                {sendButton}
+              </>
+            )}
+          </ComposerToolbar>
+        </Composer>
+
+        {showContextBar ? (
+          <div
+            className='flex h-8 flex-wrap items-center gap-1 px-3'
             data-testid='composer-context-bar'
-            className='mx-0'
           >
             {showProjectChip ? (
               <ComposerMenuButton
+                className='h-8 gap-1 rounded-lg px-2 text-[14px] leading-5 text-foreground/50'
                 label={
-                  <span className='flex items-center gap-1.5'>
+                  <span className='flex items-center gap-1'>
                     <Folder className='size-4' />
                     {projectChipLabel}
+                    <ChevronDown className='size-3.5' />
                   </span>
                 }
                 aria-label={specifiedProjectName ? '切换项目' : '选择项目'}
@@ -1145,7 +1370,6 @@ export function TaskComposer({
                 onOpenChange={setProjectOpen}
                 data-testid='composer-chip-project'
               >
-                {/* Codex-like workspace picker: search → list → create/open → clear */}
                 <div
                   className='flex flex-col gap-0.5 p-0.5'
                   data-testid='composer-project-menu'
@@ -1158,7 +1382,7 @@ export function TaskComposer({
                       onChange={(e) => setProjectQuery(e.target.value)}
                       placeholder='搜索项目'
                       data-testid='composer-project-search'
-                      className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground'
+                      className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0'
                       onKeyDown={(e) => e.stopPropagation()}
                     />
                   </label>
@@ -1350,221 +1574,10 @@ export function TaskComposer({
                 </ComposerMenuSection>
               </ComposerMenuButton>
             ) : null}
-          </ComposerContextBar>
+            <ComposerPermissionPreset taskId={capabilityTaskId} />
+          </div>
         ) : null}
-
-        <Composer data-testid='composer-shell'>
-          <ComposerFloatingPanel
-            open={slashOpen}
-            data-testid='composer-slash-panel'
-          >
-            {flatSlashItems.length === 0 ? (
-              <p className='px-2 py-3 text-[13px] text-muted-foreground'>
-                无匹配命令或技能
-              </p>
-            ) : (
-              <>
-                {renderSlashSection('命令', slashPalette.commands)}
-                {renderSlashSection('技能', slashPalette.skills)}
-              </>
-            )}
-          </ComposerFloatingPanel>
-
-          {attachments.length > 0 ? (
-            <ComposerAttachments data-testid='composer-tokens'>
-              {attachments.map((file) => (
-                <ComposerAttachmentChip
-                  key={file.id}
-                  icon={
-                    file.icon === 'file' ? (
-                      <FileText className='size-3.5' />
-                    ) : (
-                      <ImageIcon className='size-3.5' />
-                    )
-                  }
-                  name={file.name}
-                  meta={file.meta}
-                  onRemove={() =>
-                    setAttachments((prev) =>
-                      prev.filter((f) => f.id !== file.id)
-                    )
-                  }
-                />
-              ))}
-            </ComposerAttachments>
-          ) : null}
-
-          {/* Expert / skill text chips above input; connectors live next to + (WorkBuddy). */}
-          {capabilityController && capabilityTaskId ? (
-            <CapabilityChips
-              variant='stack'
-              snapshot={capabilitySnapshot}
-              onRemoveConnector={(connectorId) => {
-                handleToggleConnector(connectorId, false)
-              }}
-              onRemoveExpert={() => {
-                void capabilityController.setSelection(capabilityTaskId, {
-                  expertId: null,
-                })
-              }}
-              onRemoveSkill={(skillId) => {
-                const prev = capabilitySnapshot?.selection.skillIds ?? []
-                void capabilityController.setSelection(capabilityTaskId, {
-                  skillIds: prev.filter((id) => id !== skillId),
-                })
-              }}
-            />
-          ) : null}
-
-          <ComposerTextarea
-            id='workbench-composer-input'
-            data-testid='composer-input'
-            value={text}
-            onChange={(next) => {
-              setText(next)
-              if (addOpen) setAddOpen(false)
-              if (notice) setNotice(null)
-            }}
-            onKeyDown={onComposerKeyDown}
-            onSubmit={handleSend}
-            placeholder={
-              turnStatus === 'waiting_for_input'
-                ? '或直接回复…'
-                : '随心输入，输入 / 调用命令与技能'
-            }
-            aria-label='编写消息'
-            leading={
-              skillTokens.length > 0
-                ? skillTokens.map((skill) => (
-                    <ComposerSkillChip
-                      key={skill.id}
-                      icon={<Sparkles className='size-3.5' />}
-                      label={skill.label}
-                      data-testid={`composer-skill-${skill.id}`}
-                      onRemove={() =>
-                        setSkillTokens((prev) =>
-                          prev.filter((s) => s.id !== skill.id)
-                        )
-                      }
-                    />
-                  ))
-                : undefined
-            }
-          />
-
-          <ComposerToolbar>
-            {recording ? (
-              <>
-                {addMenu}
-                <ComposerDictation
-                  seconds={seconds}
-                  onStop={stopRecording}
-                  className='min-w-0 flex-1 px-1'
-                  aria-label='停止听写'
-                />
-                {sendButton}
-              </>
-            ) : (
-              <>
-                {addMenu}
-                {/* WorkBuddy: selected connector brand icons sit beside + */}
-                {capabilityController && capabilityTaskId ? (
-                  <CapabilityToolbarConnectors
-                    snapshot={capabilitySnapshot}
-                    onRemoveConnector={(connectorId) => {
-                      handleToggleConnector(connectorId, false)
-                    }}
-                    onOpenConnector={() => {
-                      setAddOpen(true)
-                    }}
-                  />
-                ) : null}
-                {goalMode ? (
-                  <ComposerModeBadge
-                    data-testid='composer-mode-goal'
-                    onClear={() => {
-                      setGoalMode(false)
-                      setNotice('已关闭目标模式（本地）')
-                    }}
-                  >
-                    目标
-                  </ComposerModeBadge>
-                ) : null}
-                {planMode ? (
-                  <ComposerModeBadge
-                    data-testid='composer-mode-plan'
-                    onClear={() => {
-                      setPlanMode(false)
-                      setNotice('已关闭计划模式（本地）')
-                    }}
-                  >
-                    计划模式
-                  </ComposerModeBadge>
-                ) : null}
-                <ComposerPermissionPreset taskId={capabilityTaskId} />
-                <div className='ms-auto' />
-                {showContextGauge ? (
-                  <ComposerContextGauge used={48_000} limit={200_000} />
-                ) : null}
-                {isRuntimeMode ? (
-                  <span
-                    className='inline-flex min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-violet-500 dark:text-violet-400'
-                    data-testid='composer-model'
-                    title='模型由当前 Runtime 决定'
-                  >
-                    {modelLabel}
-                  </span>
-                ) : (
-                  <ComposerModelPicker
-                    label={modelTriggerLabel}
-                    open={pickerOpen}
-                    onOpenChange={setPickerOpen}
-                    data-testid='composer-model'
-                    title='模型与推理设置（本地）'
-                  >
-                    <div className='flex items-center justify-between px-2 pt-1 text-xs text-muted-foreground'>
-                      <span>模型</span>
-                    </div>
-                    <ComposerMenuSection>
-                      {MODELS.map((m) => (
-                        <ComposerMenuItem
-                          key={m.id}
-                          onSelect={() => {
-                            setModelId(m.id)
-                            setNotice(`模型已切换为 ${m.label}（本地）`)
-                          }}
-                        >
-                          {m.label}
-                          {m.id === modelId ? ' · 当前' : ''}
-                        </ComposerMenuItem>
-                      ))}
-                    </ComposerMenuSection>
-                    <div className='mt-1 flex items-center justify-between border-t border-border/60 px-2 pt-2 text-xs text-muted-foreground'>
-                      <span>推理力度</span>
-                      <Zap className='size-3.5' />
-                    </div>
-                    <div className='px-2 pt-1 pb-2'>
-                      <ComposerEffortSlider
-                        value={effort}
-                        onChange={setEffort}
-                        labels={[...EFFORT_LABELS]}
-                        aria-label='推理力度'
-                      />
-                    </div>
-                  </ComposerModelPicker>
-                )}
-                <ComposerIconButton
-                  aria-label='语音输入'
-                  data-testid='composer-mic'
-                  onClick={startRecording}
-                >
-                  <Mic className='size-4' />
-                </ComposerIconButton>
-                {sendButton}
-              </>
-            )}
-          </ComposerToolbar>
-        </Composer>
+        </div>
 
         <input
           ref={fileInputRef}
@@ -1612,34 +1625,53 @@ export function TaskComposer({
         }}
       >
         <DialogContent
-          className='sm:max-w-md'
+          className='gap-5 rounded-2xl bg-background p-6 shadow-[var(--wb-shadow-dialog)] sm:max-w-[480px] [&_[data-slot=dialog-close]]:top-5 [&_[data-slot=dialog-close]]:right-5'
           data-testid='composer-create-project-dialog'
         >
-          <DialogHeader>
-            <DialogTitle>新建项目</DialogTitle>
+          <DialogHeader className='gap-2 pr-8'>
+            <DialogTitle className='text-base leading-6 font-semibold'>
+              新建项目
+            </DialogTitle>
             <DialogDescription>
               {projectPicker
                 ? '将在 Projects Home 下创建同名文件夹，并设为当前项目。'
                 : '为项目命名。当前为本地模拟：不会在磁盘创建同名文件夹，仅写入工作台状态。'}
             </DialogDescription>
           </DialogHeader>
-          <Input
-            autoFocus
-            value={createProjectName}
-            onChange={(e) => setCreateProjectName(e.target.value)}
-            placeholder='输入项目名称'
-            data-testid='composer-create-project-input'
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                confirmCreateProject()
-              }
-            }}
-          />
-          <DialogFooter className='border-0 bg-transparent p-0 sm:justify-end'>
+          <div className='relative'>
+            <Input
+              autoFocus
+              value={createProjectName}
+              onChange={(e) => setCreateProjectName(e.target.value)}
+              placeholder='输入项目名称'
+              data-testid='composer-create-project-input'
+              className='h-10 rounded-xl border-transparent bg-muted px-3.5 pr-10 shadow-none focus-visible:border-transparent focus-visible:ring-0'
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  confirmCreateProject()
+                }
+              }}
+            />
+            {createProjectName ? (
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon-xs'
+                className='absolute top-1/2 right-2 -translate-y-1/2 rounded-full text-muted-foreground'
+                aria-label='清除名称'
+                onClick={() => setCreateProjectName('')}
+              >
+                <XMark />
+              </Button>
+            ) : null}
+          </div>
+          <DialogFooter className='mx-0 mb-0 flex-row border-0 bg-transparent p-0 sm:justify-end'>
             <Button
               type='button'
-              variant='outline'
+              variant='secondary'
+              size='lg'
+              className='min-w-16 px-5'
               data-testid='composer-create-project-cancel'
               onClick={() => {
                 setCreateProjectOpen(false)
@@ -1650,6 +1682,8 @@ export function TaskComposer({
             </Button>
             <Button
               type='button'
+              size='lg'
+              className='min-w-16 px-5'
               data-testid='composer-create-project-confirm'
               disabled={!createProjectName.trim()}
               onClick={confirmCreateProject}

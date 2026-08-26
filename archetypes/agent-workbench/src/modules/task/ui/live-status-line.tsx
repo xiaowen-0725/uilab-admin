@@ -14,7 +14,7 @@ export interface LiveStatusLineProps {
 }
 
 /**
- * Codex-like live status (bootstrap「正在思考」).
+ * Live status (bootstrap「正在思考」).
  * Default: shimmer sweep; pass muted for static text.
  * reduced-motion: CSS forces static muted (see .wb-live-status-shimmer).
  */

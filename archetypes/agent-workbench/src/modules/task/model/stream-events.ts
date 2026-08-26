@@ -90,13 +90,13 @@ export interface StreamViewModel {
   userMessages: { id: string; text: string }[]
   turn: TurnViewModel
   /**
-   * Codex-like intermediate status (capture path).
+   * Intermediate status (capture path).
    * Derived while turn is running; null when completed/error.
    */
   liveStatus: string | null
 }
 
-/** Format duration for Codex-like chips: "45s", "1m 18s". */
+/** Format duration for compact chips: "45s", "1m 18s". */
 export function formatDurationMs(durationMs: number): string {
   if (!Number.isFinite(durationMs) || durationMs < 0) return '0s'
   const totalSec = Math.round(durationMs / 1000)
@@ -104,6 +104,17 @@ export function formatDurationMs(durationMs: number): string {
   const m = Math.floor(totalSec / 60)
   const s = totalSec % 60
   return s === 0 ? `${m}m` : `${m}m ${s}s`
+}
+
+/** Process-header duration: "16秒", "1分钟 16秒". */
+export function formatDurationZh(durationMs: number): string {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return '0秒'
+  const totalSec = Math.round(durationMs / 1000)
+  if (totalSec < 60) return `${totalSec}秒`
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  if (s === 0) return `${m}分钟`
+  return `${m}分钟 ${s}秒`
 }
 
 /**

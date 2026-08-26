@@ -131,7 +131,7 @@ describe('Workbench Real Task Lifecycle — Runtime path', () => {
 
     await expect
       .element(page.getByTestId('timeline-turn-status-label'))
-      .toHaveTextContent('已处理')
+      .toHaveTextContent(/已处理|过程/)
 
     const timeline = page.getByTestId('task-timeline').element()
     expect(timeline.getAttribute('data-runtime-turn')).toBe('completed')

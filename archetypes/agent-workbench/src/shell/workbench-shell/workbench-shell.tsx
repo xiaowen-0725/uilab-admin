@@ -388,9 +388,16 @@ export function WorkbenchShell({
   )
 
   const showingTask = isTaskDestination(activeDestination)
+  const isEmptyHub =
+    showingTask && (taskView?.mode ?? 'empty') === 'empty'
   const reservedCollapsed = navigatorMode === 'reserved' && !view.navigatorOpen
-  const chromeInTaskToolbar = reservedCollapsed && showingTask && !workFullStage
-  const showWorkspaceChrome = reservedCollapsed && !chromeInTaskToolbar
+  const overlayNavClosed =
+    navigatorMode === 'overlay' && !view.navigatorOpen && !workFullStage
+  const chromeInTaskToolbar =
+    reservedCollapsed && showingTask && !workFullStage && !isEmptyHub
+  const showWorkspaceChrome =
+    (reservedCollapsed && !chromeInTaskToolbar) ||
+    (isEmptyHub && overlayNavClosed)
   const boardListCollapsed =
     reservedCollapsed &&
     activeDestination.kind === 'board' &&
@@ -525,65 +532,67 @@ export function WorkbenchShell({
               aria-hidden={workFullStage || undefined}
               inert={workFullStage || undefined}
             >
-              {/* Task pane toolbar (44px) — was Workspace-wide header. */}
-              <header
-                className={
-                  chromeInTaskToolbar
-                    ? 'flex h-14 shrink-0 items-center gap-2 border-b border-border px-3'
-                    : 'flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
-                }
-                data-testid='workspace-top-bar'
-                data-slot='task-pane-toolbar'
-              >
-                {chromeInTaskToolbar ? (
-                  <CollapsedNavButtons
-                    onNewChat={startNewChatFromShell}
-                    onToggleNavigator={toggleNavigatorFromPointer}
+              {/* Conversation chrome only — empty hub has no title bar. */}
+              {isEmptyHub ? null : (
+                <header
+                  className={
+                    chromeInTaskToolbar
+                      ? 'flex h-14 shrink-0 items-center gap-2 border-b border-border px-3'
+                      : 'flex h-11 shrink-0 items-center gap-2 border-b border-border px-3'
+                  }
+                  data-testid='workspace-top-bar'
+                  data-slot='task-pane-toolbar'
+                >
+                  {chromeInTaskToolbar ? (
+                    <CollapsedNavButtons
+                      onNewChat={startNewChatFromShell}
+                      onToggleNavigator={toggleNavigatorFromPointer}
+                    />
+                  ) : null}
+                  {!view.navigatorOpen &&
+                  !workFullStage &&
+                  navigatorMode === 'overlay' ? (
+                    <ToolbarIconButton
+                      testId='toggle-navigator'
+                      pressed={false}
+                      label='打开导航'
+                      onClick={toggleNavigatorFromPointer}
+                    >
+                      <SidebarToggleIcon className='size-4' aria-hidden />
+                    </ToolbarIconButton>
+                  ) : null}
+
+                  <FolderIcon
+                    className='size-4 shrink-0 text-muted-foreground'
+                    aria-hidden
                   />
-                ) : null}
-                {!view.navigatorOpen &&
-                !workFullStage &&
-                navigatorMode === 'overlay' ? (
-                  <ToolbarIconButton
-                    testId='toggle-navigator'
-                    pressed={false}
-                    label='打开导航'
-                    onClick={toggleNavigatorFromPointer}
-                  >
-                    <SidebarToggleIcon className='size-4' aria-hidden />
-                  </ToolbarIconButton>
-                ) : null}
 
-                <FolderIcon
-                  className='size-4 shrink-0 text-muted-foreground'
-                  aria-hidden
-                />
+                  <div className='min-w-0 flex-1'>
+                    <h1 className='truncate text-sm leading-none font-semibold'>
+                      {taskView?.title ?? '新对话'}
+                    </h1>
+                  </div>
 
-                <div className='min-w-0 flex-1'>
-                  <h1 className='truncate text-sm leading-none font-semibold'>
-                    {taskView?.title ?? '新对话'}
-                  </h1>
-                </div>
-
-                <div className='flex shrink-0 items-center gap-0.5'>
-                  <ToolbarIconButton
-                    testId='toggle-context'
-                    pressed={view.layout.contextPanelOpen}
-                    label='切换任务上下文面板'
-                    onClick={toggleContextFromPointer}
-                  >
-                    <SlidersHorizontal className='size-4' aria-hidden />
-                  </ToolbarIconButton>
-                  <ToolbarIconButton
-                    testId='toggle-work-surface-chrome'
-                    pressed={view.layout.workSurfaceVisible}
-                    label='切换工作面'
-                    onClick={toggleWorkFromPointer}
-                  >
-                    <PanelBottom className='size-4' aria-hidden />
-                  </ToolbarIconButton>
-                </div>
-              </header>
+                  <div className='flex shrink-0 items-center gap-0.5'>
+                    <ToolbarIconButton
+                      testId='toggle-context'
+                      pressed={view.layout.contextPanelOpen}
+                      label='切换任务上下文面板'
+                      onClick={toggleContextFromPointer}
+                    >
+                      <SlidersHorizontal className='size-4' aria-hidden />
+                    </ToolbarIconButton>
+                    <ToolbarIconButton
+                      testId='toggle-work-surface-chrome'
+                      pressed={view.layout.workSurfaceVisible}
+                      label='切换工作面'
+                      onClick={toggleWorkFromPointer}
+                    >
+                      <PanelBottom className='size-4' aria-hidden />
+                    </ToolbarIconButton>
+                  </div>
+                </header>
+              )}
 
               <div className='flex min-h-0 min-w-0 flex-1'>
                 {taskView ? (

@@ -1,5 +1,5 @@
 /**
- * Codex-style bottom approval dock (replaces Composer while pending).
+ * Bottom approval dock (replaces Composer while pending).
  * Visual surface: UI Lab `tool-approval`.
  */
 import { useEffect } from 'react'

@@ -1,5 +1,5 @@
 /**
- * Timeline / stream Markdown — Streamdown + Codex file-reference chips.
+ * Timeline / stream Markdown — Streamdown plus inline file mentions.
  * @see docs/research/codex-content-area-diff-and-acceptance.md
  */
 
@@ -195,17 +195,9 @@ export function SimpleMarkdown({
   return (
     <div
       className={cn(
-        'stream-markdown tl-prose text-foreground',
-        /* Headings stay near body size; rhythm matches grok-app chat-md. */
-        '[&_h1]:text-[1.25em] [&_h2]:text-[1.12em] [&_h3]:text-[1.05em]',
-        '[&_:is(h1,h2,h3)]:mb-[0.5em] [&_:is(h1,h2,h3)]:mt-[1.15em]',
-        '[&_:is(h1,h2,h3)]:font-semibold [&_:is(h1,h2,h3)]:leading-[1.35]',
-        '[&_:is(h1,h2,h3)]:text-balance',
-        '[&_p]:mt-0 [&_p]:mb-[0.85em] [&_p]:whitespace-pre-wrap',
+        'stream-markdown tl-prose',
         '[&_blockquote]:my-[0.85em] [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
-        '[&_ul]:my-[0.85em] [&_ul]:list-disc [&_ul]:pl-[1.35em]',
-        '[&_ol]:my-[0.85em] [&_ol]:list-decimal [&_ol]:pl-[1.35em]',
-        '[&_li]:my-[0.28em]',
+        '[&_ul]:list-disc [&_ol]:list-decimal',
         '[&_pre]:my-[0.75em] [&_pre]:overflow-x-auto [&_pre]:rounded-[10px] [&_pre]:border [&_pre]:border-border/40 [&_pre]:bg-muted/60',
         '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
         className,

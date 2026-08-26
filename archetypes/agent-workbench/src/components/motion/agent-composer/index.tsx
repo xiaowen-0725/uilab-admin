@@ -46,13 +46,13 @@ export function Composer({
       data-slot="agent-composer"
       data-testid={dataTestId}
       style={{
-        // Dark (Codex CDP): no shell shadow; light keeps hairline trio via token.
+        // Dark: no shell shadow; light keeps hairline trio via token.
         boxShadow: "var(--wb-composer-shell-shadow)",
       }}
       className={cn(
         "relative z-10 flex w-full max-w-full flex-col rounded-[25px] px-4 py-3",
         "bg-[var(--wb-surface-composer)] backdrop-blur-lg",
-        // No shell focus outline (Codex-like): caret in textarea is enough.
+        // No shell focus outline: caret in textarea is enough.
         className,
       )}
     >
@@ -68,7 +68,7 @@ export interface ComposerContextBarProps {
 }
 
 /**
- * Optional context bar above `<Composer>`. Codex (CDP): inset strip, top radius
+ * Optional context bar above `<Composer>`. Inset strip, top radius
  * 20px / square bottom, negative margin so shell covers lower half; rail uses
  * `--wb-composer-rail` (fog above canvas, darker than elevated shell).
  */
@@ -85,7 +85,7 @@ export function ComposerContextBar({
         boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.06)",
       }}
       className={cn(
-        // Stronger tuck so chips sit on the shell lip (Codex ~18–22px overlap).
+        // Stronger tuck so chips sit on the shell lip (~18–22px overlap).
         "relative z-0 mx-3 -mb-6 flex items-center gap-1 overflow-x-auto",
         "rounded-t-[20px] rounded-b-none px-1.5 pt-1.5 pb-8",
         "bg-[var(--wb-composer-rail)]",
@@ -184,7 +184,7 @@ export interface ComposerTextareaProps {
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   /**
    * Inline leading tokens (e.g. selected skills) rendered in the same flow
-   * as the text field — Codex embeds skill mentions inside the input area.
+   * as the text field — skill mentions sit inside the input area.
    */
   leading?: ReactNode;
   "aria-label"?: string;
@@ -203,7 +203,7 @@ export interface ComposerTextareaProps {
  * newline as usual.
  *
  * Focus ring is intentionally suppressed: global `:focus-visible { ring-3 }`
- * would paint a bright blue box inside the glass shell (not Codex-like).
+ * would paint a bright blue box inside the glass shell.
  */
 export function ComposerTextarea({
   value,
@@ -242,7 +242,7 @@ export function ComposerTextarea({
 
   return (
     <div className="max-h-[25dvh] overflow-y-auto px-0 pt-0.5 pb-1">
-      <div className="flex min-h-[44px] flex-wrap items-center gap-x-1.5 gap-y-1">
+      <div className="flex min-h-[70px] flex-wrap items-center gap-x-1.5 gap-y-1">
         {hasLeading ? (
           <div
             className="flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1"
@@ -262,11 +262,11 @@ export function ComposerTextarea({
           placeholder={hasLeading && !value ? undefined : placeholder}
           aria-label={ariaLabel}
           className={cn(
-            "flex-1 resize-none border-none bg-transparent text-sm leading-5",
+            "flex-1 resize-none border-none bg-transparent text-[15px] leading-[26.25px]",
             "shadow-none outline-none ring-0 focus:shadow-none focus:outline-none focus:ring-0",
             "focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0",
-            "placeholder:text-muted-foreground",
-            hasLeading ? "min-h-[28px] min-w-[8rem]" : "min-h-[44px] w-full",
+            "placeholder:text-foreground/50",
+            hasLeading ? "min-h-[28px] min-w-[8rem]" : "min-h-[70px] w-full",
             className,
           )}
           style={{ boxShadow: 'none' }}
@@ -284,9 +284,9 @@ export interface ComposerFloatingPanelProps {
 }
 
 /**
- * Full-width panel anchored above the Composer shell (Codex + / slash menus).
+ * Full-width panel anchored above the Composer shell (+ / slash menus).
  * Parent must be `position: relative` (the `Composer` root is).
- * `max-h-[320px]` + internal scroll matches desktop Codex add palette.
+ * `max-h-[320px]` + internal scroll for the add palette.
  */
 export const ComposerFloatingPanel = forwardRef<
   HTMLDivElement,
@@ -417,7 +417,7 @@ export interface ComposerSkillChipProps {
 
 /**
  * Inline skill tag in the composer input.
- * Neutral muted pill; icon crossfades to × on hover/focus (Codex-style tag chrome).
+ * Neutral muted pill; icon crossfades to × on hover/focus.
  */
 export function ComposerSkillChip({
   label,

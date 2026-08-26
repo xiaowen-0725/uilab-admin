@@ -1,6 +1,6 @@
 /**
  * Task Pane Projection types (protocol v2).
- * TimelineItem aligns with Codex ThreadItem.
+ * TimelineItem is the thread read-model item.
  */
 
 import type { ProjectId, TaskId, TitleSource, TurnId, TurnStatus } from '../model/lifecycle'
@@ -177,7 +177,7 @@ export interface TaskReadModel {
   /** Latest usage from `turn.completed` or `usage.updated`. */
   usage: TokenUsage | null
   /**
-   * Codex-like intermediate status under timeline / above composer.
+   * Intermediate status under timeline / above composer.
    * Chinese label while the turn is non-terminal; null when idle or terminal.
    */
   liveStatus: string | null

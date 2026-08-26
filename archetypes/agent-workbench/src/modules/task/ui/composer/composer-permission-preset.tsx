@@ -2,7 +2,8 @@
  * Composer chrome: two-tier「默认权限」dropdown.
  * Visual trigger reuses motion `ComposerAccessChip`; Base UI `render={...}`.
  */
-import { ShieldCheckIcon as ShieldCheck } from '@heroicons/react/24/outline'
+import { ChevronDownIcon as ChevronDown, ShieldCheckIcon as ShieldCheck } from '@heroicons/react/24/outline'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,10 +21,12 @@ import {
 
 export interface ComposerPermissionPresetProps {
   taskId?: string | null
+  className?: string
 }
 
 export function ComposerPermissionPreset({
   taskId,
+  className,
 }: ComposerPermissionPresetProps) {
   const { preset, setPreset } = usePermissionPreset(taskId)
   const label = permissionPresetLabel(preset)
@@ -39,6 +42,11 @@ export function ComposerPermissionPreset({
           <ComposerAccessChip
             icon={<ShieldCheck className='size-4' />}
             tone={preset === 'full-access' ? 'warning' : 'default'}
+            className={cn(
+              'h-8 gap-1 rounded-lg px-2 text-[14px] leading-5',
+              preset === 'full-access' ? undefined : 'text-foreground/50',
+              className,
+            )}
             data-testid='composer-permission-preset'
             title='默认权限'
             aria-label={`默认权限：${label}`}
@@ -46,6 +54,7 @@ export function ComposerPermissionPreset({
         }
       >
         {label}
+        <ChevronDown className='size-3.5' />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align='start'

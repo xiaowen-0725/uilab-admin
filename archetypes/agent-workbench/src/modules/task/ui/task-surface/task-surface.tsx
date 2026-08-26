@@ -126,8 +126,10 @@ export function TaskSurface({
   }
 
   const composerMode = composerRuntime?.mode ?? 'local-sim'
+  const isTimeline =
+    (view.mode === 'runtime' || view.mode === 'stream') && Boolean(view.readModel)
 
-  // Codex: pending tool approval docks at bottom and replaces Composer —
+  // Pending tool approval docks at bottom and replaces Composer —
   // unless the permission preset auto-answers first (no Dock flash).
   const pendingApproval = useMemo(
     () =>
@@ -166,6 +168,32 @@ export function TaskSurface({
     view.taskId,
   ])
 
+  const composerSlot =
+    showDock && pendingApproval ? (
+      <ApprovalDock
+        approval={pendingApproval}
+        onApprove={(id) => void composerRuntime?.onApprove?.(id)}
+        onReject={(id) => void composerRuntime?.onReject?.(id)}
+      />
+    ) : (
+      <Composer
+        projectLabel={view.projectName}
+        mode={composerMode}
+        turnStatus={composerRuntime?.turnStatus}
+        onSubmitText={composerRuntime?.onSubmitText}
+        onCancelRun={composerRuntime?.onCancelRun}
+        runtimeNotice={composerRuntime?.runtimeNotice}
+        modelLabel={composerRuntime?.modelLabel}
+        capabilityController={composerRuntime?.capabilityController}
+        capabilityTaskId={composerRuntime?.capabilityTaskId ?? view.taskId}
+        onManageCapabilities={composerRuntime?.onManageCapabilities}
+        projectPicker={composerRuntime?.projectPicker}
+        showContextBar
+        showProjectChip={view.mode === 'empty'}
+        placement={isTimeline ? 'dock' : 'center'}
+      />
+    )
+
   return (
     <section
       className='task-container relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background'
@@ -179,45 +207,22 @@ export function TaskSurface({
     >
       <div className='relative flex min-h-0 flex-1'>
         <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
-          {(view.mode === 'runtime' || view.mode === 'stream') &&
-          view.readModel ? (
-            <Timeline
-              readModel={view.readModel}
-              onRetryTurn={composerRuntime?.onRetryTurn}
-              onFollowModeChange={composerRuntime?.onFollowModeChange}
-              onOpenFileRef={onOpenFileRef}
-              onRespondToQuestion={composerRuntime?.onRespondToQuestion}
-            />
+          {isTimeline && view.readModel ? (
+            <>
+              <Timeline
+                readModel={view.readModel}
+                onRetryTurn={composerRuntime?.onRetryTurn}
+                onFollowModeChange={composerRuntime?.onFollowModeChange}
+                onOpenFileRef={onOpenFileRef}
+                onRespondToQuestion={composerRuntime?.onRespondToQuestion}
+              />
+              {composerSlot}
+            </>
           ) : (
             <EmptyHub
               actions={view.launchActions}
               onSelectAction={handleLaunch}
-            />
-          )}
-          {showDock && pendingApproval ? (
-            <ApprovalDock
-              approval={pendingApproval}
-              onApprove={(id) => void composerRuntime?.onApprove?.(id)}
-              onReject={(id) => void composerRuntime?.onReject?.(id)}
-            />
-          ) : (
-            <Composer
-              projectLabel={view.projectName}
-              mode={composerMode}
-              turnStatus={composerRuntime?.turnStatus}
-              onSubmitText={composerRuntime?.onSubmitText}
-              onCancelRun={composerRuntime?.onCancelRun}
-              runtimeNotice={composerRuntime?.runtimeNotice}
-              modelLabel={composerRuntime?.modelLabel}
-              capabilityController={composerRuntime?.capabilityController}
-              capabilityTaskId={
-                composerRuntime?.capabilityTaskId ?? view.taskId
-              }
-              onManageCapabilities={composerRuntime?.onManageCapabilities}
-              projectPicker={composerRuntime?.projectPicker}
-              // Codex top-rail stack: rail always on for depth; project chip only on empty hub.
-              showContextBar
-              showProjectChip={view.mode === 'empty'}
+              composer={composerSlot}
             />
           )}
         </div>

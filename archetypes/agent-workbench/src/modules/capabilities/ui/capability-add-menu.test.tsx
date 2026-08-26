@@ -179,7 +179,7 @@ function KeyboardMenuHarness() {
   )
 }
 
-describe('CapabilityAddMenu WorkBuddy IA', () => {
+describe('CapabilityAddMenu IA', () => {
   it('keeps the root compact and moves honesty copy out of the root', async () => {
     renderMenu()
 
