@@ -4,6 +4,7 @@ import {
   classifyDeliverable,
   deliverableCompletionKey,
   featuredDeliverable,
+  isNonTerminalTurnStatus,
   lastCompletedTurnId,
   pathMatchesDeliverable,
   shouldAutoOpenDeliverablePane,
@@ -94,6 +95,19 @@ describe('deliverable presentation', () => {
     expect(shouldRequestPaneOpenMotion(true, false)).toBe(true)
     expect(shouldRequestPaneOpenMotion(true, true)).toBe(false)
     expect(shouldRequestPaneOpenMotion(false, false)).toBe(false)
+  })
+
+  it('treats in-flight turn statuses as non-terminal', () => {
+    expect(isNonTerminalTurnStatus(null)).toBe(false)
+    expect(isNonTerminalTurnStatus('completed')).toBe(false)
+    expect(isNonTerminalTurnStatus('failed')).toBe(false)
+    expect(isNonTerminalTurnStatus('cancelled')).toBe(false)
+    expect(isNonTerminalTurnStatus('interrupted')).toBe(false)
+    expect(isNonTerminalTurnStatus('queued')).toBe(true)
+    expect(isNonTerminalTurnStatus('running')).toBe(true)
+    expect(isNonTerminalTurnStatus('waiting_for_approval')).toBe(true)
+    expect(isNonTerminalTurnStatus('waiting_for_input')).toBe(true)
+    expect(isNonTerminalTurnStatus('cancelling')).toBe(true)
   })
 
   it('reads the last completed turn id from the terminal row', () => {

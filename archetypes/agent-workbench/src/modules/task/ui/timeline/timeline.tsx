@@ -4,7 +4,6 @@
  */
 
 import { useRef, type MutableRefObject } from 'react'
-import type { TurnStatus } from '../../model/lifecycle'
 import type { TaskReadModel, TimelineItem } from '../../projection/types'
 import { VOLTAGENT_RUNTIME_HONESTY_COPY } from '../../runtime/runtime-honesty'
 import {
@@ -18,6 +17,7 @@ import {
   type OpenDeliverablesRequest,
 } from './blocks/deliverables'
 import { TurnTerminalBlock } from './blocks/turn-terminal'
+import { isNonTerminalTurnStatus } from './deliverable-presentation'
 import {
   deriveTimelineView,
   type TimelineViewBlock,
@@ -42,17 +42,6 @@ export interface TimelineProps {
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
   onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
   onRespondToQuestion?: QuestionRespondHandler
-}
-
-function isActiveTurnStatus(status: TurnStatus | null): boolean {
-  if (!status) return false
-  return (
-    status === 'queued' ||
-    status === 'running' ||
-    status === 'waiting_for_approval' ||
-    status === 'waiting_for_input' ||
-    status === 'cancelling'
-  )
 }
 
 function isSettledRunStatus(status: string | undefined): boolean {
@@ -81,7 +70,7 @@ export function Timeline({
   onOpenDeliverables,
   onRespondToQuestion,
 }: TimelineProps) {
-  const runActive = isActiveTurnStatus(readModel.turnStatus)
+  const runActive = isNonTerminalTurnStatus(readModel.turnStatus)
   const runAttr =
     runActive || readModel.turnStatus
       ? readModel.turnStatus ?? 'unknown'
