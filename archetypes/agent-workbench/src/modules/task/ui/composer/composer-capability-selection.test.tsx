@@ -341,6 +341,13 @@ describe('TaskComposer connector selection', () => {
       .element(page.getByTestId('capability-chip-expert-expert.xhs-cover'))
       .toHaveTextContent('小红书封面专家')
 
+    await userEvent.keyboard('{Escape}')
+    const expertChip = page.getByTestId('capability-chip-expert-expert.xhs-cover')
+    const expertRemove = page.getByTestId('capability-expert-remove')
+    expect(expertRemove.element().getBoundingClientRect().width).toBeLessThan(2)
+    await expertChip.hover()
+    expect(expertRemove.element().getBoundingClientRect().width).toBeGreaterThan(8)
+
     await userEvent.fill(page.getByTestId('composer-input'), '写一张封面')
     await page.getByTestId('composer-submit').click()
 

@@ -9,8 +9,9 @@ import {
 } from 'react'
 import {
   CapabilityAddMenu,
-  CapabilityChips,
+  CapabilityInputSkills,
   CapabilityToolbarConnectors,
+  CapabilityToolbarExpert,
   formatStartAuthNotice,
   formatTaskConnectorSelectionNotice,
   waitForConnectorAuth,
@@ -438,6 +439,19 @@ export function TaskComposer({
   const runTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const selectedCapabilitySkills = useMemo(
+    () => capabilitySnapshot?.skills.filter((skill) => skill.taskSelected) ?? [],
+    [capabilitySnapshot],
+  )
+  const slashSkillTokens = useMemo(
+    () =>
+      skillTokens.filter(
+        (token) =>
+          !selectedCapabilitySkills.some((skill) => skill.id === token.id),
+      ),
+    [selectedCapabilitySkills, skillTokens],
+  )
+
   const slashQuery = useMemo(() => getTrailingSlashQuery(text), [text])
   const slashOpen = Boolean(slashQuery) && !addOpen
 
@@ -840,6 +854,40 @@ export function TaskComposer({
       .finally(() => setCapabilityBusy(false))
   }
 
+  function handleRemoveLeadingCapabilitySkill(skillId: string): void {
+    if (!capabilityController || !capabilityTaskId) return
+    const skillIds = (capabilitySnapshot?.selection.skillIds ?? []).filter(
+      (id) => id !== skillId,
+    )
+    void capabilityController.setSelection(capabilityTaskId, { skillIds })
+  }
+
+  function handleRemoveToolbarExpert(): void {
+    if (!capabilityController || !capabilityTaskId) return
+    void capabilityController.setSelection(capabilityTaskId, { expertId: null })
+  }
+
+  const leadingSkills =
+    selectedCapabilitySkills.length > 0 || slashSkillTokens.length > 0 ? (
+      <>
+        <CapabilityInputSkills
+          snapshot={capabilitySnapshot}
+          onRemoveSkill={handleRemoveLeadingCapabilitySkill}
+        />
+        {slashSkillTokens.map((skill) => (
+          <ComposerSkillChip
+            key={skill.id}
+            icon={<Sparkles className='size-3.5' />}
+            label={skill.label}
+            data-testid={`composer-skill-${skill.id}`}
+            onRemove={() =>
+              setSkillTokens((prev) => prev.filter((s) => s.id !== skill.id))
+            }
+          />
+        ))}
+      </>
+    ) : undefined
+
   const handleToggleSkill = (skillId: string, selected: boolean) => {
     const taskId = capabilityTaskId
     if (!taskId || !capabilityController) return
@@ -1188,32 +1236,10 @@ export function TaskComposer({
             </ComposerAttachments>
           ) : null}
 
-          {/* Expert / skill text chips above input; connectors live next to +. */}
-          {capabilityController && capabilityTaskId ? (
-            <CapabilityChips
-              variant='stack'
-              snapshot={capabilitySnapshot}
-              onRemoveConnector={(connectorId) => {
-                handleToggleConnector(connectorId, false)
-              }}
-              onRemoveExpert={() => {
-                void capabilityController.setSelection(capabilityTaskId, {
-                  expertId: null,
-                })
-              }}
-              onRemoveSkill={(skillId) => {
-                const prev = capabilitySnapshot?.selection.skillIds ?? []
-                void capabilityController.setSelection(capabilityTaskId, {
-                  skillIds: prev.filter((id) => id !== skillId),
-                })
-              }}
-            />
-          ) : null}
-
           <ComposerTextarea
             id='workbench-composer-input'
             data-testid='composer-input'
-            className='min-h-[70px] placeholder:text-foreground/50'
+            className='placeholder:text-foreground/50'
             value={text}
             onChange={(next) => {
               setText(next)
@@ -1228,23 +1254,7 @@ export function TaskComposer({
                 : '随心输入，输入 / 调用命令与技能'
             }
             aria-label='编写消息'
-            leading={
-              skillTokens.length > 0
-                ? skillTokens.map((skill) => (
-                    <ComposerSkillChip
-                      key={skill.id}
-                      icon={<Sparkles className='size-3.5' />}
-                      label={skill.label}
-                      data-testid={`composer-skill-${skill.id}`}
-                      onRemove={() =>
-                        setSkillTokens((prev) =>
-                          prev.filter((s) => s.id !== skill.id)
-                        )
-                      }
-                    />
-                  ))
-                : undefined
-            }
+            leading={leadingSkills}
           />
 
           <ComposerToolbar className='px-0 pb-1.5'>
@@ -1262,9 +1272,15 @@ export function TaskComposer({
             ) : (
               <>
                 {addMenu}
+                {capabilityController && capabilityTaskId ? (
+                  <CapabilityToolbarExpert
+                    snapshot={capabilitySnapshot}
+                    onRemoveExpert={handleRemoveToolbarExpert}
+                  />
+                ) : null}
                 <ComposerPermissionPreset
                   taskId={capabilityTaskId}
-                  className='h-7'
+                  className='h-7 shrink-0 whitespace-nowrap'
                 />
                 {/* Selected connector brand icons sit beside + */}
                 {capabilityController && capabilityTaskId ? (
@@ -1306,7 +1322,7 @@ export function TaskComposer({
                 ) : null}
                 {isRuntimeMode ? (
                   <span
-                    className='inline-flex min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-muted-foreground'
+                    className='hidden min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-muted-foreground sm:inline-flex'
                     data-testid='composer-model'
                     title='模型由当前 Runtime 决定'
                   >

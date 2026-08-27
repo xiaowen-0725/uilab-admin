@@ -108,6 +108,9 @@
   --wb-shimmer-dim: rgb(0 0 0 / 0.4);
   --wb-shimmer-bright: rgb(0 0 0 / 0.85);
   --wb-accent: #339cff;
+  --wb-skill-surface: color-mix(in oklab, var(--wb-accent) 14%, white);
+  --wb-skill-surface-hover: color-mix(in oklab, var(--wb-accent) 22%, white);
+  --wb-skill-text: #1668c4;
   --wb-success: oklch(59.6% 0.145 163.225);
   --wb-success-border: oklch(69.6% 0.17 162.48);
   --wb-danger: oklch(63.7% 0.237 25.331);
@@ -612,6 +615,9 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --wb-shimmer-dim: rgb(255 255 255 / 0.4);
   --wb-shimmer-bright: rgb(255 255 255 / 0.95);
   --wb-accent: #339cff;
+  --wb-skill-surface: color-mix(in oklab, var(--wb-accent) 22%, transparent);
+  --wb-skill-surface-hover: color-mix(in oklab, var(--wb-accent) 32%, transparent);
+  --wb-skill-text: #8cc4ff;
   --wb-success: #40c977;
   --wb-success-border: oklch(69.6% 0.17 162.48);
   --wb-danger: #fa423e;
@@ -661,6 +667,9 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --color-wb-shimmer-dim: var(--wb-shimmer-dim);
   --color-wb-shimmer-bright: var(--wb-shimmer-bright);
   --color-wb-accent: var(--wb-accent);
+  --color-wb-skill-surface: var(--wb-skill-surface);
+  --color-wb-skill-surface-hover: var(--wb-skill-surface-hover);
+  --color-wb-skill-text: var(--wb-skill-text);
   --color-wb-success: var(--wb-success);
   --color-wb-success-border: var(--wb-success-border);
   --color-wb-danger: var(--wb-danger);

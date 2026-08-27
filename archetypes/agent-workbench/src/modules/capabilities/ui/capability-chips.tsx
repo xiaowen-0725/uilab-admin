@@ -1,10 +1,12 @@
 /**
  * Composer chips:
  * - Connectors: brand badges for toolbar (use CapabilityToolbarConnectors)
- * - Expert / skills: text chips above input when needed
+ * - Expert: persona control beside + (use CapabilityToolbarExpert)
+ * - Skills: removable tags on the first draft line (use CapabilityInputSkills)
  */
-import { BookOpenIcon as BookOpen, UserCircleIcon as UserRound } from '@heroicons/react/24/outline'
+import { BookOpenIcon as BookOpen, UserCircleIcon as UserRound, XMarkIcon as X } from '@heroicons/react/24/outline'
 import { ComposerSkillChip } from '@/components/motion/agent-composer'
+import { cn } from '@/lib/utils'
 import type { CapabilitySnapshot } from '../ports/capability-snapshot-port'
 import { ConnectorBrandBadge } from './brand-icons'
 
@@ -15,8 +17,8 @@ export type CapabilityChipsProps = {
   onRemoveSkill: (skillId: string) => void
   /**
    * `toolbar` — only connector brand buttons (place next to +).
-   * `stack` — expert + skills text chips (above input).
-   * `all` — legacy combined row (prefer toolbar + stack).
+   * `stack` — leftover combined expert/skill row (prefer toolbar expert + input skills).
+   * `all` — legacy combined row.
    */
   variant?: 'toolbar' | 'stack' | 'all'
   onOpenConnector?: (connectorId: string) => void
@@ -56,6 +58,79 @@ export function CapabilityToolbarConnectors({
   )
 }
 
+export type CapabilityToolbarExpertProps = {
+  snapshot: CapabilitySnapshot | null
+  onRemoveExpert: () => void
+}
+
+export function CapabilityToolbarExpert({
+  snapshot,
+  onRemoveExpert,
+}: CapabilityToolbarExpertProps) {
+  if (!snapshot) return null
+  const expert = snapshot.experts.find((item) => item.taskSelected)
+  if (!expert) return null
+
+  const removeLabel = `移除 ${expert.name}`
+
+  return (
+    <button
+      type='button'
+      title={removeLabel}
+      aria-label={removeLabel}
+      onClick={onRemoveExpert}
+      data-testid={`capability-chip-expert-${expert.id}`}
+      className={cn(
+        'group/expert tl-chrome inline-flex h-7 min-w-0 max-w-[8rem] shrink items-center gap-1.5 rounded-full',
+        'bg-transparent pe-2 ps-1 text-[13px] text-foreground/80 transition-colors',
+        'hover:bg-[var(--wb-inset-strong)] hover:pe-1.5 hover:text-foreground',
+        'focus-visible:bg-[var(--wb-inset-strong)] focus-visible:pe-1.5 focus-visible:text-foreground',
+        'sm:max-w-[12rem]',
+      )}
+    >
+      <span className='flex size-5 shrink-0 items-center justify-center rounded-full bg-transparent text-muted-foreground transition-colors group-hover/expert:bg-[var(--wb-hover-strong)] group-focus-visible/expert:bg-[var(--wb-hover-strong)]'>
+        <UserRound className='size-3.5' />
+      </span>
+      <span className='min-w-0 truncate'>{expert.name}</span>
+      <span
+        data-testid='capability-expert-remove'
+        aria-hidden='true'
+        className='flex w-0 shrink-0 items-center justify-center overflow-hidden opacity-0 group-hover/expert:w-3 group-hover/expert:opacity-100 group-focus-visible/expert:w-3 group-focus-visible/expert:opacity-100'
+      >
+        <X className='size-3 text-muted-foreground' />
+      </span>
+    </button>
+  )
+}
+
+export type CapabilityInputSkillsProps = {
+  snapshot: CapabilitySnapshot | null
+  onRemoveSkill: (skillId: string) => void
+}
+
+export function CapabilityInputSkills({
+  snapshot,
+  onRemoveSkill,
+}: CapabilityInputSkillsProps) {
+  if (!snapshot) return null
+  const selected = snapshot.skills.filter((skill) => skill.taskSelected)
+  if (selected.length === 0) return null
+
+  return (
+    <>
+      {selected.map((skill) => (
+        <ComposerSkillChip
+          key={skill.id}
+          icon={<BookOpen className='size-3.5' />}
+          label={skill.name}
+          data-testid={`capability-chip-skill-${skill.id}`}
+          onRemove={() => onRemoveSkill(skill.id)}
+        />
+      ))}
+    </>
+  )
+}
+
 export function CapabilityChips({
   snapshot,
   onRemoveConnector,
@@ -81,24 +156,8 @@ export function CapabilityChips({
   }
 
   const showConnectors = variant === 'all'
-  if (
-    (showConnectors ? selectedConnectors.length === 0 : true) &&
-    !selectedExpert &&
-    selectedSkills.length === 0 &&
-    !showConnectors
-  ) {
-    if (!selectedExpert && selectedSkills.length === 0) return null
-  }
-
-  if (!selectedExpert && selectedSkills.length === 0 && !showConnectors) {
-    return null
-  }
-  if (
-    showConnectors &&
-    selectedConnectors.length === 0 &&
-    !selectedExpert &&
-    selectedSkills.length === 0
-  ) {
+  const hasConnectors = showConnectors && selectedConnectors.length > 0
+  if (!hasConnectors && !selectedExpert && selectedSkills.length === 0) {
     return null
   }
 

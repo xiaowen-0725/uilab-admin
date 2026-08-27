@@ -171,6 +171,31 @@ export function ComposerChip({
   );
 }
 
+type LeadMetrics = {
+  indent: number;
+  padTop: number;
+};
+
+const EMPTY_LEAD: LeadMetrics = { indent: 0, padTop: 0 };
+const TOKEN_GAP_PX = 12;
+const MIN_FIRST_LINE_PX = 128;
+
+function leadMetricsEqual(left: LeadMetrics, right: LeadMetrics): boolean {
+  return left.indent === right.indent && left.padTop === right.padTop;
+}
+
+function measureLeadMetrics(
+  tokens: HTMLElement,
+  field: HTMLElement,
+): LeadMetrics {
+  const tokenWidth = tokens.offsetWidth;
+  const tokenHeight = tokens.offsetHeight;
+  if (tokenWidth + TOKEN_GAP_PX + MIN_FIRST_LINE_PX > field.clientWidth) {
+    return { indent: 0, padTop: tokenHeight + 6 };
+  }
+  return { indent: tokenWidth + TOKEN_GAP_PX, padTop: 0 };
+}
+
 export interface ComposerTextareaProps {
   value: string;
   onChange: (next: string) => void;
@@ -183,8 +208,8 @@ export interface ComposerTextareaProps {
    */
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   /**
-   * Inline leading tokens (e.g. selected skills) rendered in the same flow
-   * as the text field — skill mentions sit inside the input area.
+   * Context tokens (e.g. selected skills) on the first draft line only.
+   * Later lines start at the left edge — chips must not indent the whole field.
    */
   leading?: ReactNode;
   "aria-label"?: string;
@@ -218,7 +243,33 @@ export function ComposerTextarea({
   "data-testid": dataTestId,
 }: ComposerTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const tokenRef = useRef<HTMLDivElement>(null);
   const hasLeading = Boolean(leading);
+  const [leadMetrics, setLeadMetrics] = useState<LeadMetrics>(EMPTY_LEAD);
+
+  useLayoutEffect(() => {
+    function applyLeadMetrics(): void {
+      const tokens = tokenRef.current;
+      const field = textareaRef.current;
+      const next =
+        tokens && field ? measureLeadMetrics(tokens, field) : EMPTY_LEAD;
+      setLeadMetrics((prev) => (leadMetricsEqual(prev, next) ? prev : next));
+    }
+
+    if (!hasLeading) {
+      setLeadMetrics(EMPTY_LEAD);
+      return;
+    }
+
+    applyLeadMetrics();
+    const field = textareaRef.current;
+    const tokens = tokenRef.current;
+    if (!field) return;
+    const observer = new ResizeObserver(applyLeadMetrics);
+    observer.observe(field);
+    if (tokens) observer.observe(tokens);
+    return () => observer.disconnect();
+  }, [hasLeading, leading, value]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the height depends on the rendered content, which this effect reads from the DOM rather than from the prop.
   useLayoutEffect(() => {
@@ -226,7 +277,7 @@ export function ComposerTextarea({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [value, leading]);
+  }, [value, leading, leadMetrics]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -242,10 +293,11 @@ export function ComposerTextarea({
 
   return (
     <div className="max-h-[25dvh] overflow-y-auto px-0 pt-0.5 pb-1">
-      <div className="flex min-h-[70px] flex-wrap items-center gap-x-1.5 gap-y-1">
+      <div className="relative min-h-[70px]">
         {hasLeading ? (
           <div
-            className="flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1"
+            ref={tokenRef}
+            className="absolute top-0.5 left-0 z-10 flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1"
             data-testid="composer-inline-tokens"
           >
             {leading}
@@ -262,14 +314,18 @@ export function ComposerTextarea({
           placeholder={hasLeading && !value ? undefined : placeholder}
           aria-label={ariaLabel}
           className={cn(
-            "flex-1 resize-none border-none bg-transparent text-[length:var(--tl-prose-size)] leading-[var(--tl-prose-leading)]",
+            "w-full resize-none border-none bg-transparent text-[length:var(--tl-prose-size)] leading-[var(--tl-prose-leading)]",
             "shadow-none outline-none ring-0 focus:shadow-none focus:outline-none focus:ring-0",
             "focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0",
             "placeholder:text-foreground/50",
-            hasLeading ? "min-h-[28px] min-w-[8rem]" : "min-h-[70px] w-full",
+            "min-h-[70px]",
             className,
           )}
-          style={{ boxShadow: 'none' }}
+          style={{
+            boxShadow: "none",
+            textIndent: leadMetrics.indent ? `${leadMetrics.indent}px` : undefined,
+            paddingTop: leadMetrics.padTop ? `${leadMetrics.padTop}px` : undefined,
+          }}
         />
       </div>
     </div>
@@ -417,7 +473,7 @@ export interface ComposerSkillChipProps {
 
 /**
  * Inline skill tag in the composer input.
- * Neutral muted pill; icon crossfades to × on hover/focus.
+ * Accent wash so it reads as a skill, not a gray count; removable chips keep ×.
  */
 export function ComposerSkillChip({
   label,
@@ -426,21 +482,11 @@ export function ComposerSkillChip({
   className,
   "data-testid": dataTestId,
 }: ComposerSkillChipProps) {
-  const iconSlot =
-    icon && onRemove ? (
-      <span className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-        <span className="absolute inset-0 flex items-center justify-center opacity-100 transition-opacity group-hover/skill:opacity-0 group-focus-within/skill:opacity-0">
-          {icon}
-        </span>
-        <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/skill:opacity-100 group-focus-within/skill:opacity-100">
-          <X className="size-3.5" />
-        </span>
-      </span>
-    ) : icon ? (
-      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-        {icon}
-      </span>
-    ) : null
+  const iconSlot = icon ? (
+    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+      {icon}
+    </span>
+  ) : null
 
   if (onRemove) {
     const removeLabel =
@@ -453,9 +499,9 @@ export function ComposerSkillChip({
         onClick={onRemove}
         data-testid={dataTestId}
         className={cn(
-          'group/skill inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2',
-          'bg-[var(--wb-inset-strong)] text-[13px] text-muted-foreground',
-          'transition-colors hover:bg-[var(--wb-hover-strong)] hover:text-foreground',
+          'group/skill inline-flex h-6 max-w-full items-center gap-1 rounded-full ps-2 pe-1.5',
+          'bg-[var(--wb-skill-surface)] text-[13px] text-[var(--wb-skill-text)]',
+          'transition-colors hover:bg-[var(--wb-skill-surface-hover)]',
           className,
         )}
       >
@@ -463,6 +509,10 @@ export function ComposerSkillChip({
         <span className="truncate" aria-hidden="true">
           {label}
         </span>
+        <X
+          className="size-3 shrink-0 text-[var(--wb-skill-text)]/70 group-hover/skill:text-[var(--wb-skill-text)]"
+          aria-hidden="true"
+        />
       </button>
     )
   }
@@ -472,15 +522,11 @@ export function ComposerSkillChip({
       data-testid={dataTestId}
       className={cn(
         'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2',
-        'bg-[var(--wb-inset-strong)] text-[13px] text-muted-foreground',
+        'bg-[var(--wb-skill-surface)] text-[13px] text-[var(--wb-skill-text)]',
         className,
       )}
     >
-      {icon ? (
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-          {icon}
-        </span>
-      ) : null}
+      {iconSlot}
       <span className="truncate">{label}</span>
     </span>
   );
@@ -535,7 +581,7 @@ export interface ComposerToolbarProps {
  * clusters (see the preview for the exact arrangement).
  */
 export function ComposerToolbar({ className, children }: ComposerToolbarProps) {
-  return <div className={cn("flex items-center gap-1 px-2 pb-2", className)}>{children}</div>;
+  return <div className={cn("flex min-w-0 items-center gap-1 px-2 pb-2", className)}>{children}</div>;
 }
 
 export interface ComposerIconButtonProps {
