@@ -583,7 +583,7 @@ export function TaskComposer({
     if (!text.trim()) return
     setRunning(true)
     setNotice(
-      `本地模拟已接收：${text.trim().slice(0, 40)}${text.trim().length > 40 ? '…' : ''}（不会调用 Agent Runtime）`
+      `本地模拟已接收：${previewText(text)}（不会调用 Agent Runtime）`
     )
     runTimerRef.current = setTimeout(() => {
       setRunning(false)

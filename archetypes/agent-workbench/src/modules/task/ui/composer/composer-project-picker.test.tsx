@@ -163,6 +163,24 @@ describe('Composer project picker', () => {
       page.getByTestId('composer-notice').element().textContent ?? ''
     expect(notice).toContain('本地模拟已接收')
     expect(notice).toContain('不会调用 Agent Runtime')
+    expect(notice).toContain('显式本地模拟')
+  })
+
+  it('truncates local-sim notice with the shared preview helper', async () => {
+    render(
+      <div className='flex min-h-[100vh] items-end p-8'>
+        <TaskComposer mode='local-sim' />
+      </div>,
+    )
+
+    const long = '字'.repeat(50)
+    await userEvent.fill(page.getByTestId('composer-input'), `  ${long}  `)
+    await userEvent.click(page.getByTestId('composer-submit'))
+    const notice =
+      page.getByTestId('composer-notice').element().textContent ?? ''
+    expect(notice).toBe(
+      `本地模拟已接收：${'字'.repeat(40)}…（不会调用 Agent Runtime）`,
+    )
   })
 
   it('shows 不使用项目 in the menu only after a specified project is selected', async () => {
