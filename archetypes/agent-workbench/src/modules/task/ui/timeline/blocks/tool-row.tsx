@@ -20,7 +20,6 @@ function isToolRunning(status: string | undefined): boolean {
 
 function showLiveGlyph(status: string | undefined): boolean {
   return (
-    isToolRunning(status) ||
     status === 'failed' ||
     status === 'error' ||
     status === 'rejected'
@@ -78,7 +77,7 @@ export function ToolRow({
       <span
         className={cn(
           'min-w-0 truncate',
-          running && 'text-foreground',
+          running && 'text-foreground wb-live-status-shimmer',
           item.status === 'error' && 'text-destructive',
         )}
         title={title}

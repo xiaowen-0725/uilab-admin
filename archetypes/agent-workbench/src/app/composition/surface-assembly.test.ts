@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkbenchSurfaceRegistry,
+  openWorkSurfaceFromDeliverables,
   openWorkSurfaceFromFileRef,
   openWorkSurfaceFromRuntimePayload,
 } from './surface-assembly'
@@ -113,6 +114,46 @@ describe('open channels', () => {
       resourceKey: '../secret',
     })
     expect(ok).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('opens all openable deliverables and activates the featured path', () => {
+    const registry = createWorkbenchSurfaceRegistry(stubDocumentContent())
+    const open = vi.fn()
+    const ok = openWorkSurfaceFromDeliverables(registry, open, {
+      items: [
+        { path: 'src/app.ts', source: 'file', changeKind: 'updated' },
+        { path: 'poems.md', source: 'file', changeKind: 'created' },
+        { path: 'gone.md', source: 'file', changeKind: 'deleted' },
+      ],
+      activatePath: 'poems.md',
+    })
+    expect(ok).toBe(true)
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(open.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        resourceKey: expect.stringContaining('app.ts'),
+        focus: 'tab',
+        source: 'user',
+      }),
+    )
+    expect(open.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        resourceKey: expect.stringContaining('poems.md'),
+        focus: 'pane',
+        source: 'user',
+      }),
+    )
+  })
+
+  it('returns false when no deliverable is openable', () => {
+    const registry = createWorkbenchSurfaceRegistry(stubDocumentContent())
+    const open = vi.fn()
+    expect(
+      openWorkSurfaceFromDeliverables(registry, open, {
+        items: [{ path: 'gone.md', source: 'file', changeKind: 'deleted' }],
+      }),
+    ).toBe(false)
     expect(open).not.toHaveBeenCalled()
   })
 })

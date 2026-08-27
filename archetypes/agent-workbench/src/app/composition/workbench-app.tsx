@@ -213,6 +213,11 @@ export function WorkbenchApp({
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
+  const [workSurfaceOpenMotionToken, setWorkSurfaceOpenMotionToken] =
+    useState(0)
+  const requestWorkSurfaceOpenMotion = useCallback(() => {
+    setWorkSurfaceOpenMotionToken((token) => token + 1)
+  }, [])
   const surface = useWorkbenchSurfaceAssembly({
     documentSource,
     hasOpenWorkTabs,
@@ -221,6 +226,9 @@ export function WorkbenchApp({
     selectedTaskId: taskId,
     bootReady,
     board: board.surface,
+    readModel: isRuntimePath ? runtime.readModel : null,
+    workSurfaceVisible: session.view.layout.workSurfaceVisible,
+    onRequestPaneOpenMotion: requestWorkSurfaceOpenMotion,
   })
   board.attachPreviewOpener((boardId, title) => {
     openWorkSurfaceFromRuntimePayload(
@@ -784,6 +792,8 @@ export function WorkbenchApp({
           taskExists={(id) => Boolean(catalogController?.getTaskRow(id))}
           boardOpenerRef={boardOpenerRef}
           onOpenFileRef={surface.onOpenFileRef}
+          onOpenDeliverables={surface.onOpenDeliverables}
+          workSurfaceOpenMotionToken={workSurfaceOpenMotionToken}
           workSurfaceEmptyExtra={surface.workSurfaceEmptyExtra}
           workSurfaceToolbarTrailing={surface.workSurfaceToolbarTrailing}
         />

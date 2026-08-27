@@ -24,7 +24,19 @@ export { Timeline, TIMELINE_FOLD_THRESHOLD } from './ui/timeline/timeline'
 export type {
   TimelineProps,
   TimelineOpenFileRef,
+  OpenDeliverablesRequest,
 } from './ui/timeline/timeline'
+export {
+  classifyDeliverable,
+  deliverableBasename,
+  deliverableCompletionKey,
+  featuredDeliverable,
+  isNonTerminalTurnStatus,
+  isOpenableDeliverable,
+  lastCompletedTurnId,
+  shouldAutoOpenDeliverablePane,
+  shouldRequestPaneOpenMotion,
+} from './ui/timeline/deliverable-presentation'
 
 export { LiveStatusLine } from './ui/live-status-line'
 export type { LiveStatusLineProps } from './ui/live-status-line'
@@ -153,8 +165,10 @@ export { EventStorePortError } from './ports/event-store-port'
 // --- runtime utilities (UI honesty copy + projection helpers) ---
 export {
   previewText,
+  humanizeRuntimeFailure,
   VOLTAGENT_RUNTIME_HONESTY_COPY,
 } from './runtime/runtime-honesty'
+export type { RuntimeFailureCopy } from './runtime/runtime-honesty'
 export type { RuntimeHonestyCopy } from './runtime/runtime-honesty'
 
 export {

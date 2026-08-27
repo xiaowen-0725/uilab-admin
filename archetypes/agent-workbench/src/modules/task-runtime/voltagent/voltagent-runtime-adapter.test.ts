@@ -514,6 +514,34 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(types).toContain('turn.cancelled')
   })
 
+  it('cancelRun settles a live turn even after the stream handle is gone', async () => {
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: vi.fn(async () => new Response('ok', { status: 200 })),
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-orphan')
+
+    const cancelAck = await adapter.sendCommand({
+      type: 'cancelRun',
+      commandId: 'cmd-orphan',
+      issuedAt: '2026-08-05T12:00:01.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-orphan',
+      schemaVersion: 1,
+      taskId: 'task-orphan',
+      turnId: 'turn-orphan',
+    })
+    expect(cancelAck.status).toBe('accepted')
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).toContain('turn.cancel_requested')
+    expect(types).toContain('turn.cancelled')
+  })
+
   it('HTTP error emits turn.failed', async () => {
     const fetchImpl = vi.fn(async () => new Response('down', { status: 503 }))
     const adapter = createVoltAgentRuntimeAdapter({

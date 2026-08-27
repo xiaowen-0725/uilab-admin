@@ -18,8 +18,6 @@ export interface ContextPanelProps {
  * Adaptive Context Panel visual card (shadcn Button / ScrollArea / Separator).
  * Placement (reserved vs overlay) is controlled by CSS container queries on the Task Surface.
  * Card sizes to content up to available-height max (not default full-height).
- *
- * Plan is always the first block; other sections reuse {@link ContextPanelBlock}.
  */
 export function ContextPanel({
   open,
@@ -27,6 +25,9 @@ export function ContextPanel({
   sections,
   onClose,
 }: ContextPanelProps) {
+  const hasPlan = (plan?.steps?.length ?? 0) > 0
+  const hasContent = hasPlan || sections.length > 0
+
   return (
     <aside
       className='context-panel-slot'
@@ -36,7 +37,7 @@ export function ContextPanel({
       aria-hidden={!open}
       aria-label='任务上下文面板'
     >
-      <div className='context-panel-card min-h-0'>
+      <div className='context-panel-reveal'>
         <header className='flex shrink-0 items-center justify-between gap-2 px-3 py-2'>
           <h2 className='text-sm font-semibold'>任务上下文</h2>
           {onClose ? (
@@ -52,32 +53,46 @@ export function ContextPanel({
             </Button>
           ) : null}
         </header>
-        <Separator />
-        <ScrollArea className='min-h-0 flex-1'>
-          <div className='flex flex-col gap-4 p-3'>
-            <ContextPanelBlock
-              id='plan'
-              title='计划'
-              trailing={planProgressTrailing(plan?.progress)}
-            >
-              <PlanBlock plan={plan} />
-            </ContextPanelBlock>
-            {sections.map((section) => (
-              <ContextPanelBlock key={section.id} id={section.id} title={section.title}>
-                <ul className='flex flex-col gap-1 text-sm'>
-                  {section.items.map((item) => (
-                    <li
-                      key={item}
-                      className='rounded-md bg-muted/40 px-2 py-1 text-foreground'
-                    >
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </ContextPanelBlock>
-            ))}
-          </div>
-        </ScrollArea>
+        {hasContent ? (
+          <>
+            <Separator />
+            <ScrollArea className='min-h-0 flex-1'>
+              <div className='flex flex-col gap-4 p-3'>
+                {hasPlan ? (
+                  <ContextPanelBlock
+                    id='plan'
+                    title='计划'
+                    trailing={planProgressTrailing(plan?.progress)}
+                  >
+                    <PlanBlock plan={plan} />
+                  </ContextPanelBlock>
+                ) : null}
+                {sections.map((section) => (
+                  <ContextPanelBlock
+                    key={section.id}
+                    id={section.id}
+                    title={section.title}
+                  >
+                    <ul className='flex flex-col gap-1 text-sm'>
+                      {section.items.map((item) => (
+                        <li
+                          key={item}
+                          className='rounded-md bg-muted/40 px-2 py-1 text-foreground'
+                        >
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </ContextPanelBlock>
+                ))}
+              </div>
+            </ScrollArea>
+          </>
+        ) : (
+          <p className='px-3 pb-3 text-xs text-muted-foreground'>
+            暂无上下文信息
+          </p>
+        )}
       </div>
     </aside>
   )
@@ -88,7 +103,7 @@ function planProgressTrailing(progress: PlanProgress | undefined): ReactNode {
   return (
     <span
       data-testid='context-panel-plan-progress'
-      className='text-xs tabular-nums text-muted-foreground'
+      className='context-panel-plan-progress text-xs tabular-nums text-muted-foreground'
       aria-label={`进度 ${progress.completed}/${progress.total}`}
     >
       {progress.completed}/{progress.total}

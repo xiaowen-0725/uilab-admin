@@ -139,11 +139,12 @@ export function WorkSurfaceHost({
     ? registry.get(activeTab.kind)
     : undefined
 
-  // Drawer slot owns width; Host fills 100% at scale(1). Split shows left divider.
-  const hostClassName =
-    view.maximized || fullStage || !view.visible
-      ? 'relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col bg-background'
-      : 'relative flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col border-l border-border bg-background'
+  // Drawer slot owns width; Host fills 100% at scale(1).
+  // Split uses a whisper divider, not a structural hairline. Hover/drag strengthens it.
+  const hostClassName = cn(
+    'relative flex h-full min-h-0 w-full min-w-0 flex-col bg-background',
+    view.maximized || fullStage || !view.visible ? 'flex-1' : 'shrink-0',
+  )
 
   let panelBody: ReactNode
   if (!activeTab) {
@@ -202,7 +203,13 @@ export function WorkSurfaceHost({
           aria-valuenow={view.width}
           tabIndex={0}
           data-testid='work-surface-resize'
-          className='absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize touch-none outline-none focus-visible:bg-ring/40'
+          className={cn(
+            'absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize touch-none outline-none',
+            'before:pointer-events-none before:absolute before:inset-y-0 before:left-1 before:w-px',
+            'before:bg-[var(--wb-divider)] before:transition-colors before:duration-[var(--tl-motion-fast)] before:ease-[var(--tl-ease-standard)]',
+            'hover:before:bg-foreground/12 active:before:bg-foreground/18',
+            'focus-visible:bg-ring/40',
+          )}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}

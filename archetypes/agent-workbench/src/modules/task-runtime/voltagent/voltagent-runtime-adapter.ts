@@ -13,6 +13,7 @@ import type {
 } from '@/modules/task'
 import type {
   ApplicationCommand,
+  CancelRunCommand,
   CommandAcknowledgement,
   ProvideRunInputCommand,
   QuestionAnswer,
@@ -121,6 +122,20 @@ type TaskStreamState = {
    */
   queuedResume: (() => void) | null
   resumeDrainTimer: ReturnType<typeof setTimeout> | null
+}
+
+function taskHasCancelableWork(
+  state: TaskStreamState | undefined,
+  turnId: string | null | undefined,
+): boolean {
+  if (turnId) return true
+  if (!state) return false
+  return (
+    state.activeAbort != null ||
+    state.pendingApprovals.size > 0 ||
+    state.pendingQuestions.size > 0 ||
+    state.pendingClientTools.size > 0
+  )
 }
 
 /** Wait this long for in-flight sibling tool-results before aborting to resume. */
@@ -427,7 +442,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       case 'submitTurn':
         return this.handleSubmitTurn(command)
       case 'cancelRun':
-        return this.handleCancel(command.commandId, command.taskId)
+        return this.handleCancel(command)
       case 'respondToApproval':
         return this.handleApproval(command)
       case 'provideRunInput':
@@ -647,31 +662,25 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   }
 
   private async handleCancel(
-    commandId: string,
-    taskId: string
+    command: CancelRunCommand
   ): Promise<CommandAcknowledgement> {
+    const taskId = command.taskId
     const state = this.taskState.get(taskId)
-    if (!state) {
-      return rejected(commandId, 'no_active_run', '没有可取消的轮次')
+    const turnId = command.turnId ?? state?.lastTurnId
+    if (!taskHasCancelableWork(state, turnId)) {
+      return rejected(command.commandId, 'no_active_run', '没有可取消的轮次')
     }
-    if (
-      !state.activeAbort &&
-      state.pendingApprovals.size === 0 &&
-      state.pendingQuestions.size === 0 &&
-      state.pendingClientTools.size === 0
-    ) {
-      return rejected(commandId, 'no_active_run', '没有可取消的轮次')
+
+    const next = state ?? this.ensureTask(taskId)
+    next.queuedResume = null
+    this.clearResumeDrain(next)
+    if (next.activeAbort) {
+      next.activeAbort.abort('user_cancel')
+      next.activeAbort = null
     }
-    const turnId = state.lastTurnId ?? undefined
-    state.queuedResume = null
-    this.clearResumeDrain(state)
-    if (state.activeAbort) {
-      state.activeAbort.abort('user_cancel')
-      state.activeAbort = null
-    }
-    state.pendingApprovals.clear()
-    state.pendingQuestions.clear()
-    state.pendingClientTools.clear()
+    next.pendingApprovals.clear()
+    next.pendingQuestions.clear()
+    next.pendingClientTools.clear()
 
     const ids = { turnId: turnId ?? `turn-${taskId}` }
     this.pushTaskEnvelope(taskId, ids, 'va-cancel', 'turn.cancel_requested', {
@@ -685,7 +694,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       { reason: 'user_cancel' },
       { freshReceivedAt: true }
     )
-    return accepted(commandId, this.nowIso())
+    return accepted(command.commandId, this.nowIso())
   }
 
   private async handleApproval(

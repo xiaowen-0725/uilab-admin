@@ -167,6 +167,25 @@ describe('WorkSurfaceHost + Registry', () => {
     expect(onCloseTab).toHaveBeenCalledWith(aId)
   })
 
+  it('split host has no hairline; resize handle stays mounted', async () => {
+    const registry = createSurfaceRegistry()
+    await renderHost(
+      <WorkSurfaceHost
+        view={baseView()}
+        callbacks={baseCallbacks()}
+        registry={registry}
+        taskId={null}
+      />,
+    )
+
+    const host = page.getByTestId('work-surface-host').element()
+    const resize = page.getByTestId('work-surface-resize').element()
+    expect(getComputedStyle(host).borderLeftWidth).toBe('0px')
+    expect(getComputedStyle(resize, '::before').backgroundColor).not.toBe(
+      'rgba(0, 0, 0, 0)',
+    )
+  })
+
   it('empty tabs show empty notice (not a Document import)', async () => {
     const registry = createSurfaceRegistry()
     await renderHost(

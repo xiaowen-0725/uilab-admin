@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { CheckCircleIcon as CircleCheck, ArrowPathIcon as Loader2 } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import type { PlanSnapshot, PlanStepStatus } from '../../projection/plan-snapshot'
@@ -52,11 +53,12 @@ export function PlanBlock({ plan }: PlanBlockProps) {
   }
 
   return (
-    <ul className='flex flex-col'>
+    <ul className='context-panel-plan-body flex flex-col'>
       {steps.map((step, index) => (
         <li
           key={`${index}:${step.step}`}
-          className='flex items-start gap-2 rounded-md px-1 py-1'
+          className='context-panel-plan-step flex items-start gap-2 rounded-md px-1 py-1'
+          style={{ '--plan-step-index': index } as CSSProperties}
           data-testid='context-panel-plan-step'
           data-status={step.status}
           aria-label={`${planStepStatusLabel(step.status)}：${step.step}`}

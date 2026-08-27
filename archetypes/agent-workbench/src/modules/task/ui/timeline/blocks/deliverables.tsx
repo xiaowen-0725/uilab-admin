@@ -1,9 +1,24 @@
 import type { ReactNode } from 'react'
 import { ConversationIcon } from '@/components/icons/conversation-icon'
-import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { DeliverableRef } from '../../../projection/types'
+import {
+  deliverableBadgeLabel,
+  deliverableBasename,
+  deliverableExtension,
+  deliverableMetaLabel,
+  deliverableTitle,
+  featuredDeliverable,
+  isDeletedDeliverable,
+  isOpenableDeliverable,
+  shouldShowAllArtifactsLink,
+} from '../deliverable-presentation'
 import type { TimelineOpenFileRef } from '../timeline-shared'
+
+export type OpenDeliverablesRequest = {
+  items: readonly DeliverableRef[]
+  activatePath?: string
+}
 
 type DeliverableCardProps = {
   item: DeliverableRef
@@ -13,139 +28,137 @@ type DeliverableCardProps = {
 type DeliverableZoneProps = {
   items: readonly DeliverableRef[]
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
 }
 
-function basename(path: string): string {
-  return path.split('/').pop() || path
+function badgeTone(path: string): string {
+  const ext = deliverableExtension(path)
+  if (ext === 'md' || ext === 'mdx' || ext === 'markdown') {
+    return 'bg-teal-500 text-white'
+  }
+  if (ext === 'pdf') return 'bg-red-500 text-white'
+  if (ext === 'html' || ext === 'htm') return 'bg-orange-500 text-white'
+  if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif' || ext === 'webp' || ext === 'svg') {
+    return 'bg-sky-500 text-white'
+  }
+  if (ext === 'docx') return 'bg-blue-600 text-white'
+  if (ext === 'xlsx') return 'bg-emerald-600 text-white'
+  return 'bg-neutral-500 text-white'
 }
 
-function fileExtLabel(path: string): string {
-  const name = basename(path)
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0 || dot === name.length - 1) return 'FILE'
-  return name.slice(dot + 1).toUpperCase().slice(0, 4)
-}
-
-function deliverableTitle(item: DeliverableRef): string {
-  if (item.title && item.title !== item.path) return item.title
-  return basename(item.path)
-}
-
-function deliverableMeta(item: DeliverableRef): string {
-  const ext = fileExtLabel(item.path)
-  if (item.changeKind === 'deleted') return `已删除 · ${ext}`
-  if (item.kind === 'image') return `图片 · ${ext}`
-  return `文档 · ${ext}`
-}
-
-function DeliverableMark({ ext }: { ext: string }): ReactNode {
+function DeliverableMark({ item }: { item: DeliverableRef }): ReactNode {
+  const label = deliverableBadgeLabel(item.path)
   return (
     <span
       aria-hidden
-      className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-medium tracking-wide text-muted-foreground'
+      className={cn(
+        'flex size-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tracking-wide',
+        badgeTone(item.path),
+      )}
     >
-      {ext === 'FILE' ? <ConversationIcon name='file' /> : ext}
+      {label === 'FILE' ? <ConversationIcon name='file' className='size-4' /> : label}
     </span>
   )
 }
 
-function DeliverableCardBody({
+function FeaturedDeliverableCard({
   item,
-  showOpenHint,
-}: {
-  item: DeliverableRef
-  showOpenHint: boolean
-}): ReactNode {
-  return (
+  onOpenFileRef,
+}: DeliverableCardProps): ReactNode {
+  const canOpen = Boolean(onOpenFileRef) && isOpenableDeliverable(item)
+  const rowClass = 'flex w-full items-center gap-3 px-3.5 py-3'
+
+  const body = (
     <>
-      <DeliverableMark ext={fileExtLabel(item.path)} />
+      <DeliverableMark item={item} />
       <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
-        <CardTitle className='truncate'>{deliverableTitle(item)}</CardTitle>
-        <CardDescription className='truncate'>{deliverableMeta(item)}</CardDescription>
+        <span className='truncate text-sm font-medium text-foreground'>
+          {deliverableTitle(item)}
+        </span>
+        <span className='truncate text-xs text-muted-foreground'>
+          {deliverableMetaLabel(item)}
+        </span>
       </span>
-      {showOpenHint ? (
+      {canOpen ? (
         <ConversationIcon
           name='arrow-up-right'
-          className='text-muted-foreground transition-colors duration-[var(--tl-motion-fast)] ease-[var(--tl-ease-standard)] group-hover:text-foreground'
+          className='size-4 text-muted-foreground transition-colors duration-[var(--tl-motion-fast)] ease-[var(--tl-ease-standard)] group-hover:text-foreground'
         />
       ) : null}
     </>
   )
-}
-
-function DeliverableCard({
-  item,
-  onOpenFileRef,
-}: DeliverableCardProps): ReactNode {
-  const deleted = item.changeKind === 'deleted'
-  const canOpen = Boolean(onOpenFileRef) && !deleted
-  const rowClass = 'flex w-full items-center gap-3 px-3 py-2.5'
 
   return (
-    <Card
-      size='sm'
+    <div
       className={cn(
-        'w-full max-w-[min(100%,28rem)] gap-0 rounded-2xl py-0 shadow-none',
-        deleted && 'opacity-70',
+        'timeline-deliverable-card w-full max-w-[min(100%,28rem)] rounded-2xl bg-neutral-100 shadow-[0_2px_8px_rgb(0_0_0/0.06)] dark:bg-white/8',
+        isDeletedDeliverable(item) && 'opacity-70',
       )}
       data-testid='timeline-deliverable'
       data-path={item.path}
       data-change-kind={item.changeKind}
+      data-featured='true'
     >
       {canOpen ? (
         <button
           type='button'
-          className={cn(
-            'group bg-transparent text-left shadow-none hover:bg-transparent',
-            rowClass,
-          )}
+          className={cn('group bg-transparent text-left shadow-none hover:bg-transparent', rowClass)}
           data-testid='file-reference-chip'
           data-path={item.path}
           onClick={() =>
             onOpenFileRef?.({
               path: item.path,
-              label: basename(item.path),
+              label: deliverableBasename(item.path),
             })
           }
         >
-          <DeliverableCardBody item={item} showOpenHint />
+          {body}
         </button>
       ) : (
-        <div
-          className={rowClass}
-          data-testid='file-reference-chip'
-          data-path={item.path}
-        >
-          <DeliverableCardBody item={item} showOpenHint={false} />
+        <div className={rowClass} data-testid='file-reference-chip' data-path={item.path}>
+          {body}
         </div>
       )}
-    </Card>
+    </div>
   )
 }
 
 export function DeliverableZone({
   items,
   onOpenFileRef,
+  onOpenDeliverables,
 }: DeliverableZoneProps): ReactNode {
   if (items.length === 0) return null
+  const featured = featuredDeliverable(items)
+  const showAll = shouldShowAllArtifactsLink(items, featured)
+  const activatePath = featured?.path
+
   return (
     <div
-      className='flex flex-col gap-2'
+      className='flex flex-col items-start gap-2'
       data-testid='timeline-deliverables'
       data-kind='deliverables'
+      data-count={String(items.length)}
     >
-      <p className='tl-chrome text-muted-foreground'>
-        本次产出 · {items.length} 个文件
-      </p>
-      <div className='flex flex-col gap-2'>
-        {items.map((item) => (
-          <DeliverableCard
-            key={item.path}
-            item={item}
-            onOpenFileRef={onOpenFileRef}
-          />
-        ))}
-      </div>
+      {featured ? (
+        <FeaturedDeliverableCard item={featured} onOpenFileRef={onOpenFileRef} />
+      ) : null}
+      {showAll ? (
+        <button
+          type='button'
+          className='tl-chrome inline-flex items-center gap-0.5 text-muted-foreground transition-colors hover:text-foreground'
+          data-testid='timeline-deliverables-all'
+          onClick={() =>
+            onOpenDeliverables?.({
+              items,
+              activatePath,
+            })
+          }
+        >
+          查看所有产物 ({items.length})
+          <ConversationIcon name='chevron-up' className='size-3.5 rotate-90' />
+        </button>
+      ) : null}
     </div>
   )
 }

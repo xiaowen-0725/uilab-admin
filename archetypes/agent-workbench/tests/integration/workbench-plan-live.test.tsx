@@ -97,8 +97,8 @@ describe('Workbench Plan live sidecar', () => {
       await userEvent.keyboard('{Control>}i{/Control}')
 
       await expect
-        .element(page.getByTestId('context-panel-plan-empty'))
-        .toHaveTextContent('本次任务暂无计划')
+        .element(page.getByTestId('context-panel'))
+        .toHaveTextContent('暂无上下文信息')
 
       await userEvent.fill(page.getByTestId('composer-input'), LIVE_PLAN_PROMPT)
       await userEvent.click(page.getByTestId('composer-submit'))

@@ -16,7 +16,11 @@ export interface TimelineBlockProps {
   /** Reasoning inside the process fold — no second disclosure. */
   embeddedInProcess?: boolean
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  /** Completed-turn deliverable paths — suppress paperclip chips in assistant prose. */
+  plainFilePaths?: readonly string[]
   onRespondToQuestion?: QuestionRespondHandler
+  /** Latest failed Run only — retry sits next to the error, not above the thread. */
+  onRetryTurn?: () => void
 }
 
 export function requestIdFromItem(item: TimelineItem, prefix: string): string {

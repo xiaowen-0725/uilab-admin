@@ -108,6 +108,8 @@ export interface TimelineItemMeta {
    * Tool kind hint for icon (read / web_search / command / generic).
    */
   toolKind?: string
+  /** Raw shell line for command-execution input cards. */
+  command?: string
   /** Concrete tool name for approval-request rows (exact match for presets). */
   toolName?: string
   /** Stable process category for deterministic summary aggregation. */

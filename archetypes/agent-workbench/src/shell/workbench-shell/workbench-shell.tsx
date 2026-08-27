@@ -17,6 +17,7 @@ import type {
   TaskSurfaceComposerRuntime,
   TaskSurfaceView,
   TimelineOpenFileRef,
+  OpenDeliverablesRequest,
 } from '@/modules/task'
 import { TaskSurface } from '@/modules/task'
 import { WorkSurfaceHost, type SurfaceRegistry } from '@/modules/work-surface'
@@ -24,8 +25,9 @@ import type {
   WorkbenchSessionCommands,
   WorkbenchSessionView,
 } from '@/modules/workbench-session'
-import { ChatBubbleOvalLeftIcon, FolderIcon, Bars3BottomLeftIcon as PanelBottom, AdjustmentsHorizontalIcon as SlidersHorizontal } from '@heroicons/react/24/outline'
+import { ChatBubbleOvalLeftIcon, FolderIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui/button'
+import { ConversationIcon } from '@/components/icons/conversation-icon'
 import { ToolbarIconButton } from '@/components/toolbar-icon-button'
 import {
   CollapsedNavButtons,
@@ -130,6 +132,12 @@ export interface WorkbenchShellProps {
    * User channel: Timeline file chip/card → Composition → Session openWorkSurfaceTab.
    */
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
+  /**
+   * Composition increments this when a turn auto-opens the Work drawer.
+   * Shell applies the pointer `open` transition in the same paint as width.
+   */
+  workSurfaceOpenMotionToken?: number
   /**
    * Composition-owned empty Work Surface actions (e.g. bind local folder).
    * Shell/Host only pass-through; no folder policy in Shell.
@@ -173,6 +181,8 @@ export function WorkbenchShell({
   capabilityController,
   surfaceRegistry,
   onOpenFileRef,
+  onOpenDeliverables,
+  workSurfaceOpenMotionToken = 0,
   workSurfaceEmptyExtra,
   workSurfaceToolbarTrailing,
   boardStore = null,
@@ -193,6 +203,15 @@ export function WorkbenchShell({
     useState<PaneMotionSource>('instant')
   const [paneTransition, setPaneTransition] =
     useState<PaneTransition>('instant')
+  const [appliedOpenMotionToken, setAppliedOpenMotionToken] = useState(0)
+  if (
+    workSurfaceOpenMotionToken > 0 &&
+    workSurfaceOpenMotionToken !== appliedOpenMotionToken
+  ) {
+    setAppliedOpenMotionToken(workSurfaceOpenMotionToken)
+    setPaneMotionSource('animated')
+    setPaneTransition('open')
+  }
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeDestination, setActiveDestination] =
     useState<ShellDestination>(TASK_DESTINATION)
@@ -580,7 +599,7 @@ export function WorkbenchShell({
                       label='切换任务上下文面板'
                       onClick={toggleContextFromPointer}
                     >
-                      <SlidersHorizontal className='size-4' aria-hidden />
+                      <ConversationIcon name='list-controls' className='size-4' />
                     </ToolbarIconButton>
                     <ToolbarIconButton
                       testId='toggle-work-surface-chrome'
@@ -588,7 +607,7 @@ export function WorkbenchShell({
                       label='切换工作面'
                       onClick={toggleWorkFromPointer}
                     >
-                      <PanelBottom className='size-4' aria-hidden />
+                      <ConversationIcon name='panel-bottom' className='size-4' />
                     </ToolbarIconButton>
                   </div>
                 </header>
@@ -608,6 +627,7 @@ export function WorkbenchShell({
                         : undefined
                     }
                     onOpenFileRef={onOpenFileRef}
+                    onOpenDeliverables={onOpenDeliverables}
                     onCloseContextPanel={
                       taskView.contextPanelOpen
                         ? () => {

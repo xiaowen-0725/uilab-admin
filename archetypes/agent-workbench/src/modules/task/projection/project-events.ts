@@ -1468,6 +1468,7 @@ export function applyRuntimeEvent(
         meta: {
           toolKind: 'command',
           processKind: 'command',
+          command: commandLine,
           startedAt: takeWorkAnchor(next, envelope),
         },
       })
@@ -1498,13 +1499,14 @@ export function applyRuntimeEvent(
       const commandLine =
         payloadString(envelope.payload, 'command') ??
         payloadString(envelope.payload, 'text')
+      const failed =
+        rec.isError === true ||
+        (typeof exitCode === 'number' && exitCode !== 0)
       const title = commandLine
         ? formatToolActivityCopy({
             name: 'run_command',
             args: { command: commandLine },
-            status: rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
-              ? 'error'
-              : 'completed',
+            status: failed ? 'error' : 'completed',
           })
         : undefined
       const summary = payloadString(envelope.payload, 'summary')
@@ -1517,13 +1519,11 @@ export function applyRuntimeEvent(
       upsertByKey(next, envelope, 'command-execution', commandId, {
         title,
         body: completionBody ? `\n${completionBody}` : undefined,
-        status:
-          rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
-            ? 'error'
-            : 'completed',
+        status: failed ? 'error' : 'completed',
         meta: {
           toolKind: 'command',
           processKind: 'command',
+          ...(commandLine ? { command: commandLine } : {}),
           endedAt: envelopeTime(envelope),
         },
       })

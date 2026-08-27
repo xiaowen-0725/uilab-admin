@@ -1089,7 +1089,8 @@ export function TaskComposer({
   // Env/branch only make sense when a workspace is selected.
   const showEnv = showEnvironmentChip && project !== null
   const showBranch = showBranchChip && project !== null
-  // Well footer always holds permission; project chip is empty-hub only.
+  const showHat = showContextBar && (showProjectChip || showEnv || showBranch)
+  const trayRadiusClass = 'rounded-[var(--wb-composer-radius)]'
 
   const renderSlashSection = (
     title: string,
@@ -1118,7 +1119,7 @@ export function TaskComposer({
   return (
     <div
       className={cn(
-        'z-30 w-full shrink-0',
+        'pointer-events-auto z-30 w-full shrink-0',
         placement === 'center'
           ? 'relative px-0'
           : 'sticky bottom-0 px-4 pt-2 pb-4',
@@ -1133,10 +1134,19 @@ export function TaskComposer({
         must remain hit-testable. Dock sticky only covers the bottom band.
       */}
       <div className='relative mx-auto w-full max-w-[var(--content-max-width)]'>
-        <div className='rounded-[18px] bg-[var(--wb-composer-well)] p-[2px] pb-1'>
+        <div
+          className={cn(
+            trayRadiusClass,
+            showHat && 'bg-[var(--wb-composer-well)] pb-1',
+          )}
+          data-slot='composer-well'
+        >
         <Composer
           data-testid='composer-shell'
-          className='rounded-2xl bg-[var(--wb-surface-composer)] px-3 py-3 backdrop-blur-none'
+          className={cn(
+            trayRadiusClass,
+            'bg-[var(--wb-surface-composer)] px-3 py-3 backdrop-blur-none',
+          )}
         >
           <ComposerFloatingPanel
             open={slashOpen}
@@ -1252,6 +1262,10 @@ export function TaskComposer({
             ) : (
               <>
                 {addMenu}
+                <ComposerPermissionPreset
+                  taskId={capabilityTaskId}
+                  className='h-7'
+                />
                 {/* Selected connector brand icons sit beside + */}
                 {capabilityController && capabilityTaskId ? (
                   <CapabilityToolbarConnectors
@@ -1350,7 +1364,7 @@ export function TaskComposer({
           </ComposerToolbar>
         </Composer>
 
-        {showContextBar ? (
+        {showHat ? (
           <div
             className='flex h-8 flex-wrap items-center gap-1 px-3'
             data-testid='composer-context-bar'
@@ -1575,7 +1589,6 @@ export function TaskComposer({
                 </ComposerMenuSection>
               </ComposerMenuButton>
             ) : null}
-            <ComposerPermissionPreset taskId={capabilityTaskId} />
           </div>
         ) : null}
         </div>

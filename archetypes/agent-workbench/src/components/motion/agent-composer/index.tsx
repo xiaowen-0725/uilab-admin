@@ -981,7 +981,8 @@ export function ComposerSendButton({
       aria-describedby={ariaDescribedBy}
       aria-label={ariaLabel ?? (running ? "Stop" : "Send")}
       className={cn(
-        "flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background",
+        "relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background",
+        "pointer-events-auto before:absolute before:-inset-1.5 before:content-['']",
         "disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
@@ -994,7 +995,7 @@ export function ComposerSendButton({
             animate={{ opacity: 1, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.5 }}
             transition={reduce ? { duration: 0.15, ease: EASE_OUT } : SPRING_PANEL}
-            className="block h-2.5 w-2.5 rounded-[2px] bg-current"
+            className="pointer-events-none block h-2.5 w-2.5 rounded-[2px] bg-current"
           />
         ) : (
           <motion.span
@@ -1003,7 +1004,7 @@ export function ComposerSendButton({
             animate={{ opacity: 1, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.5 }}
             transition={reduce ? { duration: 0.15, ease: EASE_OUT } : SPRING_PANEL}
-            className="flex items-center justify-center"
+            className="pointer-events-none flex items-center justify-center"
           >
             <ArrowUp className="h-4 w-4" />
           </motion.span>

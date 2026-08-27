@@ -17,6 +17,7 @@ export function FoldableBody({
   enableFold = true,
   compact = false,
   onOpenFileRef,
+  plainFilePaths,
 }: {
   itemId: string
   body: string
@@ -26,6 +27,7 @@ export function FoldableBody({
   enableFold?: boolean
   compact?: boolean
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  plainFilePaths?: readonly string[]
 }) {
   const limit = compact ? PROCESS_PROSE_PREVIEW : TIMELINE_FOLD_THRESHOLD
   const long = enableFold && body.length > limit
@@ -41,6 +43,7 @@ export function FoldableBody({
         source={source}
         className={cn(tone, clamp && 'line-clamp-3')}
         isAnimating={streaming}
+        plainFilePaths={plainFilePaths}
         onOpenFileRef={onOpenFileRef}
       />
     ) : (
