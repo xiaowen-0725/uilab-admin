@@ -56,6 +56,7 @@ import {
 } from './task-lifecycle-commands'
 import { isInstantDemo } from './test-env'
 import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
+import { readWritableRuntimeGate } from './writable-runtime-gate'
 
 export type { WorkbenchPersistence }
 
@@ -325,8 +326,10 @@ export function WorkbenchApp({
               text: string,
               composerContext?: Parameters<typeof runtime.submitText>[1],
             ) => {
-              const gate = await localRootRef.current?.waitForWritableRuntime()
-              if (gate && !gate.ok) {
+              const gate = await readWritableRuntimeGate(
+                localRootRef.current?.waitForWritableRuntime,
+              )
+              if (!gate.ok) {
                 setProjectActionError(gate.message)
                 return null
               }
@@ -384,8 +387,10 @@ export function WorkbenchApp({
     (action: LaunchAction) => {
       if (!taskId || !action.promptStub) return
       void (async () => {
-        const gate = await localRootRef.current?.waitForWritableRuntime()
-        if (gate && !gate.ok) {
+        const gate = await readWritableRuntimeGate(
+          localRootRef.current?.waitForWritableRuntime,
+        )
+        if (!gate.ok) {
           setProjectActionError(gate.message)
           return
         }
