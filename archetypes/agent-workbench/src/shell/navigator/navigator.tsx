@@ -5,7 +5,6 @@ import {
   type TaskSummary,
 } from '@/modules/project'
 import {
-  ArrowPathIcon as Loader2,
   ChevronDownIcon as ChevronDown,
   ClockIcon as AlarmClock,
   EllipsisHorizontalIcon as MoreHorizontal,
@@ -13,6 +12,7 @@ import {
   TrashIcon as Trash2,
   ViewColumnsIcon as Kanban,
 } from '@heroicons/react/24/outline'
+import { Loader } from '@/components/motion/loader'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -851,12 +851,17 @@ function TaskRow({
         onClick={() => onSelect(task.id)}
       >
         {busy ? (
-          <Loader2
-            className='size-3 shrink-0 animate-spin text-black/45 dark:text-white/42'
-            strokeWidth={1.5}
+          <span
+            className='inline-flex size-3 shrink-0 items-center justify-center'
             aria-hidden
             data-testid={`task-busy-${task.id}`}
-          />
+          >
+            <Loader
+              variant='dot-matrix'
+              size={12}
+              className='text-black/45 dark:text-white/42'
+            />
+          </span>
         ) : null}
         <span className='min-w-0 flex-1 truncate'>{task.title}</span>
         {relativeTime ? (
