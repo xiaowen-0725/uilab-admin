@@ -198,6 +198,86 @@ describe('open channels', () => {
     )
   })
 
+  it('opens interactive deliverables by id and files by path', () => {
+    const registry = createWorkbenchSurfaceRegistry(
+      stubDocumentContent(),
+      null,
+      undefined,
+      { lookup: { get: async () => null } },
+    )
+    const open = vi.fn()
+    const ok = openWorkSurfaceFromDeliverables(registry, open, {
+      items: [
+        { path: 'src/app.ts', source: 'file', changeKind: 'updated' },
+        {
+          id: 'ia_notes-table',
+          title: '对比清单',
+          kind: 'interactive',
+          source: 'artifact',
+          changeKind: 'created',
+        },
+        { path: 'notes/report.html', source: 'file', changeKind: 'created' },
+      ],
+      activatePath: 'ia_notes-table',
+    })
+    expect(ok).toBe(true)
+    expect(open).toHaveBeenCalledTimes(3)
+    expect(open.mock.calls.map((call) => call[0])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'user',
+          kind: 'interactive',
+          resourceKey: 'ia_notes-table',
+          title: '对比清单',
+        }),
+        expect.objectContaining({
+          source: 'user',
+          kind: 'document',
+          resourceKey: expect.stringContaining('app.ts'),
+        }),
+        expect.objectContaining({
+          source: 'user',
+          kind: 'document',
+          resourceKey: expect.stringContaining('report.html'),
+        }),
+      ]),
+    )
+    expect(
+      open.mock.calls.some((call) =>
+        JSON.stringify(call[0]).includes('toWorkspaceResourceKey'),
+      ),
+    ).toBe(false)
+    const interactiveCall = open.mock.calls.find(
+      (call) => call[0]?.kind === 'interactive',
+    )
+    expect(interactiveCall?.[0]?.resourceKey).toBe('ia_notes-table')
+    expect(interactiveCall?.[0]?.focus).toBe('pane')
+  })
+
+  it('user channel opens an interactive pointer without treating the id as a path', () => {
+    const registry = createWorkbenchSurfaceRegistry(
+      stubDocumentContent(),
+      null,
+      undefined,
+      { lookup: { get: async () => null } },
+    )
+    const open = vi.fn()
+    const ok = openWorkSurfaceFromFileRef(registry, open, {
+      kind: 'interactive',
+      path: 'ia_notes-table',
+      label: '对比清单',
+    })
+    expect(ok).toBe(true)
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'user',
+        kind: 'interactive',
+        resourceKey: 'ia_notes-table',
+        title: '对比清单',
+      }),
+    )
+  })
+
   it('returns false when no deliverable is openable', () => {
     const registry = createWorkbenchSurfaceRegistry(stubDocumentContent())
     const open = vi.fn()

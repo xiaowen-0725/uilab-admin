@@ -5,9 +5,12 @@
 
 import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import {
-  deliverableBasename,
+  deliverableCoverageKey,
+  deliverableOpenRef,
+  isInteractiveArtifactKind,
   isOpenableDeliverable,
   shouldRequestPaneOpenMotion,
+  type DeliverableRef,
   type OpenDeliverablesRequest,
   type TaskReadModel,
   type TaskRuntimeController,
@@ -117,6 +120,7 @@ export function openWorkSurfaceFromFileRef(
   if (!raw) return false
   const source = options?.source ?? 'user'
   const intent = resolveOpenWorkSurfaceIntent(registry, {
+    kind: isInteractiveArtifactKind(info.kind) ? info.kind : undefined,
     resourceKey: raw,
     title: info.label,
     source,
@@ -133,6 +137,19 @@ export function openWorkSurfaceFromFileRef(
   return true
 }
 
+function resolveActivateCoverageKey(
+  items: readonly DeliverableRef[],
+  requested: string | undefined,
+): string | undefined {
+  if (requested) {
+    for (const item of items) {
+      if (deliverableCoverageKey(item) === requested) return requested
+    }
+  }
+  const last = items[items.length - 1]
+  return last ? deliverableCoverageKey(last) : undefined
+}
+
 /**
  * User clicked「查看所有产物」: open every openable file, activate the featured one.
  */
@@ -143,32 +160,26 @@ export function openWorkSurfaceFromDeliverables(
 ): boolean {
   const openable = request.items.filter((item) => isOpenableDeliverable(item))
   if (openable.length === 0) return false
-  const activatePath =
-    request.activatePath &&
-    openable.some((item) => item.path === request.activatePath)
-      ? request.activatePath
-      : openable[openable.length - 1]?.path
+  const activateKey = resolveActivateCoverageKey(openable, request.activatePath)
+
+  function openOne(item: DeliverableRef, focus: 'pane' | 'tab'): boolean {
+    const ref = deliverableOpenRef(item)
+    if (!ref) return false
+    return openWorkSurfaceFromFileRef(registry, openWorkSurfaceTab, ref, {
+      source: 'user',
+      focus,
+    })
+  }
 
   let opened = false
   for (const item of openable) {
-    if (item.path === activatePath) continue
-    opened =
-      openWorkSurfaceFromFileRef(
-        registry,
-        openWorkSurfaceTab,
-        { path: item.path, label: deliverableBasename(item.path) },
-        { source: 'user', focus: 'tab' },
-      ) || opened
+    if (deliverableCoverageKey(item) === activateKey) continue
+    opened = openOne(item, 'tab') || opened
   }
-  if (activatePath) {
-    opened =
-      openWorkSurfaceFromFileRef(
-        registry,
-        openWorkSurfaceTab,
-        { path: activatePath, label: deliverableBasename(activatePath) },
-        { source: 'user', focus: 'pane' },
-      ) || opened
-  }
+  const activateItem = openable.find(
+    (item) => deliverableCoverageKey(item) === activateKey,
+  )
+  if (activateItem) opened = openOne(activateItem, 'pane') || opened
   return opened
 }
 

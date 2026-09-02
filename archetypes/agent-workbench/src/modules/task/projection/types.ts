@@ -70,7 +70,10 @@ export interface TokenUsage {
 
 /** Aggregated file / artifact produced by one completed turn. */
 export interface DeliverableRef {
-  path: string
+  /** Workspace path for file deliverables. Interactive pointers use `id`. */
+  path?: string
+  /** Stable Interactive Artifact id when `kind=interactive`. */
+  id?: string
   title?: string
   kind?: string
   changeKind?: FileChangeKind
@@ -86,8 +89,10 @@ export interface TimelineItemMeta {
   deletions?: number
   /** File-change / artifact: created vs edited vs deleted. */
   changeKind?: FileChangeKind
-  /** Artifact kind (document / image / …). */
+  /** Artifact kind (document / image / interactive / …). */
   kind?: string
+  /** Stable Interactive Artifact id when `kind=interactive`. */
+  id?: string
   /** Turn-terminal: files + artifacts produced in this turn. */
   deliverables?: DeliverableRef[]
   /** File-change: green/red card lines. */

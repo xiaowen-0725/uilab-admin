@@ -31,7 +31,10 @@ export {
   classifyDeliverable,
   deliverableBasename,
   deliverableCompletionKey,
+  deliverableCoverageKey,
+  deliverableOpenRef,
   featuredDeliverable,
+  isInteractiveDeliverable,
   isNonTerminalTurnStatus,
   isOpenableDeliverable,
   lastCompletedTurnId,
@@ -203,17 +206,7 @@ export type {
   ProjectionState,
   LiveStatusKind,
   AssistantMessageRole,
-  RunResult,
 } from './projection/types'
-export {
-  resolveRunResult,
-  isResidualAssistantText,
-  isConnectorResidueText,
-} from './projection/resolve-run-result'
-export {
-  selectRunArtifact,
-  isCommandLikeDeliverablePath,
-} from './projection/deliverable-identity'
 export {
   emptyTaskReadModel,
   emptyProjectionState,
@@ -255,7 +248,10 @@ export {
 export type { TurnStatusIndexListener } from './application/run-status-index'
 
 // --- Interactive Artifact (Task-owned library + write channel) ---
-export { INTERACTIVE_ARTIFACT_KIND } from './model/interactive-artifact'
+export {
+  INTERACTIVE_ARTIFACT_KIND,
+  isInteractiveArtifactKind,
+} from './model/interactive-artifact'
 export type {
   InteractiveArtifactId,
   InteractiveArtifactRecord,

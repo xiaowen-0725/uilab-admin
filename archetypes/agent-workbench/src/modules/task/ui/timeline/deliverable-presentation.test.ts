@@ -3,8 +3,14 @@ import type { DeliverableRef } from '../../projection/types'
 import {
   classifyDeliverable,
   deliverableCompletionKey,
+  deliverableCoverageKey,
+  deliverableMetaLabel,
+  deliverableOpenRef,
+  deliverableTitle,
   featuredDeliverable,
+  isInteractiveDeliverable,
   isNonTerminalTurnStatus,
+  isOpenableDeliverable,
   lastCompletedTurnId,
   pathMatchesDeliverable,
   shouldAutoOpenDeliverablePane,
@@ -26,6 +32,42 @@ describe('deliverable presentation', () => {
     expect(classifyDeliverable('scan.pdf')).toBe('preview')
     expect(classifyDeliverable('src/app.ts')).toBe('source')
     expect(classifyDeliverable('legacy.doc')).toBe('unsupported')
+  })
+
+  it('labels interactive pointers as 交互产物 and never features them for auto-open', () => {
+    const pointer: DeliverableRef = {
+      id: 'ia_notes-table',
+      title: '对比清单',
+      kind: 'interactive',
+      source: 'artifact',
+      changeKind: 'created',
+    }
+    const htmlFile = item('notes/report.html')
+    expect(isInteractiveDeliverable(pointer)).toBe(true)
+    expect(deliverableTitle(pointer)).toBe('对比清单')
+    expect(deliverableMetaLabel(pointer)).toBe('交互产物')
+    expect(deliverableMetaLabel(htmlFile)).toBe('文档 · HTML')
+    expect(isOpenableDeliverable(pointer)).toBe(true)
+    expect(featuredDeliverable([pointer])).toBeNull()
+    expect(featuredDeliverable([pointer, item('poems.md')])?.path).toBe('poems.md')
+    expect(deliverableCoverageKey(pointer)).toBe('ia_notes-table')
+    expect(deliverableOpenRef(pointer)).toEqual({
+      kind: 'interactive',
+      path: 'ia_notes-table',
+      label: '对比清单',
+    })
+    expect(shouldShowAllArtifactsLink([pointer], featuredDeliverable([pointer]))).toBe(
+      false,
+    )
+    expect(
+      shouldAutoOpenDeliverablePane({
+        completionKey: deliverableCompletionKey('t1', 'turn-1'),
+        featuredPath: featuredDeliverable([pointer])?.path ?? null,
+        observedActive: true,
+        alreadyOpened: false,
+        dismissed: false,
+      }),
+    ).toBe(false)
   })
 
   it('picks the last preview file as the featured card, skipping source and deleted', () => {

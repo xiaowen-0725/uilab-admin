@@ -17,7 +17,11 @@ import {
   type OpenDeliverablesRequest,
 } from './blocks/deliverables'
 import { TurnTerminalBlock } from './blocks/turn-terminal'
-import { isNonTerminalTurnStatus } from './deliverable-presentation'
+import {
+  deliverableCoverageKeys,
+  deliverablePlainPaths,
+  isNonTerminalTurnStatus,
+} from './deliverable-presentation'
 import {
   deriveTimelineView,
   type TimelineViewBlock,
@@ -85,7 +89,7 @@ export function Timeline({
         segmentKey: lastSegment.key,
         streamItems: lastSegment.bodyItems,
         runSettled: !runActive,
-        deliverablePaths: lastDeliverables?.map((item) => item.path),
+        deliverablePaths: deliverableCoverageKeys(lastDeliverables),
         prevGates: lastGatesRef.current,
         terminalId: lastSegment.terminal?.id,
       })
@@ -238,7 +242,7 @@ function TimelineRunBody({
     (block) => block.kind === 'working' && block.items.length > 0,
   )
   const runSettled = !runActive
-  const deliverablePaths = deliverables?.map((item) => item.path)
+  const deliverablePaths = deliverableCoverageKeys(deliverables)
   const gated = applyStreamGate(
     rawBlocks,
     {
@@ -257,7 +261,7 @@ function TimelineRunBody({
   const completed = latestTerminal?.status === 'completed' && runSettled
   const plainFilePaths =
     completed && deliverables && deliverables.length > 0
-      ? deliverables.map((item) => item.path)
+      ? deliverablePlainPaths(deliverables)
       : undefined
   const hasErrorItem = streamItems.some((item) => item.category === 'error')
   const hideFailedChrome =

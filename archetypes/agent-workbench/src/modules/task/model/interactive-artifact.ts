@@ -5,6 +5,12 @@
 
 export const INTERACTIVE_ARTIFACT_KIND = 'interactive' as const
 
+export function isInteractiveArtifactKind(
+  kind: string | undefined,
+): kind is typeof INTERACTIVE_ARTIFACT_KIND {
+  return kind === INTERACTIVE_ARTIFACT_KIND
+}
+
 export type InteractiveArtifactId = string
 
 export type InteractiveArtifactRecord = {

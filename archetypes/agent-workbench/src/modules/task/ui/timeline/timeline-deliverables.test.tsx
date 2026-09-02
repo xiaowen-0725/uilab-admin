@@ -38,7 +38,7 @@ function renderTimeline(
   events: AgentRuntimeEventEnvelope[],
   onOpenFileRef?: (info: { path?: string; line?: number; label: string }) => void,
   onOpenDeliverables?: (request: {
-    items: readonly { path: string }[]
+    items: readonly { path?: string; id?: string; kind?: string }[]
     activatePath?: string
   }) => void,
 ) {
@@ -124,6 +124,52 @@ describe('Timeline deliverables', () => {
     expect(onOpenDeliverables).toHaveBeenCalledWith(
       expect.objectContaining({
         activatePath: 'notes/chart.png',
+      }),
+    )
+  })
+
+  it('renders an interactive pointer card, not a file/HTML card', async () => {
+    const onOpenFileRef = vi.fn()
+    const onOpenDeliverables = vi.fn()
+    renderTimeline(
+      [
+        envelope('turn.started', 1, { inputText: '做表', text: '做表' }),
+        envelope('artifact.created', 2, {
+          id: 'ia_notes-table',
+          title: '对比清单',
+          kind: 'interactive',
+          html: '<table><tr><td>整表不该出现</td></tr></table>',
+        }),
+        envelope('file.changed', 3, {
+          path: 'src/app.ts',
+          changeKind: 'updated',
+        }),
+        envelope('message.delta', 4, { text: '表做好了。' }),
+        envelope('turn.completed', 5),
+      ],
+      onOpenFileRef,
+      onOpenDeliverables,
+    )
+
+    await expect.element(page.getByTestId('task-timeline')).toBeInTheDocument()
+    const zone = page.getByTestId('timeline-deliverables')
+    await expect.element(zone).toHaveTextContent('对比清单')
+    await expect.element(zone).toHaveTextContent('交互产物')
+    expect(zone.element().textContent ?? '').not.toContain('文档 · HTML')
+    expect(zone.element().textContent ?? '').not.toContain('整表不该出现')
+    await expect.element(zone).toHaveTextContent('查看所有产物 (2)')
+
+    ;(page.getByTestId('interactive-artifact-pointer').element() as HTMLElement).click()
+    expect(onOpenFileRef).toHaveBeenCalledWith({
+      kind: 'interactive',
+      path: 'ia_notes-table',
+      label: '对比清单',
+    })
+
+    ;(page.getByTestId('timeline-deliverables-all').element() as HTMLElement).click()
+    expect(onOpenDeliverables).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activatePath: 'ia_notes-table',
       }),
     )
   })

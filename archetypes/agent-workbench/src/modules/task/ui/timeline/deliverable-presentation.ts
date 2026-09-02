@@ -3,8 +3,12 @@
  * Independent of Work Surface format-router so Task stays free of that module.
  */
 
-import type { DeliverableRef } from '../../projection/types'
+import {
+  INTERACTIVE_ARTIFACT_KIND,
+  isInteractiveArtifactKind,
+} from '../../model/interactive-artifact'
 import type { TurnStatus } from '../../model/lifecycle'
+import type { DeliverableRef } from '../../projection/types'
 
 const PREVIEW_EXT = new Set([
   'md',
@@ -90,13 +94,38 @@ export function isDeletedDeliverable(item: DeliverableRef): boolean {
   return item.changeKind === 'deleted'
 }
 
+export function isInteractiveDeliverable(item: DeliverableRef): boolean {
+  return isInteractiveArtifactKind(item.kind)
+}
+
+export function deliverableCoverageKey(item: DeliverableRef): string | undefined {
+  const raw = isInteractiveDeliverable(item) ? item.id : item.path
+  const key = raw?.trim()
+  return key || undefined
+}
+
+export function deliverableCoverageKeys(
+  items: readonly DeliverableRef[] | undefined,
+): string[] {
+  if (!items) return []
+  const keys: string[] = []
+  for (const item of items) {
+    const key = deliverableCoverageKey(item)
+    if (key) keys.push(key)
+  }
+  return keys
+}
+
 export function isPreviewableDeliverable(item: DeliverableRef): boolean {
-  if (isDeletedDeliverable(item)) return false
+  if (isDeletedDeliverable(item) || isInteractiveDeliverable(item)) return false
+  if (!item.path) return false
   return classifyDeliverable(item.path) === 'preview'
 }
 
 export function isOpenableDeliverable(item: DeliverableRef): boolean {
   if (isDeletedDeliverable(item)) return false
+  if (isInteractiveDeliverable(item)) return Boolean(item.id?.trim())
+  if (!item.path) return false
   return classifyDeliverable(item.path) !== 'unsupported'
 }
 
@@ -111,19 +140,31 @@ export function featuredDeliverable(
   return null
 }
 
+export function visibleDeliverableCards(
+  items: readonly DeliverableRef[],
+  featured: DeliverableRef | null,
+): DeliverableRef[] {
+  const interactive = items.filter(isInteractiveDeliverable)
+  if (featured) return [...interactive, featured]
+  return interactive
+}
+
 export function shouldShowAllArtifactsLink(
   items: readonly DeliverableRef[],
   featured: DeliverableRef | null,
 ): boolean {
   if (items.length === 0) return false
-  if (!featured) return true
-  return items.length > 1
+  return items.length > visibleDeliverableCards(items, featured).length
 }
 
 export function deliverablePlainPaths(
   items: readonly DeliverableRef[],
 ): string[] {
-  return items.map((item) => item.path)
+  const paths: string[] = []
+  for (const item of items) {
+    if (!isInteractiveDeliverable(item) && item.path) paths.push(item.path)
+  }
+  return paths
 }
 
 function normalizePath(path: string): string {
@@ -157,7 +198,8 @@ export function deliverableBadgeLabel(path: string): string {
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'])
 
 export function deliverableMetaLabel(item: DeliverableRef): string {
-  const ext = deliverableExtension(item.path)
+  if (isInteractiveDeliverable(item)) return '交互产物'
+  const ext = deliverableExtension(item.path ?? '')
   const badge = ext ? ext.toUpperCase() : 'FILE'
   if (item.changeKind === 'deleted') return `已删除 · ${badge}`
   if (item.kind === 'image' || IMAGE_EXT.has(ext)) return `图片 · ${badge}`
@@ -165,13 +207,38 @@ export function deliverableMetaLabel(item: DeliverableRef): string {
   if (ext === 'html' || ext === 'htm') return '文档 · HTML'
   if (ext === 'docx') return '文档 · DOCX'
   if (ext === 'xlsx') return '表格 · XLSX'
-  if (classifyDeliverable(item.path) === 'source') return `源码 · ${badge}`
+  if (item.path && classifyDeliverable(item.path) === 'source') {
+    return `源码 · ${badge}`
+  }
   return `文档 · ${badge}`
 }
 
 export function deliverableTitle(item: DeliverableRef): string {
+  if (isInteractiveDeliverable(item)) {
+    return item.title?.trim() || item.id || '交互产物'
+  }
   if (item.title && item.title !== item.path) return item.title
-  return deliverableBasename(item.path)
+  return deliverableBasename(item.path ?? '')
+}
+
+export function deliverableOpenRef(item: DeliverableRef): {
+  kind?: string
+  path?: string
+  label: string
+} | null {
+  if (!isOpenableDeliverable(item)) return null
+  if (isInteractiveDeliverable(item) && item.id) {
+    return {
+      kind: INTERACTIVE_ARTIFACT_KIND,
+      path: item.id,
+      label: deliverableTitle(item),
+    }
+  }
+  if (!item.path) return null
+  return {
+    path: item.path,
+    label: deliverableBasename(item.path),
+  }
 }
 
 export function isNonTerminalTurnStatus(status: TurnStatus | null): boolean {

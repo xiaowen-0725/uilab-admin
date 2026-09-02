@@ -4,14 +4,17 @@ import { cn } from '@/lib/utils'
 import type { DeliverableRef } from '../../../projection/types'
 import {
   deliverableBadgeLabel,
-  deliverableBasename,
+  deliverableCoverageKey,
   deliverableExtension,
   deliverableMetaLabel,
+  deliverableOpenRef,
   deliverableTitle,
   featuredDeliverable,
   isDeletedDeliverable,
+  isInteractiveDeliverable,
   isOpenableDeliverable,
   shouldShowAllArtifactsLink,
+  visibleDeliverableCards,
 } from '../deliverable-presentation'
 import type { TimelineOpenFileRef } from '../timeline-shared'
 
@@ -23,6 +26,7 @@ export type OpenDeliverablesRequest = {
 type DeliverableCardProps = {
   item: DeliverableRef
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  featured?: boolean
 }
 
 type DeliverableZoneProps = {
@@ -31,8 +35,9 @@ type DeliverableZoneProps = {
   onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
 }
 
-function badgeTone(path: string): string {
-  const ext = deliverableExtension(path)
+function badgeTone(item: DeliverableRef): string {
+  if (isInteractiveDeliverable(item)) return 'bg-violet-500 text-white'
+  const ext = deliverableExtension(item.path ?? '')
   if (ext === 'md' || ext === 'mdx' || ext === 'markdown') {
     return 'bg-teal-500 text-white'
   }
@@ -46,27 +51,42 @@ function badgeTone(path: string): string {
   return 'bg-neutral-500 text-white'
 }
 
+function DeliverableMarkGlyph({ item }: { item: DeliverableRef }): ReactNode {
+  if (isInteractiveDeliverable(item)) {
+    return <ConversationIcon name='feather-sparkle' className='size-4' />
+  }
+  const label = deliverableBadgeLabel(item.path ?? '')
+  if (label === 'FILE') {
+    return <ConversationIcon name='file' className='size-4' />
+  }
+  return label
+}
+
 function DeliverableMark({ item }: { item: DeliverableRef }): ReactNode {
-  const label = deliverableBadgeLabel(item.path)
   return (
     <span
       aria-hidden
       className={cn(
         'flex size-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tracking-wide',
-        badgeTone(item.path),
+        badgeTone(item),
       )}
     >
-      {label === 'FILE' ? <ConversationIcon name='file' className='size-4' /> : label}
+      <DeliverableMarkGlyph item={item} />
     </span>
   )
 }
 
-function FeaturedDeliverableCard({
+export function DeliverableCard({
   item,
   onOpenFileRef,
+  featured = false,
 }: DeliverableCardProps): ReactNode {
   const canOpen = Boolean(onOpenFileRef) && isOpenableDeliverable(item)
+  const openRef = deliverableOpenRef(item)
   const rowClass = 'flex w-full items-center gap-3 px-3.5 py-3'
+  const chipTestId = isInteractiveDeliverable(item)
+    ? 'interactive-artifact-pointer'
+    : 'file-reference-chip'
 
   const body = (
     <>
@@ -88,6 +108,28 @@ function FeaturedDeliverableCard({
     </>
   )
 
+  const chipData = {
+    'data-testid': chipTestId,
+    'data-kind': item.kind,
+    'data-path': item.path,
+    'data-artifact-id': item.id,
+  }
+
+  const chip = canOpen && openRef ? (
+    <button
+      type='button'
+      className={cn('group bg-transparent text-left shadow-none hover:bg-transparent', rowClass)}
+      {...chipData}
+      onClick={() => onOpenFileRef?.(openRef)}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={rowClass} {...chipData}>
+      {body}
+    </div>
+  )
+
   return (
     <div
       className={cn(
@@ -95,30 +137,13 @@ function FeaturedDeliverableCard({
         isDeletedDeliverable(item) && 'opacity-70',
       )}
       data-testid='timeline-deliverable'
+      data-kind={item.kind ?? 'file'}
       data-path={item.path}
       data-change-kind={item.changeKind}
-      data-featured='true'
+      data-featured={featured ? 'true' : undefined}
+      data-artifact-id={item.id}
     >
-      {canOpen ? (
-        <button
-          type='button'
-          className={cn('group bg-transparent text-left shadow-none hover:bg-transparent', rowClass)}
-          data-testid='file-reference-chip'
-          data-path={item.path}
-          onClick={() =>
-            onOpenFileRef?.({
-              path: item.path,
-              label: deliverableBasename(item.path),
-            })
-          }
-        >
-          {body}
-        </button>
-      ) : (
-        <div className={rowClass} data-testid='file-reference-chip' data-path={item.path}>
-          {body}
-        </div>
-      )}
+      {chip}
     </div>
   )
 }
@@ -130,8 +155,9 @@ export function DeliverableZone({
 }: DeliverableZoneProps): ReactNode {
   if (items.length === 0) return null
   const featured = featuredDeliverable(items)
+  const cards = visibleDeliverableCards(items, featured)
   const showAll = shouldShowAllArtifactsLink(items, featured)
-  const activatePath = featured?.path
+  const activatePath = featured?.path ?? deliverableCoverageKey(cards[0] ?? items[0]!)
 
   return (
     <div
@@ -140,9 +166,14 @@ export function DeliverableZone({
       data-kind='deliverables'
       data-count={String(items.length)}
     >
-      {featured ? (
-        <FeaturedDeliverableCard item={featured} onOpenFileRef={onOpenFileRef} />
-      ) : null}
+      {cards.map((item) => (
+        <DeliverableCard
+          key={deliverableCoverageKey(item) ?? item.title ?? item.path}
+          item={item}
+          onOpenFileRef={onOpenFileRef}
+          featured={featured != null && item === featured}
+        />
+      ))}
       {showAll ? (
         <button
           type='button'

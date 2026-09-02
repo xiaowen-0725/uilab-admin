@@ -1,11 +1,13 @@
 import type { TimelineItem } from '../../projection/types'
 import type { QuestionRespondHandler } from './question-card'
 
-/** User intent to open a file/path in Work Surface (Session open, not Host mutate). */
+/** User intent to open a file/path or Interactive Artifact in Work Surface. */
 export type TimelineOpenFileRef = {
   path?: string
   line?: number
   label: string
+  /** When `interactive`, `path` is the artifact id — never a workspace path. */
+  kind?: string
 }
 
 export interface TimelineBlockProps {

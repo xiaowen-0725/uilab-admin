@@ -514,7 +514,64 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(types).toContain('turn.cancelled')
   })
 
-  it('cancelRun settles a live turn even after the stream handle is gone', async () => {
+  it('cancelRun rejects an idle lastTurnId after the turn has finished', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        sseBody([
+          { type: 'text-delta', delta: 'done' },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-idle')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-idle',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-idle',
+      schemaVersion: 1,
+      taskId: 'task-idle',
+      inputText: 'hi',
+      proposedTurnId: 'turn-idle',
+    })
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('turn.completed')
+    })
+
+    const cancelAck = await adapter.sendCommand({
+      type: 'cancelRun',
+      commandId: 'cmd-idle-x',
+      issuedAt: '2026-08-05T12:00:02.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-idle-x',
+      schemaVersion: 1,
+      taskId: 'task-idle',
+      turnId: 'turn-idle',
+    })
+    expect(cancelAck).toMatchObject({
+      status: 'rejected',
+      reasonCode: 'no_active_run',
+    })
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).not.toContain('turn.cancel_requested')
+    expect(types).not.toContain('turn.cancelled')
+  })
+
+  it('cancelRun rejects when there is no in-flight work', async () => {
     const adapter = createVoltAgentRuntimeAdapter({
       baseUrl: 'http://127.0.0.1:3141',
       agentId: 'workbench',
@@ -534,12 +591,15 @@ describe('VoltAgentRuntimeAdapter', () => {
       taskId: 'task-orphan',
       turnId: 'turn-orphan',
     })
-    expect(cancelAck.status).toBe('accepted')
+    expect(cancelAck).toMatchObject({
+      status: 'rejected',
+      reasonCode: 'no_active_run',
+    })
     const types = events
       .filter((e) => e.kind === 'event')
       .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
-    expect(types).toContain('turn.cancel_requested')
-    expect(types).toContain('turn.cancelled')
+    expect(types).not.toContain('turn.cancel_requested')
+    expect(types).not.toContain('turn.cancelled')
   })
 
   it('HTTP error emits turn.failed', async () => {

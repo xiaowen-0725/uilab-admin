@@ -163,6 +163,8 @@ type TaskStreamState = {
   nextSequence: number
   activeAbort: AbortController | null
   lastTurnId: string | null
+  /** True from stream launch until a terminal turn event. Idle lastTurnId is not enough. */
+  turnLive: boolean
   /** Last user text for this task (approval resume). */
   lastUserText: string | null
   /** Immutable connector selection captured when this Turn started. */
@@ -187,18 +189,23 @@ type TaskStreamState = {
   resumeDrainTimer: ReturnType<typeof setTimeout> | null
 }
 
-function taskHasCancelableWork(
-  state: TaskStreamState | undefined,
-  turnId: string | null | undefined,
-): boolean {
-  if (turnId) return true
-  if (!state) return false
+function hasHeldWork(state: TaskStreamState): boolean {
   return (
-    state.activeAbort != null ||
+    state.queuedResume != null ||
     state.pendingApprovals.size > 0 ||
     state.pendingQuestions.size > 0 ||
     state.pendingClientTools.size > 0
   )
+}
+
+function taskHasCancelableWork(
+  state: TaskStreamState | undefined,
+): boolean {
+  return Boolean(state && (state.turnLive || hasHeldWork(state)))
+}
+
+function endLiveTurn(state: TaskStreamState | undefined): void {
+  if (state) state.turnLive = false
 }
 
 /** Wait this long for in-flight sibling tool-results before aborting to resume. */
@@ -540,6 +547,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         nextSequence: 1,
         activeAbort: null,
         lastTurnId: null,
+        turnLive: false,
         lastUserText: null,
         lastCapabilityConnectorIds: [],
         lastCapabilityFeatureIds: [],
@@ -630,6 +638,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const state = this.ensureTask(args.taskId)
     const abort = new AbortController()
     state.activeAbort = abort
+    state.turnLive = true
     void this.streamAgent({
       ...args,
       signal: abort.signal,
@@ -731,23 +740,24 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   ): Promise<CommandAcknowledgement> {
     const taskId = command.taskId
     const state = this.taskState.get(taskId)
-    const turnId = command.turnId ?? state?.lastTurnId
-    if (!taskHasCancelableWork(state, turnId)) {
+    if (!state || !taskHasCancelableWork(state)) {
       return rejected(command.commandId, 'no_active_run', '没有可取消的轮次')
     }
 
-    const next = state ?? this.ensureTask(taskId)
-    next.queuedResume = null
-    this.clearResumeDrain(next)
-    if (next.activeAbort) {
-      next.activeAbort.abort('user_cancel')
-      next.activeAbort = null
+    state.queuedResume = null
+    this.clearResumeDrain(state)
+    if (state.activeAbort) {
+      state.activeAbort.abort('user_cancel')
+      state.activeAbort = null
     }
-    next.pendingApprovals.clear()
-    next.pendingQuestions.clear()
-    next.pendingClientTools.clear()
+    state.pendingApprovals.clear()
+    state.pendingQuestions.clear()
+    state.pendingClientTools.clear()
+    endLiveTurn(state)
 
-    const ids = { turnId: turnId ?? `turn-${taskId}` }
+    const ids = {
+      turnId: command.turnId ?? state.lastTurnId ?? `turn-${taskId}`,
+    }
     this.pushTaskEnvelope(taskId, ids, 'va-cancel', 'turn.cancel_requested', {
       reason: 'user_cancel',
     })
@@ -1142,14 +1152,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       let sawTerminalEvent = false
 
       const emitCompleted = (reason: 'done_marker' | 'stream_ended'): void => {
-        if (
-          sawTerminalEvent ||
-          signal.aborted ||
-          state.queuedResume != null ||
-          state.pendingApprovals.size > 0 ||
-          state.pendingQuestions.size > 0 ||
-          state.pendingClientTools.size > 0
-        ) {
+        if (sawTerminalEvent || signal.aborted || hasHeldWork(state)) {
           return
         }
         this.pushTaskEnvelope(
@@ -1160,6 +1163,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           { reason }
         )
         sawTerminalEvent = true
+        endLiveTurn(state)
       }
 
       const consumeLine = (line: string): void => {
@@ -1175,11 +1179,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         this.rememberApprovalFromChunk(taskId, turnId, chunk)
         this.rememberQuestionFromChunk(taskId, turnId, chunk)
         this.rememberClientToolFromChunk(taskId, turnId, chunk)
-        const pausedForHitl =
-          state.queuedResume != null ||
-          state.pendingApprovals.size > 0 ||
-          state.pendingQuestions.size > 0 ||
-          state.pendingClientTools.size > 0
+        const pausedForHitl = hasHeldWork(state)
 
         const mapped = mapFullStreamChunk(chunk, {
           projectId: this.projectId,
@@ -1202,7 +1202,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
             eventId: `va-${turnId}-${state.nextSequence}`,
           })
           state.nextSequence += 1
-          if (terminal) sawTerminalEvent = true
+          if (terminal) {
+            sawTerminalEvent = true
+            endLiveTurn(state)
+          }
         }
       }
 
@@ -1241,6 +1244,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     turnId: string,
     message: string
   ): void {
+    endLiveTurn(this.taskState.get(taskId))
     this.pushTaskEnvelope(taskId, { turnId }, 'va-fail', 'turn.failed', {
       message,
     })

@@ -59,11 +59,12 @@ export function useDeliverablePaneAutoOpen(
   }, [workSurfaceVisible, taskId, currentTurnId])
 
   useEffect(() => {
-    if (!taskId || !completedTurnId || !featured) return
+    if (!taskId || !completedTurnId || !featured?.path) return
+    const featuredPath = featured.path
     const key = deliverableCompletionKey(taskId, completedTurnId)
     const shouldOpen = shouldAutoOpenDeliverablePane({
       completionKey: key,
-      featuredPath: featured.path,
+      featuredPath,
       observedActive: observedActiveRef.current.has(key),
       alreadyOpened: openedRef.current.has(key),
       dismissed: dismissedRef.current.has(key),
@@ -71,8 +72,8 @@ export function useDeliverablePaneAutoOpen(
     if (!shouldOpen) return
     openedRef.current.add(key)
     const opened = onOpen({
-      path: featured.path,
-      label: deliverableBasename(featured.path),
+      path: featuredPath,
+      label: deliverableBasename(featuredPath),
     })
     if (shouldRequestPaneOpenMotion(opened, workSurfaceVisible)) {
       onRequestOpenMotion?.()
