@@ -243,6 +243,56 @@ describe('mapFullStreamChunks', () => {
     ])
   })
 
+  it('replays a write-then-leftover stream without letting text-end shrink the close', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        { type: 'text-start', id: 'aside' },
+        { type: 'text-delta', id: 'aside', delta: '先写进工作区。' },
+        { type: 'text-end', id: 'aside', content: '先写进工作区。' },
+        {
+          type: 'tool-call',
+          toolCallId: 'w1',
+          toolName: 'write_file',
+          args: { path: 'output/article.md', content: '# 文章' },
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'w1',
+          toolName: 'write_file',
+          args: { path: 'output/article.md' },
+          output: 'ok',
+        },
+        { type: 'text-start', id: 'tail' },
+        { type: 'text-delta', id: 'tail', delta: '拿' },
+        { type: 'text-end', id: 'tail', content: '拿' },
+        { type: 'finish', finishReason: 'stop' },
+      ],
+      baseCtx(),
+    )
+    const completed = envelopes.filter((event) => event.eventType === 'message.completed')
+    expect(completed.map((event) => (event.payload as { text?: string }).text)).toEqual([
+      '先写进工作区。',
+      '拿',
+    ])
+    expect(envelopes.some((event) => event.eventType === 'file.changed')).toBe(true)
+  })
+
+  it('treats text-end as a seal and keeps accumulated deltas', () => {
+    const { envelopes } = mapFullStreamChunks(
+      [
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: '文章已经写进工作区了。' },
+        { type: 'text-end', id: 't1', content: '拿' },
+      ],
+      baseCtx(),
+    )
+    const completed = envelopes.find((event) => event.eventType === 'message.completed')
+    expect(completed?.payload).toMatchObject({
+      text: '文章已经写进工作区了。',
+      partId: 't1',
+    })
+  })
+
   it('maps write tool result to tool.completed + file.changed', () => {
     const { envelopes } = mapFullStreamChunks(
       [

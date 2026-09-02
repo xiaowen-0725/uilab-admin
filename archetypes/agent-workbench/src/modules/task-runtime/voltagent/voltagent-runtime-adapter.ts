@@ -4,12 +4,15 @@
  * Browser-safe: only fetch/EventSource-style streaming. No Node built-ins.
  * Fake ≠ this adapter. Requires VITE_RUNTIME_ADAPTER=voltagent + running sidecar.
  */
-import type {
-  RuntimeCapabilities,
-  RuntimePort,
-  RuntimeSnapshot,
-  RuntimeSubscriptionEvent,
-  RunStartInput,
+import {
+  INTERACTIVE_CLIENT_TOOL_NAMES,
+  assertNoInteractiveContentLeak,
+  isInteractiveClientTool,
+  type RuntimeCapabilities,
+  type RuntimePort,
+  type RuntimeSnapshot,
+  type RuntimeSubscriptionEvent,
+  type RunStartInput,
 } from '@/modules/task'
 import type {
   ApplicationCommand,
@@ -28,8 +31,10 @@ import {
 } from '@/modules/task'
 import { accepted, rejected, unsupported } from '../command-acks'
 import {
+  createTextPartBuffers,
   mapFullStreamChunk,
   type FullStreamChunk,
+  type TextPartBuffers,
 } from './fullstream-to-envelope'
 
 export interface VoltAgentRuntimeAdapterOptions {
@@ -53,7 +58,7 @@ export interface VoltAgentRuntimeAdapterOptions {
    */
   tools?: string[]
   /**
-   * Renderer-side executor for client-side board tools.
+   * Renderer-side executor for client-side tools (board + interactive_commit).
    * Composition can pass a stable closure over a ref.
    */
   clientToolExecutor?: ClientToolExecutor
@@ -92,10 +97,66 @@ type PendingClientTool = {
   turnId: string
 }
 
-const BOARD_CLIENT_TOOL_NAMES = new Set(['board_status', 'board_commit'])
+const CLIENT_TOOL_NAMES = new Set<string>([
+  'board_status',
+  'board_commit',
+  ...INTERACTIVE_CLIENT_TOOL_NAMES,
+])
 
-function isBoardClientTool(name: string): boolean {
-  return BOARD_CLIENT_TOOL_NAMES.has(name)
+function isClientTool(name: string): boolean {
+  return CLIENT_TOOL_NAMES.has(name)
+}
+
+function clientToolHint(
+  toolName: string,
+  phase: 'unavailable' | 'failed',
+): string {
+  const interactive = isInteractiveClientTool(toolName)
+  if (phase === 'failed') {
+    return interactive ? '交互产物控制面执行失败' : '看板控制面执行失败'
+  }
+  return interactive
+    ? '交互产物控制面尚未接通，无法提交'
+    : '看板控制面尚未接通，无法提交'
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+function publicClientToolOutput(output: unknown): unknown {
+  const rec = asObjectRecord(output)
+  if (!rec || !('replayed' in rec)) return output
+  const { replayed: _replayed, ...rest } = rec
+  return rest
+}
+
+function interactiveCommitPointer(
+  output: unknown,
+): { artifactId: string; title: string; updated: boolean } | null {
+  const rec = asObjectRecord(output)
+  if (!rec || rec.ok !== true || rec.replayed === true) return null
+  if (typeof rec.artifactId !== 'string' || !rec.artifactId.trim()) return null
+  if (typeof rec.title !== 'string' || !rec.title.trim()) return null
+  return {
+    artifactId: rec.artifactId,
+    title: rec.title,
+    updated: rec.updated === true,
+  }
+}
+
+function clientToolEventPrefix(toolName: string): string {
+  if (isInteractiveClientTool(toolName)) return 'va-ia'
+  return 'va-board'
+}
+
+function clientToolStatus(output: unknown): 'error' | 'completed' {
+  const rec = asObjectRecord(output)
+  if (rec && rec.ok === false) return 'error'
+  return 'completed'
 }
 
 type TaskStreamState = {
@@ -112,10 +173,12 @@ type TaskStreamState = {
   pendingApprovals: Map<string, PendingApproval>
   /** Pending Question Requests keyed by toolCallId / requestId. */
   pendingQuestions: Map<string, PendingQuestion>
-  /** Pending client-side board tools keyed by toolCallId. */
+  /** Pending client-side tools keyed by toolCallId. */
   pendingClientTools: Map<string, PendingClientTool>
   /** In-flight `update_plan` call ids for mapper tool-result suppression. */
   updatePlanCallIds: Set<string>
+  /** Accumulated `text-*` parts for the current SSE turn. */
+  textParts: TextPartBuffers
   /**
    * Resume to start after the current SSE finishes or the drain window ends.
    * Auto-approve used to abort immediately and drop sibling tool-results.
@@ -484,6 +547,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         pendingQuestions: new Map(),
         pendingClientTools: new Map(),
         updatePlanCallIds: new Set(),
+        textParts: createTextPartBuffers(),
         queuedResume: null,
         resumeDrainTimer: null,
       }
@@ -623,6 +687,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     const { turnId } = this.allocateIds(taskId, command)
     state.lastTurnId = turnId
+    state.textParts = createTextPartBuffers()
     const modelInput = modelInputWithComposerContext(
       command.inputText,
       command.composerContext
@@ -903,7 +968,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     if (chunk.type !== 'tool-call') return
     const rec = chunk as unknown as Record<string, unknown>
     const toolName = pickString(rec, ['toolName', 'name'])
-    if (!toolName || !isBoardClientTool(toolName)) return
+    if (!toolName || !isClientTool(toolName)) return
     const state = this.ensureTask(taskId)
     const callId = pickString(rec, ['toolCallId', 'id']) ?? 'tool-call'
     state.pendingClientTools.set(callId, {
@@ -913,6 +978,40 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       userText: state.lastUserText ?? '',
       turnId,
     })
+  }
+
+  private finalizeInteractiveCommit(
+    taskId: string,
+    turnId: string,
+    output: unknown,
+  ): unknown {
+    try {
+      assertNoInteractiveContentLeak(output)
+      const pointer = interactiveCommitPointer(output)
+      if (pointer) {
+        this.pushTaskEnvelope(
+          taskId,
+          { turnId },
+          'va-ia',
+          pointer.updated ? 'artifact.updated' : 'artifact.created',
+          {
+            id: pointer.artifactId,
+            title: pointer.title,
+            kind: 'interactive',
+          },
+        )
+      }
+      return publicClientToolOutput(output)
+    } catch (err) {
+      return {
+        ok: false,
+        error: 'content_leak',
+        hint:
+          err instanceof Error
+            ? err.message
+            : clientToolHint('interactive_commit', 'failed'),
+      }
+    }
   }
 
   private async flushClientTools(taskId: string, turnId: string): Promise<void> {
@@ -934,32 +1033,39 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         : {
             ok: false,
             error: 'runtime_unavailable',
-            hint: '看板控制面尚未接通，无法提交',
+            hint: clientToolHint(pending.toolName, 'unavailable'),
           }
     } catch (err) {
       output = {
         ok: false,
         error: 'runtime_unavailable',
-        hint: err instanceof Error ? err.message : '看板控制面执行失败',
+        hint:
+          err instanceof Error
+            ? err.message
+            : clientToolHint(pending.toolName, 'failed'),
       }
     }
 
-    this.pushTaskEnvelope(taskId, { turnId }, 'va-board', 'tool.completed', {
-      toolId: pending.toolCallId,
-      toolCallId: pending.toolCallId,
-      toolName: pending.toolName,
-      name: pending.toolName,
-      label: pending.toolName,
-      args: pending.input,
-      output,
-      status:
-        output &&
-        typeof output === 'object' &&
-        'ok' in output &&
-        (output as { ok: unknown }).ok === false
-          ? 'error'
-          : 'completed',
-    })
+    if (isInteractiveClientTool(pending.toolName)) {
+      output = this.finalizeInteractiveCommit(taskId, turnId, output)
+    }
+
+    this.pushTaskEnvelope(
+      taskId,
+      { turnId },
+      clientToolEventPrefix(pending.toolName),
+      'tool.completed',
+      {
+        toolId: pending.toolCallId,
+        toolCallId: pending.toolCallId,
+        toolName: pending.toolName,
+        name: pending.toolName,
+        label: pending.toolName,
+        args: pending.input,
+        output,
+        status: clientToolStatus(output),
+      },
+    )
 
     this.resumeWithToolPart(
       taskId,
@@ -1084,6 +1190,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           nowIso: this.nowIso,
           eventIdPrefix: 'va',
           updatePlanCallIds: state.updatePlanCallIds,
+          textParts: state.textParts,
         })
         for (const env of mapped.envelopes) {
           if (env.eventType === 'turn.started') continue

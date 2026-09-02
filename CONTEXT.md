@@ -117,6 +117,10 @@ _Avoid_: 把过程头叫步骤, 终态仍把旁白和过程行摊在答案上
 由 Task 或具体 Turn 产生、可在 Work Surface 中查看或操作的持久结果。
 _Avoid_: Tool Surface, Runtime Event
 
+**Interactive Artifact**:
+Artifact 的一种：Agent 为本次 Task 生成、在对话旁打开的可交互产物；隶属于该 Task，一份 Task 可有多份，Agent 可对同一份迭代；用户不手改源，只对着面聊。不导出、不分享。聊天只留指针，不把视图本体摊进气泡或事件。用户可见中文「交互产物」；标识 `interactive`。
+_Avoid_: Canvas, Board Widget, Document preview, 现场产物（作正式主名）, live artifact（作正式主名）
+
 ### 跨产品术语映射
 
 | Workbench | Codex | Claude Agent SDK |
@@ -157,12 +161,16 @@ Plan 的条目，状态为待处理、进行中或已完成；「步骤」一词
 _Avoid_: 任务, 待办项, Task
 
 **Work Surface Host**:
-按需承载 Markdown、HTML、Browser、Editor、Review、Terminal 等可组合工作面的 Workspace 区域。
+按需承载 Markdown、HTML、Browser、Editor、Review、Terminal、Interactive Surface 等可组合工作面的 Workspace 区域。
 _Avoid_: Inspector, Artifact Sidebar, 固定右栏
 
 **Document Surface**:
 通过按格式注册的 Renderer 阅读或预览文件型内容的 Work Surface 家族，覆盖文本、代码、Markdown、DOCX、PDF 与只读 Spreadsheet 等内容。
-_Avoid_: Universal Document Component, Browser Surface
+_Avoid_: Universal Document Component, Browser Surface, Interactive Surface
+
+**Interactive Surface**:
+渲染 Interactive Artifact 的 Work Surface kind：不透明源 HTML 岛，不走 Board Widget 合同，也不在宿主里编译 React。岛内无网、无宿主桥、无存储；数据嵌在提交的 HTML 里。同一时刻只打开一份。Agent 创建或更新后由渲染层自动打开；关掉后从该 Task 的指针重开。不是打开工作区文件或 URL，也不是 Board 预览。
+_Avoid_: Document Surface, Browser Surface, Board preview, Canvas, Board Widget
 
 **Spreadsheet Surface**:
 提供单元格编辑、公式、筛选和 Sheet 管理等深度表格交互的专业 Work Surface；只读表格预览仍属于 Document Surface。
@@ -210,11 +218,11 @@ _Avoid_: Permission Mode（作实现词）, 权限策略引擎, Role
 
 **Board**:
 用户长期持有、按主题聚合多个 Board Widget 的网格空间（用户可见中文文案「看板」）；只拥有放置与布局，不拥有 widget 的实现与数据。应用级全局实体，不隶属于某个 Project 或 Task，其存在与浏览不依赖 Agent Runtime 可用性。
-_Avoid_: Dashboard, Canvas, Workspace, Work Surface, Task Context Panel
+_Avoid_: Dashboard, Canvas, Workspace, Work Surface, Task Context Panel, Interactive Artifact, Interactive Surface
 
 **Board Widget**:
 Board 上一块可独立渲染的单元（用户可见中文文案「小组件」），实现形态为 Agent 生成的单文件 HTML/JS，运行在不透明源沙箱内且无网络、无存储、无导航能力；外部数据只能由 Widget Data Job 经宿主桥投入。
-_Avoid_: Card, Panel, Component, Work Surface, Plugin, Artifact
+_Avoid_: Card, Panel, Component, Work Surface, Plugin, Artifact, Interactive Artifact
 
 **Widget Data Source**:
 Board Widget 数据供给的一等抽象，kind 为 `preset`（预填数据）/ `job`（已批准的零依赖取数代码）/ `query`（插件声明的结构化查询，侧车以 Product Identity 加签执行）；触发策略（trigger）挂在 Data Source 上，一个 widget 只绑一个来源。模型与 IDB v4 快照分区已落地（#143）；求值器四道闸与三类失败语义已落地（#145）；query 声明与侧车执行通道已落地（#146）；渲染层调度（打开即刷 + 前台到点刷 + IDB 租约认领 + Host 唤醒钩子）已落地（#147）。

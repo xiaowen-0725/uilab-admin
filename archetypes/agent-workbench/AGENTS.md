@@ -61,7 +61,7 @@ src/
     project/           # Project 实体 + Task 目录 + ProjectCatalogPort
       ports/host-wire.ts  # Electron ↔ Renderer IPC 线协议（叶层，无 React）
     workbench-session/ # 选择指针 + 每 Task 布局（无 projects/tasks 数组）
-    task/              # Runtime 契约 / EventStore Port / projection / Task Surface UI
+    task/              # Runtime 契约 / EventStore Port / projection / Task Surface UI / Interactive Artifact 产物库与写入通道
     task-runtime/      # VoltAgent Adapter + EventStore 实现（叶层，无 React）
     work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
     capabilities/      # 连接器 / 技能 / 专家 snapshot 与选择

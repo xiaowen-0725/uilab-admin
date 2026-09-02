@@ -7,6 +7,7 @@ import {
   ALL_STORE_NAMES,
   SESSION_ROW_ID,
   STORE_EVENTS,
+  STORE_INTERACTIVE_ARTIFACTS,
   STORE_SESSION,
   STORE_SNAPSHOTS,
   STORE_TASKS,
@@ -35,6 +36,7 @@ export {
   STORE_WIDGET_JOB_RUNS,
   STORE_WIDGET_DATA_SOURCES,
   STORE_WIDGET_DATA_SNAPSHOTS,
+  STORE_INTERACTIVE_ARTIFACTS,
   PROTOCOL_EVENT_STORE_NAMES,
 } from './workbench-idb-schema'
 
@@ -283,9 +285,21 @@ export interface DeleteTaskCascadeInput {
   navigatorOpen?: boolean
 }
 
+async function deleteByTaskIndex(
+  store: IDBObjectStore,
+  taskId: string,
+): Promise<void> {
+  const keys = await idbRequest(
+    store.index('taskId').getAllKeys(IDBKeyRange.only(taskId)),
+  )
+  for (const key of keys) {
+    await idbRequest(store.delete(key))
+  }
+}
+
 /**
- * Hard-delete catalog row + events + snapshot + retarget session in one TX.
- * Commands store is intentionally not scanned.
+ * Hard-delete catalog row + events + snapshot + Interactive Artifacts + retarget session in one TX.
+ * Commands store is intentionally not scanned. Board rows stay.
  */
 export async function deleteTaskCascade(
   db: IDBDatabase,
@@ -294,24 +308,25 @@ export async function deleteTaskCascade(
   const now = new Date().toISOString()
   await runTransaction(
     db,
-    [STORE_TASKS, STORE_EVENTS, STORE_SNAPSHOTS, STORE_SESSION],
+    [
+      STORE_TASKS,
+      STORE_EVENTS,
+      STORE_SNAPSHOTS,
+      STORE_SESSION,
+      STORE_INTERACTIVE_ARTIFACTS,
+    ],
     'readwrite',
     async (tx) => {
       const tasks = tx.objectStore(STORE_TASKS)
       const events = tx.objectStore(STORE_EVENTS)
       const snapshots = tx.objectStore(STORE_SNAPSHOTS)
       const session = tx.objectStore(STORE_SESSION)
+      const artifacts = tx.objectStore(STORE_INTERACTIVE_ARTIFACTS)
 
       await idbRequest(tasks.delete(input.taskId))
       await idbRequest(snapshots.delete(input.taskId))
-
-      const taskIndex = events.index('taskId')
-      const eventKeys = await idbRequest(
-        taskIndex.getAllKeys(IDBKeyRange.only(input.taskId)),
-      )
-      for (const key of eventKeys) {
-        await idbRequest(events.delete(key))
-      }
+      await deleteByTaskIndex(events, input.taskId)
+      await deleteByTaskIndex(artifacts, input.taskId)
 
       const pointer: SessionPointerRecord = {
         id: SESSION_ROW_ID,

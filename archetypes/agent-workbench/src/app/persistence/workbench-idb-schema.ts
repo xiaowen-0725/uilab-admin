@@ -7,7 +7,7 @@
 
 export const WORKBENCH_IDB_NAME = 'uilab-agent-workbench'
 /** Schema algebra — bump only on structure migrations. */
-export const WORKBENCH_IDB_VERSION = 4
+export const WORKBENCH_IDB_VERSION = 5
 
 export const STORE_PROJECTS = 'projects'
 export const STORE_TASKS = 'tasks'
@@ -22,6 +22,7 @@ export const STORE_WIDGET_DATA_JOBS = 'widgetDataJobs'
 export const STORE_WIDGET_JOB_RUNS = 'widgetJobRuns'
 export const STORE_WIDGET_DATA_SOURCES = 'widgetDataSources'
 export const STORE_WIDGET_DATA_SNAPSHOTS = 'widgetDataSnapshots'
+export const STORE_INTERACTIVE_ARTIFACTS = 'interactiveArtifacts'
 
 export const SESSION_ROW_ID = 'current'
 
@@ -46,6 +47,7 @@ export type WorkbenchStoreName =
   | typeof STORE_WIDGET_JOB_RUNS
   | typeof STORE_WIDGET_DATA_SOURCES
   | typeof STORE_WIDGET_DATA_SNAPSHOTS
+  | typeof STORE_INTERACTIVE_ARTIFACTS
 
 export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
   STORE_PROJECTS,
@@ -61,6 +63,7 @@ export const ALL_STORE_NAMES: readonly WorkbenchStoreName[] = [
   STORE_WIDGET_JOB_RUNS,
   STORE_WIDGET_DATA_SOURCES,
   STORE_WIDGET_DATA_SNAPSHOTS,
+  STORE_INTERACTIVE_ARTIFACTS,
 ]
 
 /** Session pointer row persisted in `session` store. */
@@ -133,6 +136,12 @@ function createWorkbenchStores(db: IDBDatabase): void {
     })
     snapshots.createIndex('widgetId', 'widgetId', { unique: false })
   }
+  if (!db.objectStoreNames.contains(STORE_INTERACTIVE_ARTIFACTS)) {
+    const artifacts = db.createObjectStore(STORE_INTERACTIVE_ARTIFACTS, {
+      keyPath: ['taskId', 'id'],
+    })
+    artifacts.createIndex('taskId', 'taskId', { unique: false })
+  }
 }
 
 /**
@@ -140,6 +149,7 @@ function createWorkbenchStores(db: IDBDatabase): void {
  * Version 2 drops local v1 event protocol data (wipe + recreate those stores only).
  * Version 3 additively creates Board stores; never delete existing stores.
  * Version 4 additively creates Widget Data Source + identity-partitioned snapshot stores.
+ * Version 5 additively creates the Task-owned Interactive Artifact store.
  * Called only from the shared shell's onupgradeneeded.
  */
 export function upgradeWorkbenchIdb(

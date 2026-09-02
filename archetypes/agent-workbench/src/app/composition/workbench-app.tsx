@@ -30,7 +30,12 @@ import {
   type ProjectSummary,
   useProjectCatalog,
 } from '@/modules/project'
-import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
+import type {
+  InteractiveArtifactContentPort,
+  InteractiveArtifactStorePort,
+  LaunchAction,
+  TaskSurfaceView,
+} from '@/modules/task'
 import { useTaskRuntime } from '@/modules/task'
 import { useWorkspaceDocumentSource, fetchWorkspaceHint } from '@/modules/work-surface'
 import {
@@ -41,6 +46,10 @@ import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWorkbenchBoardWiring } from './board-wiring'
+import {
+  useWorkbenchClientToolExecutor,
+  useWorkbenchInteractiveArtifactWiring,
+} from './interactive-artifact-wiring'
 import { DeleteProjectConfirmDialog } from './delete-project-confirm-dialog'
 import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
 import { useBusyTaskIds, useWorkbenchRuntimeWiring } from './runtime-wiring'
@@ -78,6 +87,10 @@ export interface WorkbenchAppProps {
   boardJobRuntime?: BoardJobRuntimePort
   /** Optional Product Identity (tests). Product default is the no-identity adapter. */
   identityScope?: IdentityScopePort
+  /** Optional Interactive Artifact store injection (tests). */
+  interactiveArtifactStore?: InteractiveArtifactStorePort
+  /** Optional Interactive Artifact staging (tests). */
+  interactiveArtifactContent?: InteractiveArtifactContentPort
 }
 
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
@@ -110,6 +123,8 @@ export function WorkbenchApp({
   boardContent: boardContentProp,
   boardJobRuntime: boardJobRuntimeProp,
   identityScope: identityScopeProp,
+  interactiveArtifactStore: interactiveArtifactStoreProp,
+  interactiveArtifactContent: interactiveArtifactContentProp,
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
@@ -153,6 +168,15 @@ export function WorkbenchApp({
     hostPort,
   })
   const { boardOpenerRef } = board
+  const interactiveArtifacts = useWorkbenchInteractiveArtifactWiring({
+    db,
+    store: interactiveArtifactStoreProp,
+    content: interactiveArtifactContentProp,
+  })
+  const clientToolExecutor = useWorkbenchClientToolExecutor(
+    board.executor,
+    interactiveArtifacts.executor,
+  )
 
   // --- Catalog + selection ---
   const catalogView = useProjectCatalog(catalogController)
@@ -195,13 +219,20 @@ export function WorkbenchApp({
     projectId: projectId ?? DEFAULT_PROJECT_ID,
     persistence,
     bootReady,
-    clientToolExecutor: board.executor,
+    clientToolExecutor,
   })
   const {
     controller: runtimeController,
     runStatusIndex,
     capabilityController,
   } = runtimeWiring
+  const forgetDeletedTask = useCallback(
+    (deletedTaskId: string) => {
+      capabilityController.clearTask(deletedTaskId)
+      void interactiveArtifacts.store.deleteByTaskId(deletedTaskId)
+    },
+    [capabilityController, interactiveArtifacts.store],
+  )
 
   const isRuntimePath = Boolean(taskId)
   const runtime = useTaskRuntime(runtimeController, taskId ?? '', {
@@ -612,9 +643,7 @@ export function WorkbenchApp({
         lastTaskByProject: session.view.lastTaskByProject,
         navigatorOpen: session.view.navigatorOpen,
         activeRunStatus: runtime.turnStatus,
-        onTaskDeleted: (deletedTaskId) => {
-          capabilityController.clearTask(deletedTaskId)
-        },
+        onTaskDeleted: forgetDeletedTask,
       })
 
       // Always sync selection + lastTaskByProject into session memory so the
@@ -632,7 +661,7 @@ export function WorkbenchApp({
     },
     [
       catalogController,
-      capabilityController,
+      forgetDeletedTask,
       db,
       eventStore,
       persistence,
@@ -681,9 +710,7 @@ export function WorkbenchApp({
         selectedProjectId: session.view.selectedProjectId,
         lastTaskByProject: session.view.lastTaskByProject,
         activeRunStatus: runtime.turnStatus,
-        onTaskDeleted: (deletedTaskId) => {
-          capabilityController.clearTask(deletedTaskId)
-        },
+        onTaskDeleted: forgetDeletedTask,
       })
 
       for (const removedTaskId of result.removedTaskIds) {
@@ -705,7 +732,7 @@ export function WorkbenchApp({
     },
     [
       catalogController,
-      capabilityController,
+      forgetDeletedTask,
       eventStore,
       runStatusIndex,
       startRuntimeForSelected,
