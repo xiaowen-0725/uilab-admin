@@ -271,6 +271,8 @@ export {
   MemoryInteractiveArtifactContent,
   createMemoryInteractiveArtifactContent,
 } from './adapters/memory-interactive-artifact-content'
+export { createHttpInteractiveArtifactContent } from './adapters/http-interactive-artifact-content'
+export type { HttpInteractiveArtifactContentOptions } from './adapters/http-interactive-artifact-content'
 export {
   IdbInteractiveArtifactStore,
   createIdbInteractiveArtifactStore,

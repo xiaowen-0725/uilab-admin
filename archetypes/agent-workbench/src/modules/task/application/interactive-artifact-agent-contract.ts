@@ -1,8 +1,7 @@
 /**
  * Interactive Artifact agent-facing contract.
- * Names, Layer C sentences, and Layer A descriptions are locked here so #185
- * does not invent them. Do not inject Layer C into the live system prompt
- * until sidecar begin/append/finish exist.
+ * Names, Layer C sentences, and Layer A descriptions are locked here.
+ * Keep identical to the sidecar `interactive-artifact-agent-contract.ts`.
  */
 
 export const INTERACTIVE_CLIENT_TOOL_NAMES = ['interactive_commit'] as const

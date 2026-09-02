@@ -1,9 +1,11 @@
 /**
- * Composition Interactive Artifact wiring — store / Memory staging / commit executor.
- * Live sidecar staging is #185; this ticket keeps Memory content by default.
+ * Composition Interactive Artifact wiring — store / sidecar HTTP staging / commit executor.
+ * Tests and Instant Demo stay Memory; product boot uses the sidecar content port.
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { resolveVoltAgentBaseUrl } from '@/config/runtime-adapter'
 import {
+  createHttpInteractiveArtifactContent,
   createIdbInteractiveArtifactStore,
   createInteractiveArtifactClientToolExecutor,
   createMemoryInteractiveArtifactContent,
@@ -16,6 +18,7 @@ import {
 import type { BoardClientToolExecutor } from '@/modules/board'
 import type { ClientToolExecutor } from '@/modules/task-runtime'
 import type { CreateInteractiveSurfaceOptions } from '@/modules/work-surface'
+import { isInstantDemo } from './test-env'
 
 export type InteractiveCommittedOpener = (
   artifactId: string,
@@ -44,6 +47,26 @@ export function shouldOpenInteractiveSurfaceOnCommit(input: {
   return !input.replayed && input.selectedTaskId === input.taskId
 }
 
+function sidecarToken(): string | null {
+  return (
+    (import.meta.env.VITE_UILAB_SIDECAR_TOKEN as string | undefined) ??
+    (import.meta.env.UILAB_SIDECAR_TOKEN as string | undefined) ??
+    null
+  )
+}
+
+export function resolveInteractiveArtifactContent(input: {
+  injected?: InteractiveArtifactContentPort
+  instantDemo: boolean
+}): InteractiveArtifactContentPort {
+  if (input.injected) return input.injected
+  if (input.instantDemo) return createMemoryInteractiveArtifactContent()
+  return createHttpInteractiveArtifactContent({
+    baseUrl: resolveVoltAgentBaseUrl(),
+    token: sidecarToken(),
+  })
+}
+
 function routeClientTool(
   board: BoardClientToolExecutor,
   interactive: InteractiveArtifactClientToolExecutor,
@@ -63,10 +86,14 @@ export function useWorkbenchInteractiveArtifactWiring(
     if (input.db) return createIdbInteractiveArtifactStore(input.db)
     return createMemoryInteractiveArtifactStore()
   }, [input.store, input.db])
-  const content = useMemo(() => {
-    if (input.content) return input.content
-    return createMemoryInteractiveArtifactContent()
-  }, [input.content])
+  const content = useMemo(
+    () =>
+      resolveInteractiveArtifactContent({
+        injected: input.content,
+        instantDemo: isInstantDemo(),
+      }),
+    [input.content],
+  )
   const [revision, setRevision] = useState(0)
   const selectedTaskIdRef = useRef(input.selectedTaskId)
   selectedTaskIdRef.current = input.selectedTaskId
@@ -121,7 +148,7 @@ export function createCombinedClientToolExecutor(
   board: BoardClientToolExecutor,
   interactive: InteractiveArtifactClientToolExecutor,
 ): ClientToolExecutor {
-  return async (input) => routeClientTool(board, interactive, input)
+  return (input) => routeClientTool(board, interactive, input)
 }
 
 export function useWorkbenchClientToolExecutor(

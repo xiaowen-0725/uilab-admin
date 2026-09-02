@@ -1,7 +1,6 @@
 /**
- * Interactive Artifact agent-facing contract (locked for #182 / wired in #185).
+ * Interactive Artifact agent-facing contract.
  * Keep identical to Task module `interactive-artifact-agent-contract.ts`.
- * Do not inject Layer C into system-prompt until begin/append/finish execute.
  */
 
 export const INTERACTIVE_CLIENT_TOOL_NAMES = ['interactive_commit'] as const

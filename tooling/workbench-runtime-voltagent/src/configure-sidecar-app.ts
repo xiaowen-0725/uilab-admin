@@ -20,6 +20,10 @@ import {
   type BoardRuntime,
 } from './tools/board-runtime.js'
 import {
+  getSharedInteractiveArtifactRuntime,
+  type InteractiveArtifactRuntime,
+} from './tools/interactive-artifact-runtime.js'
+import {
   guessMimeFromPath,
   httpStatusForWorkspaceRead,
   readWorkspaceFile,
@@ -40,6 +44,8 @@ export type ConfigureSidecarAppInput = {
   loadExperts?: () => Promise<readonly CapabilitySnapshotExpert[]>
   /** Inject board staging/runtime (tests). */
   boardRuntime?: BoardRuntime
+  /** Inject interactive artifact staging/runtime (tests). */
+  interactiveRuntime?: InteractiveArtifactRuntime
 }
 
 function safeError(cause: unknown): string {
@@ -123,6 +129,10 @@ export async function configureSidecarApp<
 
   const boardRuntime = input.boardRuntime ?? getSharedBoardRuntime()
   boardRuntime.mountRoutes(app)
+  const interactiveRuntime =
+    input.interactiveRuntime ?? getSharedInteractiveArtifactRuntime()
+  interactiveRuntime.mountRoutes(app)
+  logger.info('interactive artifact staging routes mounted')
   const deno = await resolveDenoExecutable()
   if (deno) {
     logger.info(`board staging and job routes mounted deno=${deno}`)

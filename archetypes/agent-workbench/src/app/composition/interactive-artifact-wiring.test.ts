@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createMemoryInteractiveArtifactContent } from '@/modules/task'
 import {
   createCombinedClientToolExecutor,
+  resolveInteractiveArtifactContent,
   shouldOpenInteractiveSurfaceOnCommit,
 } from './interactive-artifact-wiring'
 
@@ -27,6 +29,26 @@ describe('shouldOpenInteractiveSurfaceOnCommit', () => {
         selectedTaskId: 'task-b',
       }),
     ).toBe(false)
+  })
+})
+
+describe('resolveInteractiveArtifactContent', () => {
+  it('keeps Memory for tests and injected ports', () => {
+    const injected = createMemoryInteractiveArtifactContent()
+    expect(
+      resolveInteractiveArtifactContent({
+        injected,
+        instantDemo: false,
+      }),
+    ).toBe(injected)
+    const demo = resolveInteractiveArtifactContent({ instantDemo: true })
+    expect(demo.constructor.name).toBe('MemoryInteractiveArtifactContent')
+  })
+
+  it('uses sidecar HTTP on the product path', () => {
+    const product = resolveInteractiveArtifactContent({ instantDemo: false })
+    expect(product.constructor.name).not.toBe('MemoryInteractiveArtifactContent')
+    expect(typeof product.pullReady).toBe('function')
   })
 })
 

@@ -41,6 +41,7 @@ import {
   getSharedBoardRuntime,
   productIdentityFromEnv,
 } from './tools/board-runtime.js'
+import { getSharedInteractiveArtifactRuntime } from './tools/interactive-artifact-runtime.js'
 import { workbenchTools } from './tools.js'
 import { updatePlanTool } from './update-plan-tool.js'
 import { ensureOfficeWorkspace } from './workspace-root.js'
@@ -65,6 +66,13 @@ function boardToolkit(env?: NodeJS.ProcessEnv): Toolkit {
   return {
     name: 'board',
     tools: getSharedBoardRuntime({ env }).toolList,
+  }
+}
+
+function interactiveToolkit(env?: NodeJS.ProcessEnv): Toolkit {
+  return {
+    name: 'interactive-artifact',
+    tools: getSharedInteractiveArtifactRuntime({ env }).toolList,
   }
 }
 
@@ -276,7 +284,7 @@ export async function createWorkbenchAgent(
         mcpInstruction,
       }),
       model: options.model,
-      toolkits: [planToolkit, askToolkit],
+      toolkits: [planToolkit, askToolkit, interactiveToolkit(env)],
       workspace,
       workspaceToolkits: {
         filesystem: {},
@@ -358,7 +366,7 @@ export async function createWorkbenchAgent(
       env,
     }),
     model: options.model,
-    toolkits: [planToolkit],
+    toolkits: [planToolkit, interactiveToolkit(env)],
     tools: ({ context }) => {
       const turnContext = readCapabilityTurnContext({ context })
       return assembleTurnTools({

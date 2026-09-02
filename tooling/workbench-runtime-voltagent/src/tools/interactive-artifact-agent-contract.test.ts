@@ -7,7 +7,7 @@ import {
 } from './interactive-artifact-agent-contract.js'
 
 describe('interactive artifact agent contract (sidecar lock)', () => {
-  it('does not inject Layer C into the live system prompt yet', () => {
+  it('injects Layer C into office and minimal system prompts', () => {
     const office = buildWorkbenchSystemPrompt({
       profile: 'office',
       workspaceRoot: '/tmp/wb-ia-office',
@@ -16,11 +16,14 @@ describe('interactive artifact agent contract (sidecar lock)', () => {
       profile: 'minimal',
       workspaceRoot: '/tmp/wb-ia-minimal',
     })
-    assert.equal(office.includes(INTERACTIVE_TOOL_INSTRUCTIONS), false)
-    assert.equal(minimal.includes(INTERACTIVE_TOOL_INSTRUCTIONS), false)
-    for (const name of INTERACTIVE_ALL_TOOL_NAMES) {
-      assert.equal(office.includes(name), false)
-      assert.equal(minimal.includes(name), false)
-    }
+    assert.equal(office.includes(INTERACTIVE_TOOL_INSTRUCTIONS), true)
+    assert.equal(minimal.includes(INTERACTIVE_TOOL_INSTRUCTIONS), true)
+    assert.equal(office.includes('interactive_begin'), true)
+    assert.equal(office.includes('interactive_commit'), true)
+    assert.equal(minimal.includes('interactive_begin'), true)
+    assert.equal(minimal.includes('interactive_commit'), true)
+    assert.equal(office.includes('Canvas'), false)
+    assert.equal(minimal.includes('Canvas'), false)
+    assert.equal(INTERACTIVE_ALL_TOOL_NAMES.includes('interactive_append'), true)
   })
 })

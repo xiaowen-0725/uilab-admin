@@ -10,6 +10,7 @@
 import os from 'node:os'
 import path from 'node:path'
 import { BOARD_ALL_TOOLS } from './tools/board-policy.js'
+import { INTERACTIVE_ALL_TOOL_NAMES } from './tools/interactive-artifact-agent-contract.js'
 
 export type AgentProfile = 'office' | 'minimal'
 
@@ -84,6 +85,8 @@ export const OFFICE_FS_TOOL_NAMES = [
 
 export const BOARD_TOOL_NAMES = BOARD_ALL_TOOLS
 
+export const INTERACTIVE_TOOL_NAMES = INTERACTIVE_ALL_TOOL_NAMES
+
 export const MINIMAL_TOOL_NAMES = [
   'read_file',
   'write_file',
@@ -91,6 +94,7 @@ export const MINIMAL_TOOL_NAMES = [
   'update_plan',
   'ask_user_question',
   ...BOARD_TOOL_NAMES,
+  ...INTERACTIVE_TOOL_NAMES,
 ] as const
 
 /** Office honesty list: FS tools + skills toolkit (no DIY run_command). */
@@ -101,6 +105,7 @@ export const OFFICE_TOOL_NAMES = [
   'update_plan',
   'ask_user_question',
   ...BOARD_TOOL_NAMES,
+  ...INTERACTIVE_TOOL_NAMES,
 ] as const
 
 export function toolsForProfile(profile: AgentProfile): readonly string[] {
