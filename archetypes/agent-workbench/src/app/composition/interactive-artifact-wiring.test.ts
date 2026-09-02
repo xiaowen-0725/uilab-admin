@@ -1,5 +1,34 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createCombinedClientToolExecutor } from './interactive-artifact-wiring'
+import {
+  createCombinedClientToolExecutor,
+  shouldOpenInteractiveSurfaceOnCommit,
+} from './interactive-artifact-wiring'
+
+describe('shouldOpenInteractiveSurfaceOnCommit', () => {
+  it('opens only a live commit for the selected Task', () => {
+    expect(
+      shouldOpenInteractiveSurfaceOnCommit({
+        replayed: false,
+        taskId: 'task-a',
+        selectedTaskId: 'task-a',
+      }),
+    ).toBe(true)
+    expect(
+      shouldOpenInteractiveSurfaceOnCommit({
+        replayed: true,
+        taskId: 'task-a',
+        selectedTaskId: 'task-a',
+      }),
+    ).toBe(false)
+    expect(
+      shouldOpenInteractiveSurfaceOnCommit({
+        replayed: false,
+        taskId: 'task-a',
+        selectedTaskId: 'task-b',
+      }),
+    ).toBe(false)
+  })
+})
 
 describe('createCombinedClientToolExecutor', () => {
   it('routes interactive_commit away from the board executor', async () => {

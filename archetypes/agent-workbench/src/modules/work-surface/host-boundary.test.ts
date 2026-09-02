@@ -1,5 +1,5 @@
 /**
- * Host must not import concrete Document/Browser implementations.
+ * Host must not import concrete Document/Browser/Interactive implementations.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -15,8 +15,10 @@ describe('Work Surface Host dependency boundary', () => {
     const source = await fetch(hostUrl).then((r) => r.text())
     expect(source).not.toMatch(/surfaces\/document/)
     expect(source).not.toMatch(/surfaces\/browser/)
+    expect(source).not.toMatch(/surfaces\/interactive/)
     expect(source).not.toMatch(/from ['"]@\/modules\/work-surface\/surfaces\/document/)
     expect(source).not.toMatch(/from ['"]@\/modules\/work-surface\/surfaces\/browser/)
+    expect(source).not.toMatch(/from ['"]@\/modules\/work-surface\/surfaces\/interactive/)
   })
 
   it('public index re-exports registry without coupling Host to heavy libs', async () => {
@@ -25,6 +27,7 @@ describe('Work Surface Host dependency boundary', () => {
     expect(mod.createTestSurfaceDefinition).toBeTypeOf('function')
     expect(mod.createDocumentSurfaceDefinition).toBeTypeOf('function')
     expect(mod.createBrowserSurfaceDefinition).toBeTypeOf('function')
+    expect(mod.createInteractiveSurfaceDefinition).toBeTypeOf('function')
     expect(mod.WorkSurfaceHost).toBeTypeOf('function')
   })
 

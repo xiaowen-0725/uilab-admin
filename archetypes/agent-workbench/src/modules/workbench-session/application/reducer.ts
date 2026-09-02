@@ -49,6 +49,16 @@ function findTabByResource(
   return openTabs.find((t) => t.kind === kind && t.resourceKey === resourceKey)
 }
 
+/** Host may keep only one Interactive tab; other kinds are unconstrained. */
+function replaceSoleInteractiveTab(
+  openTabs: WorkSurfaceTabRecord[],
+  next: WorkSurfaceTabRecord,
+): WorkSurfaceTabRecord[] | null {
+  const current = openTabs.find((tab) => tab.kind === 'interactive')
+  if (!current) return null
+  return openTabs.map((tab) => (tab.tabId === current.tabId ? next : tab))
+}
+
 function findTabById(
   openTabs: WorkSurfaceTabRecord[],
   tabId: WorkSurfaceTabId,
@@ -329,6 +339,23 @@ export function workbenchSessionReducer(
         layout.workSurfaceVisible,
         command.focus,
       )
+      const tabId = workSurfaceTabIdFor(kind, resourceKey)
+      const record: WorkSurfaceTabRecord = {
+        tabId,
+        kind,
+        resourceKey,
+        title,
+      }
+
+      if (kind === 'interactive' && !existing) {
+        const replaced = replaceSoleInteractiveTab(layout.openTabs, record)
+        if (replaced) {
+          return updateSelectedLayout(state, {
+            openTabs: replaced,
+            ...applyOpenFocus(tabId, focus),
+          })
+        }
+      }
 
       if (existing) {
         // Re-open same resource → activate (dedup); refresh title if provided.
@@ -344,13 +371,6 @@ export function workbenchSessionReducer(
         })
       }
 
-      const tabId = workSurfaceTabIdFor(kind, resourceKey)
-      const record: WorkSurfaceTabRecord = {
-        tabId,
-        kind,
-        resourceKey,
-        title,
-      }
       return updateSelectedLayout(state, {
         openTabs: [...layout.openTabs, record],
         ...applyOpenFocus(tabId, focus),

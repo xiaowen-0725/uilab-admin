@@ -170,6 +170,7 @@ export function WorkbenchApp({
   const { boardOpenerRef } = board
   const interactiveArtifacts = useWorkbenchInteractiveArtifactWiring({
     db,
+    selectedTaskId: session.view.selectedTaskId,
     store: interactiveArtifactStoreProp,
     content: interactiveArtifactContentProp,
   })
@@ -258,6 +259,7 @@ export function WorkbenchApp({
     selectedTaskId: taskId,
     bootReady,
     board: board.surface,
+    interactive: interactiveArtifacts.surface,
     readModel: isRuntimePath ? runtime.readModel : null,
     workSurfaceVisible: session.view.layout.workSurfaceVisible,
     onRequestPaneOpenMotion: requestWorkSurfaceOpenMotion,
@@ -269,6 +271,18 @@ export function WorkbenchApp({
       {
         kind: 'board',
         resourceKey: boardId,
+        title,
+        focus: 'pane',
+      },
+    )
+  })
+  interactiveArtifacts.attachCommittedOpener((artifactId, title) => {
+    openWorkSurfaceFromRuntimePayload(
+      surface.surfaceRegistry,
+      session.commands.openWorkSurfaceTab,
+      {
+        kind: 'interactive',
+        resourceKey: artifactId,
         title,
         focus: 'pane',
       },

@@ -1,6 +1,6 @@
 /**
  * Composition Surface assembly — Registry factory + open channels.
- * Host never registers; Document/Browser/test register here only.
+ * Host never registers; Document/Browser/test/interactive register here only.
  */
 
 import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
@@ -17,6 +17,7 @@ import { useDeliverablePaneAutoOpen } from './deliverable-pane-auto-open'
 import {
   createBrowserSurfaceDefinition,
   createDocumentSurfaceDefinition,
+  createInteractiveSurfaceDefinition,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   createWebBrowserHostPort,
@@ -24,6 +25,7 @@ import {
   WorkspaceDocumentEmptyExtra,
   WorkspaceDocumentToolbarTrailing,
   type DocumentContentPort,
+  type CreateInteractiveSurfaceOptions,
   type SurfaceRegistry,
   type WorkspaceDocumentSource,
 } from '@/modules/work-surface'
@@ -49,10 +51,13 @@ export interface BoardSurfaceWiring {
   identityScope?: IdentityScopePort
 }
 
+export type InteractiveSurfaceWiring = CreateInteractiveSurfaceOptions
+
 export function createWorkbenchSurfaceRegistry(
   documentContent: DocumentContentPort,
   workspaceHint: string | null = null,
   board?: BoardSurfaceWiring,
+  interactive?: InteractiveSurfaceWiring,
 ): SurfaceRegistry {
   const registry = createSurfaceRegistry()
   registry.register(
@@ -86,6 +91,9 @@ export function createWorkbenchSurfaceRegistry(
         />
       ),
     })
+  }
+  if (interactive) {
+    registry.register(createInteractiveSurfaceDefinition(interactive))
   }
   return registry
 }
@@ -217,6 +225,7 @@ export interface UseWorkbenchSurfaceAssemblyOptions {
   /** Re-bind listener after boot when controller appears. */
   bootReady: boolean
   board?: BoardSurfaceWiring
+  interactive?: InteractiveSurfaceWiring
   readModel?: TaskReadModel | null
   workSurfaceVisible?: boolean
   onRequestPaneOpenMotion?: () => void
@@ -244,6 +253,7 @@ export function useWorkbenchSurfaceAssembly(
     selectedTaskId,
     bootReady,
     board,
+    interactive,
     readModel = null,
     workSurfaceVisible = false,
     onRequestPaneOpenMotion,
@@ -266,8 +276,9 @@ export function useWorkbenchSurfaceAssembly(
         documentContent,
         documentWorkspaceHint,
         board,
+        interactive,
       ),
-    [board, documentContent, documentWorkspaceHint],
+    [board, documentContent, documentWorkspaceHint, interactive],
   )
 
   const workSurfaceEmptyExtra = useMemo(

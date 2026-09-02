@@ -131,6 +131,69 @@ describe('resolveOpenWorkSurfaceIntent', () => {
     }
   })
 
+  it('keeps an explicit interactive id out of path normalization', () => {
+    const r = registry()
+    r.register({
+      kind: 'interactive',
+      displayName: '交互产物',
+      render: () => null,
+    })
+    const ok = resolveOpenWorkSurfaceIntent(r, {
+      kind: 'interactive',
+      resourceKey: 'ia_notes-table',
+      source: 'runtime',
+      title: '对比清单',
+    })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) {
+      expect(ok.kind).toBe('interactive')
+      expect(ok.resourceKey).toBe('ia_notes-table')
+      expect(ok.title).toBe('对比清单')
+    }
+
+    const pathLike = resolveOpenWorkSurfaceIntent(r, {
+      kind: 'interactive',
+      resourceKey: 'notes/report.html',
+      source: 'runtime',
+    })
+    expect(pathLike.ok).toBe(true)
+    if (pathLike.ok) {
+      expect(pathLike.kind).toBe('interactive')
+      expect(pathLike.resourceKey).toBe('notes/report.html')
+    }
+  })
+
+  it('rejects unregistered interactive without falling back to document', () => {
+    const r = registry()
+    const missing = resolveOpenWorkSurfaceIntent(r, {
+      kind: 'interactive',
+      resourceKey: 'ia_notes-table',
+      source: 'runtime',
+    })
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.reason).toBe('unresolved-kind')
+  })
+
+  it('still opens workspace html as document and https as browser', () => {
+    const r = registry()
+    const html = resolveOpenWorkSurfaceIntent(r, {
+      resourceKey: 'notes/report.html',
+      source: 'user',
+    })
+    expect(html.ok).toBe(true)
+    if (html.ok) {
+      expect(html.kind).toBe('document')
+      expect(html.resourceKey).toBe('notes/report.html')
+    }
+
+    const url = resolveOpenWorkSurfaceIntent(r, {
+      resourceKey: 'https://example.com/report.html',
+      source: 'user',
+    })
+    expect(url.ok).toBe(true)
+    if (url.ok) expect(url.kind).toBe('browser')
+  })
+
   it('accepts filenames with ".." characters (not parent segment)', () => {
     const r = registry()
     const ok = resolveOpenWorkSurfaceIntent(r, {

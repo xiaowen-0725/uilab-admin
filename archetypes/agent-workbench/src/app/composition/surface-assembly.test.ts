@@ -40,6 +40,21 @@ describe('createWorkbenchSurfaceRegistry', () => {
     )
     expect(registry.get('board')?.kind).toBe('board')
   })
+
+  it('registers interactive only when wiring is provided', () => {
+    const without = createWorkbenchSurfaceRegistry(stubDocumentContent(), null)
+    expect(without.get('interactive')).toBeUndefined()
+
+    const withInteractive = createWorkbenchSurfaceRegistry(
+      stubDocumentContent(),
+      null,
+      undefined,
+      {
+        lookup: { get: async () => null },
+      },
+    )
+    expect(withInteractive.get('interactive')?.kind).toBe('interactive')
+  })
 })
 
 describe('open channels', () => {
@@ -104,6 +119,43 @@ describe('open channels', () => {
         resourceKey: expect.stringMatching(/^https:\/\/example\.com\/?$/),
       }),
     )
+  })
+
+  it('runtime channel opens interactive by artifact id, not a workspace path', () => {
+    const registry = createWorkbenchSurfaceRegistry(
+      stubDocumentContent(),
+      null,
+      undefined,
+      { lookup: { get: async () => null } },
+    )
+    const open = vi.fn()
+    const ok = openWorkSurfaceFromRuntimePayload(registry, open, {
+      kind: 'interactive',
+      resourceKey: 'ia_notes-table',
+      title: '对比清单',
+      focus: 'pane',
+    })
+    expect(ok).toBe(true)
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'runtime',
+        kind: 'interactive',
+        resourceKey: 'ia_notes-table',
+        title: '对比清单',
+        focus: 'pane',
+      }),
+    )
+  })
+
+  it('runtime channel rejects unregistered interactive without opening a document', () => {
+    const registry = createWorkbenchSurfaceRegistry(stubDocumentContent())
+    const open = vi.fn()
+    const ok = openWorkSurfaceFromRuntimePayload(registry, open, {
+      kind: 'interactive',
+      resourceKey: 'ia_notes-table',
+    })
+    expect(ok).toBe(false)
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('runtime channel rejects illegal path', () => {
