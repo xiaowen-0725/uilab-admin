@@ -9,6 +9,7 @@ export function AssistantMessageBlock({
   item,
   runActive,
   onOpenFileRef,
+  plainFilePaths,
 }: TimelineBlockProps) {
   const streaming = runActive && item.status === 'streaming'
   return (
@@ -27,6 +28,7 @@ export function AssistantMessageBlock({
           streaming={streaming}
           enableFold={false}
           onOpenFileRef={onOpenFileRef}
+          plainFilePaths={plainFilePaths}
         />
         {streaming ? (
           <span data-testid='timeline-stream-caret'>

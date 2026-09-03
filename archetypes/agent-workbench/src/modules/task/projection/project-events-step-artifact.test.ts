@@ -198,6 +198,78 @@ describe('projectEvents step + artifact + deliverables', () => {
     expect(terminal?.meta?.deliverables).toEqual(state.readModel.deliverables)
   })
 
+  it('keeps interactive artifact identity on id and kind, ignoring path and HTML', () => {
+    const html = '<table><tr><td>秘密</td></tr></table>'
+    const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
+      mk(1, 'turn.started'),
+      mk(2, 'artifact.created', {
+        id: 'ia_notes-table',
+        title: '对比清单',
+        kind: 'interactive',
+        path: 'notes/report.html',
+        html,
+        content: html,
+      }),
+      mk(3, 'artifact.updated', {
+        id: 'ia_notes-table',
+        title: '对比清单（已标红）',
+        kind: 'interactive',
+        html: '<p>仍不应进读模型</p>',
+      }),
+      mk(4, 'turn.completed'),
+    ])
+
+    const artifacts = state.readModel.timeline.filter(
+      (item) => item.category === 'artifact',
+    )
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toMatchObject({
+      id: 'artifact:ia_notes-table',
+      title: '对比清单（已标红）',
+      meta: {
+        id: 'ia_notes-table',
+        kind: 'interactive',
+        title: '对比清单（已标红）',
+        changeKind: 'updated',
+      },
+    })
+    expect(artifacts[0]?.meta?.path).toBeUndefined()
+    expect(JSON.stringify(state.readModel)).not.toContain('<table')
+    expect(JSON.stringify(state.readModel)).not.toContain(html)
+    expect(state.readModel.deliverables).toEqual([
+      {
+        id: 'ia_notes-table',
+        title: '对比清单（已标红）',
+        kind: 'interactive',
+        changeKind: 'updated',
+        source: 'artifact',
+      },
+    ])
+  })
+
+  it('still treats legacy artifact events without kind as file paths', () => {
+    const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
+      mk(1, 'turn.started'),
+      mk(2, 'artifact.created', {
+        path: 'notes/result.md',
+        title: '工作流结果',
+      }),
+      mk(3, 'turn.completed'),
+    ])
+    expect(state.readModel.timeline.find((item) => item.category === 'artifact')).toMatchObject({
+      title: '工作流结果',
+      meta: { path: 'notes/result.md', title: '工作流结果' },
+    })
+    expect(state.readModel.deliverables).toEqual([
+      {
+        path: 'notes/result.md',
+        title: '工作流结果',
+        changeKind: 'created',
+        source: 'artifact',
+      },
+    ])
+  })
+
   it('does not invent deliverables when a completed run has no files or artifacts', () => {
     const state = projectEvents(emptyProjectionState({ taskId: 't', projectId: 'p' }), [
       mk(1, 'turn.started'),

@@ -45,7 +45,7 @@
    *   app body          — #0e0e0e
    *   Task / main stage — #111111
    *   Navigator rail    — see --sidebar
-   *   Composer shell    — #262626 via --wb-surface-composer (light: #fafafa)
+   *   Composer tray     — #262626 via --wb-surface-composer (light: #ffffff)
    */
   --background: #111111;
   --foreground: #fcfcfc;

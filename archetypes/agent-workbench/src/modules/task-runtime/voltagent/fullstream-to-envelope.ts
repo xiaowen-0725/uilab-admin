@@ -29,6 +29,20 @@ export interface MapFullStreamContext {
    * adapter can suppress the matching tool-result across SSE chunks.
    */
   updatePlanCallIds?: Set<string>
+  /**
+   * Accumulated `text-*` parts. `text-end.content` is a delimiter, not the
+   * body — AI SDK often sends the last token or an empty string there.
+   */
+  textParts?: TextPartBuffers
+}
+
+export type TextPartBuffers = {
+  currentId?: string
+  byId: Map<string, string>
+}
+
+export function createTextPartBuffers(): TextPartBuffers {
+  return { byId: new Map() }
 }
 
 export type FullStreamChunk = {
@@ -93,6 +107,25 @@ function toolCallId(chunk: FullStreamChunk): string {
 
 function textDelta(chunk: FullStreamChunk): string {
   return asString(chunk.delta) ?? asString(chunk.text) ?? ''
+}
+
+function textParts(ctx: MapFullStreamContext): TextPartBuffers {
+  if (!ctx.textParts) ctx.textParts = createTextPartBuffers()
+  return ctx.textParts
+}
+
+function textPartId(chunk: FullStreamChunk, parts: TextPartBuffers): string {
+  const id = asString(chunk.id) ?? parts.currentId ?? 'text'
+  parts.currentId = id
+  return id
+}
+
+function completedTextPart(
+  accumulated: string,
+  claimed: string,
+): string {
+  if (claimed.length >= accumulated.length) return claimed
+  return accumulated || claimed
 }
 
 function isShellTool(name: string): boolean {
@@ -282,29 +315,44 @@ export function mapFullStreamChunk(
       })
       break
 
-    case 'text-start':
+    case 'text-start': {
+      const parts = textParts(ctx)
+      const partId = textPartId(chunk, parts)
+      if (!parts.byId.has(partId)) parts.byId.set(partId, '')
       push('message.started', {
-        id: asString(chunk.id),
+        id: partId,
+        partId,
         chunkType: type,
       })
       break
+    }
 
     case 'text-delta': {
       const delta = textDelta(chunk)
       if (delta) {
+        const parts = textParts(ctx)
+        const partId = textPartId(chunk, parts)
+        parts.byId.set(partId, `${parts.byId.get(partId) ?? ''}${delta}`)
         push('message.delta', {
           text: delta,
           delta,
+          partId,
         })
       }
       break
     }
 
-    case 'text-end':
+    case 'text-end': {
+      const parts = textParts(ctx)
+      const partId = textPartId(chunk, parts)
+      const accumulated = parts.byId.get(partId) ?? ''
+      const claimed = asString(chunk.content) ?? asString(chunk.text) ?? ''
       push('message.completed', {
-        text: asString(chunk.content) ?? asString(chunk.text) ?? '',
+        text: completedTextPart(accumulated, claimed),
+        partId,
       })
       break
+    }
 
     case 'reasoning-start':
       push('reasoning.started', { id: asString(chunk.id) })
@@ -558,11 +606,13 @@ export function mapFullStreamChunks(
   let nextSequence = ctx.nextSequence
   const envelopes: AgentRuntimeEventEnvelope[] = []
   const updatePlanCallIds = ctx.updatePlanCallIds ?? new Set<string>()
+  const textPartBuffers = ctx.textParts ?? createTextPartBuffers()
   for (const chunk of chunks) {
     const step = mapFullStreamChunk(chunk, {
       ...ctx,
       nextSequence,
       updatePlanCallIds,
+      textParts: textPartBuffers,
     })
     envelopes.push(...step.envelopes)
     nextSequence = step.nextSequence

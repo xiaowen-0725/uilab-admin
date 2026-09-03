@@ -102,7 +102,7 @@ function renderPlanSurface(
 }
 
 describe('Workbench plan panel + Timeline card', () => {
-  it('shows the empty plan block before any plan.updated event', async () => {
+  it('hides the plan block before any plan.updated event', async () => {
     const taskId = 'task-plan-empty'
     renderPlanSurface(taskId, [
       envelope(taskId, 'turn.started', {
@@ -112,15 +112,18 @@ describe('Workbench plan panel + Timeline card', () => {
       }),
     ])
 
-    await expect
-      .element(page.getByTestId('context-panel-block-plan'))
-      .toBeInTheDocument()
-    await expect
-      .element(page.getByTestId('context-panel-plan-empty'))
-      .toHaveTextContent('本次任务暂无计划')
+    expect(
+      document.querySelector('[data-testid="context-panel-block-plan"]'),
+    ).toBeNull()
+    expect(
+      document.querySelector('[data-testid="context-panel-plan-empty"]'),
+    ).toBeNull()
     expect(
       document.querySelector('[data-testid="context-panel-plan-progress"]'),
     ).toBeNull()
+    await expect
+      .element(page.getByTestId('context-panel'))
+      .toHaveTextContent('暂无上下文信息')
   })
 
   it('renders panel progress and a Timeline plan card from scripted events', async () => {
@@ -175,9 +178,12 @@ describe('Workbench plan panel + Timeline card', () => {
       }),
     ])
 
-    await expect
-      .element(page.getByTestId('context-panel-plan-empty'))
-      .toHaveTextContent('本次任务暂无计划')
+    expect(
+      document.querySelector('[data-testid="context-panel-block-plan"]'),
+    ).toBeNull()
+    expect(
+      document.querySelector('[data-testid="context-panel-plan-empty"]'),
+    ).toBeNull()
     await expect
       .element(page.getByTestId('timeline-item-plan-update:turn-empty-steps'))
       .toHaveTextContent('（无步骤）')

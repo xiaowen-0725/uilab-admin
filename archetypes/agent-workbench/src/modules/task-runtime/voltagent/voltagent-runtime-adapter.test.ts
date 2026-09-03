@@ -514,6 +514,94 @@ describe('VoltAgentRuntimeAdapter', () => {
     expect(types).toContain('turn.cancelled')
   })
 
+  it('cancelRun rejects an idle lastTurnId after the turn has finished', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        sseBody([
+          { type: 'text-delta', delta: 'done' },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-idle')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-idle',
+      issuedAt: '2026-08-05T12:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-idle',
+      schemaVersion: 1,
+      taskId: 'task-idle',
+      inputText: 'hi',
+      proposedTurnId: 'turn-idle',
+    })
+    await vi.waitFor(() => {
+      const types = events
+        .filter((e) => e.kind === 'event')
+        .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+      expect(types).toContain('turn.completed')
+    })
+
+    const cancelAck = await adapter.sendCommand({
+      type: 'cancelRun',
+      commandId: 'cmd-idle-x',
+      issuedAt: '2026-08-05T12:00:02.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-idle-x',
+      schemaVersion: 1,
+      taskId: 'task-idle',
+      turnId: 'turn-idle',
+    })
+    expect(cancelAck).toMatchObject({
+      status: 'rejected',
+      reasonCode: 'no_active_run',
+    })
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).not.toContain('turn.cancel_requested')
+    expect(types).not.toContain('turn.cancelled')
+  })
+
+  it('cancelRun rejects when there is no in-flight work', async () => {
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: vi.fn(async () => new Response('ok', { status: 200 })),
+      nowIso: () => '2026-08-05T12:00:00.000Z',
+    })
+    const events = collectEvents(adapter, 'task-orphan')
+
+    const cancelAck = await adapter.sendCommand({
+      type: 'cancelRun',
+      commandId: 'cmd-orphan',
+      issuedAt: '2026-08-05T12:00:01.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-orphan',
+      schemaVersion: 1,
+      taskId: 'task-orphan',
+      turnId: 'turn-orphan',
+    })
+    expect(cancelAck).toMatchObject({
+      status: 'rejected',
+      reasonCode: 'no_active_run',
+    })
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).not.toContain('turn.cancel_requested')
+    expect(types).not.toContain('turn.cancelled')
+  })
+
   it('HTTP error emits turn.failed', async () => {
     const fetchImpl = vi.fn(async () => new Response('down', { status: 503 }))
     const adapter = createVoltAgentRuntimeAdapter({
@@ -1423,6 +1511,155 @@ describe('VoltAgentRuntimeAdapter', () => {
     })
     expect(resumeBody).toContain('board_commit')
     expect(resumeBody).not.toContain('<html')
+  })
+
+  it('interactive_commit emits a pointer event and resumes without HTML', async () => {
+    const executor = vi.fn(async () => ({
+      ok: true,
+      artifactId: 'ia-1',
+      title: '筛选表',
+      updated: false,
+      replayed: false,
+    }))
+    let call = 0
+    let resumeBody = ''
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        return new Response(
+          sseBody([
+            {
+              type: 'tool-call',
+              toolCallId: 'call-ia',
+              toolName: 'interactive_commit',
+              args: {
+                draftId: 'd-1',
+                contentHash: 'abc',
+                title: '筛选表',
+              },
+            },
+            { type: 'finish', finishReason: 'tool-calls' },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      resumeBody = String(init?.body ?? '')
+      return new Response(sseBody([{ type: 'finish', finishReason: 'stop' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-09-02T04:00:00.000Z',
+      clientToolExecutor: executor,
+    })
+    const events = collectEvents(adapter, 'task-ia')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-ia',
+      issuedAt: '2026-09-02T04:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-ia',
+      schemaVersion: 1,
+      taskId: 'task-ia',
+      inputText: '做一张可筛选的表',
+      proposedTurnId: 'turn-ia',
+    })
+    await vi.waitFor(() => {
+      expect(executor).toHaveBeenCalled()
+      expect(call).toBeGreaterThanOrEqual(2)
+    })
+    const envelopes = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope : null))
+      .filter((e): e is NonNullable<typeof e> => e != null)
+    expect(envelopes.map((e) => e.eventType)).toContain('artifact.created')
+    expect(envelopes.map((e) => e.eventType)).toContain('tool.completed')
+    const created = envelopes.find((e) => e.eventType === 'artifact.created')
+    expect(created?.payload).toEqual({
+      id: 'ia-1',
+      title: '筛选表',
+      kind: 'interactive',
+    })
+    const completed = envelopes.find((e) => e.eventType === 'tool.completed')
+    expect(completed?.payload).toMatchObject({
+      toolName: 'interactive_commit',
+      output: { ok: true, artifactId: 'ia-1', title: '筛选表', updated: false },
+    })
+    expect(JSON.stringify(completed?.payload)).not.toContain('replayed')
+    expect(JSON.stringify(completed?.payload)).not.toContain('<html')
+    expect(resumeBody).toContain('interactive_commit')
+    expect(resumeBody).not.toContain('<html')
+  })
+
+  it('does not emit artifact events when interactive_commit is replayed', async () => {
+    const executor = vi.fn(async () => ({
+      ok: true,
+      artifactId: 'ia-1',
+      title: '筛选表',
+      updated: false,
+      replayed: true,
+    }))
+    let call = 0
+    const fetchImpl = vi.fn(async () => {
+      call += 1
+      if (call === 1) {
+        return new Response(
+          sseBody([
+            {
+              type: 'tool-call',
+              toolCallId: 'call-ia-replay',
+              toolName: 'interactive_commit',
+              args: {
+                draftId: 'd-1',
+                contentHash: 'abc',
+                title: '筛选表',
+              },
+            },
+            { type: 'finish', finishReason: 'tool-calls' },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      }
+      return new Response(sseBody([{ type: 'finish', finishReason: 'stop' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    })
+    const adapter = createVoltAgentRuntimeAdapter({
+      baseUrl: 'http://127.0.0.1:3141',
+      agentId: 'workbench',
+      projectId: 'proj',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      nowIso: () => '2026-09-02T04:00:00.000Z',
+      clientToolExecutor: executor,
+    })
+    const events = collectEvents(adapter, 'task-ia-replay')
+    await adapter.sendCommand({
+      type: 'submitTurn',
+      commandId: 'cmd-ia-replay',
+      issuedAt: '2026-09-02T04:00:00.000Z',
+      actor: 'user',
+      idempotencyKey: 'idem-ia-replay',
+      schemaVersion: 1,
+      taskId: 'task-ia-replay',
+      inputText: '再交一次',
+      proposedTurnId: 'turn-ia-replay',
+    })
+    await vi.waitFor(() => {
+      expect(executor).toHaveBeenCalled()
+      expect(call).toBeGreaterThanOrEqual(2)
+    })
+    const types = events
+      .filter((e) => e.kind === 'event')
+      .map((e) => (e.kind === 'event' ? e.envelope.eventType : ''))
+    expect(types).toContain('tool.completed')
+    expect(types).not.toContain('artifact.created')
+    expect(types).not.toContain('artifact.updated')
   })
 
   it('getCapabilities marks runInput as supported', async () => {

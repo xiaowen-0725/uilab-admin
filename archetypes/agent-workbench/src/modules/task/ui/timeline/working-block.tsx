@@ -194,7 +194,7 @@ export function WorkingBlock({
               setUserTouched(true)
               setOpen(next)
             }}
-            className='my-0'
+            className='my-0 mx-0 px-0'
             data-testid={primaryChrome ? 'timeline-turn-toggle' : undefined}
           >
             {labelNode}
@@ -221,7 +221,7 @@ export function WorkingBlock({
           </ThreadCollapse>
         </>
       ) : (
-        <div className='tl-chrome inline-flex h-[26px] items-center px-0.5 text-black/50 dark:text-white/50'>
+        <div className='tl-chrome inline-flex h-[26px] items-center text-black/50 dark:text-white/50'>
           {labelNode}
         </div>
       )}

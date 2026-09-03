@@ -3,10 +3,7 @@
  */
 
 import type { Tool } from '@voltagent/core'
-import {
-  createAuthBindingStore,
-  type AuthBindingStore,
-} from './auth-binding-store.js'
+import { type AuthBindingStore } from './auth-binding-store.js'
 import {
   formatAuthDoctorLine,
   formatAuthStatusSummary,
@@ -56,7 +53,7 @@ import type {
   PluginManifest,
   SkillsContribution,
 } from './manifest.js'
-import { createPersistedAuthBindingStore } from './auth-binding-persist.js'
+import { resolveAuthRuntimeStores } from './auth-runtime-stores.js'
 import {
   createDefaultSecretStore,
   type SecretStore,
@@ -653,30 +650,21 @@ export async function createPluginRegistryFromEnv(
     reservedIds,
   })
 
-  let authBindingStore = options.authBindingStore
-  const persist =
-    options.persistAuthBindings !== false &&
-    env.UILAB_PERSIST_AUTH !== '0'
-  if (!authBindingStore && persist) {
-    authBindingStore = await createPersistedAuthBindingStore({
-      env,
-      rootDir: options.runtimeConfigDir,
-    })
-  }
-  if (!authBindingStore) {
-    authBindingStore = createAuthBindingStore()
-  }
-
-  const secretStore =
-    options.secretStore ?? createDefaultSecretStore(env)
+  const stores = await resolveAuthRuntimeStores({
+    env,
+    persistAuthBindings: options.persistAuthBindings,
+    secretStore: options.secretStore,
+    authBindingStore: options.authBindingStore,
+    runtimeConfigDir: options.runtimeConfigDir,
+  })
 
   return createPluginRegistry({
     ...options,
     env,
     builtins,
     packages,
-    secretStore,
-    authBindingStore,
+    secretStore: stores.secretStore,
+    authBindingStore: stores.authBindingStore,
     extra: [...(options.extra ?? []), ...discovery.manifests],
     discoveryFailures: [
       ...(options.discoveryFailures ?? []),

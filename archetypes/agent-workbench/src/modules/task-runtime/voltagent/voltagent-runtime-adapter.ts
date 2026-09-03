@@ -4,15 +4,19 @@
  * Browser-safe: only fetch/EventSource-style streaming. No Node built-ins.
  * Fake ≠ this adapter. Requires VITE_RUNTIME_ADAPTER=voltagent + running sidecar.
  */
-import type {
-  RuntimeCapabilities,
-  RuntimePort,
-  RuntimeSnapshot,
-  RuntimeSubscriptionEvent,
-  RunStartInput,
+import {
+  INTERACTIVE_CLIENT_TOOL_NAMES,
+  assertNoInteractiveContentLeak,
+  isInteractiveClientTool,
+  type RuntimeCapabilities,
+  type RuntimePort,
+  type RuntimeSnapshot,
+  type RuntimeSubscriptionEvent,
+  type RunStartInput,
 } from '@/modules/task'
 import type {
   ApplicationCommand,
+  CancelRunCommand,
   CommandAcknowledgement,
   ProvideRunInputCommand,
   QuestionAnswer,
@@ -27,8 +31,10 @@ import {
 } from '@/modules/task'
 import { accepted, rejected, unsupported } from '../command-acks'
 import {
+  createTextPartBuffers,
   mapFullStreamChunk,
   type FullStreamChunk,
+  type TextPartBuffers,
 } from './fullstream-to-envelope'
 
 export interface VoltAgentRuntimeAdapterOptions {
@@ -52,7 +58,7 @@ export interface VoltAgentRuntimeAdapterOptions {
    */
   tools?: string[]
   /**
-   * Renderer-side executor for client-side board tools.
+   * Renderer-side executor for client-side tools (board + interactive_commit).
    * Composition can pass a stable closure over a ref.
    */
   clientToolExecutor?: ClientToolExecutor
@@ -91,16 +97,74 @@ type PendingClientTool = {
   turnId: string
 }
 
-const BOARD_CLIENT_TOOL_NAMES = new Set(['board_status', 'board_commit'])
+const CLIENT_TOOL_NAMES = new Set<string>([
+  'board_status',
+  'board_commit',
+  ...INTERACTIVE_CLIENT_TOOL_NAMES,
+])
 
-function isBoardClientTool(name: string): boolean {
-  return BOARD_CLIENT_TOOL_NAMES.has(name)
+function isClientTool(name: string): boolean {
+  return CLIENT_TOOL_NAMES.has(name)
+}
+
+function clientToolHint(
+  toolName: string,
+  phase: 'unavailable' | 'failed',
+): string {
+  const interactive = isInteractiveClientTool(toolName)
+  if (phase === 'failed') {
+    return interactive ? '交互产物控制面执行失败' : '看板控制面执行失败'
+  }
+  return interactive
+    ? '交互产物控制面尚未接通，无法提交'
+    : '看板控制面尚未接通，无法提交'
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+function publicClientToolOutput(output: unknown): unknown {
+  const rec = asObjectRecord(output)
+  if (!rec || !('replayed' in rec)) return output
+  const { replayed: _replayed, ...rest } = rec
+  return rest
+}
+
+function interactiveCommitPointer(
+  output: unknown,
+): { artifactId: string; title: string; updated: boolean } | null {
+  const rec = asObjectRecord(output)
+  if (!rec || rec.ok !== true || rec.replayed === true) return null
+  if (typeof rec.artifactId !== 'string' || !rec.artifactId.trim()) return null
+  if (typeof rec.title !== 'string' || !rec.title.trim()) return null
+  return {
+    artifactId: rec.artifactId,
+    title: rec.title,
+    updated: rec.updated === true,
+  }
+}
+
+function clientToolEventPrefix(toolName: string): string {
+  if (isInteractiveClientTool(toolName)) return 'va-ia'
+  return 'va-board'
+}
+
+function clientToolStatus(output: unknown): 'error' | 'completed' {
+  const rec = asObjectRecord(output)
+  if (rec && rec.ok === false) return 'error'
+  return 'completed'
 }
 
 type TaskStreamState = {
   nextSequence: number
   activeAbort: AbortController | null
   lastTurnId: string | null
+  /** True from stream launch until a terminal turn event. Idle lastTurnId is not enough. */
+  turnLive: boolean
   /** Last user text for this task (approval resume). */
   lastUserText: string | null
   /** Immutable connector selection captured when this Turn started. */
@@ -111,16 +175,37 @@ type TaskStreamState = {
   pendingApprovals: Map<string, PendingApproval>
   /** Pending Question Requests keyed by toolCallId / requestId. */
   pendingQuestions: Map<string, PendingQuestion>
-  /** Pending client-side board tools keyed by toolCallId. */
+  /** Pending client-side tools keyed by toolCallId. */
   pendingClientTools: Map<string, PendingClientTool>
   /** In-flight `update_plan` call ids for mapper tool-result suppression. */
   updatePlanCallIds: Set<string>
+  /** Accumulated `text-*` parts for the current SSE turn. */
+  textParts: TextPartBuffers
   /**
    * Resume to start after the current SSE finishes or the drain window ends.
    * Auto-approve used to abort immediately and drop sibling tool-results.
    */
   queuedResume: (() => void) | null
   resumeDrainTimer: ReturnType<typeof setTimeout> | null
+}
+
+function hasHeldWork(state: TaskStreamState): boolean {
+  return (
+    state.queuedResume != null ||
+    state.pendingApprovals.size > 0 ||
+    state.pendingQuestions.size > 0 ||
+    state.pendingClientTools.size > 0
+  )
+}
+
+function taskHasCancelableWork(
+  state: TaskStreamState | undefined,
+): boolean {
+  return Boolean(state && (state.turnLive || hasHeldWork(state)))
+}
+
+function endLiveTurn(state: TaskStreamState | undefined): void {
+  if (state) state.turnLive = false
 }
 
 /** Wait this long for in-flight sibling tool-results before aborting to resume. */
@@ -427,7 +512,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       case 'submitTurn':
         return this.handleSubmitTurn(command)
       case 'cancelRun':
-        return this.handleCancel(command.commandId, command.taskId)
+        return this.handleCancel(command)
       case 'respondToApproval':
         return this.handleApproval(command)
       case 'provideRunInput':
@@ -462,6 +547,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         nextSequence: 1,
         activeAbort: null,
         lastTurnId: null,
+        turnLive: false,
         lastUserText: null,
         lastCapabilityConnectorIds: [],
         lastCapabilityFeatureIds: [],
@@ -469,6 +555,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         pendingQuestions: new Map(),
         pendingClientTools: new Map(),
         updatePlanCallIds: new Set(),
+        textParts: createTextPartBuffers(),
         queuedResume: null,
         resumeDrainTimer: null,
       }
@@ -551,6 +638,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     const state = this.ensureTask(args.taskId)
     const abort = new AbortController()
     state.activeAbort = abort
+    state.turnLive = true
     void this.streamAgent({
       ...args,
       signal: abort.signal,
@@ -608,6 +696,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
 
     const { turnId } = this.allocateIds(taskId, command)
     state.lastTurnId = turnId
+    state.textParts = createTextPartBuffers()
     const modelInput = modelInputWithComposerContext(
       command.inputText,
       command.composerContext
@@ -647,22 +736,14 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
   }
 
   private async handleCancel(
-    commandId: string,
-    taskId: string
+    command: CancelRunCommand
   ): Promise<CommandAcknowledgement> {
+    const taskId = command.taskId
     const state = this.taskState.get(taskId)
-    if (!state) {
-      return rejected(commandId, 'no_active_run', '没有可取消的轮次')
+    if (!state || !taskHasCancelableWork(state)) {
+      return rejected(command.commandId, 'no_active_run', '没有可取消的轮次')
     }
-    if (
-      !state.activeAbort &&
-      state.pendingApprovals.size === 0 &&
-      state.pendingQuestions.size === 0 &&
-      state.pendingClientTools.size === 0
-    ) {
-      return rejected(commandId, 'no_active_run', '没有可取消的轮次')
-    }
-    const turnId = state.lastTurnId ?? undefined
+
     state.queuedResume = null
     this.clearResumeDrain(state)
     if (state.activeAbort) {
@@ -672,8 +753,11 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     state.pendingApprovals.clear()
     state.pendingQuestions.clear()
     state.pendingClientTools.clear()
+    endLiveTurn(state)
 
-    const ids = { turnId: turnId ?? `turn-${taskId}` }
+    const ids = {
+      turnId: command.turnId ?? state.lastTurnId ?? `turn-${taskId}`,
+    }
     this.pushTaskEnvelope(taskId, ids, 'va-cancel', 'turn.cancel_requested', {
       reason: 'user_cancel',
     })
@@ -685,7 +769,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       { reason: 'user_cancel' },
       { freshReceivedAt: true }
     )
-    return accepted(commandId, this.nowIso())
+    return accepted(command.commandId, this.nowIso())
   }
 
   private async handleApproval(
@@ -894,7 +978,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     if (chunk.type !== 'tool-call') return
     const rec = chunk as unknown as Record<string, unknown>
     const toolName = pickString(rec, ['toolName', 'name'])
-    if (!toolName || !isBoardClientTool(toolName)) return
+    if (!toolName || !isClientTool(toolName)) return
     const state = this.ensureTask(taskId)
     const callId = pickString(rec, ['toolCallId', 'id']) ?? 'tool-call'
     state.pendingClientTools.set(callId, {
@@ -904,6 +988,40 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       userText: state.lastUserText ?? '',
       turnId,
     })
+  }
+
+  private finalizeInteractiveCommit(
+    taskId: string,
+    turnId: string,
+    output: unknown,
+  ): unknown {
+    try {
+      assertNoInteractiveContentLeak(output)
+      const pointer = interactiveCommitPointer(output)
+      if (pointer) {
+        this.pushTaskEnvelope(
+          taskId,
+          { turnId },
+          'va-ia',
+          pointer.updated ? 'artifact.updated' : 'artifact.created',
+          {
+            id: pointer.artifactId,
+            title: pointer.title,
+            kind: 'interactive',
+          },
+        )
+      }
+      return publicClientToolOutput(output)
+    } catch (err) {
+      return {
+        ok: false,
+        error: 'content_leak',
+        hint:
+          err instanceof Error
+            ? err.message
+            : clientToolHint('interactive_commit', 'failed'),
+      }
+    }
   }
 
   private async flushClientTools(taskId: string, turnId: string): Promise<void> {
@@ -925,32 +1043,39 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         : {
             ok: false,
             error: 'runtime_unavailable',
-            hint: '看板控制面尚未接通，无法提交',
+            hint: clientToolHint(pending.toolName, 'unavailable'),
           }
     } catch (err) {
       output = {
         ok: false,
         error: 'runtime_unavailable',
-        hint: err instanceof Error ? err.message : '看板控制面执行失败',
+        hint:
+          err instanceof Error
+            ? err.message
+            : clientToolHint(pending.toolName, 'failed'),
       }
     }
 
-    this.pushTaskEnvelope(taskId, { turnId }, 'va-board', 'tool.completed', {
-      toolId: pending.toolCallId,
-      toolCallId: pending.toolCallId,
-      toolName: pending.toolName,
-      name: pending.toolName,
-      label: pending.toolName,
-      args: pending.input,
-      output,
-      status:
-        output &&
-        typeof output === 'object' &&
-        'ok' in output &&
-        (output as { ok: unknown }).ok === false
-          ? 'error'
-          : 'completed',
-    })
+    if (isInteractiveClientTool(pending.toolName)) {
+      output = this.finalizeInteractiveCommit(taskId, turnId, output)
+    }
+
+    this.pushTaskEnvelope(
+      taskId,
+      { turnId },
+      clientToolEventPrefix(pending.toolName),
+      'tool.completed',
+      {
+        toolId: pending.toolCallId,
+        toolCallId: pending.toolCallId,
+        toolName: pending.toolName,
+        name: pending.toolName,
+        label: pending.toolName,
+        args: pending.input,
+        output,
+        status: clientToolStatus(output),
+      },
+    )
 
     this.resumeWithToolPart(
       taskId,
@@ -1027,14 +1152,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
       let sawTerminalEvent = false
 
       const emitCompleted = (reason: 'done_marker' | 'stream_ended'): void => {
-        if (
-          sawTerminalEvent ||
-          signal.aborted ||
-          state.queuedResume != null ||
-          state.pendingApprovals.size > 0 ||
-          state.pendingQuestions.size > 0 ||
-          state.pendingClientTools.size > 0
-        ) {
+        if (sawTerminalEvent || signal.aborted || hasHeldWork(state)) {
           return
         }
         this.pushTaskEnvelope(
@@ -1045,6 +1163,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           { reason }
         )
         sawTerminalEvent = true
+        endLiveTurn(state)
       }
 
       const consumeLine = (line: string): void => {
@@ -1060,11 +1179,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
         this.rememberApprovalFromChunk(taskId, turnId, chunk)
         this.rememberQuestionFromChunk(taskId, turnId, chunk)
         this.rememberClientToolFromChunk(taskId, turnId, chunk)
-        const pausedForHitl =
-          state.queuedResume != null ||
-          state.pendingApprovals.size > 0 ||
-          state.pendingQuestions.size > 0 ||
-          state.pendingClientTools.size > 0
+        const pausedForHitl = hasHeldWork(state)
 
         const mapped = mapFullStreamChunk(chunk, {
           projectId: this.projectId,
@@ -1075,6 +1190,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
           nowIso: this.nowIso,
           eventIdPrefix: 'va',
           updatePlanCallIds: state.updatePlanCallIds,
+          textParts: state.textParts,
         })
         for (const env of mapped.envelopes) {
           if (env.eventType === 'turn.started') continue
@@ -1086,7 +1202,10 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
             eventId: `va-${turnId}-${state.nextSequence}`,
           })
           state.nextSequence += 1
-          if (terminal) sawTerminalEvent = true
+          if (terminal) {
+            sawTerminalEvent = true
+            endLiveTurn(state)
+          }
         }
       }
 
@@ -1125,6 +1244,7 @@ export class VoltAgentRuntimeAdapter implements RuntimePort {
     turnId: string,
     message: string
   ): void {
+    endLiveTurn(this.taskState.get(taskId))
     this.pushTaskEnvelope(taskId, { turnId }, 'va-fail', 'turn.failed', {
       message,
     })

@@ -10,14 +10,7 @@ export function ToolStatusGlyph({
 }) {
   const slot = cn('size-4 shrink-0', className)
   if (status === 'running' || status === 'streaming') {
-    return (
-      <ConversationIcon
-        name='refresh'
-        className={cn(slot, 'animate-spin motion-reduce:animate-none opacity-80')}
-        data-slot='tool-status'
-        data-status='running'
-      />
-    )
+    return null
   }
   if (
     status === 'completed' ||

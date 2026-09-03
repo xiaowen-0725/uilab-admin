@@ -1,6 +1,6 @@
 /**
  * Work Surface Module — public Interface.
- * Host chrome + Surface Registry + Document/Browser surfaces.
+ * Host chrome + Surface Registry + Document/Browser/Interactive surfaces.
  * Concrete Document/Browser register from Composition Root; Host never imports them.
  * Workspace Document content source (Port + bind UI) lives in this module.
  */
@@ -40,6 +40,25 @@ export type {
 export { createTestSurfaceDefinition } from './surfaces/test/test-surface'
 export { createDocumentSurfaceDefinition } from './surfaces/document/document-surface'
 export { createBrowserSurfaceDefinition } from './surfaces/browser/browser-surface'
+export {
+  INTERACTIVE_SURFACE_KIND,
+  createInteractiveSurfaceDefinition,
+} from './surfaces/interactive/interactive-surface'
+export type {
+  CreateInteractiveSurfaceOptions,
+  InteractiveArtifactLookup,
+} from './surfaces/interactive/interactive-surface'
+export {
+  INTERACTIVE_IFRAME_CSP_TEMPLATE,
+  INTERACTIVE_IFRAME_SANDBOX,
+  buildInteractiveIframeCsp,
+} from './surfaces/interactive/island-policy'
+export { buildInteractiveIslandDocument } from './surfaces/interactive/island-document'
+export {
+  InteractiveIslandFrame,
+  readHostCspNonce,
+} from './surfaces/interactive/interactive-island-frame'
+export type { InteractiveIslandFrameProps } from './surfaces/interactive/interactive-island-frame'
 export {
   createMemoryDocumentContent,
   DEFAULT_DOCUMENT_FIXTURES,

@@ -14,6 +14,7 @@ import {
   STORE_WIDGET_DATA_SNAPSHOTS,
   STORE_WIDGET_DATA_SOURCES,
   STORE_WIDGET_JOB_RUNS,
+  STORE_INTERACTIVE_ARTIFACTS,
   WORKBENCH_IDB_VERSION,
   deleteTaskCascade,
   deleteWorkbenchIdb,
@@ -46,7 +47,7 @@ const BOARD_V4_STORE_NAMES = [
 ] as const
 
 function uniqueDbName(suffix: string): string {
-  return `test-idb-v4-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  return `test-idb-v5-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function openNamed(name: string, version: number): Promise<IDBDatabase> {
@@ -59,6 +60,9 @@ function openNamed(name: string, version: number): Promise<IDBDatabase> {
       }
       if (version === 3) {
         createV3Stores(db)
+      }
+      if (version === 4) {
+        createV4Stores(db)
       }
     }
     request.onsuccess = () => resolve(request.result)
@@ -91,6 +95,18 @@ function createV3Stores(db: IDBDatabase): void {
   runs.createIndex('jobId', 'jobId', { unique: false })
 }
 
+function createV4Stores(db: IDBDatabase): void {
+  createV3Stores(db)
+  const sources = db.createObjectStore(STORE_WIDGET_DATA_SOURCES, {
+    keyPath: 'id',
+  })
+  sources.createIndex('widgetId', 'widgetId', { unique: true })
+  const snapshots = db.createObjectStore(STORE_WIDGET_DATA_SNAPSHOTS, {
+    keyPath: ['widgetId', 'principalKey'],
+  })
+  snapshots.createIndex('widgetId', 'widgetId', { unique: false })
+}
+
 async function putInStore(
   db: IDBDatabase,
   storeName: string,
@@ -117,7 +133,7 @@ async function getFromStore<T>(
   })
 }
 
-describe('Workbench IDB v4', () => {
+describe('Workbench IDB v5', () => {
   const opened: string[] = []
 
   afterEach(async () => {
@@ -126,12 +142,12 @@ describe('Workbench IDB v4', () => {
     }
   })
 
-  it('creates Board, source and snapshot stores on a fresh v4 database', async () => {
+  it('creates Board, source, snapshot and Interactive Artifact stores on a fresh database', async () => {
     const name = uniqueDbName('fresh')
     opened.push(name)
     const db = await openWorkbenchIdb({ name })
-    expect(WORKBENCH_IDB_VERSION).toBe(4)
-    expect(db.version).toBe(4)
+    expect(WORKBENCH_IDB_VERSION).toBe(5)
+    expect(db.version).toBe(5)
     for (const store of ALL_STORE_NAMES) {
       expect(db.objectStoreNames.contains(store), store).toBe(true)
     }
@@ -161,6 +177,12 @@ describe('Workbench IDB v4', () => {
       .objectStore(STORE_WIDGET_DATA_SNAPSHOTS)
     expect(snapshots.keyPath).toEqual(['widgetId', 'principalKey'])
     expect(snapshots.indexNames.contains('widgetId')).toBe(true)
+
+    const artifacts = db
+      .transaction(STORE_INTERACTIVE_ARTIFACTS, 'readonly')
+      .objectStore(STORE_INTERACTIVE_ARTIFACTS)
+    expect(artifacts.keyPath).toEqual(['taskId', 'id'])
+    expect(artifacts.indexNames.contains('taskId')).toBe(true)
     db.close()
   })
 
@@ -201,7 +223,7 @@ describe('Workbench IDB v4', () => {
     v2.close()
 
     const upgraded = await openWorkbenchIdb({ name })
-    expect(upgraded.version).toBe(4)
+    expect(upgraded.version).toBe(5)
     for (const store of V2_STORE_NAMES) {
       expect(upgraded.objectStoreNames.contains(store), store).toBe(true)
     }
@@ -283,7 +305,7 @@ describe('Workbench IDB v4', () => {
     v3.close()
 
     const v4 = await openWorkbenchIdb({ name })
-    expect(v4.version).toBe(4)
+    expect(v4.version).toBe(5)
     for (const store of BOARD_V3_STORE_NAMES) {
       expect(v4.objectStoreNames.contains(store), store).toBe(true)
     }
@@ -306,7 +328,42 @@ describe('Workbench IDB v4', () => {
     })
     expect(v4.objectStoreNames.contains(STORE_WIDGET_DATA_SOURCES)).toBe(true)
     expect(v4.objectStoreNames.contains(STORE_WIDGET_DATA_SNAPSHOTS)).toBe(true)
+    expect(v4.objectStoreNames.contains(STORE_INTERACTIVE_ARTIFACTS)).toBe(true)
     v4.close()
+  })
+
+  it('keeps all v4 Board rows after upgrading to v5', async () => {
+    const name = uniqueDbName('v4-upgrade')
+    opened.push(name)
+    const v4 = await openNamed(name, 4)
+    await putInStore(v4, STORE_BOARDS, {
+      id: 'board-keep',
+      title: 'v4 看板',
+      isExample: false,
+      placements: [],
+      createdAt: '2026-08-16T00:00:00.000Z',
+      updatedAt: '2026-08-16T00:00:00.000Z',
+    })
+    await putInStore(v4, STORE_WIDGET_DATA_SOURCES, {
+      id: 'source-keep',
+      widgetId: 'widget-keep',
+      kind: 'query',
+      queryName: 'fx',
+    })
+    v4.close()
+
+    const v5 = await openWorkbenchIdb({ name })
+    expect(v5.version).toBe(5)
+    expect(await getFromStore(v5, STORE_BOARDS, 'board-keep')).toMatchObject({
+      title: 'v4 看板',
+    })
+    expect(
+      await getFromStore(v5, STORE_WIDGET_DATA_SOURCES, 'source-keep'),
+    ).toMatchObject({
+      widgetId: 'widget-keep',
+    })
+    expect(v5.objectStoreNames.contains(STORE_INTERACTIVE_ARTIFACTS)).toBe(true)
+    v5.close()
   })
 
   it('leaves Board rows in place when a Task is hard-deleted', async () => {
@@ -351,6 +408,72 @@ describe('Workbench IDB v4', () => {
     expect(await getFromStore(db, STORE_BOARDS, 'board-keep')).toMatchObject({
       id: 'board-keep',
       createdByTaskId: 'task-gone',
+    })
+    db.close()
+  })
+
+  it('cascades Interactive Artifact rows when a Task is hard-deleted', async () => {
+    const name = uniqueDbName('ia-cascade')
+    opened.push(name)
+    const db = await openWorkbenchIdb({ name })
+    await runTransaction(db, STORE_TASKS, 'readwrite', async (tx) => {
+      await idbRequest(
+        tx.objectStore(STORE_TASKS).put({
+          id: 'task-gone',
+          projectId: 'project-keep',
+          title: '将被删除',
+          titleSource: 'user',
+          lastAcceptedSuggestionVersion: 0,
+          createdAt: '2026-08-16T00:00:00.000Z',
+          updatedAt: '2026-08-16T00:00:00.000Z',
+        }),
+      )
+    })
+    await runTransaction(db, STORE_INTERACTIVE_ARTIFACTS, 'readwrite', async (tx) => {
+      await idbRequest(
+        tx.objectStore(STORE_INTERACTIVE_ARTIFACTS).put({
+          id: 'ia-keep-looking',
+          taskId: 'task-gone',
+          title: '筛选表',
+          html: '<html></html>',
+          contentHash: 'abc',
+          createdAt: '2026-08-16T00:00:00.000Z',
+          updatedAt: '2026-08-16T00:00:00.000Z',
+        }),
+      )
+      await idbRequest(
+        tx.objectStore(STORE_INTERACTIVE_ARTIFACTS).put({
+          id: 'ia-other-task',
+          taskId: 'task-stay',
+          title: '另一份',
+          html: '<html></html>',
+          contentHash: 'def',
+          createdAt: '2026-08-16T00:00:00.000Z',
+          updatedAt: '2026-08-16T00:00:00.000Z',
+        }),
+      )
+    })
+
+    await deleteTaskCascade(db, {
+      taskId: 'task-gone',
+      nextSelectedTaskId: null,
+      selectedProjectId: 'project-keep',
+      lastTaskByProject: {},
+    })
+
+    expect(
+      await getFromStore(db, STORE_INTERACTIVE_ARTIFACTS, [
+        'task-gone',
+        'ia-keep-looking',
+      ]),
+    ).toBeUndefined()
+    expect(
+      await getFromStore(db, STORE_INTERACTIVE_ARTIFACTS, [
+        'task-stay',
+        'ia-other-task',
+      ]),
+    ).toMatchObject({
+      title: '另一份',
     })
     db.close()
   })

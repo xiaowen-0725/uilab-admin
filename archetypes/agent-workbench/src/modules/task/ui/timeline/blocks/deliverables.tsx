@@ -1,151 +1,195 @@
 import type { ReactNode } from 'react'
 import { ConversationIcon } from '@/components/icons/conversation-icon'
-import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { DeliverableRef } from '../../../projection/types'
+import {
+  deliverableBadgeLabel,
+  deliverableCoverageKey,
+  deliverableExtension,
+  deliverableMetaLabel,
+  deliverableOpenRef,
+  deliverableTitle,
+  featuredDeliverable,
+  isDeletedDeliverable,
+  isInteractiveDeliverable,
+  isOpenableDeliverable,
+  shouldShowAllArtifactsLink,
+  visibleDeliverableCards,
+} from '../deliverable-presentation'
 import type { TimelineOpenFileRef } from '../timeline-shared'
+
+export type OpenDeliverablesRequest = {
+  items: readonly DeliverableRef[]
+  activatePath?: string
+}
 
 type DeliverableCardProps = {
   item: DeliverableRef
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  featured?: boolean
 }
 
 type DeliverableZoneProps = {
   items: readonly DeliverableRef[]
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
 }
 
-function basename(path: string): string {
-  return path.split('/').pop() || path
+function badgeTone(item: DeliverableRef): string {
+  if (isInteractiveDeliverable(item)) return 'bg-violet-500 text-white'
+  const ext = deliverableExtension(item.path ?? '')
+  if (ext === 'md' || ext === 'mdx' || ext === 'markdown') {
+    return 'bg-teal-500 text-white'
+  }
+  if (ext === 'pdf') return 'bg-red-500 text-white'
+  if (ext === 'html' || ext === 'htm') return 'bg-orange-500 text-white'
+  if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif' || ext === 'webp' || ext === 'svg') {
+    return 'bg-sky-500 text-white'
+  }
+  if (ext === 'docx') return 'bg-blue-600 text-white'
+  if (ext === 'xlsx') return 'bg-emerald-600 text-white'
+  return 'bg-neutral-500 text-white'
 }
 
-function fileExtLabel(path: string): string {
-  const name = basename(path)
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0 || dot === name.length - 1) return 'FILE'
-  return name.slice(dot + 1).toUpperCase().slice(0, 4)
+function DeliverableMarkGlyph({ item }: { item: DeliverableRef }): ReactNode {
+  if (isInteractiveDeliverable(item)) {
+    return <ConversationIcon name='feather-sparkle' className='size-4' />
+  }
+  const label = deliverableBadgeLabel(item.path ?? '')
+  if (label === 'FILE') {
+    return <ConversationIcon name='file' className='size-4' />
+  }
+  return label
 }
 
-function deliverableTitle(item: DeliverableRef): string {
-  if (item.title && item.title !== item.path) return item.title
-  return basename(item.path)
-}
-
-function deliverableMeta(item: DeliverableRef): string {
-  const ext = fileExtLabel(item.path)
-  if (item.changeKind === 'deleted') return `已删除 · ${ext}`
-  if (item.kind === 'image') return `图片 · ${ext}`
-  return `文档 · ${ext}`
-}
-
-function DeliverableMark({ ext }: { ext: string }): ReactNode {
+function DeliverableMark({ item }: { item: DeliverableRef }): ReactNode {
   return (
     <span
       aria-hidden
-      className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-medium tracking-wide text-muted-foreground'
+      className={cn(
+        'flex size-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tracking-wide',
+        badgeTone(item),
+      )}
     >
-      {ext === 'FILE' ? <ConversationIcon name='file' /> : ext}
+      <DeliverableMarkGlyph item={item} />
     </span>
   )
 }
 
-function DeliverableCardBody({
+export function DeliverableCard({
   item,
-  showOpenHint,
-}: {
-  item: DeliverableRef
-  showOpenHint: boolean
-}): ReactNode {
-  return (
+  onOpenFileRef,
+  featured = false,
+}: DeliverableCardProps): ReactNode {
+  const canOpen = Boolean(onOpenFileRef) && isOpenableDeliverable(item)
+  const openRef = deliverableOpenRef(item)
+  const rowClass = 'flex w-full items-center gap-3 px-3.5 py-3'
+  const chipTestId = isInteractiveDeliverable(item)
+    ? 'interactive-artifact-pointer'
+    : 'file-reference-chip'
+
+  const body = (
     <>
-      <DeliverableMark ext={fileExtLabel(item.path)} />
+      <DeliverableMark item={item} />
       <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
-        <CardTitle className='truncate'>{deliverableTitle(item)}</CardTitle>
-        <CardDescription className='truncate'>{deliverableMeta(item)}</CardDescription>
+        <span className='truncate text-sm font-medium text-foreground'>
+          {deliverableTitle(item)}
+        </span>
+        <span className='truncate text-xs text-muted-foreground'>
+          {deliverableMetaLabel(item)}
+        </span>
       </span>
-      {showOpenHint ? (
+      {canOpen ? (
         <ConversationIcon
           name='arrow-up-right'
-          className='text-muted-foreground transition-colors duration-[var(--tl-motion-fast)] ease-[var(--tl-ease-standard)] group-hover:text-foreground'
+          className='size-4 text-muted-foreground transition-colors duration-[var(--tl-motion-fast)] ease-[var(--tl-ease-standard)] group-hover:text-foreground'
         />
       ) : null}
     </>
   )
-}
 
-function DeliverableCard({
-  item,
-  onOpenFileRef,
-}: DeliverableCardProps): ReactNode {
-  const deleted = item.changeKind === 'deleted'
-  const canOpen = Boolean(onOpenFileRef) && !deleted
-  const rowClass = 'flex w-full items-center gap-3 px-3 py-2.5'
+  const chipData = {
+    'data-testid': chipTestId,
+    'data-kind': item.kind,
+    'data-path': item.path,
+    'data-artifact-id': item.id,
+  }
+
+  const chip = canOpen && openRef ? (
+    <button
+      type='button'
+      className={cn('group bg-transparent text-left shadow-none hover:bg-transparent', rowClass)}
+      {...chipData}
+      onClick={() => onOpenFileRef?.(openRef)}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={rowClass} {...chipData}>
+      {body}
+    </div>
+  )
 
   return (
-    <Card
-      size='sm'
+    <div
       className={cn(
-        'w-full max-w-[min(100%,28rem)] gap-0 rounded-2xl py-0 shadow-none',
-        deleted && 'opacity-70',
+        'timeline-deliverable-card w-full max-w-[min(100%,28rem)] rounded-2xl bg-neutral-100 shadow-[0_2px_8px_rgb(0_0_0/0.06)] dark:bg-white/8',
+        isDeletedDeliverable(item) && 'opacity-70',
       )}
       data-testid='timeline-deliverable'
+      data-kind={item.kind ?? 'file'}
       data-path={item.path}
       data-change-kind={item.changeKind}
+      data-featured={featured ? 'true' : undefined}
+      data-artifact-id={item.id}
     >
-      {canOpen ? (
-        <button
-          type='button'
-          className={cn(
-            'group bg-transparent text-left shadow-none hover:bg-transparent',
-            rowClass,
-          )}
-          data-testid='file-reference-chip'
-          data-path={item.path}
-          onClick={() =>
-            onOpenFileRef?.({
-              path: item.path,
-              label: basename(item.path),
-            })
-          }
-        >
-          <DeliverableCardBody item={item} showOpenHint />
-        </button>
-      ) : (
-        <div
-          className={rowClass}
-          data-testid='file-reference-chip'
-          data-path={item.path}
-        >
-          <DeliverableCardBody item={item} showOpenHint={false} />
-        </div>
-      )}
-    </Card>
+      {chip}
+    </div>
   )
 }
 
 export function DeliverableZone({
   items,
   onOpenFileRef,
+  onOpenDeliverables,
 }: DeliverableZoneProps): ReactNode {
   if (items.length === 0) return null
+  const featured = featuredDeliverable(items)
+  const cards = visibleDeliverableCards(items, featured)
+  const showAll = shouldShowAllArtifactsLink(items, featured)
+  const activatePath = featured?.path ?? deliverableCoverageKey(cards[0] ?? items[0]!)
+
   return (
     <div
-      className='flex flex-col gap-2'
+      className='flex flex-col items-start gap-2'
       data-testid='timeline-deliverables'
       data-kind='deliverables'
+      data-count={String(items.length)}
     >
-      <p className='tl-chrome text-muted-foreground'>
-        本次产出 · {items.length} 个文件
-      </p>
-      <div className='flex flex-col gap-2'>
-        {items.map((item) => (
-          <DeliverableCard
-            key={item.path}
-            item={item}
-            onOpenFileRef={onOpenFileRef}
-          />
-        ))}
-      </div>
+      {cards.map((item) => (
+        <DeliverableCard
+          key={deliverableCoverageKey(item) ?? item.title ?? item.path}
+          item={item}
+          onOpenFileRef={onOpenFileRef}
+          featured={featured != null && item === featured}
+        />
+      ))}
+      {showAll ? (
+        <button
+          type='button'
+          className='tl-chrome inline-flex items-center gap-0.5 text-muted-foreground transition-colors hover:text-foreground'
+          data-testid='timeline-deliverables-all'
+          onClick={() =>
+            onOpenDeliverables?.({
+              items,
+              activatePath,
+            })
+          }
+        >
+          查看所有产物 ({items.length})
+          <ConversationIcon name='chevron-up' className='size-3.5 rotate-90' />
+        </button>
+      ) : null}
     </div>
   )
 }

@@ -4,8 +4,6 @@
  */
 
 import { useRef, type MutableRefObject } from 'react'
-import { Button } from '@/components/ui/button'
-import type { TurnStatus } from '../../model/lifecycle'
 import type { TaskReadModel, TimelineItem } from '../../projection/types'
 import { VOLTAGENT_RUNTIME_HONESTY_COPY } from '../../runtime/runtime-honesty'
 import {
@@ -14,8 +12,16 @@ import {
   streamItemsToolActive,
 } from './apply-stream-gate'
 import { TimelineBlock } from './block-registry'
-import { DeliverableZone } from './blocks/deliverables'
+import {
+  DeliverableZone,
+  type OpenDeliverablesRequest,
+} from './blocks/deliverables'
 import { TurnTerminalBlock } from './blocks/turn-terminal'
+import {
+  deliverableCoverageKeys,
+  deliverablePlainPaths,
+  isNonTerminalTurnStatus,
+} from './deliverable-presentation'
 import {
   deriveTimelineView,
   type TimelineViewBlock,
@@ -31,24 +37,15 @@ import { WorkingBlock } from './working-block'
 export { TIMELINE_FOLD_THRESHOLD } from './foldable-body'
 export { chineseStatusLabel } from './chinese-status-label'
 export type { TimelineOpenFileRef } from './timeline-shared'
+export type { OpenDeliverablesRequest } from './blocks/deliverables'
 
 export interface TimelineProps {
   readModel: TaskReadModel
   onRetryTurn?: () => void
   onFollowModeChange?: (mode: 'follow' | 'user-pinned') => void
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
   onRespondToQuestion?: QuestionRespondHandler
-}
-
-function isActiveTurnStatus(status: TurnStatus | null): boolean {
-  if (!status) return false
-  return (
-    status === 'queued' ||
-    status === 'running' ||
-    status === 'waiting_for_approval' ||
-    status === 'waiting_for_input' ||
-    status === 'cancelling'
-  )
 }
 
 function isSettledRunStatus(status: string | undefined): boolean {
@@ -74,9 +71,10 @@ export function Timeline({
   onRetryTurn,
   onFollowModeChange,
   onOpenFileRef,
+  onOpenDeliverables,
   onRespondToQuestion,
 }: TimelineProps) {
-  const runActive = isActiveTurnStatus(readModel.turnStatus)
+  const runActive = isNonTerminalTurnStatus(readModel.turnStatus)
   const runAttr =
     runActive || readModel.turnStatus
       ? readModel.turnStatus ?? 'unknown'
@@ -91,7 +89,7 @@ export function Timeline({
         segmentKey: lastSegment.key,
         streamItems: lastSegment.bodyItems,
         runSettled: !runActive,
-        deliverablePaths: lastDeliverables?.map((item) => item.path),
+        deliverablePaths: deliverableCoverageKeys(lastDeliverables),
         prevGates: lastGatesRef.current,
         terminalId: lastSegment.terminal?.id,
       })
@@ -160,20 +158,6 @@ export function Timeline({
         </p>
       ) : null}
 
-      {readModel.turnStatus === 'failed' && onRetryTurn ? (
-        <div className='flex items-center gap-2'>
-          <Button
-            type='button'
-            size='sm'
-            variant='outline'
-            data-testid='timeline-retry-turn'
-            onClick={() => onRetryTurn()}
-          >
-            重试本轮
-          </Button>
-        </div>
-      ) : null}
-
       {readModel.timeline.length === 0 ? (
         <p
           className='py-6 text-center text-sm text-muted-foreground'
@@ -212,7 +196,13 @@ export function Timeline({
                   (isLast ? readModel.deliverables : undefined)
                 }
                 onOpenFileRef={onOpenFileRef}
+                onOpenDeliverables={onOpenDeliverables}
                 onRespondToQuestion={onRespondToQuestion}
+                onRetryTurn={
+                  isLast && readModel.turnStatus === 'failed'
+                    ? onRetryTurn
+                    : undefined
+                }
               />
             </div>
           )
@@ -229,7 +219,9 @@ type TimelineRunBodyProps = {
   persistGatesRef?: MutableRefObject<Record<string, StreamGate>>
   deliverables?: TaskReadModel['deliverables']
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
   onRespondToQuestion?: QuestionRespondHandler
+  onRetryTurn?: () => void
 }
 
 function TimelineRunBody({
@@ -239,7 +231,9 @@ function TimelineRunBody({
   persistGatesRef,
   deliverables,
   onOpenFileRef,
+  onOpenDeliverables,
   onRespondToQuestion,
+  onRetryTurn,
 }: TimelineRunBodyProps) {
   const localGatesRef = useRef<Record<string, StreamGate>>({})
   const gatesRef = persistGatesRef ?? localGatesRef
@@ -248,7 +242,7 @@ function TimelineRunBody({
     (block) => block.kind === 'working' && block.items.length > 0,
   )
   const runSettled = !runActive
-  const deliverablePaths = deliverables?.map((item) => item.path)
+  const deliverablePaths = deliverableCoverageKeys(deliverables)
   const gated = applyStreamGate(
     rawBlocks,
     {
@@ -265,11 +259,19 @@ function TimelineRunBody({
   const hasWorking = blocks.some((block) => block.kind === 'working')
   const lastWorkingIndex = blocks.findLastIndex((block) => block.kind === 'working')
   const completed = latestTerminal?.status === 'completed' && runSettled
+  const plainFilePaths =
+    completed && deliverables && deliverables.length > 0
+      ? deliverablePlainPaths(deliverables)
+      : undefined
+  const hasErrorItem = streamItems.some((item) => item.category === 'error')
+  const hideFailedChrome =
+    latestTerminal?.status === 'failed' && hasErrorItem
   const standaloneTerminal =
     runSettled &&
     !hasWorking &&
     latestTerminal &&
-    isSettledRunStatus(latestTerminal.status)
+    isSettledRunStatus(latestTerminal.status) &&
+    !hideFailedChrome
       ? latestTerminal
       : undefined
 
@@ -312,7 +314,11 @@ function TimelineRunBody({
             item={block.item}
             runActive={runActive}
             onOpenFileRef={onOpenFileRef}
+            plainFilePaths={plainFilePaths}
             onRespondToQuestion={onRespondToQuestion}
+            onRetryTurn={
+              block.item.category === 'error' ? onRetryTurn : undefined
+            }
           />
         )
       })}
@@ -322,7 +328,11 @@ function TimelineRunBody({
       ) : null}
 
       {completed && deliverables && deliverables.length > 0 ? (
-        <DeliverableZone items={deliverables} onOpenFileRef={onOpenFileRef} />
+        <DeliverableZone
+          items={deliverables}
+          onOpenFileRef={onOpenFileRef}
+          onOpenDeliverables={onOpenDeliverables}
+        />
       ) : null}
     </div>
   )

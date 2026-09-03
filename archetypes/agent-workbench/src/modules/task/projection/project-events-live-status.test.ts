@@ -471,4 +471,30 @@ describe('projectEvents liveStatus + file meta', () => {
       counts: { read: 1, search: 1, command: 1 },
     })
   })
+
+  it('keeps the full shell line on command-execution meta', () => {
+    const command =
+      "find /tmp -name '*.md' -printf '%T@ %p\\n' | sort -rn"
+    const state = projectEvents(
+      emptyProjectionState({ taskId: 't', projectId: 'p' }),
+      [
+        mk(1, 'turn.started', {}),
+        mk(2, 'command.started', {
+          commandId: 'cmd-1',
+          command,
+        }),
+        mk(3, 'command.completed', {
+          commandId: 'cmd-1',
+          command,
+          summary: 'ok',
+          exitCode: 0,
+        }),
+      ],
+    )
+    const row = state.readModel.timeline.find(
+      (item) => item.category === 'command-execution',
+    )
+    expect(row?.meta?.command).toBe(command)
+    expect(row?.body).toContain('ok')
+  })
 })

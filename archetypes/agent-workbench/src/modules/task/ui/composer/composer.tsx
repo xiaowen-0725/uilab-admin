@@ -9,8 +9,9 @@ import {
 } from 'react'
 import {
   CapabilityAddMenu,
-  CapabilityChips,
+  CapabilityInputSkills,
   CapabilityToolbarConnectors,
+  CapabilityToolbarExpert,
   formatStartAuthNotice,
   formatTaskConnectorSelectionNotice,
   waitForConnectorAuth,
@@ -438,6 +439,19 @@ export function TaskComposer({
   const runTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const selectedCapabilitySkills = useMemo(
+    () => capabilitySnapshot?.skills.filter((skill) => skill.taskSelected) ?? [],
+    [capabilitySnapshot],
+  )
+  const slashSkillTokens = useMemo(
+    () =>
+      skillTokens.filter(
+        (token) =>
+          !selectedCapabilitySkills.some((skill) => skill.id === token.id),
+      ),
+    [selectedCapabilitySkills, skillTokens],
+  )
+
   const slashQuery = useMemo(() => getTrailingSlashQuery(text), [text])
   const slashOpen = Boolean(slashQuery) && !addOpen
 
@@ -583,7 +597,7 @@ export function TaskComposer({
     if (!text.trim()) return
     setRunning(true)
     setNotice(
-      `本地模拟已接收：${text.trim().slice(0, 40)}${text.trim().length > 40 ? '…' : ''}（不会调用 Agent Runtime）`
+      `本地模拟已接收：${previewText(text)}（不会调用 Agent Runtime）`
     )
     runTimerRef.current = setTimeout(() => {
       setRunning(false)
@@ -840,6 +854,40 @@ export function TaskComposer({
       .finally(() => setCapabilityBusy(false))
   }
 
+  function handleRemoveLeadingCapabilitySkill(skillId: string): void {
+    if (!capabilityController || !capabilityTaskId) return
+    const skillIds = (capabilitySnapshot?.selection.skillIds ?? []).filter(
+      (id) => id !== skillId,
+    )
+    void capabilityController.setSelection(capabilityTaskId, { skillIds })
+  }
+
+  function handleRemoveToolbarExpert(): void {
+    if (!capabilityController || !capabilityTaskId) return
+    void capabilityController.setSelection(capabilityTaskId, { expertId: null })
+  }
+
+  const leadingSkills =
+    selectedCapabilitySkills.length > 0 || slashSkillTokens.length > 0 ? (
+      <>
+        <CapabilityInputSkills
+          snapshot={capabilitySnapshot}
+          onRemoveSkill={handleRemoveLeadingCapabilitySkill}
+        />
+        {slashSkillTokens.map((skill) => (
+          <ComposerSkillChip
+            key={skill.id}
+            icon={<Sparkles className='size-3.5' />}
+            label={skill.label}
+            data-testid={`composer-skill-${skill.id}`}
+            onRemove={() =>
+              setSkillTokens((prev) => prev.filter((s) => s.id !== skill.id))
+            }
+          />
+        ))}
+      </>
+    ) : undefined
+
   const handleToggleSkill = (skillId: string, selected: boolean) => {
     const taskId = capabilityTaskId
     if (!taskId || !capabilityController) return
@@ -1089,7 +1137,8 @@ export function TaskComposer({
   // Env/branch only make sense when a workspace is selected.
   const showEnv = showEnvironmentChip && project !== null
   const showBranch = showBranchChip && project !== null
-  // Well footer always holds permission; project chip is empty-hub only.
+  const showHat = showContextBar && (showProjectChip || showEnv || showBranch)
+  const trayRadiusClass = 'rounded-[var(--wb-composer-radius)]'
 
   const renderSlashSection = (
     title: string,
@@ -1118,7 +1167,7 @@ export function TaskComposer({
   return (
     <div
       className={cn(
-        'z-30 w-full shrink-0',
+        'pointer-events-auto z-30 w-full shrink-0',
         placement === 'center'
           ? 'relative px-0'
           : 'sticky bottom-0 px-4 pt-2 pb-4',
@@ -1133,10 +1182,19 @@ export function TaskComposer({
         must remain hit-testable. Dock sticky only covers the bottom band.
       */}
       <div className='relative mx-auto w-full max-w-[var(--content-max-width)]'>
-        <div className='rounded-[18px] bg-[var(--wb-composer-well)] p-[2px] pb-1'>
+        <div
+          className={cn(
+            trayRadiusClass,
+            showHat && 'bg-[var(--wb-composer-well)] pb-1',
+          )}
+          data-slot='composer-well'
+        >
         <Composer
           data-testid='composer-shell'
-          className='rounded-2xl bg-[var(--wb-surface-composer)] px-3 py-3 backdrop-blur-none'
+          className={cn(
+            trayRadiusClass,
+            'bg-[var(--wb-surface-composer)] px-3 py-3 backdrop-blur-none',
+          )}
         >
           <ComposerFloatingPanel
             open={slashOpen}
@@ -1178,32 +1236,10 @@ export function TaskComposer({
             </ComposerAttachments>
           ) : null}
 
-          {/* Expert / skill text chips above input; connectors live next to +. */}
-          {capabilityController && capabilityTaskId ? (
-            <CapabilityChips
-              variant='stack'
-              snapshot={capabilitySnapshot}
-              onRemoveConnector={(connectorId) => {
-                handleToggleConnector(connectorId, false)
-              }}
-              onRemoveExpert={() => {
-                void capabilityController.setSelection(capabilityTaskId, {
-                  expertId: null,
-                })
-              }}
-              onRemoveSkill={(skillId) => {
-                const prev = capabilitySnapshot?.selection.skillIds ?? []
-                void capabilityController.setSelection(capabilityTaskId, {
-                  skillIds: prev.filter((id) => id !== skillId),
-                })
-              }}
-            />
-          ) : null}
-
           <ComposerTextarea
             id='workbench-composer-input'
             data-testid='composer-input'
-            className='min-h-[70px] placeholder:text-foreground/50'
+            className='placeholder:text-foreground/50'
             value={text}
             onChange={(next) => {
               setText(next)
@@ -1218,23 +1254,7 @@ export function TaskComposer({
                 : '随心输入，输入 / 调用命令与技能'
             }
             aria-label='编写消息'
-            leading={
-              skillTokens.length > 0
-                ? skillTokens.map((skill) => (
-                    <ComposerSkillChip
-                      key={skill.id}
-                      icon={<Sparkles className='size-3.5' />}
-                      label={skill.label}
-                      data-testid={`composer-skill-${skill.id}`}
-                      onRemove={() =>
-                        setSkillTokens((prev) =>
-                          prev.filter((s) => s.id !== skill.id)
-                        )
-                      }
-                    />
-                  ))
-                : undefined
-            }
+            leading={leadingSkills}
           />
 
           <ComposerToolbar className='px-0 pb-1.5'>
@@ -1252,6 +1272,16 @@ export function TaskComposer({
             ) : (
               <>
                 {addMenu}
+                {capabilityController && capabilityTaskId ? (
+                  <CapabilityToolbarExpert
+                    snapshot={capabilitySnapshot}
+                    onRemoveExpert={handleRemoveToolbarExpert}
+                  />
+                ) : null}
+                <ComposerPermissionPreset
+                  taskId={capabilityTaskId}
+                  className='h-7 shrink-0 whitespace-nowrap'
+                />
                 {/* Selected connector brand icons sit beside + */}
                 {capabilityController && capabilityTaskId ? (
                   <CapabilityToolbarConnectors
@@ -1292,7 +1322,7 @@ export function TaskComposer({
                 ) : null}
                 {isRuntimeMode ? (
                   <span
-                    className='inline-flex min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-muted-foreground'
+                    className='hidden min-h-7 items-center rounded-lg px-2 text-[12px] font-medium text-muted-foreground sm:inline-flex'
                     data-testid='composer-model'
                     title='模型由当前 Runtime 决定'
                   >
@@ -1350,7 +1380,7 @@ export function TaskComposer({
           </ComposerToolbar>
         </Composer>
 
-        {showContextBar ? (
+        {showHat ? (
           <div
             className='flex h-8 flex-wrap items-center gap-1 px-3'
             data-testid='composer-context-bar'
@@ -1575,7 +1605,6 @@ export function TaskComposer({
                 </ComposerMenuSection>
               </ComposerMenuButton>
             ) : null}
-            <ComposerPermissionPreset taskId={capabilityTaskId} />
           </div>
         ) : null}
         </div>

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactElement } from 'react'
 import {
   ConversationChevron,
   ConversationIcon,
@@ -11,10 +11,24 @@ import {
   formatActivityGroupRunningCopy,
 } from '../../../projection/tool-activity-copy'
 import type { TimelineItem } from '../../../projection/types'
+import { CommandBlock } from './command'
 import { ToolRow } from './tool-row'
 
 function isToolRunning(item: TimelineItem): boolean {
   return item.status === 'running' || item.status === 'streaming'
+}
+
+function ActivityGroupItem({ item }: { item: TimelineItem }): ReactElement {
+  if (item.category === 'command-execution') {
+    return (
+      <CommandBlock
+        item={item}
+        runActive={isToolRunning(item)}
+        forceToolCollapsed
+      />
+    )
+  }
+  return <ToolRow item={item} forceCollapsed />
 }
 
 type ActivityGroupProps = {
@@ -25,7 +39,7 @@ type ActivityGroupProps = {
 export function ActivityGroup({
   kinds,
   items,
-}: ActivityGroupProps): ReactNode {
+}: ActivityGroupProps): ReactElement {
   const runningItems = items.filter(isToolRunning)
   const live = runningItems.length > 0
   const [open, setOpen] = useState(false)
@@ -73,7 +87,7 @@ export function ActivityGroup({
         <div className='overflow-hidden'>
           <div className='relative flex flex-col ps-[22px] before:absolute before:bottom-1 before:start-[7px] before:top-1 before:w-px before:bg-border'>
             {items.map((item) => (
-              <ToolRow key={item.id} item={item} forceCollapsed />
+              <ActivityGroupItem key={item.id} item={item} />
             ))}
           </div>
         </div>

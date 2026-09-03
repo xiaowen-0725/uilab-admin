@@ -47,11 +47,14 @@ export function resolveOpenWorkSurfaceIntent(
   const raw = (input.resourceKey ?? '').trim()
   if (!raw) return { ok: false, reason: 'empty' }
 
-  if (input.kind === 'board') {
-    if (!registry.get('board')) return { ok: false, reason: 'unresolved-kind' }
+  // Board / Interactive ids are opaque — never toWorkspaceResourceKey.
+  if (input.kind === 'board' || input.kind === 'interactive') {
+    if (!registry.get(input.kind)) {
+      return { ok: false, reason: 'unresolved-kind' }
+    }
     return {
       ok: true,
-      kind: 'board',
+      kind: input.kind,
       resourceKey: raw,
       title: input.title?.trim() || raw,
       source: input.source,

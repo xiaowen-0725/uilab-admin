@@ -98,6 +98,20 @@ describe('configureSidecarApp', () => {
     const denied = (await content.json()) as { ok: false; error: string }
     assert.equal(denied.ok, false)
     assert.equal(denied.error, 'not_authorized')
+
+    const interactive = await app.request('/interactive/staging/missing/content')
+    assert.equal(interactive.status, 401)
+    const interactiveDenied = (await interactive.json()) as {
+      ok: false
+      error: string
+    }
+    assert.equal(interactiveDenied.ok, false)
+    assert.equal(interactiveDenied.error, 'not_authorized')
+    assert.ok(
+      logger.messages.info.some((message) =>
+        message.includes('interactive artifact staging routes mounted'),
+      ),
+    )
   })
 
   it('logs catalog load failure, still serves snapshot, and does not reject', async () => {

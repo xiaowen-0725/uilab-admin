@@ -74,8 +74,12 @@ export {
 
 export {
   CapabilityChips,
+  CapabilityInputSkills,
   CapabilityToolbarConnectors,
+  CapabilityToolbarExpert,
   type CapabilityChipsProps,
+  type CapabilityInputSkillsProps,
+  type CapabilityToolbarExpertProps,
 } from './ui/capability-chips'
 
 export {

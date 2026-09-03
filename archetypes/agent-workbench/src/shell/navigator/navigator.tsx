@@ -5,7 +5,6 @@ import {
   type TaskSummary,
 } from '@/modules/project'
 import {
-  ArrowPathIcon as Loader2,
   ChevronDownIcon as ChevronDown,
   ClockIcon as AlarmClock,
   EllipsisHorizontalIcon as MoreHorizontal,
@@ -13,6 +12,7 @@ import {
   TrashIcon as Trash2,
   ViewColumnsIcon as Kanban,
 } from '@heroicons/react/24/outline'
+import { Loader } from '@/components/motion/loader'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -160,12 +160,6 @@ const sectionHeaderClass =
   'mb-0.5 flex h-[30px] w-full items-center gap-1 rounded-[8px] px-3 text-[12px] leading-5 font-semibold text-black/50 outline-none hover:bg-black/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-white/50 dark:hover:bg-white/[0.05]'
 
 const catalogListClass = 'flex flex-col gap-0.5'
-
-const collapseRowClass =
-  'flex h-[31px] w-full items-center justify-center rounded-[8px] bg-black/[0.04] text-[13px] leading-[21px] text-black/55 outline-none transition-colors duration-200 ease-in-out hover:bg-black/[0.06] focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-white/[0.06] dark:text-white/50 dark:hover:bg-white/[0.08]'
-
-/** Show a bottom 收起 once the loose-task list is long enough to scroll away from the header. */
-const TASK_COLLAPSE_HINT = 5
 
 /** Left rail: toolbar → primary action → destinations → catalog. */
 export function Navigator({
@@ -474,32 +468,19 @@ export function Navigator({
                   还没有任务
                 </p>
               ) : (
-                <>
-                  <ul className={catalogListClass}>
-                    {filteredLooseTasks.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        selected={task.id === selectedTaskId}
-                        busy={busyTaskIds?.has(task.id) ?? false}
-                        tabIndex={tabIndex}
-                        onSelect={onSelectTask}
-                        onDelete={onDeleteTask}
-                      />
-                    ))}
-                  </ul>
-                  {filteredLooseTasks.length >= TASK_COLLAPSE_HINT ? (
-                    <button
-                      type='button'
-                      className={cn(collapseRowClass, 'mt-0.5')}
+                <ul className={catalogListClass}>
+                  {filteredLooseTasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      selected={task.id === selectedTaskId}
+                      busy={busyTaskIds?.has(task.id) ?? false}
                       tabIndex={tabIndex}
-                      data-testid='navigator-tasks-collapse'
-                      onClick={() => setTasksExpanded(false)}
-                    >
-                      收起
-                    </button>
-                  ) : null}
-                </>
+                      onSelect={onSelectTask}
+                      onDelete={onDeleteTask}
+                    />
+                  ))}
+                </ul>
               )}
             </>
           ) : null}
@@ -870,12 +851,17 @@ function TaskRow({
         onClick={() => onSelect(task.id)}
       >
         {busy ? (
-          <Loader2
-            className='size-3 shrink-0 animate-spin text-black/45 dark:text-white/42'
-            strokeWidth={1.5}
+          <span
+            className='inline-flex size-3 shrink-0 items-center justify-center'
             aria-hidden
             data-testid={`task-busy-${task.id}`}
-          />
+          >
+            <Loader
+              variant='dot-matrix'
+              size={12}
+              className='text-black/45 dark:text-white/42'
+            />
+          </span>
         ) : null}
         <span className='min-w-0 flex-1 truncate'>{task.title}</span>
         {relativeTime ? (

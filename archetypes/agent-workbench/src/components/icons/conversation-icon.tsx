@@ -13,6 +13,7 @@ export type ConversationIconName =
   | 'refresh'
   | 'link'
   | 'list-controls'
+  | 'panel-bottom'
   | 'library'
   | 'paperclip'
   | 'file'
@@ -20,6 +21,7 @@ export type ConversationIconName =
   | 'project'
   | 'more'
   | 'feather-sparkle'
+  | 'brain'
   | 'close'
   | 'alert'
 
@@ -75,6 +77,12 @@ const MARKS: Record<ConversationIconName, ReactNode> = {
       <path d='M10 7h10M10 17h10' />
     </>
   ),
+  'panel-bottom': (
+    <>
+      <rect x='3' y='4' width='18' height='16' rx='3' />
+      <path d='M7 16h10' />
+    </>
+  ),
   library: (
     <>
       <path d='M12 7c-1.7-2-4.3-3-7-2.5A2.5 2.5 0 0 0 3 7v9.8a2.5 2.5 0 0 0 3 2.5c2.5-.5 4.5.2 6 1.7V7Z' />
@@ -116,6 +124,14 @@ const MARKS: Record<ConversationIconName, ReactNode> = {
     <>
       <path d='M8 21c0-7 3.2-13.4 12.8-17-.1 5.2-2.5 9.4-7.5 11.8-1.5.7-3.1 1.1-4.8 1.2' />
       <path d='M8 21c1.7-5 5-8.7 9.7-11M12.5 14H17m-1.5-4H20M4 2.5v6M1 5.5h6' />
+    </>
+  ),
+  brain: (
+    <>
+      <path d='M9.5 5.2A3.1 3.1 0 0 0 6.2 8.4 3.2 3.2 0 0 0 4 12.2c0 1.4.7 2.6 1.7 3.3-.2.5-.3 1.1-.3 1.6 0 2.1 1.9 3.8 4.4 4.1V22h4.4v-.8c2.5-.3 4.4-2 4.4-4.1 0-.5-.1-1.1-.3-1.6 1-.7 1.7-1.9 1.7-3.3a3.2 3.2 0 0 0-2.2-3.8A3.1 3.1 0 0 0 14.5 5.2c-.8 0-1.6.3-2.2.8-.6-.5-1.4-.8-2.2-.8Z' />
+      <path d='M12 8.5v8' />
+      <path d='M9.2 12.5h2' />
+      <path d='M12.8 14.5h2' />
     </>
   ),
   close: (

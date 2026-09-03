@@ -27,9 +27,9 @@
 :root {
   /* Desktop sidebar width */
   --navigator-width: 264px;
-  /* Composer column; timeline reading column is wider */
+  /* One conversation column: process header, answer, and composer. */
   --content-max-width: 772px;
-  --tl-column-width: 811px;
+  --tl-column-width: var(--content-max-width);
   /* Conversation column type, not shell 13/14 wrappers */
   --tl-prose-size: 15px;
   --tl-prose-leading: 1.78;
@@ -59,9 +59,8 @@
   --tl-turn-gap: 16px;
   --wb-app-bg: var(--sidebar);
   --wb-font-weight: 400;
-  /* Input shadow — well already frames the card */
-  --wb-composer-shell-shadow:
-    0 12px 24px -8px rgb(0 0 0 / 0.02), 0 2px 4px -4px rgb(0 0 0 / 0.02);
+  --wb-composer-radius: 24px;
+  --wb-composer-shell-shadow: 0 0 0 1px var(--wb-composer-border);
   /* Dialog shadow */
   --wb-shadow-dialog:
     0 8px 48px rgb(0 0 0 / 0.08), 0 6px 12px rgb(0 0 0 / 0.04);
@@ -96,12 +95,11 @@
   --wb-surface-translucent: oklch(94.5% 0.002 250 / 0.75);
   --wb-overlay-scrim: rgb(0 0 0 / 0.06);
   --wb-surface-raised: rgb(255 255 255 / 0.95);
-  /* Composer dock: rail (chip strip) vs elevated shell — must differ from canvas. */
+  /* Composer: white input card; grey well is only the bottom hat. */
   --wb-composer-rail: #e8e8e8;
-  /* Composer input well */
   --wb-composer-well: #f2f2f2;
-  /* Composer card on the well */
-  --wb-surface-composer: #fafafa;
+  --wb-surface-composer: #ffffff;
+  --wb-composer-border: oklch(0 0 0 / 0.06);
   --wb-card: rgb(0 0 0 / 0.04);
   --wb-inverse: oklch(20.5% 0 0);
   --wb-inverse-fg: rgb(255 255 255);
@@ -110,6 +108,9 @@
   --wb-shimmer-dim: rgb(0 0 0 / 0.4);
   --wb-shimmer-bright: rgb(0 0 0 / 0.85);
   --wb-accent: #339cff;
+  --wb-skill-surface: color-mix(in oklab, var(--wb-accent) 14%, white);
+  --wb-skill-surface-hover: color-mix(in oklab, var(--wb-accent) 22%, white);
+  --wb-skill-text: #1668c4;
   --wb-success: oklch(59.6% 0.145 163.225);
   --wb-success-border: oklch(69.6% 0.17 162.48);
   --wb-danger: oklch(63.7% 0.237 25.331);
@@ -437,62 +438,114 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   pointer-events: auto;
 }
 
-.context-panel-card {
-  display: flex;
-  max-height: 100%;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: color-mix(in oklch, var(--card) 96%, transparent);
-  box-shadow:
-    0 10px 30px color-mix(in oklch, var(--foreground) 8%, transparent),
-    0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent);
-  backdrop-filter: blur(8px);
-  opacity: 1;
-  transform: translateY(0);
+.context-panel-slot[data-open='false'] {
+  display: none;
 }
 
-/* Pointer Context open: 140ms opacity + translateY entry; close is immediate. */
+.context-panel-slot[data-open='true'] .context-panel-reveal {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.context-panel-reveal {
+  display: flex;
+  overflow: hidden;
+  max-height: 100%;
+  flex-direction: column;
+  border-radius: 1rem;
+  background: var(--wb-surface-composer);
+  box-shadow:
+    0 10px 30px rgb(0 0 0 / 0.08),
+    0 2px 8px rgb(0 0 0 / 0.04);
+  transform: translateX(0);
+}
+
+/* Pointer Context open: GPU translateX reveal; shadow stays on this layer. */
 [data-slot='workbench-shell'][data-context-motion='animated']
   .context-panel-slot[data-open='true']
-  .context-panel-card {
-  transition-property: opacity, transform;
-  transition-duration: 140ms;
-  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  .context-panel-reveal {
+  transition: transform 220ms var(--ease-drawer-close);
 }
 
 @starting-style {
   [data-slot='workbench-shell'][data-context-motion='animated']
     .context-panel-slot[data-open='true']
-    .context-panel-card {
-    opacity: 0;
-    transform: translateY(-4px);
+    .context-panel-reveal {
+    transform: translateX(100%);
   }
 }
 
-/* Reserved-space when Task container is wide enough — upper-right of lane. */
+/* Plan block content: fade/slide in when steps first arrive or new steps mount. */
+:is(
+  .context-panel-plan-body,
+  .context-panel-plan-step,
+  .context-panel-plan-progress
+) {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 150ms var(--ease-drawer-close),
+    transform 150ms var(--ease-drawer-close);
+}
+
+.context-panel-plan-step {
+  transition-delay: min(calc(var(--plan-step-index, 0) * 40ms), 120ms);
+}
+
+[data-slot='workbench-shell'][data-context-motion='instant']
+  :is(
+    .context-panel-plan-body,
+    .context-panel-plan-step,
+    .context-panel-plan-progress
+  ) {
+  transition: none;
+}
+
+@starting-style {
+  [data-slot='workbench-shell'][data-context-motion='animated']
+    :is(
+      .context-panel-plan-body,
+      .context-panel-plan-step,
+      .context-panel-plan-progress
+    ) {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Featured deliverable card: same 150ms fade as plan steps, same frame as pane open. */
+.timeline-deliverable-card {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 150ms var(--ease-drawer-close),
+    transform 150ms var(--ease-drawer-close);
+}
+
+@starting-style {
+  .timeline-deliverable-card {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Reserved-space when Task container is wide enough — upper-right rail. */
 @container task (min-width: 820px) {
   .context-panel-slot[data-open='true'] {
     position: relative;
     z-index: 1;
     display: flex;
     width: min(300px, 36%);
+    min-width: 0;
     max-height: calc(100% - 1.5rem);
     flex-shrink: 0;
     align-self: flex-start;
+    margin-left: auto;
     padding: 0.75rem 0.75rem 0.75rem 0;
   }
 
-  .context-panel-slot[data-open='true'] .context-panel-card {
-    width: 100%;
-    height: auto;
-    max-height: 100%;
-    border-radius: 0.75rem;
-  }
-
-  .context-panel-slot[data-open='false'] {
-    display: none;
-  }
 }
 
 /* Overlay when Task Surface is constrained (≤819px) — top-right content height. */
@@ -504,19 +557,10 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
     bottom: auto;
     z-index: 30;
     width: min(320px, calc(100% - 1.5rem));
+    min-width: 0;
     max-height: calc(100% - 1.5rem);
   }
 
-  .context-panel-slot[data-open='true'] .context-panel-card {
-    width: 100%;
-    height: auto;
-    max-height: 100%;
-    border-radius: 0.75rem;
-  }
-
-  .context-panel-slot[data-open='false'] {
-    display: none;
-  }
 }
 
 .dark {
@@ -562,7 +606,7 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --wb-composer-rail: #222222;
   --wb-composer-well: #222222;
   --wb-surface-composer: #262626;
-  --wb-composer-shell-shadow: none;
+  --wb-composer-border: oklch(1 0 0 / 0.12);
   --wb-card: oklch(26.9% 0 0 / 0.5);
   --wb-inverse: rgb(255 255 255);
   --wb-inverse-fg: oklch(20.5% 0 0);
@@ -571,6 +615,9 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --wb-shimmer-dim: rgb(255 255 255 / 0.4);
   --wb-shimmer-bright: rgb(255 255 255 / 0.95);
   --wb-accent: #339cff;
+  --wb-skill-surface: color-mix(in oklab, var(--wb-accent) 22%, transparent);
+  --wb-skill-surface-hover: color-mix(in oklab, var(--wb-accent) 32%, transparent);
+  --wb-skill-text: #8cc4ff;
   --wb-success: #40c977;
   --wb-success-border: oklch(69.6% 0.17 162.48);
   --wb-danger: #fa423e;
@@ -611,6 +658,7 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --color-wb-composer-rail: var(--wb-composer-rail);
   --color-wb-composer-well: var(--wb-composer-well);
   --color-wb-surface-composer: var(--wb-surface-composer);
+  --color-wb-composer-border: var(--wb-composer-border);
   --color-wb-card: var(--wb-card);
   --color-wb-inverse: var(--wb-inverse);
   --color-wb-inverse-fg: var(--wb-inverse-fg);
@@ -619,6 +667,9 @@ html.wb-electron.wb-platform-mac [data-slot='dialog-content'] {
   --color-wb-shimmer-dim: var(--wb-shimmer-dim);
   --color-wb-shimmer-bright: var(--wb-shimmer-bright);
   --color-wb-accent: var(--wb-accent);
+  --color-wb-skill-surface: var(--wb-skill-surface);
+  --color-wb-skill-surface-hover: var(--wb-skill-surface-hover);
+  --color-wb-skill-text: var(--wb-skill-text);
   --color-wb-success: var(--wb-success);
   --color-wb-success-border: var(--wb-success-border);
   --color-wb-danger: var(--wb-danger);

@@ -10,6 +10,7 @@ import path from 'node:path'
 import { ASK_TOOL_INSTRUCTIONS } from './ask-user-question-tool.js'
 import type { AgentProfile } from './profile.js'
 import { BOARD_TOOL_INSTRUCTIONS } from './tools/board-agent-contract.js'
+import { INTERACTIVE_TOOL_INSTRUCTIONS } from './tools/interactive-artifact-agent-contract.js'
 import { PLAN_TOOL_INSTRUCTIONS } from './update-plan-tool.js'
 
 export type WorkbenchSystemPromptInput = {
@@ -67,6 +68,7 @@ export function buildWorkbenchSystemPrompt(
     PLAN_TOOL_INSTRUCTIONS,
     ASK_TOOL_INSTRUCTIONS,
     BOARD_TOOL_INSTRUCTIONS,
+    INTERACTIVE_TOOL_INSTRUCTIONS,
   ].filter((line): line is string => Boolean(line?.trim()))
 
   return `You are UI Lab Agent Workbench. You are the local Agent Runtime inside a desktop-first Task workbench. Use the instructions below and the tools available to you to assist the user. Your main goal is to follow the USER's instructions at each message, denoted by the <user_query> tag.

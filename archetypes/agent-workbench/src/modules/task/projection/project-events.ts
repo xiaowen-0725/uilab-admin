@@ -22,6 +22,10 @@ import {
   questionAnswerToInputText,
 } from '../protocol/question-answer'
 import { normalizeToolOutput } from '../runtime/tool-output-normalize'
+import {
+  INTERACTIVE_ARTIFACT_KIND,
+  isInteractiveArtifactKind,
+} from '../model/interactive-artifact'
 import { emptyProjectionState } from './empty-read-model'
 import { parsePlanSnapshot } from './plan-snapshot'
 import {
@@ -199,6 +203,22 @@ function payloadText(payload: unknown, keys: string[] = ['text', 'inputText']): 
 function payloadString(payload: unknown, key: string): string | null {
   const value = asRecord(payload)[key]
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function artifactNamedTitle(payload: unknown, fallback: string): string {
+  return (
+    payloadString(payload, 'title') ??
+    payloadString(payload, 'name') ??
+    fallback
+  )
+}
+
+function artifactEventStatus(
+  type: string,
+  changeKind: FileChangeKind | undefined,
+): string {
+  if (type === 'artifact.linked') return 'linked'
+  return changeKind ?? 'created'
 }
 
 function approvalResolvedStatus(decision: string | null): string {
@@ -698,14 +718,14 @@ function collectTurnDeliverables(
   state: MutableState,
   turnId: TurnId | undefined,
 ): DeliverableRef[] {
-  const byPath = new Map<string, DeliverableRef>()
+  const byKey = new Map<string, DeliverableRef>()
   for (const item of state.readModel.timeline) {
     if (turnId && item.turnId && item.turnId !== turnId) continue
     if (item.category === 'file-change') {
       const path = item.meta?.path ?? item.title
       if (!path) continue
-      const prev = byPath.get(path)
-      byPath.set(path, {
+      const prev = byKey.get(path)
+      byKey.set(path, {
         path,
         title: prev?.title ?? item.title ?? path,
         kind: prev?.kind,
@@ -717,10 +737,24 @@ function collectTurnDeliverables(
       continue
     }
     if (item.category === 'artifact') {
+      if (isInteractiveArtifactKind(item.meta?.kind)) {
+        const id = item.meta?.id
+        if (!id) continue
+        const key = `${INTERACTIVE_ARTIFACT_KIND}:${id}`
+        const prev = byKey.get(key)
+        byKey.set(key, {
+          id,
+          title: item.title ?? item.meta?.title ?? prev?.title ?? id,
+          kind: INTERACTIVE_ARTIFACT_KIND,
+          changeKind: item.meta?.changeKind ?? prev?.changeKind,
+          source: 'artifact',
+        })
+        continue
+      }
       const path = item.meta?.path ?? item.title
       if (!path) continue
-      const prev = byPath.get(path)
-      byPath.set(path, {
+      const prev = byKey.get(path)
+      byKey.set(path, {
         path,
         title: item.title ?? prev?.title ?? path,
         kind: item.meta?.kind ?? prev?.kind,
@@ -731,7 +765,7 @@ function collectTurnDeliverables(
       })
     }
   }
-  return [...byPath.values()]
+  return [...byKey.values()]
 }
 
 function attachTurnDeliverables(
@@ -1468,6 +1502,7 @@ export function applyRuntimeEvent(
         meta: {
           toolKind: 'command',
           processKind: 'command',
+          command: commandLine,
           startedAt: takeWorkAnchor(next, envelope),
         },
       })
@@ -1498,13 +1533,14 @@ export function applyRuntimeEvent(
       const commandLine =
         payloadString(envelope.payload, 'command') ??
         payloadString(envelope.payload, 'text')
+      const failed =
+        rec.isError === true ||
+        (typeof exitCode === 'number' && exitCode !== 0)
       const title = commandLine
         ? formatToolActivityCopy({
             name: 'run_command',
             args: { command: commandLine },
-            status: rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
-              ? 'error'
-              : 'completed',
+            status: failed ? 'error' : 'completed',
           })
         : undefined
       const summary = payloadString(envelope.payload, 'summary')
@@ -1517,13 +1553,11 @@ export function applyRuntimeEvent(
       upsertByKey(next, envelope, 'command-execution', commandId, {
         title,
         body: completionBody ? `\n${completionBody}` : undefined,
-        status:
-          rec.isError === true || (typeof exitCode === 'number' && exitCode !== 0)
-            ? 'error'
-            : 'completed',
+        status: failed ? 'error' : 'completed',
         meta: {
           toolKind: 'command',
           processKind: 'command',
+          ...(commandLine ? { command: commandLine } : {}),
           endedAt: envelopeTime(envelope),
         },
       })
@@ -1576,15 +1610,7 @@ export function applyRuntimeEvent(
     case 'artifact.created':
     case 'artifact.updated':
     case 'artifact.linked': {
-      const path =
-        payloadString(envelope.payload, 'path') ??
-        payloadString(envelope.payload, 'uri') ??
-        'artifact'
       const kind = payloadString(envelope.payload, 'kind') ?? undefined
-      const title =
-        payloadString(envelope.payload, 'title') ??
-        payloadString(envelope.payload, 'name') ??
-        path
       const changeKind =
         parseChangeKind(rec.changeKind) ??
         (type === 'artifact.created'
@@ -1592,9 +1618,30 @@ export function applyRuntimeEvent(
           : type === 'artifact.updated'
             ? 'updated'
             : undefined)
+      if (isInteractiveArtifactKind(kind)) {
+        const id = payloadString(envelope.payload, 'id')
+        if (!id) break
+        const title = artifactNamedTitle(envelope.payload, id)
+        upsertByKey(next, envelope, 'artifact', id, {
+          title,
+          status: artifactEventStatus(type, changeKind),
+          meta: {
+            id,
+            kind: INTERACTIVE_ARTIFACT_KIND,
+            title,
+            changeKind,
+          },
+        })
+        break
+      }
+      const path =
+        payloadString(envelope.payload, 'path') ??
+        payloadString(envelope.payload, 'uri') ??
+        'artifact'
+      const title = artifactNamedTitle(envelope.payload, path)
       upsertByKey(next, envelope, 'artifact', path, {
         title,
-        status: type === 'artifact.linked' ? 'linked' : changeKind ?? 'created',
+        status: artifactEventStatus(type, changeKind),
         meta: {
           path,
           kind,

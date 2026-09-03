@@ -46,7 +46,7 @@ export const VOLTAGENT_RUNTIME_HONESTY_COPY = {
   approvalRejected: '已拒绝（本机侧车，未执行写操作）',
   inputProvided: '已提供补充输入（本机 VoltAgent Runtime）',
   recovery: '检测到事件序号缺口，可尝试对账恢复（本机 Runtime）。',
-  retryAccepted: '已重试 Turn（本机 VoltAgent Runtime）',
+  retryAccepted: '已重试本轮（本机运行时）',
   queueAccepted: '已排队后续消息（本机 VoltAgent Runtime）',
   steerAccepted: '已发送转向（本机 VoltAgent Runtime）',
   reconcileAccepted: '已对账中断 Run（本机 Runtime）',
@@ -55,4 +55,74 @@ export const VOLTAGENT_RUNTIME_HONESTY_COPY = {
 export function previewText(text: string, max = 40): string {
   const t = text.trim()
   return t.length > max ? `${t.slice(0, max)}…` : t
+}
+
+export type RuntimeFailureCopy = {
+  title: string
+  body: string
+  /** Original engine string when it differs from the shown copy. */
+  raw?: string
+}
+
+const SIDECAR_DISCONNECT_TITLE = '无法连接本机运行时'
+const SIDECAR_DISCONNECT_BODY =
+  '确认已同时打开本机侧车（localhost:3141）后再试。'
+const GENERIC_FAILURE_TITLE = '这一轮没完成'
+const GENERIC_FAILURE_BODY = '本机运行时中断了。可以重试这一轮。'
+
+const SIDECAR_DISCONNECT_NEEDLES = [
+  'failed to fetch',
+  'load failed',
+  'networkerror',
+  'econnrefused',
+  'econnreset',
+  'etimedout',
+  'err_connection',
+  'sidecar unavailable',
+  'sidecar disconnected',
+  'bad gateway',
+  'gateway timeout',
+  '连接 voltagent 侧车失败',
+] as const
+
+function isSidecarDisconnectMessage(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    SIDECAR_DISCONNECT_NEEDLES.some((needle) => normalized.includes(needle)) ||
+    /侧车\s*http\s*(502|503|504)\b/i.test(message)
+  )
+}
+
+function isEngineHttpDump(message: string): boolean {
+  return /侧车\s*http\s*\d{3}\b/i.test(message)
+}
+
+function genericFailure(raw?: string): RuntimeFailureCopy {
+  return raw
+    ? { title: GENERIC_FAILURE_TITLE, body: GENERIC_FAILURE_BODY, raw }
+    : { title: GENERIC_FAILURE_TITLE, body: GENERIC_FAILURE_BODY }
+}
+
+/** Map engine/network failures to actionable Chinese. Do not invent a cause. */
+export function humanizeRuntimeFailure(
+  raw: string | undefined,
+): RuntimeFailureCopy {
+  const message = raw?.trim() ?? ''
+  if (isSidecarDisconnectMessage(message)) {
+    return {
+      title: SIDECAR_DISCONNECT_TITLE,
+      body: SIDECAR_DISCONNECT_BODY,
+      raw: message,
+    }
+  }
+  if (!message || message === '运行失败') {
+    return genericFailure()
+  }
+  if (isEngineHttpDump(message)) {
+    return genericFailure(message)
+  }
+  if (/[\u4e00-\u9fff]/.test(message)) {
+    return { title: GENERIC_FAILURE_TITLE, body: message }
+  }
+  return genericFailure(message)
 }

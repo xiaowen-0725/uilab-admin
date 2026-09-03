@@ -1,14 +1,26 @@
 /**
  * Composition Surface assembly — Registry factory + open channels.
- * Host never registers; Document/Browser/test register here only.
+ * Host never registers; Document/Browser/test/interactive register here only.
  */
 
 import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
-import type { TimelineOpenFileRef } from '@/modules/task'
-import type { TaskRuntimeController } from '@/modules/task'
+import {
+  deliverableCoverageKey,
+  deliverableOpenRef,
+  isInteractiveArtifactKind,
+  isOpenableDeliverable,
+  shouldRequestPaneOpenMotion,
+  type DeliverableRef,
+  type OpenDeliverablesRequest,
+  type TaskReadModel,
+  type TaskRuntimeController,
+  type TimelineOpenFileRef,
+} from '@/modules/task'
+import { useDeliverablePaneAutoOpen } from './deliverable-pane-auto-open'
 import {
   createBrowserSurfaceDefinition,
   createDocumentSurfaceDefinition,
+  createInteractiveSurfaceDefinition,
   createSurfaceRegistry,
   createTestSurfaceDefinition,
   createWebBrowserHostPort,
@@ -16,6 +28,7 @@ import {
   WorkspaceDocumentEmptyExtra,
   WorkspaceDocumentToolbarTrailing,
   type DocumentContentPort,
+  type CreateInteractiveSurfaceOptions,
   type SurfaceRegistry,
   type WorkspaceDocumentSource,
 } from '@/modules/work-surface'
@@ -41,10 +54,13 @@ export interface BoardSurfaceWiring {
   identityScope?: IdentityScopePort
 }
 
+export type InteractiveSurfaceWiring = CreateInteractiveSurfaceOptions
+
 export function createWorkbenchSurfaceRegistry(
   documentContent: DocumentContentPort,
   workspaceHint: string | null = null,
   board?: BoardSurfaceWiring,
+  interactive?: InteractiveSurfaceWiring,
 ): SurfaceRegistry {
   const registry = createSurfaceRegistry()
   registry.register(
@@ -79,6 +95,9 @@ export function createWorkbenchSurfaceRegistry(
       ),
     })
   }
+  if (interactive) {
+    registry.register(createInteractiveSurfaceDefinition(interactive))
+  }
   return registry
 }
 
@@ -92,23 +111,86 @@ export function openWorkSurfaceFromFileRef(
   registry: SurfaceRegistry,
   openWorkSurfaceTab: OpenWorkSurfaceTabCommand,
   info: TimelineOpenFileRef,
+  options?: {
+    source?: 'user' | 'runtime'
+    focus?: 'pane' | 'tab' | 'none'
+  },
 ): boolean {
   const raw = (info.path ?? info.label ?? '').trim()
   if (!raw) return false
+  const source = options?.source ?? 'user'
   const intent = resolveOpenWorkSurfaceIntent(registry, {
+    kind: isInteractiveArtifactKind(info.kind) ? info.kind : undefined,
     resourceKey: raw,
     title: info.label,
-    source: 'user',
+    source,
+    focus: options?.focus,
   })
   if (!intent.ok) return false
   openWorkSurfaceTab({
-    source: 'user',
+    source,
     kind: intent.kind,
     resourceKey: intent.resourceKey,
     title: intent.title,
-    focus: intent.focus,
+    focus: options?.focus ?? intent.focus,
   })
   return true
+}
+
+function resolveActivateCoverageKey(
+  items: readonly DeliverableRef[],
+  requested: string | undefined,
+): string | undefined {
+  if (requested) {
+    for (const item of items) {
+      if (deliverableCoverageKey(item) === requested) return requested
+    }
+  }
+  const last = items[items.length - 1]
+  return last ? deliverableCoverageKey(last) : undefined
+}
+
+/**
+ * User clicked「查看所有产物」: open every openable file, activate the featured one.
+ */
+export function openWorkSurfaceFromDeliverables(
+  registry: SurfaceRegistry,
+  openWorkSurfaceTab: OpenWorkSurfaceTabCommand,
+  request: OpenDeliverablesRequest,
+): boolean {
+  const openable = request.items.filter((item) => isOpenableDeliverable(item))
+  if (openable.length === 0) return false
+  const activateKey = resolveActivateCoverageKey(openable, request.activatePath)
+
+  function openOne(item: DeliverableRef, focus: 'pane' | 'tab'): boolean {
+    const ref = deliverableOpenRef(item)
+    if (!ref) return false
+    return openWorkSurfaceFromFileRef(registry, openWorkSurfaceTab, ref, {
+      source: 'user',
+      focus,
+    })
+  }
+
+  let opened = false
+  for (const item of openable) {
+    if (deliverableCoverageKey(item) === activateKey) continue
+    opened = openOne(item, 'tab') || opened
+  }
+  const activateItem = openable.find(
+    (item) => deliverableCoverageKey(item) === activateKey,
+  )
+  if (activateItem) opened = openOne(activateItem, 'pane') || opened
+  return opened
+}
+
+function requestPaneOpenMotionIfNeeded(
+  didOpen: boolean,
+  paneAlreadyVisible: boolean,
+  request?: () => void,
+): void {
+  if (shouldRequestPaneOpenMotion(didOpen, paneAlreadyVisible)) {
+    request?.()
+  }
 }
 
 /**
@@ -154,6 +236,10 @@ export interface UseWorkbenchSurfaceAssemblyOptions {
   /** Re-bind listener after boot when controller appears. */
   bootReady: boolean
   board?: BoardSurfaceWiring
+  interactive?: InteractiveSurfaceWiring
+  readModel?: TaskReadModel | null
+  workSurfaceVisible?: boolean
+  onRequestPaneOpenMotion?: () => void
 }
 
 export interface WorkbenchSurfaceAssembly {
@@ -161,6 +247,7 @@ export interface WorkbenchSurfaceAssembly {
   workSurfaceEmptyExtra: ReactNode
   workSurfaceToolbarTrailing: ReactNode | undefined
   onOpenFileRef: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables: (request: OpenDeliverablesRequest) => void
 }
 
 /**
@@ -177,6 +264,10 @@ export function useWorkbenchSurfaceAssembly(
     selectedTaskId,
     bootReady,
     board,
+    interactive,
+    readModel = null,
+    workSurfaceVisible = false,
+    onRequestPaneOpenMotion,
   } = options
 
   const {
@@ -196,8 +287,9 @@ export function useWorkbenchSurfaceAssembly(
         documentContent,
         documentWorkspaceHint,
         board,
+        interactive,
       ),
-    [board, documentContent, documentWorkspaceHint],
+    [board, documentContent, documentWorkspaceHint, interactive],
   )
 
   const workSurfaceEmptyExtra = useMemo(
@@ -235,14 +327,64 @@ export function useWorkbenchSurfaceAssembly(
 
   const onOpenFileRef = useCallback(
     (info: TimelineOpenFileRef) => {
-      openWorkSurfaceFromFileRef(
+      const opened = openWorkSurfaceFromFileRef(
         surfaceRegistry,
         sessionCommands.openWorkSurfaceTab,
         info,
       )
+      requestPaneOpenMotionIfNeeded(
+        opened,
+        workSurfaceVisible,
+        onRequestPaneOpenMotion,
+      )
     },
+    [
+      onRequestPaneOpenMotion,
+      sessionCommands.openWorkSurfaceTab,
+      surfaceRegistry,
+      workSurfaceVisible,
+    ],
+  )
+
+  const onOpenDeliverableAuto = useCallback(
+    (info: TimelineOpenFileRef) =>
+      openWorkSurfaceFromFileRef(
+        surfaceRegistry,
+        sessionCommands.openWorkSurfaceTab,
+        info,
+        { source: 'runtime', focus: 'pane' },
+      ),
     [sessionCommands.openWorkSurfaceTab, surfaceRegistry],
   )
+
+  const onOpenDeliverables = useCallback(
+    (request: OpenDeliverablesRequest) => {
+      const opened = openWorkSurfaceFromDeliverables(
+        surfaceRegistry,
+        sessionCommands.openWorkSurfaceTab,
+        request,
+      )
+      requestPaneOpenMotionIfNeeded(
+        opened,
+        workSurfaceVisible,
+        onRequestPaneOpenMotion,
+      )
+    },
+    [
+      onRequestPaneOpenMotion,
+      sessionCommands.openWorkSurfaceTab,
+      surfaceRegistry,
+      workSurfaceVisible,
+    ],
+  )
+
+  useDeliverablePaneAutoOpen({
+    taskId: selectedTaskId,
+    readModel,
+    workSurfaceVisible,
+    onOpen: onOpenDeliverableAuto,
+    onRequestOpenMotion: onRequestPaneOpenMotion,
+  })
 
   useEffect(() => {
     if (!runtimeController || !bootReady) return
@@ -272,5 +414,6 @@ export function useWorkbenchSurfaceAssembly(
     workSurfaceEmptyExtra,
     workSurfaceToolbarTrailing,
     onOpenFileRef,
+    onOpenDeliverables,
   }
 }

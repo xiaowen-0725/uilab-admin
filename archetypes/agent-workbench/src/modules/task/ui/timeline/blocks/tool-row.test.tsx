@@ -3,6 +3,7 @@ import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import type { TimelineItem } from '../../../projection/types'
 import { ActivityGroup } from './activity-group'
+import { CommandBlock } from './command'
 import { ToolRow } from './tool-row'
 
 function toolItem(partial: Partial<TimelineItem> & Pick<TimelineItem, 'id'>): TimelineItem {
@@ -86,6 +87,88 @@ describe('ToolRow sentence chrome', () => {
     expect(getComputedStyle(trigger.element()).backgroundColor).toMatch(
       /rgba\(\s*0,\s*0,\s*0,\s*0\s*\)|transparent/,
     )
+  })
+})
+
+describe('live row shimmer', () => {
+  it('sweeps running tool titles and does not render a spinner glyph', async () => {
+    await render(<ToolRow item={toolItem({ id: 't1', status: 'running' })} />)
+    expect(
+      document.querySelector(
+        '[data-slot="tool-status"][data-status="running"]',
+      ),
+    ).toBeNull()
+    const title = document.querySelector(
+      '[data-testid="timeline-item-t1"] .wb-live-status-shimmer',
+    )
+    expect(title?.textContent).toContain('读取 README.md')
+  })
+
+  it('sweeps running command titles and does not render a spinner glyph', async () => {
+    await render(
+      <CommandBlock
+        item={{
+          id: 'c1',
+          category: 'command-execution',
+          status: 'running',
+          title: '正在执行 node ./README.md',
+          sourceEventIds: [],
+          taskId: 'task-1',
+          projectionVersion: 1,
+          meta: { command: 'node ./README.md' },
+        }}
+        runActive
+      />,
+    )
+    expect(
+      document.querySelector(
+        '[data-slot="tool-status"][data-status="running"]',
+      ),
+    ).toBeNull()
+    const title = document.querySelector(
+      '[data-testid="timeline-item-c1"] .wb-live-status-shimmer',
+    )
+    expect(title?.textContent).toContain('正在执行 node ./README.md')
+    expect(title?.textContent).not.toContain('$ ')
+  })
+})
+
+describe('CommandBlock input card', () => {
+  it('stays collapsed and wraps the shell input when opened', async () => {
+    await render(
+      <CommandBlock
+        item={{
+          id: 'c2',
+          category: 'command-execution',
+          status: 'completed',
+          title: '已执行 mkdir -p /tmp/memory',
+          body: 'ok',
+          sourceEventIds: [],
+          taskId: 'task-1',
+          projectionVersion: 1,
+          meta: { command: 'mkdir -p /tmp/memory' },
+        }}
+        runActive={false}
+      />,
+    )
+    await expect
+      .element(page.getByTestId('timeline-item-c2'))
+      .toHaveAttribute('data-expanded', 'false')
+    expect(document.querySelector('[data-slot="command-input-card"]')).toBeNull()
+
+    await userEvent.click(page.getByTestId('timeline-command-trigger-c2'))
+    await expect
+      .element(page.getByTestId('timeline-item-c2'))
+      .toHaveAttribute('data-expanded', 'true')
+    const card = document.querySelector('[data-slot="command-input-card"]')
+    expect(card?.textContent).toContain('bash')
+    expect(card?.textContent).toContain('mkdir -p /tmp/memory')
+    expect(card?.textContent).toContain('运行成功')
+    expect(
+      document.querySelector('[data-slot="command-run-status"]')?.getAttribute(
+        'data-status',
+      ),
+    ).toBe('success')
   })
 })
 

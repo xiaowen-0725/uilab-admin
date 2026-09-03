@@ -188,6 +188,64 @@ describe('workbenchSessionReducer (Module Implementation)', () => {
     expect(selectSessionView(state).layout.openTabs).toEqual([])
   })
 
+  it('keeps only one interactive tab and leaves other kinds alone', () => {
+    let state = createInitialSessionState(seed)
+    state = workbenchSessionReducer(state, {
+      type: 'openWorkSurfaceTab',
+      kind: 'document',
+      resourceKey: 'notes/report.html',
+      title: 'report.html',
+      source: 'user',
+    })
+    state = workbenchSessionReducer(state, {
+      type: 'openWorkSurfaceTab',
+      kind: 'browser',
+      resourceKey: 'https://example.com',
+      title: '示例',
+      source: 'user',
+    })
+    state = workbenchSessionReducer(state, {
+      type: 'openWorkSurfaceTab',
+      kind: 'board',
+      resourceKey: 'board-daily',
+      title: '每日速递',
+      source: 'user',
+    })
+    state = workbenchSessionReducer(state, {
+      type: 'openWorkSurfaceTab',
+      kind: 'interactive',
+      resourceKey: 'ia_one',
+      title: '对比清单',
+      source: 'user',
+    })
+    state = workbenchSessionReducer(state, {
+      type: 'openWorkSurfaceTab',
+      kind: 'interactive',
+      resourceKey: 'ia_two',
+      title: '筛选表',
+      source: 'user',
+    })
+
+    const layout = selectSessionView(state).layout
+    const interactiveTabs = layout.openTabs.filter(
+      (tab) => tab.kind === 'interactive',
+    )
+    expect(interactiveTabs).toHaveLength(1)
+    expect(interactiveTabs[0]).toMatchObject({
+      resourceKey: 'ia_two',
+      title: '筛选表',
+    })
+    expect(layout.openTabs.map((tab) => tab.kind)).toEqual([
+      'document',
+      'browser',
+      'board',
+      'interactive',
+    ])
+    expect(layout.activeTabId).toBe(
+      workSurfaceTabIdFor('interactive', 'ia_two'),
+    )
+  })
+
   it('closeWorkSurfaceTab removes tab; last tab closes pane', () => {
     let state = createInitialSessionState(seed)
     state = workbenchSessionReducer(state, {

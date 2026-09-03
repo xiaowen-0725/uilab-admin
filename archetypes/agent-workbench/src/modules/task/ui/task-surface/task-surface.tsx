@@ -23,7 +23,11 @@ import {
 import { Composer, type ComposerProjectPicker } from '../composer/composer'
 import { ContextPanel } from '../context-panel/context-panel'
 import { EmptyHub } from '../empty-hub/empty-hub'
-import { Timeline, type TimelineOpenFileRef } from '../timeline/timeline'
+import {
+  Timeline,
+  type OpenDeliverablesRequest,
+  type TimelineOpenFileRef,
+} from '../timeline/timeline'
 
 export interface TaskSurfaceView {
   taskId: string
@@ -86,6 +90,7 @@ export interface TaskSurfaceProps {
    * Composition wires Session.openWorkSurfaceTab; Task does not own openTabs.
    */
   onOpenFileRef?: (info: TimelineOpenFileRef) => void
+  onOpenDeliverables?: (request: OpenDeliverablesRequest) => void
 }
 
 const claimedAutoRespond = new Set<string>()
@@ -112,6 +117,7 @@ export function TaskSurface({
   onLaunchAction,
   composerRuntime,
   onOpenFileRef,
+  onOpenDeliverables,
 }: TaskSurfaceProps) {
   const [lastActionId, setLastActionId] = useState<string | null>(null)
   const { preset } = usePermissionPreset(view.taskId)
@@ -193,6 +199,27 @@ export function TaskSurface({
       />
     )
 
+  const conversationBody =
+    isTimeline && view.readModel ? (
+      <>
+        <Timeline
+          readModel={view.readModel}
+          onRetryTurn={composerRuntime?.onRetryTurn}
+          onFollowModeChange={composerRuntime?.onFollowModeChange}
+          onOpenFileRef={onOpenFileRef}
+          onOpenDeliverables={onOpenDeliverables}
+          onRespondToQuestion={composerRuntime?.onRespondToQuestion}
+        />
+        {composerSlot}
+      </>
+    ) : (
+      <EmptyHub
+        actions={view.launchActions}
+        onSelectAction={handleLaunch}
+        composer={composerSlot}
+      />
+    )
+
   return (
     <section
       className='task-container relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background'
@@ -204,26 +231,11 @@ export function TaskSurface({
       data-approval-dock={showDock ? 'open' : undefined}
       aria-label={`任务表面：${view.title}`}
     >
-      <div className='relative flex min-h-0 flex-1'>
-        <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
-          {isTimeline && view.readModel ? (
-            <>
-              <Timeline
-                readModel={view.readModel}
-                onRetryTurn={composerRuntime?.onRetryTurn}
-                onFollowModeChange={composerRuntime?.onFollowModeChange}
-                onOpenFileRef={onOpenFileRef}
-                onRespondToQuestion={composerRuntime?.onRespondToQuestion}
-              />
-              {composerSlot}
-            </>
-          ) : (
-            <EmptyHub
-              actions={view.launchActions}
-              onSelectAction={handleLaunch}
-              composer={composerSlot}
-            />
-          )}
+      <div className='relative flex min-h-0 min-w-0 flex-1'>
+        <div className='pointer-events-none absolute inset-0 z-0 flex min-h-0 flex-col'>
+          <div className='pointer-events-auto flex min-h-0 min-w-0 flex-1 flex-col'>
+            {conversationBody}
+          </div>
         </div>
         <ContextPanel
           open={view.contextPanelOpen}

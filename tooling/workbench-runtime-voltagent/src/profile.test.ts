@@ -86,6 +86,8 @@ describe('toolsForProfile', () => {
     assert.ok(tools.includes('ask_user_question'))
     assert.ok(tools.includes('board_widget_begin'))
     assert.ok(tools.includes('board_job_finish'))
+    assert.ok(tools.includes('interactive_begin'))
+    assert.ok(tools.includes('interactive_commit'))
     for (const name of OFFICE_FS_TOOL_NAMES) {
       assert.ok(tools.includes(name), `missing FS tool ${name}`)
     }
@@ -109,6 +111,10 @@ describe('toolsForProfile', () => {
         'board_job_finish',
         'board_status',
         'board_commit',
+        'interactive_begin',
+        'interactive_append',
+        'interactive_finish',
+        'interactive_commit',
       ],
     )
   })

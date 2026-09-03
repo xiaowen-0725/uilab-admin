@@ -11,6 +11,8 @@ export type FileReferenceChipProps = {
   path?: string
   line?: number
   className?: string
+  /** Same path as a turn deliverable — keep the name, drop the paperclip control. */
+  plain?: boolean
   onOpen?: (info: { path?: string; line?: number; label: string }) => void
 }
 
@@ -22,8 +24,21 @@ export function FileReferenceChip({
   path,
   line,
   className,
+  plain = false,
   onOpen,
 }: FileReferenceChipProps): ReactNode {
+  if (plain) {
+    return (
+      <span
+        data-testid='file-reference-plain'
+        data-path={path}
+        className={cn('font-medium', className)}
+      >
+        {label}
+      </span>
+    )
+  }
+
   const title = [path, line != null ? `line ${line}` : null]
     .filter(Boolean)
     .join(':')

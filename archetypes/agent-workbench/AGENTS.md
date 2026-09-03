@@ -61,9 +61,9 @@ src/
     project/           # Project 实体 + Task 目录 + ProjectCatalogPort
       ports/host-wire.ts  # Electron ↔ Renderer IPC 线协议（叶层，无 React）
     workbench-session/ # 选择指针 + 每 Task 布局（无 projects/tasks 数组）
-    task/              # Runtime 契约 / EventStore Port / projection / Task Surface UI
+    task/              # Runtime 契约 / EventStore Port / projection / Task Surface UI / Interactive Artifact 产物库与写入通道
     task-runtime/      # VoltAgent Adapter + EventStore 实现（叶层，无 React）
-    work-surface/      # Host + Registry + Document/Browser + WorkspaceDocumentSource
+    work-surface/      # Host + Registry + Document/Browser/Interactive Surface + WorkspaceDocumentSource
     capabilities/      # 连接器 / 技能 / 专家 snapshot 与选择
     board/             # Board 实体 + BoardStorePort + BoardWidgetHost / 桥 + Canvas / 列表详情预览；作业执行走侧车 Deno 端点；刷新语义（#140）+ 零作业示例板（#141）+ agent 面契约（#142）已交付
     identity/          # Product Identity 领域；无身份默认 adapter 满足 Board 的 IdentityScopePort

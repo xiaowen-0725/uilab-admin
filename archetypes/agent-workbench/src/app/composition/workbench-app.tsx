@@ -30,7 +30,12 @@ import {
   type ProjectSummary,
   useProjectCatalog,
 } from '@/modules/project'
-import type { LaunchAction, TaskSurfaceView } from '@/modules/task'
+import type {
+  InteractiveArtifactContentPort,
+  InteractiveArtifactStorePort,
+  LaunchAction,
+  TaskSurfaceView,
+} from '@/modules/task'
 import { useTaskRuntime } from '@/modules/task'
 import { useWorkspaceDocumentSource, fetchWorkspaceHint } from '@/modules/work-surface'
 import {
@@ -41,6 +46,10 @@ import { ThemeProvider } from '@/shell/theme/theme-provider'
 import { WorkbenchShell } from '@/shell/workbench-shell/workbench-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWorkbenchBoardWiring } from './board-wiring'
+import {
+  useWorkbenchClientToolExecutor,
+  useWorkbenchInteractiveArtifactWiring,
+} from './interactive-artifact-wiring'
 import { DeleteProjectConfirmDialog } from './delete-project-confirm-dialog'
 import { DeleteTaskConfirmDialog } from './delete-task-confirm-dialog'
 import { useBusyTaskIds, useWorkbenchRuntimeWiring } from './runtime-wiring'
@@ -56,6 +65,7 @@ import {
 } from './task-lifecycle-commands'
 import { isInstantDemo } from './test-env'
 import { useWorkbenchBoot, type WorkbenchPersistence } from './workbench-boot'
+import { readWritableRuntimeGate } from './writable-runtime-gate'
 
 export type { WorkbenchPersistence }
 
@@ -77,6 +87,10 @@ export interface WorkbenchAppProps {
   boardJobRuntime?: BoardJobRuntimePort
   /** Optional Product Identity (tests). Product default is the no-identity adapter. */
   identityScope?: IdentityScopePort
+  /** Optional Interactive Artifact store injection (tests). */
+  interactiveArtifactStore?: InteractiveArtifactStorePort
+  /** Optional Interactive Artifact staging (tests). */
+  interactiveArtifactContent?: InteractiveArtifactContentPort
 }
 
 const DEFAULT_SESSION_SEED: WorkbenchSessionSeed = {
@@ -109,6 +123,8 @@ export function WorkbenchApp({
   boardContent: boardContentProp,
   boardJobRuntime: boardJobRuntimeProp,
   identityScope: identityScopeProp,
+  interactiveArtifactStore: interactiveArtifactStoreProp,
+  interactiveArtifactContent: interactiveArtifactContentProp,
 }: WorkbenchAppProps = {}) {
   const persistence = persistenceProp ?? resolveDefaultPersistence()
   const session = useWorkbenchSession(DEFAULT_SESSION_SEED)
@@ -152,6 +168,16 @@ export function WorkbenchApp({
     hostPort,
   })
   const { boardOpenerRef } = board
+  const interactiveArtifacts = useWorkbenchInteractiveArtifactWiring({
+    db,
+    selectedTaskId: session.view.selectedTaskId,
+    store: interactiveArtifactStoreProp,
+    content: interactiveArtifactContentProp,
+  })
+  const clientToolExecutor = useWorkbenchClientToolExecutor(
+    board.executor,
+    interactiveArtifacts.executor,
+  )
 
   // --- Catalog + selection ---
   const catalogView = useProjectCatalog(catalogController)
@@ -194,13 +220,20 @@ export function WorkbenchApp({
     projectId: projectId ?? DEFAULT_PROJECT_ID,
     persistence,
     bootReady,
-    clientToolExecutor: board.executor,
+    clientToolExecutor,
   })
   const {
     controller: runtimeController,
     runStatusIndex,
     capabilityController,
   } = runtimeWiring
+  const forgetDeletedTask = useCallback(
+    (deletedTaskId: string) => {
+      capabilityController.clearTask(deletedTaskId)
+      void interactiveArtifacts.store.deleteByTaskId(deletedTaskId)
+    },
+    [capabilityController, interactiveArtifacts.store],
+  )
 
   const isRuntimePath = Boolean(taskId)
   const runtime = useTaskRuntime(runtimeController, taskId ?? '', {
@@ -213,6 +246,11 @@ export function WorkbenchApp({
 
   // --- Surface registry + open channels ---
   const hasOpenWorkTabs = session.view.layout.openTabs.length > 0
+  const [workSurfaceOpenMotionToken, setWorkSurfaceOpenMotionToken] =
+    useState(0)
+  const requestWorkSurfaceOpenMotion = useCallback(() => {
+    setWorkSurfaceOpenMotionToken((token) => token + 1)
+  }, [])
   const surface = useWorkbenchSurfaceAssembly({
     documentSource,
     hasOpenWorkTabs,
@@ -221,6 +259,10 @@ export function WorkbenchApp({
     selectedTaskId: taskId,
     bootReady,
     board: board.surface,
+    interactive: interactiveArtifacts.surface,
+    readModel: isRuntimePath ? runtime.readModel : null,
+    workSurfaceVisible: session.view.layout.workSurfaceVisible,
+    onRequestPaneOpenMotion: requestWorkSurfaceOpenMotion,
   })
   board.attachPreviewOpener((boardId, title) => {
     openWorkSurfaceFromRuntimePayload(
@@ -229,6 +271,18 @@ export function WorkbenchApp({
       {
         kind: 'board',
         resourceKey: boardId,
+        title,
+        focus: 'pane',
+      },
+    )
+  })
+  interactiveArtifacts.attachCommittedOpener((artifactId, title) => {
+    openWorkSurfaceFromRuntimePayload(
+      surface.surfaceRegistry,
+      session.commands.openWorkSurfaceTab,
+      {
+        kind: 'interactive',
+        resourceKey: artifactId,
         title,
         focus: 'pane',
       },
@@ -317,8 +371,10 @@ export function WorkbenchApp({
               text: string,
               composerContext?: Parameters<typeof runtime.submitText>[1],
             ) => {
-              const gate = await localRootRef.current?.waitForWritableRuntime()
-              if (gate && !gate.ok) {
+              const gate = await readWritableRuntimeGate(
+                localRootRef.current?.waitForWritableRuntime,
+              )
+              if (!gate.ok) {
                 setProjectActionError(gate.message)
                 return null
               }
@@ -376,8 +432,10 @@ export function WorkbenchApp({
     (action: LaunchAction) => {
       if (!taskId || !action.promptStub) return
       void (async () => {
-        const gate = await localRootRef.current?.waitForWritableRuntime()
-        if (gate && !gate.ok) {
+        const gate = await readWritableRuntimeGate(
+          localRootRef.current?.waitForWritableRuntime,
+        )
+        if (!gate.ok) {
           setProjectActionError(gate.message)
           return
         }
@@ -599,9 +657,7 @@ export function WorkbenchApp({
         lastTaskByProject: session.view.lastTaskByProject,
         navigatorOpen: session.view.navigatorOpen,
         activeRunStatus: runtime.turnStatus,
-        onTaskDeleted: (deletedTaskId) => {
-          capabilityController.clearTask(deletedTaskId)
-        },
+        onTaskDeleted: forgetDeletedTask,
       })
 
       // Always sync selection + lastTaskByProject into session memory so the
@@ -619,7 +675,7 @@ export function WorkbenchApp({
     },
     [
       catalogController,
-      capabilityController,
+      forgetDeletedTask,
       db,
       eventStore,
       persistence,
@@ -668,9 +724,7 @@ export function WorkbenchApp({
         selectedProjectId: session.view.selectedProjectId,
         lastTaskByProject: session.view.lastTaskByProject,
         activeRunStatus: runtime.turnStatus,
-        onTaskDeleted: (deletedTaskId) => {
-          capabilityController.clearTask(deletedTaskId)
-        },
+        onTaskDeleted: forgetDeletedTask,
       })
 
       for (const removedTaskId of result.removedTaskIds) {
@@ -692,7 +746,7 @@ export function WorkbenchApp({
     },
     [
       catalogController,
-      capabilityController,
+      forgetDeletedTask,
       eventStore,
       runStatusIndex,
       startRuntimeForSelected,
@@ -784,6 +838,8 @@ export function WorkbenchApp({
           taskExists={(id) => Boolean(catalogController?.getTaskRow(id))}
           boardOpenerRef={boardOpenerRef}
           onOpenFileRef={surface.onOpenFileRef}
+          onOpenDeliverables={surface.onOpenDeliverables}
+          workSurfaceOpenMotionToken={workSurfaceOpenMotionToken}
           workSurfaceEmptyExtra={surface.workSurfaceEmptyExtra}
           workSurfaceToolbarTrailing={surface.workSurfaceToolbarTrailing}
         />

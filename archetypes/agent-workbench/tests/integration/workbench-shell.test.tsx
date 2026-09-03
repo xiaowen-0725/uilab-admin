@@ -1167,13 +1167,13 @@ describe('Workbench Shell integration (visible behavior)', () => {
       page.getByTestId('composer-input').element(),
     )
     expect(emptyInputStyle.fontSize).toBe('15px')
-    expect(emptyInputStyle.lineHeight).toBe('26.25px')
+    expect(emptyInputStyle.lineHeight).toBe('26.7px')
     expect(Number.parseFloat(emptyInputStyle.minHeight)).toBeGreaterThanOrEqual(
       70,
     )
-    // New-task empty hub: workspace + permission sit in the well under the shell.
     const emptyBar = page.getByTestId('composer-context-bar').element()
     const emptyShell = page.getByTestId('composer-shell').element()
+    const emptyWell = document.querySelector('[data-slot="composer-well"]')
     const emptyProjectChip = page.getByTestId('composer-chip-project').element()
     const emptyPermission = page
       .getByTestId('composer-permission-preset')
@@ -1184,9 +1184,11 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(page.getByTestId('composer-permission-preset'))
       .toBeInTheDocument()
-    expect(emptyShell.contains(emptyPermission)).toBe(false)
+    expect(emptyWell?.contains(emptyShell)).toBe(true)
+    expect(emptyWell?.contains(emptyBar)).toBe(true)
+    expect(emptyShell.contains(emptyPermission)).toBe(true)
     expect(emptyBar.contains(emptyProjectChip)).toBe(true)
-    expect(emptyBar.contains(emptyPermission)).toBe(true)
+    expect(emptyBar.contains(emptyPermission)).toBe(false)
     await expect
       .element(page.getByTestId('composer-model'))
       .toHaveTextContent('本地侧车模型')
@@ -1197,16 +1199,17 @@ describe('Workbench Shell integration (visible behavior)', () => {
     await expect
       .element(page.getByTestId('composer'))
       .toHaveAttribute('data-composer-placement', 'dock')
-    // Conversation: well footer keeps permission; project chip hides.
-    await expect
-      .element(page.getByTestId('composer-context-bar'))
-      .toBeInTheDocument()
+    expect(
+      document.querySelector('[data-testid="composer-context-bar"]')
+    ).toBeNull()
     expect(
       document.querySelector('[data-testid="composer-chip-project"]')
     ).toBeNull()
-    await expect
-      .element(page.getByTestId('composer-permission-preset'))
-      .toBeInTheDocument()
+    const dockPermission = page
+      .getByTestId('composer-permission-preset')
+      .element()
+    const dockShell = page.getByTestId('composer-shell').element()
+    expect(dockShell.contains(dockPermission)).toBe(true)
     // Notice is sr-only (no visible honesty chrome under Composer)
     expect(
       page

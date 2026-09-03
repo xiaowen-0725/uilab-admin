@@ -6,13 +6,10 @@
 
 import {
   assertRuntimeConfigOutsideWorkspace,
-  createPersistedAuthBindingStore,
   defaultRuntimeConfigDir,
 } from './auth-binding-persist.js'
-import {
-  createAuthBindingStore,
-  type AuthBindingStore,
-} from './auth-binding-store.js'
+import { type AuthBindingStore } from './auth-binding-store.js'
+import { resolveAuthRuntimeStores } from './auth-runtime-stores.js'
 import { resolveAuthResourceStatus } from './auth-status.js'
 import {
   oauthKeychainAccount,
@@ -32,7 +29,6 @@ import {
   type OAuthPendingStore,
 } from './oauth.js'
 import {
-  createDefaultSecretStore,
   resolveKeychainCapability,
   resolveKeychainModeFromEnv,
   type SecretStore,
@@ -162,32 +158,21 @@ async function openAuthContext(options: RunAuthOptions): Promise<{
   persistEnabled: boolean
 }> {
   const env = options.env ?? process.env
-  const secretStore = options.secretStore ?? createDefaultSecretStore(env)
-  // Honor same persistence policy as createPluginRegistryFromEnv (adversarial P1)
-  const persistEnabled =
-    options.persistAuthBindings !== false && env.UILAB_PERSIST_AUTH !== '0'
-
-  let bindingStore = options.authBindingStore
-  if (!bindingStore) {
-    if (persistEnabled) {
-      bindingStore = await createPersistedAuthBindingStore({
-        env,
-        rootDir: options.runtimeConfigDir,
-        // Never auto-skip when runtimeConfigDir is set — that allowed PKCE
-        // pending under agent-writable WORKSPACE_ROOT (acceptance P1).
-        skipWorkspaceGuard: options.skipWorkspaceGuard === true,
-      })
-    } else {
-      bindingStore = createAuthBindingStore()
-    }
-  }
+  const stores = await resolveAuthRuntimeStores({
+    env,
+    persistAuthBindings: options.persistAuthBindings,
+    secretStore: options.secretStore,
+    authBindingStore: options.authBindingStore,
+    runtimeConfigDir: options.runtimeConfigDir,
+    skipWorkspaceGuard: options.skipWorkspaceGuard,
+  })
 
   const registry = await createPluginRegistryFromEnv({
     ...options,
     env,
-    secretStore,
-    authBindingStore: bindingStore,
-    persistAuthBindings: false, // we already own bindingStore
+    secretStore: stores.secretStore,
+    authBindingStore: stores.authBindingStore,
+    persistAuthBindings: false,
   })
   const loaded = await registry.load({
     workspaceRoot: options.workspaceRoot,
@@ -195,11 +180,11 @@ async function openAuthContext(options: RunAuthOptions): Promise<{
 
   return {
     env,
-    secretStore,
-    bindingStore,
+    secretStore: stores.secretStore,
+    bindingStore: stores.authBindingStore,
     manifests: registry.listManifests(),
     disconnect: loaded.disconnect,
-    persistEnabled,
+    persistEnabled: stores.persistEnabled,
   }
 }
 

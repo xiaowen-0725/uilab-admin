@@ -5,6 +5,7 @@
  * - RuntimePort / EventStorePort / projection / TaskSurface
  * - Phase 4B Runtime Kernel
  * - Phase 4C–4F Task Pane (projection, Runtime lifecycle, fold/scroll)
+ * - Task-owned Interactive Artifact library + client-side commit channel
  * - Capture replay retained only for test harness / explicit dev (not product default)
  *
  * Product default: local VoltAgent sidecar Runtime path (ADR-0018).
@@ -24,7 +25,22 @@ export { Timeline, TIMELINE_FOLD_THRESHOLD } from './ui/timeline/timeline'
 export type {
   TimelineProps,
   TimelineOpenFileRef,
+  OpenDeliverablesRequest,
 } from './ui/timeline/timeline'
+export {
+  classifyDeliverable,
+  deliverableBasename,
+  deliverableCompletionKey,
+  deliverableCoverageKey,
+  deliverableOpenRef,
+  featuredDeliverable,
+  isInteractiveDeliverable,
+  isNonTerminalTurnStatus,
+  isOpenableDeliverable,
+  lastCompletedTurnId,
+  shouldAutoOpenDeliverablePane,
+  shouldRequestPaneOpenMotion,
+} from './ui/timeline/deliverable-presentation'
 
 export { LiveStatusLine } from './ui/live-status-line'
 export type { LiveStatusLineProps } from './ui/live-status-line'
@@ -153,8 +169,10 @@ export { EventStorePortError } from './ports/event-store-port'
 // --- runtime utilities (UI honesty copy + projection helpers) ---
 export {
   previewText,
+  humanizeRuntimeFailure,
   VOLTAGENT_RUNTIME_HONESTY_COPY,
 } from './runtime/runtime-honesty'
+export type { RuntimeFailureCopy } from './runtime/runtime-honesty'
 export type { RuntimeHonestyCopy } from './runtime/runtime-honesty'
 
 export {
@@ -228,3 +246,62 @@ export {
   isNavigatorBusyStatus,
 } from './application/run-status-index'
 export type { TurnStatusIndexListener } from './application/run-status-index'
+
+// --- Interactive Artifact (Task-owned library + write channel) ---
+export {
+  INTERACTIVE_ARTIFACT_KIND,
+  isInteractiveArtifactKind,
+} from './model/interactive-artifact'
+export type {
+  InteractiveArtifactId,
+  InteractiveArtifactRecord,
+} from './model/interactive-artifact'
+export { hashInteractiveContent } from './model/interactive-content-hash'
+export type { InteractiveArtifactStorePort } from './ports/interactive-artifact-store-port'
+export type {
+  InteractiveArtifactContentFailure,
+  InteractiveArtifactContentOk,
+  InteractiveArtifactContentPort,
+} from './ports/interactive-artifact-content-port'
+export {
+  MemoryInteractiveArtifactStore,
+  createMemoryInteractiveArtifactStore,
+} from './adapters/memory-interactive-artifact-store'
+export {
+  MemoryInteractiveArtifactContent,
+  createMemoryInteractiveArtifactContent,
+} from './adapters/memory-interactive-artifact-content'
+export { createHttpInteractiveArtifactContent } from './adapters/http-interactive-artifact-content'
+export type { HttpInteractiveArtifactContentOptions } from './adapters/http-interactive-artifact-content'
+export {
+  IdbInteractiveArtifactStore,
+  createIdbInteractiveArtifactStore,
+} from './adapters/idb-interactive-artifact-store'
+export {
+  INTERACTIVE_ALL_TOOL_NAMES,
+  INTERACTIVE_CLIENT_TOOL_NAMES,
+  INTERACTIVE_INSTRUCTION_SENTENCES,
+  INTERACTIVE_SIDECAR_TOOL_NAMES,
+  INTERACTIVE_TOOL_DESCRIPTIONS,
+  INTERACTIVE_TOOL_INSTRUCTIONS,
+  isInteractiveClientTool,
+} from './application/interactive-artifact-agent-contract'
+export type {
+  InteractiveArtifactToolName,
+  InteractiveClientToolName,
+} from './application/interactive-artifact-agent-contract'
+export {
+  assertNoInteractiveContentLeak,
+  commitInteractiveDraft,
+} from './application/interactive-artifact-write-channel'
+export type {
+  InteractiveArtifactCommitInput,
+  InteractiveArtifactCommitOk,
+  InteractiveArtifactToolFailure,
+  InteractiveArtifactWriteClock,
+} from './application/interactive-artifact-write-channel'
+export { createInteractiveArtifactClientToolExecutor } from './application/interactive-artifact-client-tools'
+export type {
+  InteractiveArtifactClientToolExecutor,
+  InteractiveArtifactCommitEffects,
+} from './application/interactive-artifact-client-tools'

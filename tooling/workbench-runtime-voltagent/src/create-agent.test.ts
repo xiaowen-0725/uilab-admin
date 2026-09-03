@@ -18,6 +18,7 @@ import {
   officeFilesystemToolConfig,
 } from './create-agent.js'
 import { BOARD_TOOL_INSTRUCTIONS } from './tools/board-agent-contract.js'
+import { INTERACTIVE_TOOL_INSTRUCTIONS } from './tools/interactive-artifact-agent-contract.js'
 import { askUserQuestionTool } from './ask-user-question-tool.js'
 import { updatePlanTool } from './update-plan-tool.js'
 import {
@@ -533,6 +534,10 @@ describe('createWorkbenchAgent', { concurrency: 1 }, () => {
         'board_job_finish',
         'board_status',
         'board_commit',
+        'interactive_begin',
+        'interactive_append',
+        'interactive_finish',
+        'interactive_commit',
       ],
     )
   })
@@ -566,6 +571,8 @@ describe('createWorkbenchAgent', { concurrency: 1 }, () => {
     assert.ok(bundle.tools.includes('ask_user_question'))
     assert.ok(bundle.tools.includes('board_widget_begin'))
     assert.ok(bundle.tools.includes('board_job_finish'))
+    assert.ok(bundle.tools.includes('interactive_begin'))
+    assert.ok(bundle.tools.includes('interactive_commit'))
     assert.ok(!bundle.tools.includes('run_command'))
 
     // O2 first-run bootstrap
@@ -614,7 +621,9 @@ describe('createWorkbenchAgent', { concurrency: 1 }, () => {
       `expected generic Workspace Shell, got: ${toolNames.join(',')}`,
     )
     assertBoardToolsAbsent(fullState)
+    assertInteractiveToolsPresent(fullState)
     assert.ok((fullState.instructions ?? '').includes(BOARD_TOOL_INSTRUCTIONS))
+    assert.ok((fullState.instructions ?? '').includes(INTERACTIVE_TOOL_INSTRUCTIONS))
     assertRegisteredUpdatePlan(fullState)
     assertRegisteredAskUserQuestion(fullState)
 
@@ -665,6 +674,22 @@ function assertBoardToolsAbsent(fullState: {
   ]) {
     assert.ok(!names.includes(name), `board tool ${name} must stay gated`)
   }
+}
+
+function assertInteractiveToolsPresent(fullState: {
+  tools: Array<{ name?: string; execute?: unknown }>
+}) {
+  const names = fullState.tools.map((tool) => tool.name)
+  for (const name of [
+    'interactive_begin',
+    'interactive_append',
+    'interactive_finish',
+    'interactive_commit',
+  ]) {
+    assert.ok(names.includes(name), `interactive tool ${name} must stay mounted`)
+  }
+  const commit = fullState.tools.find((tool) => tool.name === 'interactive_commit')
+  assert.equal(commit?.execute, undefined)
 }
 
 function assertRegisteredUpdatePlan(fullState: {

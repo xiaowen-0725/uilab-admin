@@ -1,3 +1,4 @@
+import { isInteractiveArtifactKind } from '../../model/interactive-artifact'
 import type { TimelineItem } from '../../projection/types'
 import {
   flattenWorkingEntries,
@@ -87,6 +88,9 @@ function isSettledFoldableInline(item: TimelineItem): boolean {
 function itemDeliverablePath(item: TimelineItem): string | undefined {
   if (item.category !== 'file-change' && item.category !== 'artifact') {
     return undefined
+  }
+  if (isInteractiveArtifactKind(item.meta?.kind)) {
+    return item.meta?.id?.trim() || undefined
   }
   const path = item.meta?.path ?? item.title
   return path?.trim() || undefined

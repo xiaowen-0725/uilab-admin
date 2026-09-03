@@ -8,6 +8,7 @@ import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
 import { Streamdown, type PluginConfig } from 'streamdown'
 import { cn } from '@/lib/utils'
+import { pathMatchesDeliverable } from '../timeline/deliverable-presentation'
 import {
   FileReferenceChip,
   isFilePathToken,
@@ -25,6 +26,8 @@ export type SimpleMarkdownProps = {
   source: string
   className?: string
   isAnimating?: boolean
+  /** Turn deliverable paths — render as plain names, not paperclip chips. */
+  plainFilePaths?: readonly string[]
   onOpenFileRef?: (info: {
     path?: string
     line?: number
@@ -63,7 +66,17 @@ function escapeText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function buildComponents(onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef']) {
+function isPlainPath(
+  path: string | undefined,
+  plainFilePaths?: readonly string[],
+): boolean {
+  return pathMatchesDeliverable(path, plainFilePaths ?? [])
+}
+
+function buildComponents(
+  onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef'],
+  plainFilePaths?: readonly string[],
+) {
   return {
     // Custom tag from preprocessFileReferences
     'file-ref': ({
@@ -81,6 +94,7 @@ function buildComponents(onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef']) {
           label={label}
           path={path}
           line={line ? Number(line) : undefined}
+          plain={isPlainPath(path, plainFilePaths)}
           onOpen={onOpenFileRef}
         />
       )
@@ -101,6 +115,7 @@ function buildComponents(onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef']) {
             label={t.label}
             path={t.path}
             line={t.line}
+            plain={isPlainPath(t.path, plainFilePaths)}
             onOpen={onOpenFileRef}
           />
         )
@@ -152,6 +167,7 @@ function buildComponents(onOpenFileRef?: SimpleMarkdownProps['onOpenFileRef']) {
           <FileReferenceChip
             label={text.split('/').pop() || text}
             path={text}
+            plain={isPlainPath(text, plainFilePaths)}
             onOpen={onOpenFileRef}
           />
         )
@@ -187,9 +203,10 @@ export function SimpleMarkdown({
   source,
   className,
   isAnimating = false,
+  plainFilePaths,
   onOpenFileRef,
 }: SimpleMarkdownProps) {
-  const components = buildComponents(onOpenFileRef)
+  const components = buildComponents(onOpenFileRef, plainFilePaths)
   const prepared = preprocessFileReferences(source)
 
   return (

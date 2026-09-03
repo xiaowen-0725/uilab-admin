@@ -382,6 +382,30 @@ describe('applyStreamGate', () => {
     ])
   })
 
+  it('omits interactive artifact rows already listed by id after settle', () => {
+    const raw = deriveTimelineView([
+      item({
+        id: 'artifact:ia_notes-table',
+        category: 'artifact',
+        title: '对比清单',
+        meta: { id: 'ia_notes-table', kind: 'interactive' },
+      }),
+      item({
+        id: 'answer',
+        category: 'assistant-message',
+        body: '表做好了。',
+        status: 'completed',
+      }),
+    ])
+    const settled = applyStreamGate(raw, {
+      hasProcess: false,
+      toolActive: false,
+      runSettled: true,
+      deliverablePaths: ['ia_notes-table'],
+    })
+    expect(settled.blocks.map((block) => block.kind)).toEqual(['prose'])
+  })
+
   it('does not promote a completed mid-turn commentary while tools are still running', () => {
     const commentary: TimelineViewBlock = {
       kind: 'prose',
