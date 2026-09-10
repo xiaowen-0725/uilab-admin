@@ -21,6 +21,8 @@ export type {
   TaskSurfaceComposerRuntime,
 } from './ui/task-surface/task-surface'
 
+export { workbenchMarkdownPlugins } from './ui/markdown/workbench-markdown-plugins'
+
 export { Timeline, TIMELINE_FOLD_THRESHOLD } from './ui/timeline/timeline'
 export type {
   TimelineProps,
