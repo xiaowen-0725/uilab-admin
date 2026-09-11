@@ -115,15 +115,19 @@ _Avoid_: 把过程头叫步骤, 终态仍把旁白和过程行摊在答案上
 
 **Artifact**:
 由 Task 或具体 Turn 产生、可在 Work Surface 中查看或操作的持久结果。
-_Avoid_: Tool Surface, Runtime Event, 行内图
+_Avoid_: Tool Surface, Runtime Event, 行内图, 行内视觉
 
 **Interactive Artifact**:
 Artifact 的一种：Agent 为本次 Task 生成、在对话旁打开的可交互产物；隶属于该 Task，一份 Task 可有多份，Agent 可对同一份迭代；用户不手改源，只对着面聊。不导出、不分享。聊天只留指针，不把视图本体摊进气泡或事件。用户可见中文「交互产物」；标识 `interactive`。
-_Avoid_: Canvas, Board Widget, Document preview, 现场产物（作正式主名）, live artifact（作正式主名）, 行内图
+_Avoid_: Canvas, Board Widget, Document preview, 现场产物（作正式主名）, live artifact（作正式主名）, 行内图, 行内视觉
 
 **行内图 Inline Figure**:
-助手正文里嵌着渲染的图，是 TimelineItem 正文的一部分，不是独立 Artifact。源有两种，不要合成一个词：闭合的 Markdown SVG 围栏（信息串 `svg`，大小写等同），以及 mermaid 围栏。正文里的裸 `<svg>` 不是行内图的源。首版插入宿主同源 DOM（浅框静图），经白名单消毒，不走 iframe 岛。用户可见中文「行内图」。
-_Avoid_: Interactive Artifact, Canvas, Board Widget, mermaid（作上位词）, 行内可视化, 图表（作正式主名）, 裸 SVG（作行内图源）
+助手正文里嵌着渲染的静图，是 TimelineItem 正文的一部分，不是独立 Artifact。产品源只有闭合的 mermaid 围栏；触发方是侧车写作约定（流程 / 时序 / 状态机 / 架构关系主动出图），不是用户点名 svg。对比卡不是行内图。` ```svg `、裸 `<svg>`、用户气泡、Composer、过程旁白都不是行内图源。插入宿主同源 DOM（浅框静图），经白名单消毒，不走 iframe 岛。用户可见中文「行内图」。
+_Avoid_: Interactive Artifact, Canvas, Board Widget, mermaid（作上位词）, 行内可视化, 行内视觉, 图表（作正式主名）, 裸 SVG（作行内图源）, SVG 围栏（作产品出图）
+
+**行内视觉 Inline Visual**:
+助手正文里的 HTML 视觉卡（对比、讲解、双栏），是 TimelineItem 正文的一部分，不是独立 Artifact，也不是交互产物。产品源只有闭合的 `visual` 围栏，里面是 HTML 片段（可内嵌 SVG）。触发方是侧车写作约定：对比 / 优劣 / 双栏讲解时 Agent 自己出卡，用户不点名 html / visual / 画图。画在对话列沙箱 iframe（ADR-0021 子文档收紧），宿主提供标题栏与折叠，不打开 Interactive Surface。` ```html `、` ```svg `、mermaid subgraph、用户气泡、Composer、过程旁白都不是行内视觉源。用户可见中文「行内视觉」。
+_Avoid_: Interactive Artifact, Canvas, Custom visuals（作正式主名）, Visualizer, widget（作正式主名）, mermaid（作上位词）, 行内图, Artifact
 
 ### 跨产品术语映射
 

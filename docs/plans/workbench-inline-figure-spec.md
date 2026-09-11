@@ -1,6 +1,6 @@
 # Spec: Workbench 行内图（Inline Figure）首版
 
-**Status:** ready for tickets（可施工规格已发布，未实施）
+**Status:** shipped as display layer；**产品源已纠正** — 不要再把 ` ```svg ` 当出图能力。职责见 [Agent 主动可视化](./workbench-agent-initiated-visualization.md)。mermaid 浅框渲染仍有效。
 **Tracker:** [规格：Workbench 行内图（Inline Figure）首版](https://github.com/xiaowen-0725/uilab-admin/issues/197)（`ready-for-agent`）
 **Map:** [Wayfinder 地图：Workbench 助手正文行内图（SVG / mermaid）首版规格](https://github.com/xiaowen-0725/uilab-admin/issues/187)
 **ADR:** [0027-inline-figure-same-origin-sanitized-svg](../adr/0027-inline-figure-same-origin-sanitized-svg.md)
@@ -14,7 +14,7 @@
 
 **Prototype:** `output/inline-figure-prototype/`（#195 选「浅框」）
 **Related (do not reinvent):** [workbench-interactive-artifact-spec](./workbench-interactive-artifact-spec.md)、ADR-0021 / 0026、[agent-event-stream-and-projection §6.1](../architecture/agent-event-stream-and-projection.md)
-**诚实边界:** 本文是可施工规格，不是已交付功能。实施走 [#197](https://github.com/xiaowen-0725/uilab-admin/issues/197) 的子票（#198 → #200 → #199），不要直接 `/implement` 本规格整张。不要改系统提示词去教模型画图。
+**诚实边界:** 显示器（闭合 mermaid 围栏 → 浅框）已合主干。**对比 / 讲解卡不是行内图**，见 [Agent 主动可视化](./workbench-agent-initiated-visualization.md) 与 [ADR-0028](../adr/0028-inline-visual-html-island.md)。**把 ` ```svg ` 当产品出图已作废**。
 
 ---
 
@@ -54,7 +54,7 @@
 ### 领域与命名
 
 - 正式名：**行内图 / Inline Figure**。不是 Artifact，不是 Interactive Artifact，不是 Board Widget。
-- 两种源不要合成一个词：闭合 ` ```svg `（信息串第一个 token，大小写等同），闭合 ` ```mermaid `。
+- 两种源不要合成一个词：**现行产品源只有闭合 ` ```mermaid `。** 历史稿曾把闭合 ` ```svg ` 也当源，已由 [Agent 主动可视化](./workbench-agent-initiated-visualization.md) 撤回。
 - 不认：裸 `<svg>`、` ```xml `、HTML 混排、` ```svg.xml ` 这类第二 token。
 - 用户可见中文「行内图」。不要在 UI 里写 Canvas / 图表 / 行内可视化。
 
@@ -70,7 +70,7 @@
 - Timeline 与 Document **共用一份**插件 / renderer / 消毒配置。禁止两边各写一套白名单。
 - Timeline 现有 `components.code` 会拆掉 mermaid 与 `renderers` 管线，必须改成 `inlineCode`（文件路径芯片只接管行内 code）。
 - 装 `@streamdown/mermaid`，版本与当前 `streamdown` 匹配（调研时对照 `streamdown@2.5.0` 的 `@streamdown/mermaid@1.0.2`）。**mermaid 运行时钉在该插件声明的依赖上**，升级走插件升级，不要单独漂 `mermaid`。
-- ` ```svg ` 无官方插件：用 `plugins.renderers` 按 language `svg` 接管。
+- ` ```svg ` **不再**用 `plugins.renderers` 出图；该语言走普通代码块。mermaid 仍用 custom renderer。
 - `controls={false}` 保持关掉（无下载 / 全屏 / 源码切换）。
 - 消毒与体积闸是无 React 的纯函数，可单测。插入 DOM 用 SVG 命名空间的 React 节点（或等价 `importNode`），不要把未消毒字符串写进 `svg.innerHTML`。
 
@@ -137,7 +137,7 @@
 ### 协议与 Runtime
 
 - 纯渲染层。不新增 TimelineItem 种类，不新增 Runtime 事件，不复活 `work_surface.open_requested`。
-- 不改系统提示词。模型会不会吐围栏是运气；渲染器只负责画已写出的源。
+- 显示器仍不新造协议事件。**写作约定已改**：侧车 `INLINE_FIGURE_INSTRUCTIONS` 教模型在结构类回答里写 mermaid，见 [Agent 主动可视化](./workbench-agent-initiated-visualization.md)。
 - 过大或可交互的视图：Agent 应走交互产物水管。渲染器不跳转、不提示换管。
 
 ## Testing Decisions
@@ -183,7 +183,7 @@
 - 正文裸 `<svg>`、KaTeX、HTML 岛、可点图表。
 - 过程旁白出图；边流边编译。
 - 工具栏、源码切换、可见图题条、导向交互产物的文案。
-- 新 TimelineItem / Runtime 事件；改系统提示词。
+- 新 TimelineItem / Runtime 事件。写作约定见 [Agent 主动可视化](./workbench-agent-initiated-visualization.md)。
 - 用户消息 Markdown 出图。
 - 本规格范围内的功能实施（见子票 #198 / #200 / #199）。
 

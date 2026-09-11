@@ -21,7 +21,7 @@ export type InteractiveArtifactToolName =
 
 export const INTERACTIVE_INSTRUCTION_SENTENCES = [
   '交互产物是本次 Task 旁边的可交互 HTML 视图，不是看板，也不是工作区文件。',
-  '用户要可筛选的表、对比清单、可点的图，或明确说「交互产物」时：interactive_begin → append → finish → interactive_commit；禁止 write_file 一个 .html 来「打开」，禁止用 board_* 冒充，禁止把整表摊进聊天。',
+  '用户要可筛选的表、可点的清单、表单、需要迭代的小应用，或明确说「交互产物」时：interactive_begin → append → finish → interactive_commit；禁止 write_file 一个 .html 来「打开」，禁止用 board_* 冒充，禁止把整表摊进聊天。对比卡、讲解卡走行内视觉，不要为对照去开交互产物。',
   '更新同一份必须带上次 commit 返回的 artifactId；省略 id 且内容 hash 已存在则回放，不铸新份。没有 interactive_* 时不得声称能做。',
 ] as const
 

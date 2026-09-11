@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-27
+- **Amended:** 2026-09-11 — 对话列 **行内视觉**（HTML 对比卡）另见 [ADR-0028](./0028-inline-visual-html-island.md)，不是本 ADR 的 Interactive Surface
 - **Scope:** Agent Workbench 对话旁 Interactive Artifact / Interactive Surface；不改 Board 合同
 - **Map:** [#167](https://github.com/xiaowen-0725/uilab-admin/issues/167)
 - **Spec:** [workbench-interactive-artifact-spec](../plans/workbench-interactive-artifact-spec.md) · [规格票 #181](https://github.com/xiaowen-0725/uilab-admin/issues/181)

@@ -18,6 +18,8 @@ import {
   officeFilesystemToolConfig,
 } from './create-agent.js'
 import { BOARD_TOOL_INSTRUCTIONS } from './tools/board-agent-contract.js'
+import { INLINE_FIGURE_INSTRUCTIONS } from './tools/inline-figure-agent-contract.js'
+import { INLINE_VISUAL_INSTRUCTIONS } from './tools/inline-visual-agent-contract.js'
 import { INTERACTIVE_TOOL_INSTRUCTIONS } from './tools/interactive-artifact-agent-contract.js'
 import { askUserQuestionTool } from './ask-user-question-tool.js'
 import { updatePlanTool } from './update-plan-tool.js'
@@ -624,6 +626,8 @@ describe('createWorkbenchAgent', { concurrency: 1 }, () => {
     assertInteractiveToolsPresent(fullState)
     assert.ok((fullState.instructions ?? '').includes(BOARD_TOOL_INSTRUCTIONS))
     assert.ok((fullState.instructions ?? '').includes(INTERACTIVE_TOOL_INSTRUCTIONS))
+    assert.ok((fullState.instructions ?? '').includes(INLINE_FIGURE_INSTRUCTIONS))
+    assert.ok((fullState.instructions ?? '').includes(INLINE_VISUAL_INSTRUCTIONS))
     assertRegisteredUpdatePlan(fullState)
     assertRegisteredAskUserQuestion(fullState)
 

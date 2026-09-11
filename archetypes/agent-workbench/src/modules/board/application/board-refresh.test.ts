@@ -191,7 +191,8 @@ describe('executeJobRun', () => {
       latestData: { quote: 1 },
       status: 'error',
     })
-    expect((await store.listRuns('j1')).at(-1)).toMatchObject({
+    const lastRun = await store.listRuns('j1')
+    expect(lastRun[lastRun.length - 1]).toMatchObject({
       status: 'error',
       errorMessage: expect.stringMatching(/合法 JSON/),
     })
@@ -356,7 +357,8 @@ describe('createBoardRefreshController', () => {
     const result = await controller.refreshJob('j1')
     expect(result.kind).toBe('already_running')
     expect(await store.getWidget('w1')).toMatchObject({ status: 'running' })
-    expect((await store.listRuns('j1')).at(-1)?.status).toBe('running')
+    const lastRun = await store.listRuns('j1')
+    expect(lastRun[lastRun.length - 1]?.status).toBe('running')
   })
 
   it('returns 运行时未连接 when the sidecar is not available', async () => {

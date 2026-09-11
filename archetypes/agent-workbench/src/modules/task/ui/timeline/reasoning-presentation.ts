@@ -10,5 +10,5 @@ export function reasoningPreview(body: string | undefined): string | undefined {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-  return lines.at(-1)
+  return lines[lines.length - 1]
 }

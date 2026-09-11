@@ -32,6 +32,7 @@ describe('FoldableBody compact process prose', () => {
     const el = root.element()
     expect(el.querySelector('[data-testid="simple-markdown"]')).toBeNull()
     expect(el.querySelector('[data-testid="inline-figure"]')).toBeNull()
+    expect(el.querySelector('[data-testid="inline-visual"]')).toBeNull()
     expect(el.textContent ?? '').toContain('```svg')
     expect(el.textContent ?? '').toContain('fill="#dc2626"')
   })

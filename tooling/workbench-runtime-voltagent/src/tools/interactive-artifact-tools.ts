@@ -12,10 +12,7 @@ import {
 } from './interactive-artifact-types.js'
 import type { InteractiveArtifactStaging } from './interactive-artifact-staging.js'
 
-function toModelOutput({ output }: { output: unknown }): {
-  type: 'json'
-  value: unknown
-} {
+function toModelOutput({ output }: { output: unknown }) {
   return toInteractiveModelOutput(output)
 }
 

@@ -95,7 +95,10 @@ describe('BoardWidgetHost', () => {
     await userEvent.click(page.getByTestId('board-widget-menu-reload'))
 
     await expect
-      .poll(() => onSubmit.mock.calls.at(-1)?.[0], { timeout: 4000 })
+      .poll(() => {
+        const calls = onSubmit.mock.calls
+        return calls[calls.length - 1]?.[0]
+      }, { timeout: 4000 })
       .toEqual({ painted: { value: 128 } })
     await expectPhase('ready')
     expect(page.getByTestId('board-widget-error').elements()).toHaveLength(0)
@@ -292,7 +295,10 @@ describe('BoardWidgetHost', () => {
     )
 
     await expect
-      .poll(() => onSubmit.mock.calls.at(-1)?.[0], { timeout: 4000 })
+      .poll(() => {
+        const calls = onSubmit.mock.calls
+        return calls[calls.length - 1]?.[0]
+      }, { timeout: 4000 })
       .toEqual({
         theme: 'dark',
         bg: WIDGET_THEME_VARS.dark['--widget-bg'],

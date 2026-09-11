@@ -27,6 +27,7 @@ describe('Composer inline-figure boundary', () => {
     expect(field.value).toContain('fill="#dc2626"')
     const composer = page.getByTestId('composer').element()
     expect(composer.querySelector('[data-testid="inline-figure"]')).toBeNull()
+    expect(composer.querySelector('[data-testid="inline-visual"]')).toBeNull()
     expect(composer.querySelector('[data-testid="simple-markdown"]')).toBeNull()
   })
 })
