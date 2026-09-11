@@ -56,4 +56,24 @@ describe('ReasoningBlock', () => {
       .element(row)
       .toHaveTextContent('轨道倾角小角度随机 2-7 度。')
   })
+
+  it('keeps a fence in the thought body as characters', async () => {
+    const fence = [
+      '先画一张图。',
+      '```svg',
+      '<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="#dc2626"/></svg>',
+      '```',
+    ].join('\n')
+    await render(
+      <ReasoningBlock item={item({ body: fence })} runActive={false} />,
+    )
+    await userEvent.click(page.getByTestId('timeline-reasoning-trigger-reasoning-1'))
+    const row = page.getByTestId('timeline-item-reasoning-1')
+    await expect.element(row).toHaveAttribute('data-expanded', 'true')
+    const el = row.element()
+    expect(el.querySelector('[data-testid="inline-figure"]')).toBeNull()
+    expect(el.querySelector('[data-testid="simple-markdown"]')).toBeNull()
+    expect(el.textContent ?? '').toContain('```svg')
+    expect(el.textContent ?? '').toContain('fill="#dc2626"')
+  })
 })

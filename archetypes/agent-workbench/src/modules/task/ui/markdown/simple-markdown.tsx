@@ -4,9 +4,7 @@
  */
 
 import type { ComponentPropsWithoutRef } from 'react'
-import { cjk } from '@streamdown/cjk'
-import { code } from '@streamdown/code'
-import { Streamdown, type PluginConfig } from 'streamdown'
+import { Streamdown } from 'streamdown'
 import { cn } from '@/lib/utils'
 import { pathMatchesDeliverable } from '../timeline/deliverable-presentation'
 import {
@@ -14,13 +12,9 @@ import {
   isFilePathToken,
   parseFileRefTarget,
 } from './file-reference-chip'
+import { workbenchMarkdownPlugins } from './workbench-markdown-plugins'
 
 import 'streamdown/styles.css'
-
-const streamPlugins: PluginConfig = {
-  cjk,
-  code: code as PluginConfig['code'],
-}
 
 export type SimpleMarkdownProps = {
   source: string
@@ -155,14 +149,13 @@ function buildComponents(
         </a>
       )
     },
-    code: ({
+    inlineCode: ({
       className,
       children,
       ...rest
     }: ComponentPropsWithoutRef<'code'>) => {
       const text = extractText(children).trim()
-      const isBlock = Boolean(className?.includes('language-'))
-      if (!isBlock && isFilePathToken(text)) {
+      if (isFilePathToken(text)) {
         return (
           <FileReferenceChip
             label={text.split('/').pop() || text}
@@ -176,8 +169,7 @@ function buildComponents(
         <code
           {...rest}
           className={cn(
-            !isBlock &&
-              'rounded-md bg-muted px-1.5 py-0.5 font-mono text-sm font-[445]',
+            'rounded-md bg-muted px-1.5 py-0.5 font-mono text-sm font-[445]',
             className,
           )}
         >
@@ -224,7 +216,7 @@ export function SimpleMarkdown({
     >
       <Streamdown
         className='size-full'
-        plugins={streamPlugins}
+        plugins={workbenchMarkdownPlugins}
         components={components as never}
         allowedTags={{ 'file-ref': ['path', 'line'] }}
         isAnimating={isAnimating}

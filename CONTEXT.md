@@ -115,11 +115,15 @@ _Avoid_: 把过程头叫步骤, 终态仍把旁白和过程行摊在答案上
 
 **Artifact**:
 由 Task 或具体 Turn 产生、可在 Work Surface 中查看或操作的持久结果。
-_Avoid_: Tool Surface, Runtime Event
+_Avoid_: Tool Surface, Runtime Event, 行内图
 
 **Interactive Artifact**:
 Artifact 的一种：Agent 为本次 Task 生成、在对话旁打开的可交互产物；隶属于该 Task，一份 Task 可有多份，Agent 可对同一份迭代；用户不手改源，只对着面聊。不导出、不分享。聊天只留指针，不把视图本体摊进气泡或事件。用户可见中文「交互产物」；标识 `interactive`。
-_Avoid_: Canvas, Board Widget, Document preview, 现场产物（作正式主名）, live artifact（作正式主名）
+_Avoid_: Canvas, Board Widget, Document preview, 现场产物（作正式主名）, live artifact（作正式主名）, 行内图
+
+**行内图 Inline Figure**:
+助手正文里嵌着渲染的图，是 TimelineItem 正文的一部分，不是独立 Artifact。源有两种，不要合成一个词：闭合的 Markdown SVG 围栏（信息串 `svg`，大小写等同），以及 mermaid 围栏。正文里的裸 `<svg>` 不是行内图的源。首版插入宿主同源 DOM（浅框静图），经白名单消毒，不走 iframe 岛。用户可见中文「行内图」。
+_Avoid_: Interactive Artifact, Canvas, Board Widget, mermaid（作上位词）, 行内可视化, 图表（作正式主名）, 裸 SVG（作行内图源）
 
 ### 跨产品术语映射
 
