@@ -30,7 +30,7 @@ function ProcessAside({ item }: { item: TimelineItem }): ReactNode {
       data-testid={`timeline-process-aside-${item.id}`}
       className='px-0.5'
     >
-      <FoldableBody itemId={item.id} body={body} muted compact />
+      <FoldableBody itemId={item.id} body={body} markdown={false} muted compact />
     </div>
   )
 }

@@ -273,6 +273,37 @@ describe('DocumentPanel', () => {
       .toHaveTextContent('工作区侧车未连接')
   })
 
+  it('renders a workspace .svg file as an image, not an inline figure', async () => {
+    const content = createMemoryDocumentContent({
+      files: {
+        'demo/diagram.svg':
+          '<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="#dc2626"/></svg>',
+      },
+    })
+    await render(
+      <DocumentPanel
+        resourceKey='demo/diagram.svg'
+        title='diagram.svg'
+        content={content}
+      />,
+    )
+    await expect
+      .poll(() =>
+        page.getByTestId('work-surface-document').element().getAttribute('data-state'),
+      )
+      .toBe('ready')
+    await expect
+      .element(page.getByTestId('work-surface-document'))
+      .toHaveAttribute('data-format', 'image')
+    await expect
+      .element(page.getByTestId('document-renderer-image'))
+      .toBeInTheDocument()
+    expect(document.querySelector('[data-testid="inline-figure"]')).toBeNull()
+    expect(
+      document.querySelector('[data-testid="document-renderer-markdown"]'),
+    ).toBeNull()
+  })
+
   it('renders optional workspace hint in header', async () => {
     const content = createMemoryDocumentContent()
     await render(

@@ -1,16 +1,10 @@
 /**
- * Document Markdown — Streamdown + CJK/code plugins (same stack as Timeline).
- * Safe default Streamdown pipeline; no raw HTML execution path.
+ * Document Markdown — same Streamdown plugins as Timeline prose.
+ * One sanitizer whitelist; do not fork `{ cjk, code }` or a second renderer map.
  */
-import { cjk } from '@streamdown/cjk'
-import { code } from '@streamdown/code'
-import { Streamdown, type PluginConfig } from 'streamdown'
+import { Streamdown } from 'streamdown'
+import { workbenchMarkdownPlugins } from '@/modules/task'
 import 'streamdown/styles.css'
-
-const streamPlugins: PluginConfig = {
-  cjk,
-  code: code as PluginConfig['code'],
-}
 
 export interface MarkdownRendererProps {
   source: string
@@ -29,10 +23,12 @@ export function MarkdownRenderer({
     >
       <Streamdown
         className='size-full'
-        plugins={streamPlugins}
+        plugins={workbenchMarkdownPlugins}
         isAnimating={false}
         mode='static'
         controls={false}
+        lineNumbers={false}
+        parseIncompleteMarkdown
       >
         {source}
       </Streamdown>

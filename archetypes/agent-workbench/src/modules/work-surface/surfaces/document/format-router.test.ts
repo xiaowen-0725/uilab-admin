@@ -20,6 +20,7 @@ describe('resolveDocumentFormat', () => {
     expect(resolveDocumentFormat('scan.pdf')).toBe('pdf')
     expect(resolveDocumentFormat('sheet.xlsx')).toBe('xlsx')
     expect(resolveDocumentFormat('photo.png')).toBe('image')
+    expect(resolveDocumentFormat('charts/flow.svg')).toBe('image')
     expect(resolveDocumentFormat('letter.docx')).toBe('docx')
     expect(resolveDocumentFormat('old.doc')).toBe('unsupported')
     expect(resolveDocumentFormat('old.xls')).toBe('unsupported')

@@ -18,6 +18,25 @@ function toolItem(id: string): TimelineItem {
   }
 }
 
+const SVG_FENCE = [
+  '过程旁白里的图',
+  '```svg',
+  '<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="#dc2626"/></svg>',
+  '```',
+].join('\n')
+
+function asideItem(id: string, body: string): TimelineItem {
+  return {
+    id,
+    category: 'assistant-message',
+    status: 'completed',
+    body,
+    sourceEventIds: [],
+    taskId: 'task-1',
+    projectionVersion: 1,
+  }
+}
+
 describe('WorkingBlock process fold', () => {
   it('does not auto-collapse after the user opens it', async () => {
     const block = workingBlockFromItems([toolItem('r1')])
@@ -96,5 +115,29 @@ describe('WorkingBlock process fold', () => {
       page.getByTestId('timeline-turn-toggle').element().querySelectorAll('svg'),
     ).toHaveLength(1)
     expect(document.querySelector('[data-testid="timeline-process-rule"]')).not.toBeNull()
+  })
+
+  it('keeps a process-aside fence as characters, not a figure', async () => {
+    const block = workingBlockFromItems([asideItem('aside-1', SVG_FENCE)])
+    await render(
+      <WorkingBlock
+        block={block}
+        terminal={{
+          ...toolItem('term'),
+          id: 'term',
+          category: 'turn-terminal',
+          status: 'running',
+        }}
+        runActive
+        primaryChrome
+      />,
+    )
+    const aside = page.getByTestId('timeline-process-aside-aside-1')
+    await expect.element(aside).toBeInTheDocument()
+    const el = aside.element()
+    expect(el.querySelector('[data-testid="inline-figure"]')).toBeNull()
+    expect(el.querySelector('[data-testid="simple-markdown"]')).toBeNull()
+    expect(el.textContent ?? '').toContain('```svg')
+    expect(el.textContent ?? '').toContain('fill="#dc2626"')
   })
 })
