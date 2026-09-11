@@ -1,6 +1,7 @@
 /**
  * Document .md preview shares Timeline's plugin / renderer / sanitizer config.
- * Closed svg / mermaid fences become the same shallow-frame figure.
+ * Closed mermaid fences become a shallow-frame figure; visual fences become
+ * a sandboxed HTML card; svg fences stay code.
  */
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
@@ -38,7 +39,7 @@ function expectFenceSource(root: Element, snippet: string): void {
 }
 
 describe('Document MarkdownRenderer inline figures', { timeout: 20_000 }, () => {
-  it('draws a closed svg fence as a shallow-frame figure', async () => {
+  it('keeps a closed svg fence as a code block', async () => {
     const root = await renderDocumentMarkdown(
       fence(
         `<svg viewBox="0 0 10 10">
@@ -49,12 +50,8 @@ describe('Document MarkdownRenderer inline figures', { timeout: 20_000 }, () => 
       ),
     )
 
-    const figure = await expectInlineFigure()
-    expect(figure.getAttribute('role')).toBe('img')
-    expect(figure.getAttribute('aria-label')).toBe('上周用量')
-    expect(figure.querySelector('button')).toBeNull()
-    expect(figure.querySelector('rect')?.getAttribute('fill')).toBe('#dc2626')
-    expect(root.textContent ?? '').not.toContain('```svg')
+    expectFenceSource(root, 'fill="#dc2626"')
+    expect(root.querySelector('rect')).toBeNull()
   })
 
   it('draws a closed mermaid fence as a shallow-frame figure', async () => {
@@ -79,27 +76,29 @@ describe('Document MarkdownRenderer inline figures', { timeout: 20_000 }, () => 
     expectFenceSource(root, 'fill="#dc2626"')
   })
 
-  it('falls back to the original fence source when sanitizing fails', async () => {
-    const dirty =
-      '<svg viewBox="0 0 10 10"><rect width="10" height="10" onclick="alert(1)"/></svg>'
-    const root = await renderDocumentMarkdown(fence(dirty, 'svg'))
-    expectFenceSource(root, 'onclick="alert(1)"')
-    expect(root.querySelector('rect')).toBeNull()
-    expect(root.textContent ?? '').not.toContain('无法绘制')
-  })
-
-  it('does not open a Work Surface when the figure is clicked', async () => {
-    await renderDocumentMarkdown(
-      fence(
-        '<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="#0cbf5b"/></svg>',
-        'svg',
-      ),
-    )
+  it('does not open a Work Surface when the mermaid figure is clicked', async () => {
+    await renderDocumentMarkdown(fence(FLOWCHART, 'mermaid'))
     await expectInlineFigure()
     await userEvent.click(page.getByTestId('inline-figure'))
     expect(document.querySelector('[data-kind="interactive"]')).toBeNull()
     expect(
       document.querySelector('[data-testid="work-surface-interactive"]'),
     ).toBeNull()
+  })
+
+  it('draws a closed visual fence as a sandboxed island card', async () => {
+    const root = await renderDocumentMarkdown(
+      fence(
+        `<title>方案对照</title><div style="display:grid;grid-template-columns:1fr 1fr"><section>A</section><section>B</section></div>`,
+        'visual',
+      ),
+    )
+    const card = page.getByTestId('inline-visual')
+    await expect.element(card).toBeInTheDocument()
+    await expect.element(card).toHaveTextContent('方案对照')
+    const iframe = page.getByTestId('inline-visual-frame').element()
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts')
+    expect(iframe.getAttribute('sandbox')).not.toContain('allow-same-origin')
+    expect(root.querySelector('[data-testid="inline-figure"]')).toBeNull()
   })
 })

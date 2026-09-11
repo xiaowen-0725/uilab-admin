@@ -6,6 +6,8 @@ import { after, describe, it } from 'node:test'
 import { ASK_TOOL_INSTRUCTIONS } from './ask-user-question-tool.js'
 import { buildWorkbenchSystemPrompt } from './system-prompt.js'
 import { BOARD_TOOL_INSTRUCTIONS } from './tools/board-agent-contract.js'
+import { INLINE_FIGURE_INSTRUCTIONS } from './tools/inline-figure-agent-contract.js'
+import { INLINE_VISUAL_INSTRUCTIONS } from './tools/inline-visual-agent-contract.js'
 import { INTERACTIVE_TOOL_INSTRUCTIONS } from './tools/interactive-artifact-agent-contract.js'
 import { PLAN_TOOL_INSTRUCTIONS } from './update-plan-tool.js'
 
@@ -40,6 +42,8 @@ describe('buildWorkbenchSystemPrompt', () => {
     assert.ok(prompt.includes(ASK_TOOL_INSTRUCTIONS))
     assert.ok(prompt.includes(BOARD_TOOL_INSTRUCTIONS))
     assert.ok(prompt.includes(INTERACTIVE_TOOL_INSTRUCTIONS))
+    assert.ok(prompt.includes(INLINE_FIGURE_INSTRUCTIONS))
+    assert.ok(prompt.includes(INLINE_VISUAL_INSTRUCTIONS))
     assert.match(prompt, /Working directory: \/tmp\/wb-prompt-office/)
     assert.match(prompt, /Default shell: \/bin\/zsh/)
     assert.match(prompt, /Profile is office/)
@@ -62,6 +66,8 @@ describe('buildWorkbenchSystemPrompt', () => {
     assert.ok(prompt.includes(ASK_TOOL_INSTRUCTIONS))
     assert.ok(prompt.includes(BOARD_TOOL_INSTRUCTIONS))
     assert.ok(prompt.includes(INTERACTIVE_TOOL_INSTRUCTIONS))
+    assert.ok(prompt.includes(INLINE_FIGURE_INSTRUCTIONS))
+    assert.ok(prompt.includes(INLINE_VISUAL_INSTRUCTIONS))
   })
 
   it('marks a workspace with .git as a git repo', async () => {

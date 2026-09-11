@@ -15,6 +15,14 @@ const SVG_FENCE = [
   '```',
 ].join('\n')
 
+const VISUAL_FENCE = [
+  '对比这两种方案',
+  '',
+  '```visual',
+  '<title>A vs B</title><div>卡</div>',
+  '```',
+].join('\n')
+
 function userItem(body: string): TimelineItem {
   return {
     id: 'user-1',
@@ -39,5 +47,18 @@ describe('UserMessageBlock inline-figure boundary', () => {
     expect(el.querySelector('[data-testid="simple-markdown"]')).toBeNull()
     expect(el.textContent ?? '').toContain('```svg')
     expect(el.textContent ?? '').toContain('fill="#dc2626"')
+  })
+
+  it('keeps a pasted visual fence as characters', async () => {
+    await render(
+      <UserMessageBlock item={userItem(VISUAL_FENCE)} runActive={false} />,
+    )
+    const bubble = page.getByTestId('timeline-item-user-1')
+    await expect.element(bubble).toBeInTheDocument()
+    const el = bubble.element()
+    expect(el.querySelector('[data-testid="inline-visual"]')).toBeNull()
+    expect(el.querySelector('[data-testid="simple-markdown"]')).toBeNull()
+    expect(el.textContent ?? '').toContain('```visual')
+    expect(el.textContent ?? '').toContain('A vs B')
   })
 })

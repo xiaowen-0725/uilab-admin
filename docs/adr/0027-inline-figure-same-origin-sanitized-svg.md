@@ -2,15 +2,16 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
+- **Amended:** 2026-09-11 — 产品源只认闭合 mermaid 围栏；` ```svg ` 不是行内图源。消毒器仍处理 mermaid 编译出的 SVG。对比 / 讲解卡是 **行内视觉**（ADR-0028），不是本 ADR。见 [Agent 主动可视化](../plans/workbench-agent-initiated-visualization.md)
 - **Scope:** Agent Workbench Timeline 助手正文与 Document Markdown 预览里的 **行内图**；不改 Board / Interactive Artifact
 - **Map:** [#187](https://github.com/xiaowen-0725/uilab-admin/issues/187)
 - **Spec:** [workbench-inline-figure-spec](../plans/workbench-inline-figure-spec.md) · [规格票 #197](https://github.com/xiaowen-0725/uilab-admin/issues/197) · 汇编 [#196](https://github.com/xiaowen-0725/uilab-admin/issues/196)
 - **Amends:** 根 `CONTEXT.md`（行内图）；ADR-0021「宿主侧无渲染不可信 HTML 的路径」对这条插入不再成立
-- **Does not amend:** ADR-0026（交互产物仍是岛）
+- **Does not amend:** ADR-0026（交互产物仍是岛）；行内视觉另见 [ADR-0028](./0028-inline-visual-html-island.md)，不走本消毒路径
 
 ## Context
 
-用户要 Timeline **助手正文**里把闭合的 Markdown ` ```svg ` / ` ```mermaid ` 画成静图，跟字一个流。这不是 Artifact，也不开 Work Surface。
+用户要 Timeline **助手正文**里把闭合的 Markdown ` ```mermaid ` 画成静图，跟字一个流。这不是 Artifact，也不开 Work Surface。` ```svg ` 围栏不是产品出图源。
 
 对照邻居已经锁死另一条水管：Board Widget 与 Interactive Artifact 把不可信 HTML 放进 `srcdoc` iframe，`sandbox="allow-scripts"` 且 **不加** `allow-same-origin`，子文档 CSP 把 `connect-src` 收到 `'none'`（ADR-0021 / 0026）。`sandbox` 只作用于 iframe 的 nested browsing context。`<svg>` 没有等价属性；行内节点的 browsing context 就是宿主文档。
 
@@ -24,7 +25,7 @@ ADR-0021 曾写：本机桌面应用「宿主侧无渲染不可信 HTML 的路�
 
 1. **行内图插入宿主同源 DOM。** 不套 iframe、不复用 ADR-0021 的 `sandbox` / 子文档 `csp=`、不走 Interactive Surface。
 2. **安全边界是白名单消毒，不是隔离。** 政策以 [规格白名单](../plans/workbench-inline-figure-spec.md) 为准，不得「跟 DOMPurify 默认 SVG profile」或「跟 Streamdown 默认 schema」当合同。宿主 CSP 是后盾，不能替代消毒。
-3. **源只来自闭合围栏。** 取出代码字符串 → 体积闸 →（mermaid 则先编译）→ 消毒 → 浅框插入。正文裸 `<svg>` 仍不是行内图源，继续被现有 Markdown HTML schema 剥掉。
+3. **源只来自闭合 mermaid 围栏。** 取出代码字符串 → 体积闸 → 编译 → 消毒 → 浅框插入。` ```svg ` 与正文裸 `<svg>` 都不是行内图源；裸 `<svg>` 继续被现有 Markdown HTML schema 剥掉。
 4. **mermaid 画出的 SVG 过同一套白名单。** 关掉 HTML labels；不为 mermaid 放行 `foreignObject`。插件自带的 `securityLevel: "strict"` 只是加一层，不是合同。
 5. **失败回退代码块。** 消毒失败、超限、mermaid 失败都不在宿主里留下半张图。
 
@@ -37,6 +38,6 @@ ADR-0021 曾写：本机桌面应用「宿主侧无渲染不可信 HTML 的路�
 
 ## Consequences
 
-- 模型 SVG / mermaid 输出是宿主上的不可信 HTML 路径。ADR-0021 的 CSP 后盾仍在；「无不可信 HTML 路径」这条前提对行内图作废。
+- 模型 mermaid 输出（编译后的 SVG）是宿主上的不可信 HTML 路径。ADR-0021 的 CSP 后盾仍在；「无不可信 HTML 路径」这条前提对行内图作废。
 - 实施必须把 Timeline 现有 `components.code` 让路（改 `inlineCode`），否则 mermaid / `renderers` 进不去；Document 与 Timeline 共用同一套管线。
 - 交互产物、看板小组件、工作区 `.svg` 文件预览合同不动。大图、可交互视图继续走交互产物，不走这条。
