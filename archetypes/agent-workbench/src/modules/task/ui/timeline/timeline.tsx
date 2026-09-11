@@ -257,7 +257,10 @@ function TimelineRunBody({
   gatesRef.current = gated.gates
   const blocks = gated.blocks
   const hasWorking = blocks.some((block) => block.kind === 'working')
-  const lastWorkingIndex = blocks.findLastIndex((block) => block.kind === 'working')
+  const lastWorkingIndex = blocks.reduce(
+    (found, block, index) => (block.kind === 'working' ? index : found),
+    -1,
+  )
   const completed = latestTerminal?.status === 'completed' && runSettled
   const plainFilePaths =
     completed && deliverables && deliverables.length > 0

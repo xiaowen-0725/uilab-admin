@@ -3,6 +3,8 @@
  * Tool results stay scalars — never HTML / source.
  */
 
+import type { ToolResultOutput } from '@voltagent/core'
+
 export const INTERACTIVE_ARTIFACT_MAX_BYTES = 256 * 1024
 export const INTERACTIVE_STAGING_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -71,10 +73,12 @@ export function assertNoInteractiveHtmlLeak(value: unknown): void {
 }
 
 /** Model-facing summary only — never pass HTML / source through. */
-export function toInteractiveModelOutput(output: unknown): {
-  type: 'json'
-  value: unknown
-} {
+export function toInteractiveModelOutput(
+  output: unknown,
+): Extract<ToolResultOutput, { type: 'json' }> {
   assertNoInteractiveHtmlLeak(output)
-  return { type: 'json', value: output }
+  return {
+    type: 'json',
+    value: output as Extract<ToolResultOutput, { type: 'json' }>['value'],
+  }
 }
